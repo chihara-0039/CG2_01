@@ -10,9 +10,38 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <cassert>
+#include <dbghelp.h>
+#include <strsafe.h>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "Dbghelp.lib")
+
+
+
+static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception) {
+	//中身はこれから埋める
+	SYSTEMTIME time;
+	GetLocalTime(&time);
+	wchar_t filePath[MAX_PATH] = { 0 };
+	CreateDirectory(L"./Dumps", nullptr);
+	StringCchPrintfW(filePath, MAX_PATH, L"./Dumps/%04d-%02d%02d-%02d%02d.dmp", time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute);
+	HANDLE dumpFileHandle = CreateFile(filePath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE | FILE_SHARE_READ, 0, CREATE_ALWAYS, 0, 0);
+	//processId(このexeのIdとクラッシュの発生したthreadIdを取得
+	DWORD processId = GetCurrentProcessId();
+	DWORD threadId = GetCurrentThreadId();
+	//設定情報を入力
+	MINIDUMP_EXCEPTION_INFORMATION minidumpInformation{ 0 };
+	minidumpInformation.ThreadId = threadId;
+	minidumpInformation.ExceptionPointers = exception;
+	minidumpInformation.ClientPointers = TRUE;
+	//Dumpを出力。MiniDumpNormalは最低限の情報を出力するフラグ
+	MiniDumpWriteDump(GetCurrentProcess(), processId, dumpFileHandle, MiniDumpNormal, &minidumpInformation, nullptr, nullptr);
+	//他に関連づけられているSEH例外ハンドラがあれば実行。通常はプロセス終了する
+
+	return EXCEPTION_EXECUTE_HANDLER;
+}
+
 
 
 //ログを出す関数
@@ -68,6 +97,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg,
 //Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
+	SetUnhandledExceptionFilter(ExportDump);
+
 	//ログ出力用のフォルダ「logs」の作成
 	std::filesystem::create_directory("logs");
 
@@ -87,6 +118,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//ファイルを作って書き込み準備
 	std::ofstream logStream(logFilePath);
 
+	
 
 	WNDCLASS wc{};
 	//ウィンドウプロシージャ
@@ -135,9 +167,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Log(logStream, "Hello,DIrectX!\n");
 	Log(logStream,
 		ConvertString(std::format(
-		L"width:{},{}\n", kClientWidth,
-		kClientHeight
-	)));
+			L"width:{},{}\n", kClientWidth,
+			kClientHeight
+		)));
 
 	//DXGIファクトリーの生成
 	IDXGIFactory7* dxgiFactory = nullptr;
@@ -152,7 +184,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	IDXGIAdapter4* useAdapter = nullptr;
 	//良い淳にアダプタを頼む
 	for (UINT i = 0; dxgiFactory->EnumAdapterByGpuPreference(i,
-	DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&useAdapter)) !=
+															 DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&useAdapter)) !=
 	DXGI_ERROR_NOT_FOUND; ++i) {
 		//アダプターの情報を取得する
 		DXGI_ADAPTER_DESC3 adapterDesc{};
@@ -183,23 +215,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			Log(logStream, std::format("FeatureLevel : {}\n", featureLevelStrings[i]));
 			break;
 		}
-	
+
 	}
 	//デバイスの生成がうまくいかなかったので起動できない
 	assert(device != nullptr);
-	Log(logStream,"Complate create D3D12Device!!\n"); // 初期化完了のログをだす
+	//喜びの舞い
+	Log(logStream, "Complate create D3D12Device!!\n"); // 初期化完了のログをだす
 
-
-
-
-
-
-
-
-
-
-
-
+	//コマンドキューを生成する
+	ID3D12CommandQueue* commandQueue = nullptr;
+	D3D12_COMMAND_QUEUE_DESC commandQueueDesc{};
+	hr = device->CreateCommandQueue(&commandQueueDesc,
+		IID_PPV_ARGS(&commandQueue));
+	//コマンドキューの生成がうまくいかなかったので起動できない
+	assert(SUCCEEDED(hr));
 
 	MSG msg{};
 	//ウィンドウの×ボタンが押されるまでループ
