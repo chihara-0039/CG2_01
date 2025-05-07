@@ -27,16 +27,20 @@ static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception) {
 	CreateDirectory(L"./Dumps", nullptr);
 	StringCchPrintfW(filePath, MAX_PATH, L"./Dumps/%04d-%02d%02d-%02d%02d.dmp", time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute);
 	HANDLE dumpFileHandle = CreateFile(filePath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE | FILE_SHARE_READ, 0, CREATE_ALWAYS, 0, 0);
+	
 	//processId(このexeのIdとクラッシュの発生したthreadIdを取得
 	DWORD processId = GetCurrentProcessId();
 	DWORD threadId = GetCurrentThreadId();
+	
 	//設定情報を入力
 	MINIDUMP_EXCEPTION_INFORMATION minidumpInformation{ 0 };
 	minidumpInformation.ThreadId = threadId;
 	minidumpInformation.ExceptionPointers = exception;
 	minidumpInformation.ClientPointers = TRUE;
+	
 	//Dumpを出力。MiniDumpNormalは最低限の情報を出力するフラグ
 	MiniDumpWriteDump(GetCurrentProcess(), processId, dumpFileHandle, MiniDumpNormal, &minidumpInformation, nullptr, nullptr);
+	
 	//他に関連づけられているSEH例外ハンドラがあれば実行。通常はプロセス終了する
 
 	return EXCEPTION_EXECUTE_HANDLER;
@@ -83,7 +87,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg,
 							WPARAM wparam, LPARAM jparam) {
 	// メッセージに応じてゲーム固有の処理を行う
 	switch (msg) {
-		//ウィンドウが破壊された
+	//ウィンドウが破壊された
+	
 	case WM_DESTROY:
 	// OSに対して、 アプリの終了を伝える
 	PostQuitMessage(0);
@@ -93,6 +98,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg,
 	//標準のメッセージ処理を行う
 	return DefWindowProc(hwnd, msg, wparam, jparam);
 }
+
+
 
 //Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -340,6 +347,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//２つ目を作る
 	device->CreateRenderTargetView(swapChainResources[1], &rtvDesc, rtvHandles[1]);
 
+	//初期値0でFenceを作る
+	ID3D12Fence* fence = nullptr;
+	uint64_t fenceValue = 0;
+	hr = device->CreateFence(fenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+	assert(SUCCEEDED(hr));
+
+	//FenceのSignalを持つためのイベントを作成する
+	HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+	assert(fenceEvent != nullptr);
+
 	MSG msg{};
 	//ウィンドウの×ボタンが押されるまでループ
 	while (msg.message != WM_QUIT) {
@@ -353,12 +370,38 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			//これから書き込むバックバッファのインデックスを取得
 			UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
 
+			//TransitionBarrierの設定
+			D3D12_RESOURCE_BARRIER barrier{};
+
+			//今回のバリアはTransition
+			barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+
+			//バリアを張る対象のリソース。現在のバックバッファに大して行う
+			barrier.Transition.pResource = swapChainResources[backBufferIndex];
+
+			//遷移前（現在）のResources
+			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+
+			//遷移後のResources
+			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+			//TransitionBarrierを張る
+			commandList->ResourceBarrier(1, &barrier);
+
 			//描画先のRTVを設定
 			commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, nullptr);
 
 			//指定した色で画面全体をクリアする
 			float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };	//青っぽい色。 RGBAの順
 			commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
+
+			//画面に描く処理はすべて終わり、画面に映すので、状態を遷移
+			//今回はRenderTargetからPresentにする
+			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+
+			//TranstionBarrierを張る
+			commandList->ResourceBarrier(1, &barrier);
 
 			//コマンドリストの内容を確定させる。 すべてのコマンドを積んでからCloseすること
 			hr = commandList->Close();
@@ -372,6 +415,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			//GPUとOSに画面の交換を行うよう通知する
 			swapChain->Present(1, 0);
 
+			//Fenceの値を更新
+			fenceValue++;
+
+			//GPUがここまでたどり着いたときに、Fenceの値を指定した値に代入するようにSignalを送る
+			commandQueue->Signal(fence, fenceValue);
+
+			//Fenceの値が指定したSignal値にたどり着いているか確認する
+			//GetCompletedValueの初期値はFence作成時に渡した初期値
+			if (fence->GetCompletedValue() < fenceValue) {
+				
+				//作成したSignalにたどり着いてないので、たどり着くまで待つようにイベントを設定する
+				fence->SetEventOnCompletion(fenceValue, fenceEvent);
+
+				//イベントを待つ
+				WaitForSingleObject(fenceEvent, INFINITE);
+			}
+
 			//次のフレーム用のコマンドリストを準備
 			hr = commandAllocator->Reset();
 			assert(SUCCEEDED(hr));
@@ -382,3 +442,5 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	return 0;
 }
+
+//swapChain
