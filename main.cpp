@@ -13,12 +13,14 @@
 #include <dbghelp.h>
 #include <strsafe.h>
 #include <dxgidebug.h>
+#include <dxcapi.h>
 
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "Dbghelp.lib")
 #pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "dxcompiler.lib")
 
 
 
@@ -30,20 +32,20 @@ static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception) {
 	CreateDirectory(L"./Dumps", nullptr);
 	StringCchPrintfW(filePath, MAX_PATH, L"./Dumps/%04d-%02d%02d-%02d%02d.dmp", time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute);
 	HANDLE dumpFileHandle = CreateFile(filePath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE | FILE_SHARE_READ, 0, CREATE_ALWAYS, 0, 0);
-	
+
 	//processId(このexeのIdとクラッシュの発生したthreadIdを取得
 	DWORD processId = GetCurrentProcessId();
 	DWORD threadId = GetCurrentThreadId();
-	
+
 	//設定情報を入力
 	MINIDUMP_EXCEPTION_INFORMATION minidumpInformation{ 0 };
 	minidumpInformation.ThreadId = threadId;
 	minidumpInformation.ExceptionPointers = exception;
 	minidumpInformation.ClientPointers = TRUE;
-	
+
 	//Dumpを出力。MiniDumpNormalは最低限の情報を出力するフラグ
 	MiniDumpWriteDump(GetCurrentProcess(), processId, dumpFileHandle, MiniDumpNormal, &minidumpInformation, nullptr, nullptr);
-	
+
 	//他に関連づけられているSEH例外ハンドラがあれば実行。通常はプロセス終了する
 
 	return EXCEPTION_EXECUTE_HANDLER;
@@ -90,8 +92,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg,
 							WPARAM wparam, LPARAM jparam) {
 	// メッセージに応じてゲーム固有の処理を行う
 	switch (msg) {
-	//ウィンドウが破壊された
-	
+		//ウィンドウが破壊された
+
 	case WM_DESTROY:
 	// OSに対して、 アプリの終了を伝える
 	PostQuitMessage(0);
@@ -102,6 +104,86 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg,
 	return DefWindowProc(hwnd, msg, wparam, jparam);
 }
 
+
+IDxcBlob* CompileShader(
+		// CompilerするShaderファイルへのパス
+		const std::wstring& filePath,
+
+		//Compilerに使用するProfile
+		const wchar_t* profile,
+
+		//初期化で生成したものを3つ
+		IDxcUtils* dxcUtils,
+		IDxcCompiler3* dxcCompiler,
+		IDxcIncludeHandler* includeHandler,
+		std::ostream& os) {
+	//ここに中身を書いていく
+
+	//1.hlslファイルを読む
+	//これからシェーダーをコンパイルする旨をログに出す
+	Log(os, ConvertString(std::format(L"Begin CompileShader, path{}, profile:{}\n", filePath, profile)));
+
+	//hlslファイル読む
+	IDxcBlobEncoding* shaderSource = nullptr;
+	HRESULT hr = dxcUtils->LoadFile(filePath.c_str(), nullptr, &shaderSource);
+
+	//読めなかったら止める
+	assert(SUCCEEDED(hr));
+
+	//読み込んだファイル内容を設定する
+	DxcBuffer shaderSourceBuffer;
+	shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
+	shaderSourceBuffer.Size = shaderSource->GetBufferSize();
+	shaderSourceBuffer.Encoding = DXC_CP_UTF8;	//UTF8の文字コードであることを通知
+
+	//2.Compleする
+	LPCWSTR arguments[] = {
+		filePath.c_str(),	//コンパイル対象のhlslファイル名
+		L"-E", L"main",		//エントリーポイントの指定。基本的にmain以外にはしない
+		L"-T", profile,		//ShaderProfileの設定
+		L"-Zi", L"-Qembed_debug",	//デバッグ用の情報を埋め込む
+		L"-Od",				//最適化を外しとく
+		L"-Zpr",			//メモリレイアウトは行優先
+	};
+
+	//実際にShaderをコンパイルする
+	IDxcResult* shaderResult = nullptr;
+	hr = dxcCompiler->Compile(
+		&shaderSourceBuffer,	//読み込んだファイル
+		arguments,				//コンパイルオプション
+		_countof(arguments),	//コンパイルオプションの数
+		includeHandler,			//includeが含まれた諸々
+		IID_PPV_ARGS(&shaderResult)	//コンパイル結果
+	);
+
+	//	コンパイルエラーではなくdxcが起動できないなど致命的な状況
+	assert(SUCCEEDED(hr));
+
+	//3.警告・エラーが出ていないか確認する
+	IDxcBlobUtf8* shaderError = nullptr;
+	shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
+	Log(os, shaderError->GetStringPointer());
+	
+	//警告・エラーダメゼッタイ
+	assert(false);
+
+	//4.Compile結果を受け取って返す
+	//	コンパイル結果から実行用のバイナリ部分を取得
+	IDxcBlob* shaderBlob = nullptr;
+	hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
+	assert(SUCCEEDED(hr));
+
+	//	成功したログを出す
+	Log(os,ConvertString(std::format(L"Compile Succeeded, path:{}, profile{}\n", filePath, profile)));
+	
+	//	もう使わないでリソースを解放
+	shaderSource->Release();
+	shaderResult->Release();
+	
+	//	実行用のバイナリを返却
+	return shaderBlob;
+
+}
 
 
 //Windowsアプリでのエントリーポイント(main関数)
@@ -119,16 +201,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//ログファイルの名前にコンマ何秒はいらないので、削って秒にする
 	std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>
 		nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
-	
+
 	//日本時間（PCの設定時間)に変更する
 	std::chrono::zoned_time localTime{ std::chrono::current_zone(), nowSeconds };
-	
+
 	//formatを使って年月日_時分秒に変換
 	std::string dateString = std::format("{:%Y%m%d_%H%M%S}", localTime);
-	
+
 	//時刻を使ってファイル名を決定
 	std::string logFilePath = std::string("logs/") + dateString + ".log";
-	
+
 	//ファイルを作って書き込み準備
 	std::ofstream logStream(logFilePath);
 
@@ -190,7 +272,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
 		//デバッグレイヤーを有効化する
 		debugController->EnableDebugLayer();
-		
+
 		//さらにGPU側でもチェックを行うようにする
 		debugController->SetEnableGPUBasedValidation(TRUE);
 	}
@@ -253,23 +335,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	if (SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
 		//ヤバイエラー時に止まる
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
-		
+
 		//エラー時に止まる
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
-		
+
 		//警告時に止まる
 		//infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
-		
+
 		//解放
 		infoQueue->Release();
-		
+
 		//抑制するメッセージのID
 		D3D12_MESSAGE_ID denyIds[] = {
 			//Windows11でのDXGIデバッグレイヤーとDX12デバッグレイヤーの相互作用バグによるエラーメッセージ
 			//https://stackoverflow.com/questions/69805245/directx\12\application\is\crashing-in-windows-11
 				D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
 		};
-		
+
 		//抑制するレベル
 		D3D12_MESSAGE_SEVERITY severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
 		D3D12_INFO_QUEUE_FILTER filter{};
@@ -277,7 +359,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		filter.DenyList.pIDList = denyIds;
 		filter.DenyList.NumSeverities = _countof(severities);
 		filter.DenyList.pSeverityList = severities;
-		
+
 		//指定したメッセージの表示を抑制する
 		infoQueue->PushStorageFilter(&filter);
 	}
@@ -371,6 +453,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 	assert(fenceEvent != nullptr);
 
+	//dxcCompilerを初期化
+	IDxcUtils* dxcUtils = nullptr;
+	IDxcCompiler3* dxcCompiler = nullptr;
+	hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils));
+	assert(SUCCEEDED(hr));
+	hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
+	assert(SUCCEEDED(hr));
+
+	//現時点でincludeはしないが、includeに対応するための設定を行っておく
+	IDxcIncludeHandler* includeHandler = nullptr;
+	hr = dxcUtils->CreateDefaultIncludeHandler(&includeHandler);
+	assert(SUCCEEDED(hr));
+
+
+
 	MSG msg{};
 	//ウィンドウの×ボタンが押されるまでループ
 	while (msg.message != WM_QUIT) {
@@ -438,7 +535,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			//Fenceの値が指定したSignal値にたどり着いているか確認する
 			//GetCompletedValueの初期値はFence作成時に渡した初期値
 			if (fence->GetCompletedValue() < fenceValue) {
-				
+
 				//作成したSignalにたどり着いてないので、たどり着くまで待つようにイベントを設定する
 				fence->SetEventOnCompletion(fenceValue, fenceEvent);
 
@@ -455,6 +552,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	}
 
 	CloseHandle(fenceEvent);
+	includeHandler->Release();
 	fence->Release();
 	rtvDescriptorHeap->Release();
 	swapChainResources[0]->Release();
@@ -483,3 +581,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	return 0;
 }
 
+/*
+//RootSignature作成
+D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
+descriptionRootSignature.Flags =
+D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+//シリアライズしてバイナリにする
+ID3DBlob* signatureBlob = nullptr;
+ID3DBlob* errorBlob = nullptr;
+hr = D3D12SerializeRootSignature(&descriptionRootSignature,
+D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+if (FAILED(hr)) {
+	Log(reinterpret_cast<char*>(errorBlob->GetBufferPointer()));
+	assert(false);
+}
+
+//バイナリを元に生成
+ID3D12RootSignature* rootSignature = nullptr;
+hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(),
+								 IID_PPV_ARGS(&rootSignature));
+assert(SUCCEEDED(hr));
+
+*/
