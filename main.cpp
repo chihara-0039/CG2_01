@@ -3,27 +3,21 @@
 #include <string>
 #include <format>
 #include <cmath>
-//ファイルやディレクトリに関する操作を行うライブラリ
+#include <strsafe.h>
+#include <DbgHelp.h>	
 #include <filesystem>
-//ファイルにかいたりよんだりするライブラリ
+#include <dxgidebug.h>
 #include <fstream>
-//時間を扱うライブラリ
+#include <dxcapi.h>
 #include <chrono>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <cassert>
+
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
-#include <strsafe.h>
-
-//Debug用のあれやこれやを使えるようにする
-#include <DbgHelp.h>	
 #pragma comment(lib, "Dbghelp.lib")
-
-#include <dxgidebug.h>
 #pragma comment(lib,"dxguid.lib")
-
-#include <dxcapi.h>
 #pragma comment(lib,"dxcompiler.lib")
 
 struct Vector4 {
