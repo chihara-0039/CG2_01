@@ -300,6 +300,7 @@ IDxcBlob* CompileShader(
 
 }
 
+//DescriptorHeapの作成関数
 ID3D12DescriptorHeap* CreateDescriptorHeap(
 	ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors, bool shaderVisible) {
 
@@ -631,8 +632,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	descriptionRootSignature.pParameters = rootParamenters;					//ルートパラメータ配列へのポインタ
 	descriptionRootSignature.NumParameters = _countof(rootParamenters);		//配列の長さ
 
-	//開発用UIの処理。 実際に開発用のUIを出す場合はここをゲーム固有のそりに置き換える
-	ImGui::ShowDemoWindow();
+	
 
 	//シリアライズしてバイナリにする
 	ID3DBlob* signatureBlob = nullptr;
@@ -741,6 +741,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//assert(SUCCEEDED(hr));
 
 
+
 	ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(Vector4) * 3);
 
 
@@ -833,6 +834,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 						srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart()
 	);
 
+	
+
 
 	MSG msg{};
 
@@ -846,10 +849,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 			//ゲームの処理
 
+			
+
 
 			ImGui_ImplDX12_NewFrame();
 			ImGui_ImplWin32_NewFrame();
 			ImGui::NewFrame();
+
+			//開発用UIの処理。 実際に開発用のUIを出す場合はここをゲーム固有のそりに置き換える
+			ImGui::ShowDemoWindow();
 
 			//画面のクリア処理
 
@@ -903,6 +911,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			commandList->DrawInstanced(3, 1, 0, 0);
 
 
+			//実際のcommandListのImGuiの描画コマンドを積む
+			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 
 			//画面に描く処理は全ておわり
 			//今回はRenderTargeからPresetにする
@@ -911,8 +921,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			//TriansitionBarrierを張る
 			commandList->ResourceBarrier(1, &barrier);
 
-			//実際のcommandListのImGuiの描画コマンドを積む
-			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+			
 
 			//コマンドリストの内容を確定させる。全てのコマンドを積んでからCloseすること
 			hr = commandList->Close();
@@ -972,7 +981,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	device->Release();
 	useAdapter->Release();
 	dxgiFactory->Release();
-	rtvDescriptorHeap->Release();
 
 #ifdef _DEBUG
 	debugController->Release();
