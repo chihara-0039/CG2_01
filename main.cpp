@@ -3,20 +3,26 @@
 #include <string>
 #include <format>
 #include <cmath>
+#include <Windows.h>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <chrono>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <cassert>
+#include <format>
+#include <string>
+#include <dbghelp.h>
 #include <strsafe.h>
-#include <DbgHelp.h>	
 #include <dxgidebug.h>
 #include <dxcapi.h>
+#include <DirectXMath.h> 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
-
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+using Vector4 = DirectX::XMFLOAT4; // Define Vector4 as an alias for DirectX::XMFLOAT4
 
 #pragma comment(lib, "Dbghelp.lib")
 #pragma comment(lib, "d3d12.lib")
@@ -26,88 +32,40 @@
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-
-struct Vector4 {
-	float x;
-	float y;
-	float z;
-	float w;
-};
-
-struct Vector3 {
-	float x, y, z;
-};
-
 struct Matrix4x4 {
 	float m[4][4];
 };
 
-struct Transform {
-	Vector3 scale;
-	Vector3 rotate;
-	Vector3 translate;
-};
-
 Matrix4x4 MakeIdentity4x4() {
 	Matrix4x4 mat = {};
-	mat.m[0][0] = mat.m[1][1] = mat.m[2][2] = mat.m[3][3] = 1.0f;
+	for (int i = 0; i < 4; i++) {
+		mat.m[i][i] = 1.0f;
+	}
 	return mat;
 }
 
-Matrix4x4 MakeRotateYMatrix(float angle) {
-	Matrix4x4 mat = MakeIdentity4x4();
-	mat.m[0][0] = cosf(angle);
-	mat.m[0][2] = sinf(angle);
-	mat.m[2][0] = -sinf(angle);
-	mat.m[2][2] = cosf(angle);
-	return mat;
-}
 
-Matrix4x4 MakeTranslateMatrix(const Vector3& t) {
-	Matrix4x4 mat = MakeIdentity4x4();
-	mat.m[3][0] = t.x;
-	mat.m[3][1] = t.y;
-	mat.m[3][2] = t.z;
-	return mat;
-}
+struct Transform {
+	Vector4 scale;
+	Vector4 rotate;
+	Vector4 translate;
+};
 
-Matrix4x4 Multiply(const Matrix4x4& m1, const Matrix4x4& m2) {
+
+
+Matrix4x4 Multiply(const Matrix4x4& mat1, const Matrix4x4& mat2) {
 	Matrix4x4 result = {};
-	for (int row = 0; row < 4; ++row) {
-		for (int col = 0; col < 4; ++col) {
+	for (int i = 0; i < 4; ++i) {
+		for (int j = 0; j < 4; ++j) {
 			for (int k = 0; k < 4; ++k) {
-				result.m[row][col] += m1.m[row][k] * m2.m[k][col];
+				result.m[i][j] += mat1.m[i][k] * mat2.m[k][j];
 			}
 		}
 	}
 	return result;
 }
+Matrix4x4 worldMatrix = MakeIdentity4x4();
 
-Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate) {
-	Matrix4x4 s = MakeIdentity4x4();
-	s.m[0][0] = scale.x;
-	s.m[1][1] = scale.y;
-	s.m[2][2] = scale.z;
-
-	Matrix4x4 ry = MakeRotateYMatrix(rotate.y);
-	Matrix4x4 t = MakeTranslateMatrix(translate);
-
-	return Multiply(s, Multiply(ry, t));
-}
-
-Vector3 Transform(const Vector3& v, const Matrix4x4& m) {
-	Vector3 result;
-	result.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0];
-	result.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1];
-	result.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2];
-	float w = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
-	if (w != 0.0f) {
-		result.x /= w;
-		result.y /= w;
-		result.z /= w;
-	}
-	return result;
-}
 
 //Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 
@@ -759,23 +717,42 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	//頂点リソースにデータを書き込む
 	Vector4* vertexData = nullptr;
-
 	//
 	vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
 
 	//左下
 	vertexData[0] = { -0.5f,-0.5f,0.0f,1.0f };
-
 	//上
 	vertexData[1] = { 0.0f,0.5f,0.0f,1.0f };
-
 	//右下
 	vertexData[2] = { 0.5f,-0.5f,0.0f,1.0f };
 
+	ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Vector4));
+
+	Vector4* materialData = nullptr;
+
+	materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
+
+	*materialData = Vector4{ 1.0f, 0.0f, 0.0f, 1.0f };
+
+	ID3D12Resource* wvpResource = CreateBufferResource(device, sizeof(Matrix4x4));
+
+
+	Transform transform{ {1.0f,1.0f,1.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f} };
+	// Transform cameratransform{ {1.0f,1.0f,1.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,-5.0f,0.0f} };
+	 // 修正: "cameraTransform" が未定義のため、適切な定義を追加します。
+	Transform cameraTransform = { {1.0f, 1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f, 0.0f} };
+	Matrix4x4* wvpData = nullptr;
+
+	wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&wvpData));
+
+	*wvpData = MakeIdentity4x4();
+
+	Matrix4x4* transformationMatrixData = nullptr;
+	wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixData));
+
 	//ビューポート
 	D3D12_VIEWPORT viewport{};
-
-	//
 	viewport.Width = kClientWidth;
 	viewport.Height = kClientHeight;
 	viewport.TopLeftX = 0;
@@ -906,6 +883,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 			//wvp用のCBufferの場所を設定
 			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
+
+			transform.rotate.y += 0.03f;
+
+
+			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+			Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
+			Matrix4x4 viewMatrix = Inverse(cameraMatrix);
+			Matrix4x4 projectionMatrix = MakePerspetiveFovMatrix(0.45f, (float)kClientWidth / (float)kClientHeight, 0.1f, 100.0f);
+			//WVPMatrixを作る
+			Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
+
+			// Matrix4x4* transformationMatrixData = nullptr;
+
+			*transformationMatrixData = worldViewProjectionMatrix;
 
 			//描画！(DrawCall/ドローコール）・３頂点で一つのインスタンス。インスタンスについては今後
 			commandList->DrawInstanced(3, 1, 0, 0);
