@@ -17,7 +17,9 @@
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-using Vector4 = DirectX::XMFLOAT4; // Define Vector4 as an alias for DirectX::XMFLOAT4
+using Vector4 = DirectX::XMFLOAT4; // Vector4の有効化
+using Vector3 = DirectX::XMFLOAT3;
+using Vector2 = DirectX::XMFLOAT2;
 
 // ライブラリリンク
 #pragma comment(lib, "d3d12.lib")
@@ -29,6 +31,11 @@ using Vector4 = DirectX::XMFLOAT4; // Define Vector4 as an alias for DirectX::XM
 
 struct Matrix4x4 {
     float m[4][4];
+};
+
+struct VertexData {
+    Vector4 position;
+    Vector2 texcoord;
 };
 
 Matrix4x4 MakeIdentity4x4() {
@@ -384,11 +391,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
     //InputLayout
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[1] = {};
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[2] = {};
     inputElementDescs[0].SemanticName = "POSITION";
     inputElementDescs[0].SemanticIndex = 0;
     inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
     inputElementDescs[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDescs[1].SemanticName = "TEXCOORD";
+    inputElementDescs[1].SemanticIndex = 0;
+    inputElementDescs[1].Format = DXGI_FORMAT_R32G32_FLOAT;
+    inputElementDescs[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
     D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
     inputLayoutDesc.pInputElementDescs = inputElementDescs;
     //BlendStateの設定
@@ -717,7 +728,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     assert(SUCCEEDED(hr));
 
     // 実際に頂点リソースを作る
-    ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(Vector4) * 3);
+    ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * 3);
 
 
     // 頂点バッファビューを作成する
@@ -726,21 +737,28 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // リソースの先頭のアドレスから使う
     vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
     // 使用するリソースのサイズは頂点3つ分のサイズ
-    vertexBufferView.SizeInBytes = sizeof(Vector4) * 3;
+    vertexBufferView.SizeInBytes = sizeof(VertexData) * 3;
     // 1頂点あたりのサイズ
-    vertexBufferView.StrideInBytes = sizeof(Vector4);
+    vertexBufferView.StrideInBytes = sizeof(VertexData);
 
 
 
     // 頂点リソースにデータを書き込む 
-    Vector4* vertexData = nullptr; // 書き込むためのアドレスを取得
+    VertexData* vertexData = nullptr; 
+
+    // 書き込むためのアドレスを取得
     vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
     //左下
-    vertexData[0] = { -0.5f, -0.5f, 0.0f, 1.0f };
+    vertexData[0].position = { -0.5f, -0.5f, 0.0f, 1.0f };
+    vertexData[0].texcoord = { 0.0f, 1.0f };
+
     // 上
-    vertexData[1] = { 0.0f, 0.5f, 0.0f, 1.0f };
+    vertexData[1].position = { 0.0f, 0.5f, 0.0f, 1.0f };
+    vertexData[1].texcoord = { 0.5f, 0.0f };
+
     // 右下
-    vertexData[2] = { 0.5f, -0.5f, 0.0f, 1.0f };
+    vertexData[2].position = { 0.5f, -0.5f, 0.0f, 1.0f };
+    vertexData[2].texcoord = { 1.0f, 1.0f };
 
     //マテリアル用のリソースを作る。今回はcolor一つ分のサイズを用意する
     ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Vector4));
