@@ -13,6 +13,7 @@
 #include <dxgidebug.h>
 #include <dxcapi.h>
 #include <DirectXMath.h> 
+#include "externals/DirectXTex/DirectXTex.h"
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
@@ -647,13 +648,29 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     hr = dxcUtils->CreateDefaultIncludeHandler(&includeHandler);
     assert(SUCCEEDED(hr));
 
+    //metDataを基にSRVの設定
+D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+srvDesc.Format = metadata.format;
+srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;//2Dテクスチャ
+srvDesc.Texture2D.MipLevels = UINT(metadata.mipLevels);
+
+//SRVを作成するDescriptorHeapの場所を決める
+D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU = srvDscriptorHeap->GetCPUDescriptorHandleForHeapStart();
+D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU = srvDscriptorHeap->GetGPUDescriptorHandleForHeapStart();
+//先頭はImGuiが使っているのでその次を使う
+textureSrvHandleCPU.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+textureSrvHandleGPU.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+//SRVの生成
+device->CreateShaderResourceView(textureResource, &srvDesc, textureSrvHandleCPU);
+
     //RootSignatureの作成
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
     descriptionRootSignature.Flags =
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
     //////////////////////////////////////////////////////////////////////////////////////////
    //RootParameter作成。複数設定できるので配列。今回は結果一つだけなので長さ１の配列
-    D3D12_ROOT_PARAMETER rootParameters[2] = {};                            
+    D3D12_ROOT_PARAMETER rootParameters[3] = {};                            
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;       //CBVを使う
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;      //PixelShaderで使う
     rootParameters[0].Descriptor.ShaderRegister = 0;                        //レジスタ番号0使う
@@ -662,6 +679,33 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     rootParameters[1].Descriptor.ShaderRegister = 0;                        //レジスタ番号0使う
     descriptionRootSignature.pParameters = rootParameters;                  //ルートパラメータ配列へのポインタ
     descriptionRootSignature.NumParameters = _countof(rootParameters);      //配列の長さ
+
+    //Samplerの設定
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR; //バイナリフィルタ
+    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;   //0~1の範囲外をリピート
+    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; //比較しない
+    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;   //ありったけのMipmapを使う
+    staticSamplers[0].ShaderRegister = 0;   //レジスタ番号0を使う
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; //PixelShaderで使う
+    descriptionRootSignature.pStaticSamplers = staticSamplers;
+    descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
+
+
+    //DescriptorRange
+    D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
+    descriptorRange[0].BaseShaderRegister = 0;  //0から始まる
+    descriptorRange[0].NumDescriptors = 1;  //数は1つ
+    descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; //SRVを使う
+    descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;    //offsetを自動計算
+
+    //DescriptorTable
+    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;   //DescriptorTableを使う
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; //PixelShaderで使う
+    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;  //Tableの中身の配列を指定
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);  //Tableで利用する敵
 
 
     //シリアライズしてバイナリにする
@@ -875,6 +919,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap };
         commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
+        //DescriptorTableを設定する
+        //SRVのDescriptorTableの先頭を設定。2はrootParameter[2]である。
+
         commandList->RSSetViewports(1, &viewport); //Viewportを設定
         commandList->RSSetScissorRects(1, &scissorRect); //Scirssorを設定
         // RootSignatureを設定。PSOに設定しているけど別途設定が必要 
@@ -889,6 +936,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         //wvp用のCBufferの場所を設定
         commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
 
+        commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
 
         transform.rotate.y += 0.03f;
 
