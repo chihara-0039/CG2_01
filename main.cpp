@@ -1109,6 +1109,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	useAdapter->Release();
 	dxgiFactory->Release();
 	textureResource->Release();
+	intermediateResource->Release();
 #ifdef _DEBUG
 	debugController->Release();
 #endif
