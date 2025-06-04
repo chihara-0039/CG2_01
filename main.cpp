@@ -738,7 +738,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	rtvHandles[1].ptr = rtvStartHandle.ptr + device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	device->CreateRenderTargetView(swapChainResources[1], &rtvDesc, rtvHandles[1]);
 
-
 	OutputDebugStringA("Hello, DirectX!\n");
 
 	//初期化0でFence
@@ -839,6 +838,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//ResiterzerStartの設定
 	D3D12_RASTERIZER_DESC rasterizerDesc{};
 
+	//DepthStencilStateの設定
+	D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
+	//Depthの機能を有効化する
+	depthStencilDesc.DepthEnable = true;
+	//書き込みします
+	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	//比較関数はLessEqyal。 つまり、近づければ描画される
+	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+
 	//裏面（時計回り）を表示しない
 	//rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
 
@@ -873,6 +881,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// どのように画面に色を打ち込むかの設定 (気にしなくて良い) 
 	graphicsPipelineStateDesc.SampleDesc.Count = 1;
 	graphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+	//DepthStencilの設定
+	graphicsPipelineStateDesc.DepthStencilState = depthStencilDesc;
+	graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
 	// 実際に生成
 	ID3D12PipelineState* graphicsPipelineState = nullptr;
 	hr = device->CreateGraphicsPipelineState(&graphicsPipelineStateDesc,
@@ -894,8 +907,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	vertexBufferView.SizeInBytes = sizeof(VertexData) * 6;
 	// 1頂点あたりのサイズ
 	vertexBufferView.StrideInBytes = sizeof(VertexData);
-
-
 
 	// 頂点リソースにデータを書き込む 
 	VertexData* vertexData = nullptr;
@@ -944,7 +955,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	Transform transform{ {1.0f,1.0f,1.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f} };
-	// Transform cameratransform{ {1.0f,1.0f,1.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,-5.0f,0.0f} };
 	 // 修正: "cameraTransform" が未定義のため、適切な定義を追加します。
 	Transform cameraTransform = { {1.0f, 1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f, 0.0f} };
 
@@ -959,8 +969,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	Matrix4x4* transformationMatrixData = nullptr;
 	wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixData));
-
-
 
 	// ビューポート
 	D3D12_VIEWPORT viewport{};
@@ -1087,14 +1095,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
 
-		transform.rotate.y += 0.03f;
+		//回転速度
+		transform.rotate.y += 0.01f;
 
-
+		//WVPMatrixを作る
 		Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 		Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
 		Matrix4x4 viewMatrix = Inverse(cameraMatrix);
-		Matrix4x4 projectionMatrix = MakePerspetiveFovMatrix(0.45f, (float)kClientWidth / (float)kClientHeight, 0.1f, 100.0f);
-		//WVPMatrixを作る
+		Matrix4x4 projectionMatrix = MakePerspetiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 		Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
 
 		// Matrix4x4* transformationMatrixData = nullptr;
@@ -1117,19 +1125,28 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		//ImGuiの内部コマンドを生成する
 		ImGui::Render();
 
-
-
+		//描画先のRTVとDSVを設定する
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+		commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, &dsvHandle);
+		
 		// 描画! (DrawCall/ ドローコール)。 3頂点で1つのインスタンス。 インスタンスについては今後 
 		commandList->DrawInstanced(6, 1, 0, 0);
 		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+		//指定した深度で画面全体をクリアする
+		commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 
+		
+
 		commandList->ResourceBarrier(1, &barrier);
+		
 
 		hr = commandList->Close();
 		assert(SUCCEEDED(hr));
+
 
 
 		// コマンドリストを実行
