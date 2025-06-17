@@ -507,7 +507,43 @@ ID3D12Resource* CreateTextureResource(ID3D12Device* device,
     return resource;
 }
 
-// データを転送するUploadTextureData関数を作る03_00EX
+
+ID3D12Resource* CreateTextureResource2(ID3D12Device* device,
+                                      const DirectX::TexMetadata& metadata2) {
+    // 1.metadataをもとにResourceの設定
+    D3D12_RESOURCE_DESC resourceDesc{};
+    resourceDesc.Width = UINT(metadata2.width);           // Textureの幅
+    resourceDesc.Height = UINT(metadata2.height);         // Textureの高さ
+    resourceDesc.MipLevels = UINT16(metadata2.mipLevels); // mipdmapの数
+    resourceDesc.DepthOrArraySize =
+        UINT16(metadata2.arraySize);        // 奥行き　or 配列Textureの配列数
+    resourceDesc.Format = metadata2.format; // TextureのFormat
+    resourceDesc.SampleDesc.Count = 1;     // サンプリングカウント。1固定
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(
+        metadata2.dimension); // Textureの次元数　普段使っているのは二次元
+    // 2.利用するHeapの設定。非常に特殊な運用。02_04exで一般的なケース版がある
+    D3D12_HEAP_PROPERTIES heapProperties{};
+    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT; // 細かい設定を行う//03_00EX
+    // heapProperties.CPUPageProperty =
+    //     D3D12_CPU_PAGE_PROPERTY_WRITE_BACK; //
+    //     WriteBaackポリシーでCPUアクセス可能
+    // heapProperties.MemoryPoolPreference =
+    //     D3D12_MEMORY_POOL_L0; // プロセッサの近くに配置
+
+    // 3.Resourceを生成する
+    ID3D12Resource* resource = nullptr;
+    HRESULT hr = device->CreateCommittedResource(
+        &heapProperties,      // Heapの固定
+        D3D12_HEAP_FLAG_NONE, // Heapの特殊な設定。特になし
+        &resourceDesc,        // Resourceの設定
+        D3D12_RESOURCE_STATE_COPY_DEST, // 初回のResourceState.Textureは基本読むだけ//03_00EX
+        nullptr,                        // Clear最適地。使わないのでnullptr
+        IID_PPV_ARGS(&resource)); // 作成するResourceポインタへのポインタ
+    assert(SUCCEEDED(hr));
+    return resource;
+}
+
+// データを転送するUploadTextureData関数を作る03_00
 [[nodiscard]] // 03_00EX
 ID3D12Resource*
 UploadTextureData(ID3D12Resource* texture,
@@ -516,6 +552,35 @@ UploadTextureData(ID3D12Resource* texture,
     std::vector<D3D12_SUBRESOURCE_DATA> subresources;
     DirectX::PrepareUpload(device, mipImages.GetImages(),
                            mipImages.GetImageCount(), mipImages.GetMetadata(),
+                           subresources);
+
+    uint64_t intermediateSize = GetRequiredIntermediateSize(
+        texture, 0, static_cast<UINT>(subresources.size()));
+    ID3D12Resource* intermediate = CreateBufferResource(device, intermediateSize);
+
+    UpdateSubresources(commandList, texture, intermediate, 0, 0,
+                       static_cast<UINT>(subresources.size()),
+                       subresources.data());
+
+    D3D12_RESOURCE_BARRIER barrier = {};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = texture;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    commandList->ResourceBarrier(1, &barrier);
+
+    return intermediate;
+}
+
+[[nodiscard]] // 03_00EX
+ID3D12Resource*
+UploadTextureData2(ID3D12Resource* texture,
+                  const DirectX::ScratchImage& mipImages2, ID3D12Device* device,
+                  ID3D12GraphicsCommandList* commandList) {
+    std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+    DirectX::PrepareUpload(device, mipImages2.GetImages(),
+                           mipImages2.GetImageCount(), mipImages2.GetMetadata(),
                            subresources);
 
     uint64_t intermediateSize = GetRequiredIntermediateSize(
@@ -774,6 +839,7 @@ IDxcBlob* CompileShader(
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     CoInitializeEx(0, COINIT_MULTITHREADED);
 
+
     // 誰も補足しなかった場合(Unhandled),補足する関数を登録
     // main関数はじまってすぐに登録するとよい
     SetUnhandledExceptionFilter(ExportDump);
@@ -968,6 +1034,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         reinterpret_cast<IDXGISwapChain1**>(&swapChain));
     assert(SUCCEEDED(hr));
 
+    //DescriptorSizeを取得しておく
+    const uint32_t descriptorSizeSRV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const uint32_t descriptorSizeRTV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    const uint32_t descriptorSizeDSV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
+    
+
     // RTV用のヒープでディスクリプタの数は２。RTVはSHADER内で触るものではないので、shaderVisivleはfalse02_02
     ID3D12DescriptorHeap* rtvDescriptorHeap =
         CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2, false);
@@ -1119,9 +1192,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ID3D12Resource* textureResource = CreateTextureResource(device, metadata);
     // UploadTextureData(textureResource, mipImages);
 
+    // Textureを読んで転送する2
+    DirectX::ScratchImage mipImages2 = LoadTexture("resources/iii.png");
+    const DirectX::TexMetadata& metadata2 = mipImages2.GetMetadata();
+    ID3D12Resource* textureResource2 = CreateTextureResource(device, metadata2);
+    //UploadTextureData2(textureResource2, mipImages2, device, commandList);
+
     // 03_00EX
     ID3D12Resource* intermediateResource =
         UploadTextureData(textureResource, mipImages, device, commandList);
+
+    ID3D12Resource* intermediateResource2 =
+        UploadTextureData2(textureResource2, mipImages2, device, commandList);
 
     // metaDataを基にSRVの設定03_00
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -1130,12 +1212,29 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D; // 2Dテクスチャ
     srvDesc.Texture2D.MipLevels = UINT(metadata.mipLevels);
 
+    // metaDataを基にSRVの設定2
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc2{};
+    srvDesc.Format = metadata2.format;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D; // 2Dテクスチャ
+    srvDesc.Texture2D.MipLevels = UINT(metadata2.mipLevels);
+
     // SRVを作成するDescriptorHeapの場所を決める
     D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU =
         srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
     D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU =
         srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 
+    //  SRVを作成するDescriptorHeapの場所を決める(球体）
+    D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU2 =
+        GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 2);
+    D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 =
+        GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 2);
+
+    //  SRVの生成
+    device->CreateShaderResourceView(textureResource2, &srvDesc2, textureSrvHandleCPU2);
+     
+    
     // 先頭はImGuiが使っているのでその次を使う
     textureSrvHandleCPU.ptr += device->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
