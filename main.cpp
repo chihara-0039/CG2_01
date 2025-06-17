@@ -419,7 +419,7 @@ std::string ConvertString(const std::wstring& str) {
     return result;
 }
 
-// 関数作成ヒープですか？ 02_03
+// 関数作成ヒープ 02_03
 ID3D12Resource* CreateBufferResource(ID3D12Device* device, size_t sizeInBytes) {
 
     // 頂点リソース用のヒープの設定02_03
@@ -537,7 +537,7 @@ UploadTextureData(ID3D12Resource* texture,
     return intermediate;
 }
 
-// ミップマップです03_00
+// ミップマップ03_00
 DirectX::ScratchImage LoadTexture(const std::string& filePath) {
     // テクスチャファイルを読んでプログラムで扱えるようにする
     DirectX::ScratchImage image{};
@@ -655,6 +655,20 @@ void GenerateSphereVertices(VertexData* vertices, int kSubdivision,
         }
     }
 }
+
+//CPUHandleの関数化
+D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, uint32_t descriptorSize, uint32_t index) {
+    D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    handleCPU.ptr += (descriptorSize * index);
+    return handleCPU;
+}
+
+//GPUHandle関数化
+D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, uint32_t descriptorSize, uint32_t index) {
+    D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+    return handleGPU;
+}
+
 ////////////////////
 // 関数の生成ここまで//
 ////////////////////
