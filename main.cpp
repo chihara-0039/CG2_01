@@ -671,8 +671,12 @@ D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(ID3D12DescriptorHeap* descrip
 //GPUHandle関数化
 D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, uint32_t descriptorSize, uint32_t index) {
     D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+    handleGPU.ptr += (descriptorSize * index);
     return handleGPU;
 }
+
+//bool変数を用意
+bool useMonsterBall = true;
 
 ////////////////////
 // 関数の生成ここまで//
@@ -1133,7 +1137,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // UploadTextureData(textureResource, mipImages);
 
     // Textureを読んで転送する2
-    DirectX::ScratchImage mipImages2 = LoadTexture("resources/iii.png");
+    DirectX::ScratchImage mipImages2 = LoadTexture("resources/monsterBall.png");
     const DirectX::TexMetadata& metadata2 = mipImages2.GetMetadata();
     ID3D12Resource* textureResource2 = CreateTextureResource(device, metadata2);
     //UploadTextureData(textureResource2, mipImages2, device, commandList);
@@ -1443,6 +1447,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             ImGui::SliderAngle("RotateZ", &transform.rotate.z, -180.0f, 180.0f);
             ImGui::SliderFloat3("Translate", &transform.translate.x, -5.0f, 5.0f);
             ImGui::ColorEdit4("Color", &(*materialData).x);
+            ImGui::Checkbox("useMonsterBall", &useMonsterBall);
 
             // --- アニメーション選択 ---
             ImGui::Text("Animation");
@@ -1619,7 +1624,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             // TransitionBarrierを張る
             commandList->ResourceBarrier(1, &barrier);
 
-            // 描画先のRTVうぃ設定する
+            // 描画先のRTVを設定する
             commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false,
                                             nullptr);
             // 描画先のRTVとDSVを設定する
@@ -1648,6 +1653,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU2);
 
+            
+
             // マテリアルCbufferの場所を設定
             commandList->SetGraphicsRootConstantBufferView(
                 0, materialResource->GetGPUVirtualAddress());
@@ -1663,7 +1670,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
             commandList->SetGraphicsRootConstantBufferView(
                 1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+
+            //uvCheckerとmonsterBallの切り替え
+            commandList->SetGraphicsRootDescriptorTable(2, useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
+            commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+
             commandList->DrawInstanced(6, 1, 0, 0);
+
             // 描画の最後です//----------------------------------------------------
             //  実際のcommandListのImGuiの描画コマンドを積む
             ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
@@ -1748,8 +1761,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     dxcUtils->Release();
     vertexResourceSprite->Release();
     transformationMatrixResourceSprite->Release();
-    intermediateResource2->Release();  // ← 抜けてる！
-    mipImages2.Release();  // ← 抜けてる！
+    intermediateResource2->Release();  
+    mipImages2.Release();  
 
 
     CoInitialize(nullptr);
