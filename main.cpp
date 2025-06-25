@@ -78,6 +78,11 @@ struct Fragment {
     bool active;
 };
 
+struct Material {
+    Vector4 color;
+    int32_t enableLighting;
+};
+
 // 変数//--------------------
 // 16分割
 const int kSubdivision = 16;
@@ -596,6 +601,8 @@ ID3D12Resource* CreateDepthStencilTextureResource(ID3D12Device* device,
     return resource;
 }
 
+
+
 // 球の頂点生成関数_05_00_OTHER新しい書き方
 void GenerateSphereVertices(VertexData* vertices, int kSubdivision,
                             float radius) {
@@ -676,12 +683,13 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descrip
     return handleGPU;
 }
 
-//bool変数を用意
-bool useMonsterBall = true;
-
 ////////////////////
 // 関数の生成ここまで//
 ////////////////////
+
+//bool変数を用意
+bool useMonsterBall = true;
+
 
 // ウィンドウプロシージャ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -1397,6 +1405,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 今回は赤を書き込んでみる
     *materialData = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 
+    //Sprite用のマテリアルリソースを作る
+    ID3D12Resource* materialResourceSprite = CreateBufferResource(device, sizeof(Material));
+    // マテリアルにデータを書き込む
+    Material* materialDataSprite = nullptr;
+    // 書き込むためのアドレスを取得
+    materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialDataSprite));
+    // 今回は白を書き込んでみる
+    *materialData = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    //SpriteはLightingしないのでfalseを設定する
+    materialDataSprite->enableLighting = false;
+
     // WVPリソースを作る02_02
     ID3D12Resource* wvpResource = CreateBufferResource(device, sizeof(Matrix4x4));
     // データを書き込む02_02
@@ -1764,6 +1784,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #ifdef _DEBUG
     debugController->Release();
     materialResource->Release();
+    materialResourceSprite->Release();
     wvpResource->Release();
     srvDescriptorHeap->Release();
     textureResource->Release();      // 03_00
