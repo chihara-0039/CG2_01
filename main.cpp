@@ -412,7 +412,7 @@ std::string ConvertString(const std::wstring& str) {
 }
 
 // 関数作成ヒープですか？ 02_03
-ID3D12Resource* CreateBufferRespource(ID3D12Device* device,
+ID3D12Resource* CreateBufferResource(ID3D12Device* device,
     size_t sizeInBytes) {
 
     // 頂点リソース用のヒープの設定02_03
@@ -1361,13 +1361,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     assert(SUCCEEDED(hr));
 
     ID3D12Resource* vertexResource =
-        CreateBufferRespource(device, sizeof(VertexData) * kNumVertices);
+        CreateBufferResource(device, sizeof(VertexData) * kNumVertices);
 
     // sprite用の頂点リソースを作る04_00
     ID3D12Resource* vertexResourceSprite =
-        CreateBufferRespource(device, sizeof(VertexData) * kNumVertices);
+        CreateBufferResource(device, sizeof(VertexData) * kNumVertices);
 
-    ID3D12Resource* materialResourceSprite = CreateBufferRespource(device, sizeof(Material));
+    ID3D12Resource* materialResourceSprite = CreateBufferResource(device, sizeof(Material));
 
     Material* materialDataSprite = nullptr;
 
@@ -1589,6 +1589,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     viewport.MinDepth = 0.0f;
     viewport.MaxDepth = 1.0f;
 
+    //まずResourceを作成する。 １つあたりのIndexのサイズは32bitとするので、必要なサイズは32bit*6
+    ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint32_t) * 6);
+
+    D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite{};
+    //リソースの先頭のアドレスから使う
+    indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
+    //使用するリソースのサイズはインデックス6つ分のサイズ
+    indexBufferViewSprite.SizeInBytes = sizeof(uint32_t) * 6;
+    //インデックスはuint32_tとする
+    indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
+    //インデックス
+
+
     // シザー矩形
     D3D12_RECT scissorRect{};
     // 基本的にビューポートと同じ矩形が構成されるようにする
@@ -1598,7 +1611,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     scissorRect.bottom = kClientHeight;
     // マテリアル用のリソースを作る今回はcolor一つ分のサイズを用意する
     ID3D12Resource* materialResource =
-        CreateBufferRespource(device, sizeof(Material));
+        CreateBufferResource(device, sizeof(Material));
     // マテリアルにデータを書き込む
     Material* materialData = nullptr;
     // 書き込むためのアドレスを取得
@@ -1609,7 +1622,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     // WVPリソースを作る02_02
     ID3D12Resource* wvpResource =
-        CreateBufferRespource(device, sizeof(TransformationMatrix));
+        CreateBufferResource(device, sizeof(TransformationMatrix));
     // データを書き込む02_02
     TransformationMatrix* wvpData = nullptr;
     // 書き込むためのアドレスを取得02_02
@@ -1623,7 +1636,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // sprite用のTransfomationMatrix用のリソースを作る。Matrix4x4
     // 1つ分のサイズを用意する04_00
     ID3D12Resource* transformationMatrixResourceSprite =
-        CreateBufferRespource(device, sizeof(TransformationMatrix));
+        CreateBufferResource(device, sizeof(TransformationMatrix));
     // sprite用のデータを書き込む04_00
     TransformationMatrix* transformationMatrixDataSprite = nullptr;
     // sprite用の書き込むためのアドレスを取得04_00
@@ -1652,7 +1665,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 
-    ID3D12Resource* directionalLightResource = CreateBufferRespource(device, sizeof(DirectionalLight));
+    ID3D12Resource* directionalLightResource = CreateBufferResource(device, sizeof(DirectionalLight));
     DirectionalLight* directionalLightData = nullptr;
     directionalLightResource->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData));
     directionalLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -1901,6 +1914,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     dsvDescriptorHeap->Release();    // 03_01
     depthStencilResource->Release(); // 03_01
     textureResource2->Release();
+    indexResourceSprite->Release();
 
     vertexResourceSprite->Release();
     transformationMatrixResourceSprite->Release();
