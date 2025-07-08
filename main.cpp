@@ -1,26 +1,38 @@
 ﻿#define _USE_MATH_DEFINES
-#include "vector"
-#include <Windows.h>
+
+// 標準ライブラリ
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <cmath>       // math.hよりcmath推奨
+#include <filesystem>
+#include <fstream>
+#include <numbers>
+#include <string>
+#include <vector>      // "vector" → <vector> に修正
+// #include <format>    // 使用中ならコメントアウト解除
+
+// Windows
+#include <Windows.h>
+#include <strsafe.h>
+
+// DirectX 12 関連
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include <filesystem>
-#include <math.h>
-#include <string>
-#include <numbers>
-// #include <format>
-#include <fstream>
-#include <strsafe.h>
+#include <dxgidebug.h>
+#include <dxcapi.h>
+
+// デバッグ用
+#include <dbghelp.h>
+
+// ライブラリリンク
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
-#include <dbghelp.h>
-#pragma comment(lib, "dbghelp.lib")
-#include <dxgidebug.h>
 #pragma comment(lib, "dxguid.lib")
-#include <dxcapi.h>
 #pragma comment(lib, "dxcompiler.lib")
+#pragma comment(lib, "dbghelp.lib")
+
+// 外部ライブラリ
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
