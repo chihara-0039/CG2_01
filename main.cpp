@@ -1599,8 +1599,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     indexBufferViewSprite.SizeInBytes = sizeof(uint32_t) * 6;
     //インデックスはuint32_tとする
     indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
-    //インデックス
-
+    //インデックスリソースにデータを書き込む
+    uint32_t* indexDataSprite = nullptr;
+    indexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
+    indexDataSprite[0] = 0; indexDataSprite[1] = 1; indexDataSprite[2] = 2;
+    indexDataSprite[3] = 1; indexDataSprite[4] = 3; indexDataSprite[4] = 2;
 
     // シザー矩形
     D3D12_RECT scissorRect{};
@@ -1826,12 +1829,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
             // Sprite用VBV
             commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
+            commandList->IASetIndexBuffer(&indexBufferViewSprite);  //IBVを設定
+
             // CBuffer設定
             commandList->SetGraphicsRootConstantBufferView(
                 0, materialResourceSprite->GetGPUVirtualAddress());
             commandList->SetGraphicsRootConstantBufferView(
                 1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
 
+            //描画！  (DrawCall/ドローコール) 6個のインデックスを使用し1つのインスタンスを描画。 その他は当面0で良い
+            commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
             // Spriteの描画（DrawInstanced）
             commandList->DrawInstanced(6, 1, 0, 0);
