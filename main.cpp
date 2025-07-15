@@ -88,6 +88,7 @@ struct Fragment {
 struct Material {
     Vector4 color;
     int32_t enableLighting;
+	float padding[3]; // 16バイト境界のためのパディング
     Matrix3x3 uvTransform;
 };
 struct TransformationMatrix {
@@ -1349,6 +1350,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 今回は赤を書き込んでみる
     materialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
     materialData->enableLighting = true;
+	materialData->uvTransform = MakeIdentity4x4();
     //--------------------------
     // WVP行列
     //--------------------------
@@ -1493,6 +1495,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 今回は白を設定
     materialDataSprite->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
     materialDataSprite->enableLighting = false; // kokomonstrball?
+    materialDataSprite->uvTransform = MakeIdentity4x4();
 
     // sprite用のTransfomationMatrix用のリソースを作る。Matrix4x4
     // 1つ分のサイズを用意する04_00
