@@ -1780,51 +1780,79 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    // 解放処理CG2_01_03
+    // 解放処理 CG2_01_03
+
+// イベントとフェンス
     CloseHandle(fenceEvent);
     fence->Release();
-    rtvDescriptorHeap->Release();
-    swapChainResources[0]->Release();
-    swapChainResources[1]->Release();
-    swapChain->Release();
+
+    // コマンド関連
     commandList->Release();
     commandAllocator->Release();
     commandQueue->Release();
+
+    // スワップチェインとレンダーターゲット
+    swapChainResources[0]->Release();
+    swapChainResources[1]->Release();
+    swapChain->Release();
+    rtvDescriptorHeap->Release();
+
+    // デバイスとアダプタ、ファクトリ
     device->Release();
     useAdapter->Release();
     dxgiFactory->Release();
-    vertexResource->Release();
+
+    // パイプラインとルートシグネチャ
     graphicsPinelineState->Release();
+    rootSignature->Release();
     signatureBlob->Release();
+
+    // シェーダー関連
+    vertexShaderBlob->Release();
+    pixelShaderBlob->Release();
     if (errorBlob) {
         errorBlob->Release();
     }
-    rootSignature->Release();
-    pixelShaderBlob->Release();
-    vertexShaderBlob->Release();
+
+    // デバッグレイヤー
 #ifdef _DEBUG
     debugController->Release();
+
+    // 描画用リソース（基本）
+    vertexResource->Release();
     materialResource->Release();
     wvpResource->Release();
+
+    // テクスチャ＆SRV
+    textureResource->Release();            // 03_00
     srvDescriptorHeap->Release();
-    textureResource->Release();      // 03_00
-    mipImages.Release();             // 03_00
-    intermediateResource->Release(); // 03_00EX
+    mipImages.Release();                   // 03_00
+    intermediateResource->Release();       // 03_00EX
+
+    // 深度ステンシル関連
     depthStencillResource->Release();
     dsvDescriptorHeap->Release();
+
+    // HLSLコンパイラ関連
     includHandler->Release();
     dxcCompiler->Release();
     dxcUtils->Release();
+
+    // スプライト関連（05_01 ～ 05_03）
     vertexResourceSprite->Release();
-    transformationMatrixResourceSprite->Release();
-    intermediateResource->Release();   // 05_01
-    intermediateResource2->Release();  // 05_01
-    textureResource2->Release();       // 05_01
-    materialResourceSprite->Release(); // 05_03
-    directionalLightResource->Release();
     indexResourceSprite->Release();
+    transformationMatrixResourceSprite->Release();
+    materialResourceSprite->Release();
+    textureResource2->Release();          // 05_01
+    intermediateResource2->Release();     // 05_01
+
+    // 球体モデル関連
     vertexResourceSphere->Release();
     indexResourceSphere->Release();
+
+    // ライティング
+    directionalLightResource->Release();
+
     CoInitialize(nullptr);
 #endif
     CloseWindow(hwnd);
