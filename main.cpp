@@ -1658,9 +1658,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     directionalLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
     directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
     directionalLightData->intensity = 1.0f;
-    directionalLightData->direction = Normalize(directionalLightData->direction);
-
-
+   
 
     MSG msg{};
 
@@ -1735,6 +1733,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                     Multiply(viewMatrixSprite, projectionMatrixSprite));
             transformationMatrixDataSprite->WVP = woroldViewProjectionMatrixSprite;
 
+
+            directionalLightData->direction = Normalize(directionalLightData->direction);
 
 
 
