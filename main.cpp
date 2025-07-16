@@ -1766,7 +1766,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                 // イベント待つ01_02
                 WaitForSingleObject(fenceEvent, INFINITE);
             }
-            // 次のｆｒａｍｅ用のコマンドりイストを準備
+            // 次のframe用のコマンドリストを準備
             hr = commandAllocator->Reset();
             assert(SUCCEEDED(hr));
             hr = commandList->Reset(commandAllocator, nullptr);
