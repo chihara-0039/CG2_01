@@ -1,29 +1,45 @@
-﻿#define _USE_MATH_DEFINES
+﻿// --- 定数定義 ---
+#define _USE_MATH_DEFINES
+
+// --- Windows / 標準ライブラリ ---
 #include <Windows.h>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <strsafe.h>
+#include <vector>
+
+// --- Direct3D 12 / DXGI 関連 ---
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include <filesystem>
-#include <string>
-#include <vector>
-#include <format>
-#include <fstream>
-#include <strsafe.h>
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
+
+// --- DirectX デバッグ支援 ---
 #include <dbghelp.h>
-#pragma comment(lib, "dbghelp.lib")
 #include <dxgidebug.h>
+#pragma comment(lib, "dbghelp.lib")
 #pragma comment(lib, "dxguid.lib")
+
+// --- DXC (Shader Compiler) ---
 #include <dxcapi.h>
 #pragma comment(lib, "dxcompiler.lib")
+
+// --- DirectXTex ---
 #include "externals/DirectXTex/DirectXTex.h"
-#include "externals/DirectXTex/d3dx12.h"
+#include "externals/DirectXTex/d3dx12.h" // d3dx12.h はヘッダのみ
+
+// --- ImGui ---
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
+
+// --- その他（必要ならアンコメント） ---
+// #include <format>  // C++20 の format 機能
+
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd,
                                                              UINT msg,
@@ -1747,20 +1763,29 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    // 解放処理CG2_01_03
+    // === 解放処理 ===
+
+// --- 同期・イベント系 ---
     CloseHandle(fenceEvent);
     fence->Release();
+
+    // --- スワップチェイン / RTV ---
     rtvDescriptorHeap->Release();
     swapChainResources[0]->Release();
     swapChainResources[1]->Release();
     swapChain->Release();
+
+    // --- コマンド系 ---
     commandList->Release();
     commandAllocator->Release();
     commandQueue->Release();
+
+    // --- デバイス・アダプタ ---
     device->Release();
     useAdapter->Release();
     dxgiFactory->Release();
-    vertexResource->Release();
+
+    // --- パイプライン / シェーダ ---
     graphicsPinelineState->Release();
     signatureBlob->Release();
     if (errorBlob) {
@@ -1769,27 +1794,46 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     rootSignature->Release();
     pixelShaderBlob->Release();
     vertexShaderBlob->Release();
-#ifdef _DEBUG
-    debugController->Release();
+
+    // --- 通常描画用リソース ---
+    vertexResource->Release();
     materialResource->Release();
     wvpResource->Release();
     srvDescriptorHeap->Release();
-    textureResource->Release();      // 03_00
-    mipImages.Release();             // 03_00
-    intermediateResource->Release(); // 03_00EX
+
+    // --- テクスチャ / ミップマップ ---
+    textureResource->Release();         // 03_00
+    mipImages.Release();                // 03_00
+    intermediateResource->Release();    // 03_00EX
+
+    // --- DepthStencil ---
     depthStencillResource->Release();
     dsvDescriptorHeap->Release();
+
+    // --- DXC関連 ---
     includHandler->Release();
     dxcCompiler->Release();
     dxcUtils->Release();
+
+    // --- スプライト用 ---
     vertexResourceSprite->Release();
     transformationMatrixResourceSprite->Release();
-    intermediateResource->Release();   // 05_01
-    intermediateResource2->Release();  // 05_01
-    textureResource2->Release();       // 05_01
-    materialResourceSprite->Release(); // 05_03
-    directionalLightResource->Release();
+    intermediateResource2->Release();     // 05_01
+    textureResource2->Release();          // 05_01
+    materialResourceSprite->Release();    // 05_03
     indexResourceSprite->Release();
+
+    // --- 照明 ---
+    directionalLightResource->Release();
+
+    // --- 球体モデル用 ---
+    //vertexResourceSphere->Release();
+    //indexResourceSphere->Release();
+
+#ifdef _DEBUG
+    // --- デバッグレイヤー（DEBUG時のみ） ---
+    debugController->Release();
+
     CoInitialize(nullptr);
 #endif
     CloseWindow(hwnd);
