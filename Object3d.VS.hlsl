@@ -1,23 +1,22 @@
-#include "Object3d.hlsli"
+#include "object3d.hlsli"
 
-struct TransformationMatrix
-{
-    float32_t4x4 WVP;
-    float32_t4x4 World;
-
-};
-
+//struct TransformationMatrix
+//{
+//    float32_t4x4 WVP;@//‘—¿‚É‚æ‚ê‚Îhlsl‚É‘‚­
+//};
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
 
-struct VertexShaderInput
-{
 
+
+struct VertexSgaderInput
+{
     float32_t4 position : POSITION0;
     float32_t2 texcoord : TEXCOORD0;
     float32_t3 normal : NORMAL0;
 };
 
-VertexShaderOutput main(VertexShaderInput input)
+
+VertexShaderOutput main(VertexSgaderInput input)
 {
     VertexShaderOutput output;
     output.position = mul(input.position, gTransformationMatrix.WVP);
