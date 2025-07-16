@@ -15,9 +15,9 @@ ConstantBuffer<Material> gMaterial : register(b0);
 
 struct DirectionalLight
 {
-    float32_t4 color;
-    float32_t3 direction;
-    float intensity;
+    float32_t4 color;      //ライトの色
+    float32_t3 direction;   //ライトの向き
+    float intensity;    //ライトの強度
 
 };
 
@@ -35,9 +35,6 @@ PixelShaderOutput main(VertexShaderOutput input)
     PixelShaderOutput output;
 
     float32_t4 textureColor = gTexture.Sample(gSampler, input.texcoord);
-
-
-
 
 
     if (gMaterial.enableLighting != 0)

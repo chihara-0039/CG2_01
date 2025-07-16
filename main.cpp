@@ -80,9 +80,9 @@ struct TransformationMatrix {
 };
 
 struct DirectionalLight {
-    Vector4 color;
-    Vector3 direction;
-    float intensity;
+    Vector4 color;  //!<ライトの色
+	Vector3 direction;  //!<ライトの方向
+	float intensity;  //!<ライトの強度
 };
 
 // 変数//--------------------
