@@ -11,7 +11,6 @@
 #include <string>
 #include <strsafe.h>
 #include <vector>
-#include <fstream>
 #include <sstream>
 
 // --- Direct3D 12 / DXGI 関連 ---
@@ -100,6 +99,11 @@ struct DirectionalLight {
 
 struct ModelData {
 	std::vector<VertexData> vertices;
+	//MaterialData material;
+};
+
+struct MaterialData {
+	std::string textureFilePath;
 };
 
 // 変数//--------------------
@@ -751,6 +755,41 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
 	return modelData; // 読み込んだデータを返す
 }
 
+
+//mtlファイルを読む関数
+//MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename) {
+//	// 1. 中で必要となる変数の宣言
+//	MaterialData materialData; // MaterialDataを返すための変数
+//	std::string line; // ファイルから読み込む行を格納する変数
+//
+//	// 2. ファイルを開く
+//	std::ifstream file(directoryPath + "/" + filename); // ファイルを開く
+//	assert(file.is_open()); // とりあえず開けなかったらアサート
+//
+//	// 3. 実際にファイルを読み、MaterialDataを構築していく
+//	while (std::getline(file, line)) {
+//		std::string identifier; // 行の識別子を格納する変数
+//		std::istringstream s(line); // 行をストリームに変換
+//		s >> identifier; // 行の識別子を取得
+//
+//		// identifierに応じて処理を分岐
+//		if (identifier == "map_kd") { // 新しいマテリアルの定義
+//			std::string textureFilename; // テクスチャファイル名を格納する変数
+//			s >> textureFilename; // マテリアル名を読み込む
+//			//連続してファイルパスにする
+//			materialData.textureFilePath = directoryPath + "/" + textureFilename;
+//
+//		} else if (identifier == "mtllib") {
+//			//materialTemp;ateLibraryファイルの名前を取得する
+//			std::string materialFilename;
+//			s >> materialFilename; // マテリアルライブラリファイル名を読み込む
+//			// 基本的にobjファイルと同一階層に存在させるので、ディレクトリ名とファイル名を渡す
+//			modelData.material = LoadMaterialTemplateFile()
+//		}
+//	}
+//		//4. MaterialData を返す
+//		return materialData;
+//}
 ////////////////////
 // 関数の生成ここまで//
 ////////////////////
@@ -1364,8 +1403,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 通常モデル用リソース
 	//--------------------------
 	
+#pragma region 通常モデル用リソースの作成箇所
 	//モデル読み込み
-	ModelData modelData = LoadObjFile("resources", "plane.pbj");
+	ModelData modelData = LoadObjFile("Resources", "axis.obj");
 	//頂点リソースの生成
 	ID3D12Resource* vertexResource =
 		CreateBufferResource(device, sizeof(VertexData) * modelData.vertices.size());
@@ -1407,18 +1447,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	vertexBufferView.SizeInBytes = UINT(sizeof(VertexData) * modelData.vertices.size()); // 使用するリソースのサイズは頂点３つ分のサイズ
 	vertexBufferView.StrideInBytes = sizeof(VertexData); // 1頂点あたりのサイズ
 
+#pragma region 頂点データの書き込み(古いやつ)
 	//// リソースの先頭のアドレスから使う
 	//vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
 	//// 使用するリソースのサイズは頂点３つ分のサイズ
 	//vertexBufferView.SizeInBytes = sizeof(VertexData) * kNumVertices;
 	//// 1頂点あたりのサイズ
 	//vertexBufferView.StrideInBytes = sizeof(VertexData);
+#pragma endregion
 
 	//頂点リソースにデータを書き込む
 	VertexData* vertexData = nullptr;
 	vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));	//書き込むためのアドレスを取得
-	std::memcpy(vertexData, modelData.vertices.data(), sizeof(VertexData)* modelData.vertices.size());
+	std::memcpy(vertexData, modelData.vertices.data(), sizeof(VertexData)* modelData.vertices.size());//頂点データをリソースにコピー
 
+#pragma endregion
 	//--------------------------
 	// マテリアル
 	//--------------------------
