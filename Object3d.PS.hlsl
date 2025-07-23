@@ -19,7 +19,7 @@ PixelShaderOutput main(VertexShaderOutput input)
     PixelShaderOutput output;
     output.color = gMaterial.color;
 
-    //これは不要同じスコープで二回宣言するとエラーになる06_01
+    //これは不要同じスコープで二回宣言するとエラーになるからねー06_01
     //float32_t4 textureColor = gTexture.Sample(gSampler, input.texcoord);
 
     // UV座標を同次座標系に拡張して（x, y, 1.0）、アフィン変換を適用する
