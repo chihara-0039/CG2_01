@@ -6,7 +6,7 @@
 //    float32_t4x4 WVP;@//‘—¿‚Éhlsl‚É‘‚¯‚Á‚Ä‚ ‚Á‚½‚©‚ç‚»‚Á‚¿‚É‘‚­‚æ
 //};
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
-
+    
 
 
 struct VertexSgaderInput
