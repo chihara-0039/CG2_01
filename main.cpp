@@ -915,7 +915,7 @@ ModelData LoadOjFile(const std::string& directoryPath,
             modelData.vertices.push_back(triangle[2]);
             modelData.vertices.push_back(triangle[1]);
             modelData.vertices.push_back(triangle[0]);
-            //?
+            
         } else if (identifiler == "mtllib") {
             // materialTemplateLibraryファイルの名前を取得する
             std::string materialFilename;
@@ -1289,10 +1289,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = UploadTextureData(textureResource.Get(), mipImages, device.Get(),
         commandList.Get()); //?
     // モデル読み込み
-    ModelData modelData = LoadOjFile("resources", "Plane.obj");
+    ModelData modelData = LoadOjFile("resources", "plane.obj");
 
-    std::cout << "テクスチャファイルパス: " << modelData.material.textureFilePath
-        << std::endl;
+    std::cout << "テクスチャファイルパス: " << modelData.material.textureFilePath<< std::endl;
 
     if (!std::filesystem::exists(modelData.material.textureFilePath)) {
         std::cerr << "ファイルが存在しません！" << std::endl;
@@ -1669,7 +1668,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     assert(SUCCEEDED(hr));
 
     // スフィア作成_05_00_OTHER
-    // GenerateSphereVertices(vertexData, kSubdivision, 0.5f);
+    //GenerateSphereVertices(vertexData, kSubdivision, 0.5f);
 
     // ImGuiの初期化。詳細はさして重要ではないので解説は省略する。02_03
     // こういうもんである02_03
@@ -1709,6 +1708,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             ImGui::SliderAngle("RotateZ", &transform.rotate.z, -180.0f, 180.0f);
             ImGui::SliderFloat3("Translate", &transform.translate.x, -5.0f, 5.0f);
 
+            ImGui::SliderFloat3("TranslateSprite", &transformSprite.translate.x, -50.0f, 500.0f);
+
             /*   ImGui::ColorEdit4("Color", &(*materialData).x);*/
             ImGui::Text("useMonstarBall");
             ImGui::Checkbox("useMonstarBall", &useMonstarBall);
@@ -1729,8 +1730,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             ImGui::End();
 
             // ImGuiの内部コマンドを生成する02_03
-            ImGui::
-                Render(); // ImGui終わりの場所。描画の前02_03--------------------------
+            ImGui::Render(); // ImGui終わりの場所。描画の前02_03--------------------------
             // 描画用のDescrriptorHeapの設定02_03
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeaps[] = {
                 srvDescriptorHeap
@@ -1757,7 +1757,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             // CBVのバッファに書き込む02_02
             // CBVに正しい行列を書き込む
             memcpy(&wvpData->WVP, &worldViewProjectionMatrix, sizeof(Matrix4x4));
-
+			memcpy(&wvpData->World, &worldMatrix, sizeof(Matrix4x4));
+            //memcpy()
             // Sprite用のworldviewProjectionMatrixを作る04_00
             Matrix4x4 worldMatrixSprite = MakeAffineMatrix(transformSprite.scale, transformSprite.rotate,
                 transformSprite.translate);
@@ -1829,6 +1830,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             commandList->SetGraphicsRootDescriptorTable(
                 2, useMonstarBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
 
+            // 平行光源用のCbufferの場所を設定05_03
+            commandList->SetGraphicsRootConstantBufferView(
+                3, directionalLightResource->GetGPUVirtualAddress());
+
             // マテリアルCbufferの場所を設定05_03変更
             commandList->SetGraphicsRootConstantBufferView(
                 0, materialResource->GetGPUVirtualAddress()); // ここでmaterialResource使え
@@ -1836,9 +1841,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             // wvp用のCBufferの場所を設定02_02
             commandList->SetGraphicsRootConstantBufferView(
                 1, wvpResource->GetGPUVirtualAddress());
-            // 平行光源用のCbufferの場所を設定05_03
-            commandList->SetGraphicsRootConstantBufferView(
-                3, directionalLightResource->GetGPUVirtualAddress());
+            
 
             // 描画！(DRAWCALL/ドローコール)。３頂点で１つのインスタンス。インスタンスについては今後_05_00_OHTER
             // commandList->DrawInstanced(kNumVertices, 1, 0, 0);
