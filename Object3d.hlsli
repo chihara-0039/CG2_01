@@ -1,4 +1,4 @@
-//03_00
+﻿//03_00
 struct VertexShaderOutput
 {
     float32_t4 position : SV_POSITION;

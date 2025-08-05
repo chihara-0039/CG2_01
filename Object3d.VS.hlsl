@@ -1,9 +1,9 @@
-#include "object3d.hlsli"
+ï»¿#include "object3d.hlsli"
 
-//‰‚ß‚Ä‚ÌVertexShader/CG2_02_00
+//åˆã‚ã¦ã®VertexShader/CG2_02_00
 //struct TransformationMatrix
 //{
-//    float32_t4x4 WVP;@//‘—¿‚Éhlsl‚É‘‚¯‚Á‚Ä‚ ‚Á‚½‚©‚ç‚»‚Á‚¿‚É‘‚­‚æ
+//    float32_t4x4 WVP;ã€€//è³‡æ–™ã«hlslã«æ›¸ã‘ã£ã¦ã‚ã£ãŸã‹ã‚‰ãã£ã¡ã«æ›¸ãã‚ˆ
 //};
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
     
