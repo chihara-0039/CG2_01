@@ -1371,6 +1371,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     D3D12_BLEND_DESC blendDesc{};
     // 全ての色要素を書き込む
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    blendDesc.RenderTarget[0].BlendEnable = TRUE;
+    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA; //これから書き込む色。つまりPixelShaderから出力する色
+	blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;      //これから書き込むα。つまりPixelShaderから出力するα
+	blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;  //既に書き込まれている色。つまりフレームバッファにある色
+	//Result = SrcColor * SrcAlpha + DestColor * (1 - SrcAlpha)
+
+    //α値のブレンド設定で基本的に使わない。書いてある通りにしておけばいい
+    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+    blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+
 
     // RasiterzerStateの設定
     D3D12_RASTERIZER_DESC rasterizerDesc{};
@@ -1726,6 +1737,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             ImGui::DragFloat2("UVScale", &uvTransformSprite.scale.x, 0.01f, -10.0f,
                 10.0f);
             ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
+
+            // ---- 3Dモデル用の色＆アルファ ----
+            ImGui::SeparatorText("3D Material");
+            ImGui::ColorEdit3("Color (RGB, 3D)", &materialData->color.x);   // 色だけ
+            ImGui::SliderFloat("Alpha (3D)", &materialData->color.w, 0.0f, 1.0f);
+
+            // ---- スプライト用の色＆アルファ ----
+            ImGui::SeparatorText("Sprite Material");
+            ImGui::ColorEdit3("Color (RGB, Sprite)", &materialDataSprite->color.x);
+            ImGui::SliderFloat("Alpha (Sprite)", &materialDataSprite->color.w, 0.0f, 1.0f);
+
 
             ImGui::End();
 
