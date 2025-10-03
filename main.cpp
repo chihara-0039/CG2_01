@@ -1289,7 +1289,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = UploadTextureData(textureResource.Get(), mipImages, device.Get(),
         commandList.Get()); //?
     // モデル読み込み
-    ModelData modelData = LoadOjFile("resources", "axis.obj");
+    ModelData modelData = LoadOjFile("resources", "fence.obj");
 
     std::cout << "テクスチャファイルパス: " << modelData.material.textureFilePath<< std::endl;
 
@@ -1420,6 +1420,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     depthStencilDesc.DepthEnable = true;
     // 書き込みします
     depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    //depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     // 比較関数はLessEqual。つまり、近ければ描画される
     depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     // depthStenncillの設定
