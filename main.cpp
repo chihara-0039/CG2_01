@@ -628,6 +628,8 @@ CreateDepthStencilTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device,
     return resource.Get();
 }
 
+
+
 // 球の頂点生成関数_05_00_OTHER新しい書き方
 void GenerateSphereVertices(VertexData* vertices, int kSubdivision,
     float radius) {
@@ -1289,7 +1291,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = UploadTextureData(textureResource.Get(), mipImages, device.Get(),
         commandList.Get()); //?
     // モデル読み込み
-    ModelData modelData = LoadOjFile("resources", "fence.obj");
+    ModelData modelData = LoadOjFile("resources", "plane.obj");
 
     std::cout << "テクスチャファイルパス: " << modelData.material.textureFilePath<< std::endl;
 
