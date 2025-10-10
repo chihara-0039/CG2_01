@@ -481,7 +481,7 @@ CreateBufferResource(ID3D12Device* device, size_t sizeInBytes) {
         IID_PPV_ARGS(&vertexResource));
     assert(SUCCEEDED(hr));
 
-    return vertexResource.Get();
+    return vertexResource;
 }
 
 //=== D3D12ディスクリプタヒープ作成 ===
@@ -503,7 +503,7 @@ CreateDescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
         IID_PPV_ARGS(&DescriptorHeap));
     // ディスクリプタヒープが作れなかったので起動できない
     assert(SUCCEEDED(hr)); // 1
-    return DescriptorHeap.Get();
+    return DescriptorHeap;
 }
 
 //=== D3D12テクスチャリソース作成（DEFAULTヒープ） ===
@@ -539,7 +539,7 @@ CreateTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device,
         nullptr, // Clear最適地。使わないのでnullptr
         IID_PPV_ARGS(&resource)); // 作成するResourceポインタへのポインタ
     assert(SUCCEEDED(hr));
-    return resource.Get();
+    return resource;
 }
 
 // データを転送するUploadTextureData関数を作る03_00EX
@@ -625,7 +625,7 @@ CreateDepthStencilTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device,
         D3D12_RESOURCE_STATE_DEPTH_WRITE, &depthClearValue,
         IID_PPV_ARGS(&resource));
     assert(SUCCEEDED(hr));
-    return resource.Get();
+    return resource;
 }
 
 // 球の頂点生成関数_05_00_OTHER新しい書き方
@@ -795,7 +795,7 @@ Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
     // shaderSource->Release();
     // shaderResult->Release();
     // 実行用のバイナリを返却02_00
-    return shaderBlob.Get(); // get
+    return shaderBlob; // get
 }
 
 // CG2_05_01_page_5
@@ -1380,6 +1380,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 三角形の中を塗りつぶす
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
     rasterizerDesc.FrontCounterClockwise = FALSE;
+
+	// シェーダーのコンパイル
+    auto vs = L"Resources/shaders/hlsl/Object3d.VS.hlsl";
+    auto ps = L"Resources/shaders/hlsl/Object3d.PS.hlsl";
+    auto vsBlob = CompileShader(vs, L"vs_6_0", dxcUtils, dxcCompiler, includHandler, logStream);
+    auto psBlob = CompileShader(ps, L"ps_6_0", dxcUtils, dxcCompiler, includHandler, logStream);
+
+
     // Shaderをコンパイルする
     Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"Object3d.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler,
         includHandler, logStream);
