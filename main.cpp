@@ -383,6 +383,18 @@ Vector3 Normalize(const Vector3& v) {
         return { 0.0f, 0.0f, 0.0f };
     return { v.x / length, v.y / length, v.z / length };
 }
+
+//Instancing用のTransform
+
+// インスタンス数
+const uint32_t kNumInstance = 10;
+Transform transforms[kNumInstance];
+for (uint32_t index = 0; index < kNumInstance; ++index) {
+    transforms[index].scale = { 1.0f,1.0f,1.0f };
+    transforms[index].rotate = { 0.0f,0.0f,0.0f };
+    transforms[index].translate = { index * 0.1f,index * 0.1f,index * 0.1f };
+};
+
 #pragma endregion
 
 //===エラーハンドリング用の身にダンプ出力関数===///
@@ -1243,20 +1255,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     rootParameters[1].Descriptor.ShaderRegister = 0; // 得wジスタ番号０を使う
     // ここまで[2]
     // 新しいディスクリプタレンジ03_00
-    D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-    descriptorRange[0].BaseShaderRegister = 0; // 0から始まる
-    descriptorRange[0].NumDescriptors = 1; // 数は1つ
-    descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
-    descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // Offsetを自動計算
+    D3D12_DESCRIPTOR_RANGE descriptorRangeForInstancing[1] = {};
+    descriptorRangeForInstancing[0].BaseShaderRegister = 0; // 0から始まる
+    descriptorRangeForInstancing[0].NumDescriptors = 1; // 数は1つ
+    descriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
+    descriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // Offsetを自動計算
     descriptionRootSignature.pParameters = rootParameters; // ルートパラメータ配列へのポインタ
     descriptionRootSignature.NumParameters = _countof(rootParameters); // 配列の長さ
 
     // 新しいディスクリプタレンジ03_00
     // ここから[3]03_00
     rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; // DescriptorTableを使う
-    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
-    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange; // Tableの中身の配列を指定
-    rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange); // Tableで利用する数
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // PixelShaderで使う
+    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRangeForInstancing; // Tableの中身の配列を指定
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForInstancing); // Tableで利用する数
     // ここまで[3]//05_03追加しろー
     rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PxelShaderで使う
@@ -1293,7 +1305,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // モデル読み込み
     ModelData modelData = LoadOjFile("resources", "plane.obj");
 
+    modelData.vertices.push_back({ .position = {1.0f, 1.0f, 0.0f, 1.0f},.texcoord = {0.0f, 0.0f},.normal = {0.0f, 0.0f, 1.0f } }); //左上
+    modelData.vertices.push_back({ .position = {-1.0f, 1.0f, 0.0f, 1.0f},.texcoord = {1.0f, 0.0f},.normal = {0.0f, 0.0f, 1.0f } }); //右上
+    modelData.vertices.push_back({ .position = {1.0f, -1.0f, 0.0f, 1.0f},.texcoord = {0.0f, 1.0f},.normal = {0.0f, 0.0f, 1.0f } }); //左下
+    modelData.vertices.push_back({ .position = {1.0f, -1.0f, 0.0f, 1.0f},.texcoord = {0.0f, 1.0f},.normal = {0.0f, 0.0f, 1.0f } }); //左下
+    modelData.vertices.push_back({ .position = {-1.0f, 1.0f, 0.0f, 1.0f},.texcoord = {1.0f, 0.0f},.normal = {0.0f, 0.0f, 1.0f } }); //右上
+    modelData.vertices.push_back({ .position = {-1.0f, -1.0f, 0.0f, 1.0f},.texcoord = {1.0f, 1.0f},.normal = {0.0f, 0.0f, 1.0f } }); //右下
+
     std::cout << "テクスチャファイルパス: " << modelData.material.textureFilePath<< std::endl;
+
+    int instanceCount = 10; //粒の数
 
     if (!std::filesystem::exists(modelData.material.textureFilePath)) {
         std::cerr << "ファイルが存在しません！" << std::endl;
@@ -1393,11 +1414,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
     rasterizerDesc.FrontCounterClockwise = FALSE;
     // Shaderをコンパイルする
-    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"Object3d.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler,
+    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"Particle.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler,
         includHandler, logStream);
     assert(vertexShaderBlob != nullptr);
 
-    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"Object3d.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler,
+    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"Particle.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler,
         includHandler, logStream);
     assert(pixelShaderBlob != nullptr);
 
@@ -1584,6 +1605,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // インデックスはuint32_tとする
     indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
 
+    
+
+
     // Sprite用のマテリアルリソースを作る05_03
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResourceSprite = CreateBufferResource(device.Get(), sizeof(Material));
     // Sprite用のマテリアルにデータを書き込む
@@ -1606,6 +1630,39 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         0, nullptr, reinterpret_cast<void**>(&transformationMatrixDataSprite));
     // 単位行列を書き込んでおく04_00//これいったん消しました05_03
     // *transformationMatrixDataSprite = MakeIdentity4x4();
+
+
+
+	//Resourceの作成：Instancing用
+    const uint32_t kNumInstance = 10; // インスタンス数
+
+    // Instancing用のTransformationMatrixリソースを作る
+    Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource =
+        CreateBufferResource(device.Get(), sizeof(TransformationMatrix) * kNumInstance);
+
+    // 書き込むためのアドレスを取得
+    TransformationMatrix* instancingData = nullptr;
+    instancingResource->Map(0, nullptr, reinterpret_cast<void**>(&instancingData));
+
+    // 単位行列を書き込んでいく
+    for (uint32_t index = 0; index < kNumInstance; ++index) {
+        instancingData[index].WVP = MakeIdentity4x4();
+        instancingData[index].World = MakeIdentity4x4();
+    }
+
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc{};
+	instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN; // StructuredBufferなので不明でOK
+	instancingSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	instancingSrvDesc.Buffer.FirstElement = 0;
+	instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+	instancingSrvDesc.Buffer.NumElements = kNumInstance;
+	instancingSrvDesc.Buffer.StructureByteStride = sizeof(TransformationMatrix);
+	// SRVを作成するDescriptorHeapの場所を決める
+    D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU = GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 3);
+	D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 3);
+    device->CreateShaderResourceView(instancingResource.Get(), &instancingSrvDesc, instancingSrvHandleCPU);
 
     //--------------------------
     // 共通リソース
@@ -1871,11 +1928,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             // 描画！(DRAWCALL/ドローコール)。３頂点で１つのインスタンス。インスタンスについては今後_05_00_OHTER
             // commandList->DrawInstanced(kNumVertices, 1, 0, 0);
             // obj
-            commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0,
-                0); // オブジェクトのやつ
-            // マテリアルCbufferの場所を設定05_03変更これ書くとUvChackerがちゃんとする
-            commandList->SetGraphicsRootConstantBufferView(
-                0, materialResourceSprite->GetGPUVirtualAddress()); // ここでmaterialResource使え
+            for (int i = 0; i < instanceCount; ++i) {
+
+                // マテリアルCbufferの場所を設定05_03変更これ書くとUvChackerがちゃんとする
+                commandList->SetGraphicsRootConstantBufferView(
+                    0, materialResourceSprite->GetGPUVirtualAddress()); // ここでmaterialResource使え
+                commandList->DrawInstanced(UINT(modelData.vertices.size()), instanceCount, 0,
+                    0); // オブジェクトのやつ
+                
+            }
 
             // 描画
             commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
