@@ -16,11 +16,32 @@
     <Filter Include="imgui">
       <UniqueIdentifier>{ee4ab976-8f29-4c19-966a-869c69492197}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\app">
+      <UniqueIdentifier>{cff74d49-df64-4f52-a0bf-7e59d13fda6d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\render">
+      <UniqueIdentifier>{ff047a05-8fdb-4780-90cc-0a4faa8c254d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\shader">
+      <UniqueIdentifier>{cb882ec1-1666-4623-9189-b495a824f071}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\assets">
+      <UniqueIdentifier>{cdcbeaaf-9cfc-43c2-9ad3-1874240f26ec}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\ext">
+      <UniqueIdentifier>{92f2297a-88e2-4503-ac90-8b2b849a3726}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\audio">
+      <UniqueIdentifier>{4d7f7cac-9af3-4f5d-ba56-ebc76b77c3bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\math">
+      <UniqueIdentifier>{d576b240-fbb9-41bc-9e31-c909a9c5590c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\externals">
+      <UniqueIdentifier>{e8e422ea-f8f0-4705-ae29-09cc2a6a003c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\app\main.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="externals\imgui\imgui.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
@@ -42,10 +63,17 @@
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
+    <ClCompile Include="src\app\main.cpp">
+      <Filter>ソース ファイル\app</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Resources\shaders\hlsl\Object3d.VS.hlsl" />
-    <FxCompile Include="Resources\shaders\hlsl\Object3d.PS.hlsl" />
+    <FxCompile Include="Resources\shaders\hlsl\Object3d.PS.hlsl">
+      <Filter>ソース ファイル\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Resources\shaders\hlsl\Object3d.VS.hlsl">
+      <Filter>ソース ファイル\shader</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h">
@@ -74,6 +102,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\shaders\hlsl\Object3d.hlsli" />
+    <None Include="Resources\shaders\hlsl\Object3d.hlsli">
+      <Filter>ソース ファイル\shader</Filter>
+    </None>
   </ItemGroup>
 </Project>
