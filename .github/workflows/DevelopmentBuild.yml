@@ -1,4 +1,4 @@
-name: DevelopmentBuild
+name: DepelopmentBuild
 
 on:
   push:
@@ -9,7 +9,7 @@ env:
   #リポジトリのルートディレクトリを起点としたソリューションファイルのパス
   SOLUTION_FILE_PATH: project/CG2_01.sln
   #Visual Studio の構成（Debug / Release）
-  CONFIGURATION: Development
+  CONFIGURATION: Depelopment
 
 jobs:
   build:
