@@ -1,0 +1,16 @@
+Use Adapater:NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel : 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader,path:Object3d.VS.hlsl,profike:vs_6_0
+
+Compile Succeeded, path:Object3d.VS.hlsl, profike:vs_6_0
+ 
+Begin CompileShader,path:Object3d.PS.hlsl,profike:ps_6_0
+
+Object3d.PS.hlsl:26:82: error: no member named 'uvTransform' in 'Material'
+    float4 transformedUV = mul(float32_t4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
+                                                                       ~~~~~~~~~ ^
+

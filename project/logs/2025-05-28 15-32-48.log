@@ -1,0 +1,15 @@
+Use Adapter: NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel: 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader, path: Object3D.VS.hlsl, profile:vs_6_0
+
+Object3D.VS.hlsl:18:27: error: use of undeclared identifier 'input'
+    output.position = mul(input.position, gTransformationMatrix.WVP);
+                          ^
+Object3D.VS.hlsl:19:23: error: use of undeclared identifier 'input'
+    output.texcoord = input.texcoord;
+                      ^
+

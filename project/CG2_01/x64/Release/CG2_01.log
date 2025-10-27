@@ -1,0 +1,16 @@
+﻿  imgui.cpp
+  imgui_demo.cpp
+  imgui_draw.cpp
+  imgui_impl_dx12.cpp
+  imgui_impl_win32.cpp
+  imgui_tables.cpp
+  imgui_widgets.cpp
+  main.cpp
+  コード生成しています。
+  124 of 4962 functions ( 2.5%) were compiled, the rest were copied from previous compilation.
+    4 functions were new in current compilation
+    172 functions had inline decision re-evaluated but remain unchanged
+  コード生成が終了しました。
+  CG2_01.vcxproj -> C:\Users\CG2\CG2_01\x64\Release\CG2_01.exe
+          1 個のファイルをコピーしました。
+          1 個のファイルをコピーしました。

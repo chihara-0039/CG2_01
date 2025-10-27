@@ -1,0 +1,15 @@
+Use Adapter: NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel: 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader, path: Object3D.VS.hlsl, profile:vs_6_0
+
+Object3D.VS.hlsl:9:8: error: redefinition of 'VertexShaderOutput'
+struct VertexShaderOutput
+       ^
+./object3d.hlsli:1:8: note: previous definition is here
+struct VertexShaderOutput
+       ^
+

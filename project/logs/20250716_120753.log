@@ -1,0 +1,21 @@
+Use Adapater:NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel : 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader,path:Object3d.VS.hlsl,profike:vs_6_0
+
+Compile Succeeded, path:Object3d.VS.hlsl, profike:vs_6_0
+ 
+Begin CompileShader,path:Object3d.PS.hlsl,profike:ps_6_0
+
+Object3d.PS.hlsl:4:16: error: use of undeclared identifier 'Material'
+ConstantBuffer<Material> gMaterial : register(b0);
+               ^
+Object3d.PS.hlsl:7:16: error: use of undeclared identifier 'DirectionalLight'
+ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
+               ^
+
+Compile Succeeded, path:Object3d.PS.hlsl, profike:ps_6_0
+ 

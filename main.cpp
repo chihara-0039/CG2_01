@@ -384,16 +384,26 @@ Vector3 Normalize(const Vector3& v) {
     return { v.x / length, v.y / length, v.z / length };
 }
 
-//Instancing用のTransform
+// カメラ → View 行列
+inline Matrix4x4 MakeViewMatrix(const Transform& camera) {
+    Matrix4x4 camWorld = MakeAffineMatrix({ 1,1,1 }, camera.rotate, camera.translate);
+    return Inverse(camWorld);
+}
 
-// インスタンス数
-const uint32_t kNumInstance = 10;
-Transform transforms[kNumInstance];
-for (uint32_t index = 0; index < kNumInstance; ++index) {
-    transforms[index].scale = { 1.0f,1.0f,1.0f };
-    transforms[index].rotate = { 0.0f,0.0f,0.0f };
-    transforms[index].translate = { index * 0.1f,index * 0.1f,index * 0.1f };
-};
+// 透視射影 → Projection 行列
+inline Matrix4x4 MakeProjectionMatrix(float fovY, float aspect, float nearZ, float farZ) {
+    return MakePerspectiveFovMatrix(fovY, aspect, nearZ, farZ);
+}
+
+// ViewProjection 行列
+inline Matrix4x4 MakeViewProjectionMatrix(const Transform& camera,
+                                          float fovY, float aspect,
+                                          float nearZ, float farZ) {
+    Matrix4x4 view = MakeViewMatrix(camera);
+    Matrix4x4 proj = MakeProjectionMatrix(fovY, aspect, nearZ, farZ);
+    return Multiply(view, proj);          // ←行列の掛け順はあなたのコードに合わせて（view * proj）
+}
+
 
 #pragma endregion
 
@@ -1225,74 +1235,100 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     IDxcIncludeHandler* includHandler = nullptr;
     hr = dxcUtils->CreateDefaultIncludeHandler(&includHandler);
     assert(SUCCEEDED(hr));
-    // ==== ルートシグネチャを作る準備 ====
-    // RootSignature作成02_00
-    // 頂点データの形式を使っていいよ！というフラグを立てる
-    // ルート何？03_00
-    D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
-    descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
-    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR; // バイリニアフィルタ
-    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 0〜1の範囲外をリピート
-    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較しない
-    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ありったけのMipMapを使う
-    staticSamplers[0].ShaderRegister = 0; // レジスタ番号0を使う
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
+    // ==== ルートシグネチャ（入力アセンブラ使用を許可）====
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
-    descriptionRootSignature.pStaticSamplers = staticSamplers;
-    descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
-    // RootParameter作成。複数設定できるので配列。今回は結果１つだけなので長さ１の配列
-    // PixelShaderのMaterialとVertexShaderのTransform
-    D3D12_ROOT_PARAMETER rootParameters[4] = {};
-    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
-    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
-    rootParameters[0].Descriptor.ShaderRegister = 0; // レジスタ番号０とバインド
-    // ここから[2]
-    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
-    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // Vertexshaderで使う
-    rootParameters[1].Descriptor.ShaderRegister = 0; // 得wジスタ番号０を使う
-    // ここまで[2]
-    // 新しいディスクリプタレンジ03_00
-    D3D12_DESCRIPTOR_RANGE descriptorRangeForInstancing[1] = {};
-    descriptorRangeForInstancing[0].BaseShaderRegister = 0; // 0から始まる
-    descriptorRangeForInstancing[0].NumDescriptors = 1; // 数は1つ
-    descriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
-    descriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // Offsetを自動計算
-    descriptionRootSignature.pParameters = rootParameters; // ルートパラメータ配列へのポインタ
-    descriptionRootSignature.NumParameters = _countof(rootParameters); // 配列の長さ
+    // ------------------------------------------------------------
+    // ディスクリプタレンジの定義
+    // ------------------------------------------------------------
 
-    // 新しいディスクリプタレンジ03_00
-    // ここから[3]03_00
-    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; // DescriptorTableを使う
-    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // PixelShaderで使う
-    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRangeForInstancing; // Tableの中身の配列を指定
-    rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForInstancing); // Tableで利用する数
-    // ここまで[3]//05_03追加しろー
-    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
-    rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PxelShaderで使う
-    rootParameters[3].Descriptor.ShaderRegister = 1; // レジスタ番号１を使う
-    // ==== シリアライズしてバイナリにする（GPUが読める形に変換） ====
-    // バイナリになるデータを入れるための箱02_00
-    ID3DBlob* signatureBlob = nullptr; // ルートシグネチャ本体
-    ID3DBlob* errorBlob = nullptr; // エラー内容が入るかも
-    // GPUが読めるようにデータ変換！（バイナリ化）
-    hr = D3D12SerializeRootSignature(&descriptionRootSignature,
-        D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob,
-        &errorBlob);
+    // 頂点シェーダーで使う：t0 = インスタンシング用 StructuredBuffer<TransformationMatrix>
+    D3D12_DESCRIPTOR_RANGE descriptorRange_InstancingSRV{};
+    descriptorRange_InstancingSRV.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange_InstancingSRV.NumDescriptors = 1;
+    descriptorRange_InstancingSRV.BaseShaderRegister = 0; // t0
+    descriptorRange_InstancingSRV.RegisterSpace = 0;
+    descriptorRange_InstancingSRV.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    // もし失敗したら、エラーメッセージを出して止める
+    // ピクセルシェーダーで使う：t0 = Texture2D（テクスチャ用）
+    D3D12_DESCRIPTOR_RANGE descriptorRange_TextureSRV{};
+    descriptorRange_TextureSRV.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange_TextureSRV.NumDescriptors = 1;
+    descriptorRange_TextureSRV.BaseShaderRegister = 0; // t0
+    descriptorRange_TextureSRV.RegisterSpace = 0;
+    descriptorRange_TextureSRV.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    // ------------------------------------------------------------
+    // ルートパラメータ（順番固定）
+    // [0] ピクセルシェーダー b0 : マテリアル用 CBV
+    // [1] 頂点シェーダー   t0 : インスタンシング用 SRV（ディスクリプタテーブル）
+    // [2] ピクセルシェーダー t0 : テクスチャ用 SRV（ディスクリプタテーブル）
+    // [3] ピクセルシェーダー b1 : 平行光源用 CBV
+    // ------------------------------------------------------------
+    D3D12_ROOT_PARAMETER rootParameters[4]{};
+
+    // [0] マテリアル用 CBV（ピクセルシェーダー b0）
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[0].Descriptor.ShaderRegister = 0; // b0
+
+    // [1] インスタンシング用 SRV（頂点シェーダー t0、ディスクリプタテーブル）
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[1].DescriptorTable.pDescriptorRanges = &descriptorRange_InstancingSRV;
+
+    // [2] テクスチャ用 SRV（ピクセルシェーダー t0、ディスクリプタテーブル）
+    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[2].DescriptorTable.pDescriptorRanges = &descriptorRange_TextureSRV;
+
+    // [3] 平行光源用 CBV（ピクセルシェーダー b1）
+    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[3].Descriptor.ShaderRegister = 1; // b1
+
+    // ------------------------------------------------------------
+    // 静的サンプラー（ピクセルシェーダー s0）
+    // ------------------------------------------------------------
+    D3D12_STATIC_SAMPLER_DESC staticSamplerDesc{};
+    staticSamplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplerDesc.ShaderRegister = 0; // s0
+    staticSamplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // 記述体へ反映
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumParameters = _countof(rootParameters);
+    rootSignatureDesc.pStaticSamplers = &staticSamplerDesc;
+    rootSignatureDesc.NumStaticSamplers = 1;
+
+    // ==== シリアライズして作成 ====
+    Microsoft::WRL::ComPtr<ID3DBlob> rootSigBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> rootSigError;
+    hr = D3D12SerializeRootSignature(
+        &rootSignatureDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &rootSigBlob,
+        &rootSigError
+    );
+
     if (FAILED(hr)) {
-        Log(logStream, reinterpret_cast<char*>(errorBlob->GetBufferPointer())); // エラーをログに出す
-        assert(false); // 絶対成功してないと困るので、止める
+        if (rootSigError) { Log(logStream, (char*)rootSigError->GetBufferPointer()); }
+        assert(false);
     }
 
-    // バイナリをもとに生成02_00
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature = nullptr; // com
-    hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(),
-        signatureBlob->GetBufferSize(),
-        IID_PPV_ARGS(&rootSignature));
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+    hr = device->CreateRootSignature(
+        0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(),
+        IID_PPV_ARGS(&rootSignature)
+    );
     assert(SUCCEEDED(hr));
 
     // Textureを読んで転送する03_00
@@ -1535,6 +1571,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     materialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
     materialData->uvTransform = MakeIdentity4x4(); // 06_01_UuvTransform行列を単位行列で初期化
     materialData->enableLighting = true;
+
     //--------------------------
     // WVP行列
     //--------------------------
@@ -1605,8 +1642,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // インデックスはuint32_tとする
     indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
 
-    
-
 
     // Sprite用のマテリアルリソースを作る05_03
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResourceSprite = CreateBufferResource(device.Get(), sizeof(Material));
@@ -1648,6 +1683,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     for (uint32_t index = 0; index < kNumInstance; ++index) {
         instancingData[index].WVP = MakeIdentity4x4();
         instancingData[index].World = MakeIdentity4x4();
+    }
+
+    Transform transforms[kNumInstance];
+    for (uint32_t index = 0; index < kNumInstance; ++index) {
+        transforms[index].scale = { 1.0f, 1.0f, 1.0f };
+        transforms[index].rotate = { 0.0f, 0.0f, 0.0f };
+        transforms[index].translate = { index * 0.1f, index * 0.1f, index * 0.1f };
     }
 
 
@@ -1863,6 +1905,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                 uvTransformMatrix, MakeTranslateMatrix(uvTransformSprite.translate));
             materialDataSprite->uvTransform = uvTransformMatrix;
 
+
+			// インスタンスごとのWVP行列を計算して書き込む
+            for (uint32_t index = 0; index < kNumInstance; ++index) {
+                Matrix4x4 worldMatrix =
+                    MakeAffineMatrix(transforms[index].scale, transforms[index].rotate, transforms[index].translate);
+                Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, projectionMatrix);
+                instancingData[index].WVP = worldViewProjectionMatrix;
+                instancingData[index].World = worldMatrix;
+            }
+
+
             // 画面のクリア処理
             //   これから書き込むバックバッファのインデックスを取得
             UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
@@ -1911,6 +1964,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
             commandList->SetGraphicsRootDescriptorTable(
                 2, useMonstarBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
+
+			//instancing用のSRVをセット
+			commandList->SetGraphicsRootDescriptorTable(1, instancingSrvHandleGPU);
 
             // 平行光源用のCbufferの場所を設定05_03
             commandList->SetGraphicsRootConstantBufferView(

@@ -1,0 +1,18 @@
+Hello,DIrectX!
+
+width:1290,720
+
+Use Adapter: NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel : 12.2
+
+Complate create D3D12Device!!
+
+Begin CompileShader, path:Object3D.VS.hlsl, profile:vs_6_0
+
+Compile Succeeded, path:Object3D.VS.hlsl, profilevs_6_0
+
+Begin CompileShader, path:Object3D.PS.hlsl, profile:ps_6_0
+
+Compile Succeeded, path:Object3D.PS.hlsl, profileps_6_0
+

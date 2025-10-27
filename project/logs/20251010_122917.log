@@ -1,0 +1,38 @@
+Use Adapater:NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel : 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader,path:Object3d.VS.hlsl,profike:vs_6_0
+
+Object3d.VS.hlsl:8:64: error: invalid register specification, expected 't' binding
+StructuredBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
+                                                               ^
+Object3d.VS.hlsl:23:65: error: no member named 'WVP' in 'StructuredBuffer<TransformationMatrix>'
+    output.position = mul(input.position, gTransformationMatrix.WVP);
+                                          ~~~~~~~~~~~~~~~~~~~~~ ^
+Object3d.VS.hlsl:25:86: error: no member named 'World' in 'StructuredBuffer<TransformationMatrix>'
+    output.normal = normalize(mul(input.normal, (float32_t3x3) gTransformationMatrix.World));
+                                                               ~~~~~~~~~~~~~~~~~~~~~ ^
+
+Compile Succeeded, path:Object3d.VS.hlsl, profike:vs_6_0
+ 
+Begin CompileShader,path:Object3d.PS.hlsl,profike:ps_6_0
+
+Object3d.PS.hlsl:7:16: error: use of undeclared identifier 'DirectionalLight'
+ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
+               ^
+Object3d.PS.hlsl:9:23: error: redefinition of 'gTexture'
+Texture2D<float32_t4> gTexture : register(t0);
+                      ^
+./Particle.hlsli:30:19: note: previous definition is here
+Texture2D<float4> gTexture : register(t0);
+                  ^
+Object3d.PS.hlsl:10:14: error: redefinition of 'gSampler'
+SamplerState gSampler : register(s0);
+             ^
+./Particle.hlsli:31:14: note: previous definition is here
+SamplerState gSampler : register(s0);
+             ^
+

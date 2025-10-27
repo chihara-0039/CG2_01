@@ -1,0 +1,16 @@
+Use Adapater:NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel : 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader,path:Object3d.VS.hlsl,profike:vs_6_0
+
+Object3d.VS.hlsl:13:25: error: unknown type name 'VertexSgaderInput'; did you mean 'VertexShaderInput'?
+VertexShaderOutput main(VertexSgaderInput input)
+                        ^~~~~~~~~~~~~~~~~
+                        VertexShaderInput
+Object3d.VS.hlsl:5:8: note: 'VertexShaderInput' declared here
+struct VertexShaderInput
+       ^
+

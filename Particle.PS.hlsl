@@ -1,13 +1,10 @@
 #include "Particle.hlsli"
 
-
+// PS の CBV（b0, b1）
 ConstantBuffer<Material> gMaterial : register(b0);
-
-
 ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
 
-Texture2D<float32_t4> gTexture : register(t0);
-SamplerState gSampler : register(s0);
+// gTexture / gSampler は hlsli で宣言済み。ここで再宣言しない。
 
 struct PixelShaderOutput
 {
@@ -17,44 +14,22 @@ struct PixelShaderOutput
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
-    output.color = gMaterial.color;
-    float32_t4 transformedUV = mul(float32_t4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
-    float32_t4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
-    
-    
-    output.color = gMaterial.color * textureColor;
-    
-    if (output.color.a == 0.0)
+
+    // UV 変換
+    float32_t4 uv4 = mul(float32_t4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
+    float32_t4 uv = uv4.xy;
+
+    // サンプル
+    float32_t4 tex = gTexture.Sample(gSampler, uv);
+
+    // 今はアンリットでOK（必要ならライティングブロックを戻す）
+    output.color = gMaterial.color * tex;
+
+    // 透過破棄（必要に応じて閾値調整）
+    if (output.color.a == 0.0f)
     {
         discard;
     }
-    
-    //if (gMaterial.enableLighting != 0)
-    //{
-    //    float NdotL = dot(normalize(input.normal), -gDirectionalLight.direction);
-    //    float cos = pow(NdotL * 0.5f + 0.5f, 2.0f);
-        
-    //    //output.color = cos * gMaterial.color * textureColor;
-    //    output.color.rgb = gMaterial.color.rgb * textureColor.rgb * gDirectionalLight.color.rgb * cos * gDirectionalLight.intensity;
-    //    output.color.a = gMaterial.color.a * textureColor.a;
-    //}
-    //else
-    //{
-    //    output.color = gMaterial.color * textureColor;
-    //}
-    
-   
-    //if (textureColor.a <= 0.5f)  //textureのα値が0.5以下の時Pixelを棄却
-    //{
-    //    discard;
-    //}
-    //else if (textureColor.a == 0.0) //textureのα値が0.0の時Pixelを棄却
-    //{
-    //    discard;
-    //}
-    //else if (output.color.a == 0.0) //output.Colorのα値が0.0の時Pixelを棄却
-    //{
-    //    discard;
-    //}
-        return output;
+
+    return output;
 }

@@ -1,19 +1,21 @@
 #include "Particle.hlsli"
 
-// ★VS用のSRVは space1 に
-StructuredBuffer<TransformationMatrix> gTransformationMatrices : register(t0, space1);
+// VS 側インスタンシング行列（t0）
+// ルートシグネチャで「頂点シェーダ可視の SRV テーブル t0」に紐付ける
+StructuredBuffer<TransformationMatrix> gTransformationMatrices : register(t0);
 
 VertexShaderOutput main(VertexShaderInput input, uint32_t instanceId : SV_InstanceID)
 {
-    VertexShaderOutput output;
+    VertexShaderOutput o;
 
     float4x4 wvp = gTransformationMatrices[instanceId].WVP;
     float4x4 world = gTransformationMatrices[instanceId].World;
 
-    output.position = mul(input.position, wvp);
-    output.texcoord = input.texcoord;
+    o.position = mul(input.position, wvp);
 
-    // 法線は World の3x3で
-    output.normal = normalize(mul(input.normal, (float3x3) world));
-    return output;
+    // ※ 正確には法線行列（world の 3x3 逆転置）だが、ひとまず world の 3x3 でOK
+    o.normal = normalize(mul(input.normal, (float3x3) world));
+    o.texcoord = input.texcoord;
+
+    return o;
 }

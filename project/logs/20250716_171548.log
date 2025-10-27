@@ -1,0 +1,34 @@
+Use Adapater:NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel : 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader,path:Object3d.VS.hlsl,profike:vs_6_0
+
+Compile Succeeded, path:Object3d.VS.hlsl, profike:vs_6_0
+ 
+Begin CompileShader,path:Object3d.PS.hlsl,profike:ps_6_0
+
+Object3d.PS.hlsl:14:23: error: redefinition of 'gTexture'
+Texture2D<float32_t4> gTexture : register(t0);
+                      ^
+Object3d.PS.hlsl:3:23: note: previous definition is here
+Texture2D<float32_t4> gTexture : register(t0);
+                      ^
+Object3d.PS.hlsl:15:14: error: redefinition of 'gSampler'
+SamplerState gSampler : register(s0);
+             ^
+Object3d.PS.hlsl:4:14: note: previous definition is here
+SamplerState gSampler : register(s0);
+             ^
+Object3d.PS.hlsl:17:16: error: use of undeclared identifier 'DirecctionalLight'
+ConstantBuffer<DirecctionalLight> gDirectionalLight : register(b1);
+               ^
+Object3d.PS.hlsl:27:34: error: redefinition of 'gDirectionalLight'
+ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
+                                 ^
+Object3d.PS.hlsl:17:35: note: previous definition is here
+ConstantBuffer<DirecctionalLight> gDirectionalLight : register(b1);
+                                  ^
+
