@@ -1,4 +1,5 @@
-﻿#define _USE_MATH_DEFINES
+#define _USE_MATH_DEFINES
+#define DIRECTIONPUT_VERSION 0x0800
 
 //----------------------------
 // 標準ライブラリ
@@ -12,6 +13,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <dinput.h>
+#include "Input.h"
 
 //----------------------------
 // Windows API / COM 関連
@@ -56,6 +59,8 @@
 #pragma comment(lib, "dbghelp.lib")
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "dxcompiler.lib")
+#pragma comment(lib, "dinput8.lib")
+#pragma comment(lib, "dxguid.lib")
 
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd,
@@ -741,7 +746,7 @@ Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
     Microsoft::WRL::ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
     HRESULT hr = dxcUtils->LoadFile(filepath.c_str(), nullptr, &shaderSource);
     // 読めなかったら止める02_00
-    assert(SUCCEEDED(hr));
+    assert(SUCCEEDED(hr)); 
     // 読み込んだファイルの内容を設定する02_00
     DxcBuffer shaderSourceBuffer;
     shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
@@ -955,8 +960,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
     // 日本時間(PCの設定時間)に変換
     std::chrono::zoned_time loacalTime{ std::chrono::current_zone(), nowSeconds };
+   
+    
     // formatを使って年月日_時分秒の文字列に変換
-    std::string dateString = std::format("{:%Y%m%d_%H%M%S}", loacalTime);
+    std::time_t tt = std::chrono::system_clock::to_time_t(nowSeconds);
+    std::tm localTm{};
+    localtime_s(&localTm, &tt);
+    std::ostringstream oss;
+    oss << std::put_time(&localTm, "%Y%m%d_%H%M%S");
+    std::string dateString = oss.str();
+    
+    
     // 時刻を使ってファイル名を決定
     std::string logFilePath = std::string("logs/") + dateString + ".log";
     // ファイルを作って書き込み準備
@@ -1074,6 +1088,39 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // デバイスの生成が上手くいかなかったので起動できない
     assert(device != nullptr);
     Log(logStream, "Complete create D3D12Device!!!\n"); // 初期化完了のログを出す
+
+	//DirectInputの初期化
+	IDirectInput8* directInput = nullptr;
+	result = DirectInput8Create(
+		wc.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
+		(void**)&directInput, nullptr);
+    assert(SUCCEEDED(result));
+
+    //キーボードデバイスの生成
+    IDirectInputDevice8* keyboard = nullptr;
+	result = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
+    assert(SUCCEEDED(result));
+
+    //入力データ形式のセット
+	result = keyboard->SetDataFormat(&c_dfDIKeyboard);  //標準形式のセット
+	assert(SUCCEEDED(result));
+	//協調モードのセット
+
+    //排他制御レベルのセット
+    result = keyboard->SetCooperativeLevel(
+		hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+    assert(SUCCEEDED(result));
+
+    //ポインタ
+    Input* input = nullptr;
+
+    // 入力の初期化
+    input = new Input();
+    input->Initialize(wc.hInstance, hwnd);
+
+    //入力解放
+    delete input;
+
 
 #ifdef _DEBUG
 
@@ -1739,6 +1786,24 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             // ImGuiの内部コマンドを生成する02_03
             ImGui::
                 Render(); // ImGui終わりの場所。描画の前02_03--------------------------
+            
+            // キーボード情報の取得開始
+			keyboard->Acquire();
+
+			// キーボードの状態取得
+			BYTE key[256] = {};
+			keyboard->GetDeviceState(sizeof(key), key);
+
+			// 押されたキーに応じて処理を行う
+            if (key[DIK_0]) {
+                OutputDebugStringA("Hit 0\n");  //出力ウィンドウに「HIT 0」と表示
+            }
+            
+            
+
+
+           
+            
             // 描画用のDescrriptorHeapの設定02_03
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeaps[] = {
                 srvDescriptorHeap
