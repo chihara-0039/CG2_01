@@ -13,7 +13,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <dinput.h>
 #include "Input.h"
 
 //----------------------------
@@ -1077,7 +1076,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     for (size_t i = 0; i < _countof(featureLevels); ++i) {
         // 採用したアダプターでデバイスを生成
         hr = D3D12CreateDevice(useAdapter, featureLevels[i], IID_PPV_ARGS(&device));
-        // 指定した昨日レベルでデバイスは生成できたか確認
+        // 指定した機能レベルでデバイスは生成できたか確認
         if (SUCCEEDED(hr)) {
             // 生成できたのでログ出力を行ってループを抜ける
             Log(logStream,
@@ -1118,8 +1117,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     input = new Input();
     input->Initialize(wc.hInstance, hwnd);
 
-    //入力解放
-    delete input;
+    
 
 
 #ifdef _DEBUG
@@ -1787,22 +1785,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             ImGui::
                 Render(); // ImGui終わりの場所。描画の前02_03--------------------------
             
-            // キーボード情報の取得開始
-			keyboard->Acquire();
-
-			// キーボードの状態取得
-			BYTE key[256] = {};
-			keyboard->GetDeviceState(sizeof(key), key);
+           //入力の更新
+            input->Update();
 
 			// 押されたキーに応じて処理を行う
-            if (key[DIK_0]) {
-                OutputDebugStringA("Hit 0\n");  //出力ウィンドウに「HIT 0」と表示
-            }
+            //if (key[DIK_0]) {
+            //    OutputDebugStringA("Hit 0\n");  //出力ウィンドウに「HIT 0」と表示
+            //}
             
-            
-
-
-           
             
             // 描画用のDescrriptorHeapの設定02_03
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeaps[] = {
