@@ -1905,12 +1905,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                 uvTransformMatrix, MakeTranslateMatrix(uvTransformSprite.translate));
             materialDataSprite->uvTransform = uvTransformMatrix;
 
+            Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
 
 			// インスタンスごとのWVP行列を計算して書き込む
             for (uint32_t index = 0; index < kNumInstance; ++index) {
                 Matrix4x4 worldMatrix =
                     MakeAffineMatrix(transforms[index].scale, transforms[index].rotate, transforms[index].translate);
+                
                 Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, projectionMatrix);
+                
                 instancingData[index].WVP = worldViewProjectionMatrix;
                 instancingData[index].World = worldMatrix;
             }
@@ -1965,20 +1968,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             commandList->SetGraphicsRootDescriptorTable(
                 2, useMonstarBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
 
-			//instancing用のSRVをセット
-			commandList->SetGraphicsRootDescriptorTable(1, instancingSrvHandleGPU);
-
             // 平行光源用のCbufferの場所を設定05_03
             commandList->SetGraphicsRootConstantBufferView(
                 3, directionalLightResource->GetGPUVirtualAddress());
+
+			//instancing用のSRVをセット
+			commandList->SetGraphicsRootDescriptorTable(1, instancingSrvHandleGPU);
 
             // マテリアルCbufferの場所を設定05_03変更
             commandList->SetGraphicsRootConstantBufferView(
                 0, materialResource->GetGPUVirtualAddress()); // ここでmaterialResource使え
 
             // wvp用のCBufferの場所を設定02_02
-            commandList->SetGraphicsRootConstantBufferView(
-                1, wvpResource->GetGPUVirtualAddress());
+           /* commandList->SetGraphicsRootConstantBufferView(
+                1, wvpResource->GetGPUVirtualAddress());*/
             
 
             // 描画！(DRAWCALL/ドローコール)。３頂点で１つのインスタンス。インスタンスについては今後_05_00_OHTER
@@ -1989,6 +1992,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                 // マテリアルCbufferの場所を設定05_03変更これ書くとUvChackerがちゃんとする
                 commandList->SetGraphicsRootConstantBufferView(
                     0, materialResourceSprite->GetGPUVirtualAddress()); // ここでmaterialResource使え
+                
                 commandList->DrawInstanced(UINT(modelData.vertices.size()), instanceCount, 0,
                     0); // オブジェクトのやつ
                 
@@ -1996,13 +2000,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
             // 描画
             commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+          
+
             // spriteの描画04_00
             commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
+
+            
+            commandList->SetGraphicsRootConstantBufferView(
+                1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+            
             // IBVを設定
             commandList->IASetIndexBuffer(&indexBufferViewSprite);
 
-            commandList->SetGraphicsRootConstantBufferView(
-                1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+            
             // UvChecker
             commandList->DrawIndexedInstanced(6, 1, 0, 0, 0); // 左上のやつ
 

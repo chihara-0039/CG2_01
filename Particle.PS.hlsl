@@ -2,7 +2,7 @@
 
 // PS の CBV（b0, b1）
 ConstantBuffer<Material> gMaterial : register(b0);
-ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
+
 
 // gTexture / gSampler は hlsli で宣言済み。ここで再宣言しない。
 
@@ -16,13 +16,13 @@ PixelShaderOutput main(VertexShaderOutput input)
     PixelShaderOutput output;
 
     // UV 変換
-    float32_t4 uv4 = mul(float32_t4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
-    float32_t4 uv = uv4.xy;
+    float4 uv = float4(input.texcoord, 0.0f, 1.0f);
+    float4 uvTransformed = mul(uv, gMaterial.uvTransform);
 
     // サンプル
-    float32_t4 tex = gTexture.Sample(gSampler, uv);
+    float32_t4 tex = gTexture.Sample(gSampler, uvTransformed.xy);
 
-    // 今はアンリットでOK（必要ならライティングブロックを戻す）
+    //色合成
     output.color = gMaterial.color * tex;
 
     // 透過破棄（必要に応じて閾値調整）
