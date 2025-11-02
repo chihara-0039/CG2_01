@@ -1,8 +1,11 @@
 #include "Input.h"
 #include <cassert>
+#include <cstring>
 
-#pragma comment(lib,"dinput8.lib")
-#pragma comment(lib,"dxguid.lib")
+namespace {
+    constexpr BYTE kPressedMask = 0x80; // DirectInput の「押下」ビット
+}
+
 
 void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     hInstance_ = hInstance;
@@ -35,6 +38,18 @@ bool Input::EnsureDevice_() {
     return true;
 }
 
+bool Input::PushKey(BYTE keyNumber) {
+    // 押下フラグ(0x80)で判定するのがDirectInputの定石
+    return (key[keyNumber] & kPressedMask) != 0;
+}
+
+bool Input::TriggerKey(BYTE keyNumber) {
+    // 「前フレームは離していた && 今フレームで押された」
+    const bool wasDown = (keyPre[keyNumber] & kPressedMask) != 0;
+    const bool isDown = (key[keyNumber] & kPressedMask) != 0;
+    return (!wasDown && isDown);
+}
+
 void Input::Update() {
     // 親 or 子が無効なら作り直しを試みる
     if (!directInput_) {
@@ -53,10 +68,17 @@ void Input::Update() {
         if (FAILED(hr)) return; // 未取得ならこのフレームは未入力扱い
     }
 
-    BYTE key[256] = {};
+    //前回のキー入力を保存
+    memcpy(keyPre, key, sizeof(key));
+    
     hr = keyboard_->GetDeviceState(sizeof(key), key);
     if (FAILED(hr)) {
         // 入力ロスト等。次フレーム以降に再取得を試みる。
         keyboard_->Unacquire();
+        std::memset(key, 0, sizeof(key));
     }
+
+
 }
+
+

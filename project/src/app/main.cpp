@@ -1746,6 +1746,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             DispatchMessage(&msg);
         } else {
 
+            if (input->PushKey(DIK_SPACE)) { OutputDebugStringA("PUSH\n"); }
+            if (input->TriggerKey(DIK_SPACE)) { OutputDebugStringA("TRIGGER\n"); }
+
+
             // ここがframeの先頭02_03
             ImGui_ImplDX12_NewFrame();
             ImGui_ImplWin32_NewFrame();
@@ -1789,9 +1793,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             input->Update();
 
 			// 押されたキーに応じて処理を行う
-            //if (key[DIK_0]) {
-            //    OutputDebugStringA("Hit 0\n");  //出力ウィンドウに「HIT 0」と表示
-            //}
+            if (input->PushKey(DIK_0)) {
+                OutputDebugStringA("Hit 0\n");  //出力ウィンドウに「HIT 0」と表示
+            }
             
             
             // 描画用のDescrriptorHeapの設定02_03
