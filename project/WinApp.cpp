@@ -76,3 +76,8 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd,
 void WinApp::Update() {
 
 }
+
+void WinApp::Finalize() {
+	CloseWindow(hwnd);
+	CoUninitialize();
+}

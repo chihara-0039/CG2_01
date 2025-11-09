@@ -1120,7 +1120,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     // 入力の初期化
     input = new Input();
-    input->Initialize(winApp->GetHInstance(), winApp->GetHwnd());
+    input->Initialize(winApp);
 
     
 
@@ -1979,21 +1979,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
+    // リリースする場所
     //  // 解放処理CG2_01_03
     CloseHandle(fenceEvent);
 
-    
-
-    // リリースする場所
     // XAudio解放
-    xAudio2.Reset();
     // 音声データ開放
     /*SoundUnload(&soundData1);*/
-    CoInitialize(nullptr);
-    // #endif
-    CloseWindow(winApp->GetHwnd());
+    xAudio2.Reset();
+
+
+	// WindowsAPI解放
+	winApp->Finalize();
+
     //WindowsAPI解放
     delete winApp;
+    winApp = nullptr;
     
 
     return 0;

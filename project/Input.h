@@ -3,6 +3,7 @@
 #define DIRECTINPUT_VERSION 0x0800
 #include <dinput.h>
 #include <wrl.h>
+#include "WinApp.h"
 
 #pragma comment(lib,"dinput8.lib")
 #pragma comment(lib,"dxguid.lib")
@@ -12,7 +13,7 @@ class Input {
 public:
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-    void Initialize(HINSTANCE hInstance, HWND hwnd);
+    void Initialize(WinApp* winApp);
     void Update();
 
 /// <summary>
@@ -47,4 +48,7 @@ private:
 
     //前回の全キーの状態
     BYTE keyPre[256] = {};
+
+    //WindowsAPI
+    WinApp* winApp_ = nullptr;
 };

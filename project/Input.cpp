@@ -7,9 +7,10 @@ namespace {
 }
 
 
-void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
-    hInstance_ = hInstance;
-    hwnd_ = hwnd;
+void Input::Initialize(WinApp* winApp) {
+    
+    //借りてきたWinAppのインスタンスを記録
+    this->winApp_ = winApp;
 
     // DirectInput 本体をメンバに保持（親を生かし続ける）
     HRESULT hr = DirectInput8Create(

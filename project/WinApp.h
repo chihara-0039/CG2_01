@@ -17,6 +17,9 @@ public: //メンバ関数
     //更新
     void Update();
 
+    //終了
+    void Finalize();
+
 public://定数
     //クライアント領域のサイズ
     static constexpr int32_t kClientWidth = 1280;
