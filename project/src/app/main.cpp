@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include "Input.h"
+#include "DirectXCommon.h"
 
 //----------------------------
 // Windows API / COM 関連
@@ -487,26 +488,26 @@ CreateBufferResource(ID3D12Device* device, size_t sizeInBytes) {
 }
 
 //=== D3D12ディスクリプタヒープ作成 ===
-Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>
-CreateDescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
-	D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors,
-	bool shaderVisivle) {
-	// ディスクリプタヒープの生成02_02
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescriptorHeap = nullptr;
-
-	D3D12_DESCRIPTOR_HEAP_DESC DescriptorHeapDesc{};
-	DescriptorHeapDesc.Type = heapType;
-	DescriptorHeapDesc.NumDescriptors = numDescriptors;
-	DescriptorHeapDesc.Flags = shaderVisivle
-		? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-		: D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-
-	HRESULT hr = device->CreateDescriptorHeap(&DescriptorHeapDesc,
-		IID_PPV_ARGS(&DescriptorHeap));
-	// ディスクリプタヒープが作れなかったので起動できない
-	assert(SUCCEEDED(hr)); // 1
-	return DescriptorHeap;
-}
+//Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>
+//CreateDescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
+//	D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors,
+//	bool shaderVisivle) {
+//	// ディスクリプタヒープの生成02_02
+//	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescriptorHeap = nullptr;
+//
+//	D3D12_DESCRIPTOR_HEAP_DESC DescriptorHeapDesc{};
+//	DescriptorHeapDesc.Type = heapType;
+//	DescriptorHeapDesc.NumDescriptors = numDescriptors;
+//	DescriptorHeapDesc.Flags = shaderVisivle
+//		? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+//		: D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+//
+//	HRESULT hr = device->CreateDescriptorHeap(&DescriptorHeapDesc,
+//		IID_PPV_ARGS(&DescriptorHeap));
+//	// ディスクリプタヒープが作れなかったので起動できない
+//	assert(SUCCEEDED(hr)); // 1
+//	return DescriptorHeap;
+//}
 
 //=== D3D12テクスチャリソース作成（DEFAULTヒープ） ===
 Microsoft::WRL::ComPtr<ID3D12Resource>
@@ -690,6 +691,7 @@ void GenerateSphereVertices(VertexData* vertices, int kSubdivision,
 		}
 	}
 }
+
 // D3Dリソースリークチェック用のクラス
 struct D3DResourceLeakChecker {
 	~D3DResourceLeakChecker() {
@@ -782,22 +784,7 @@ Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
 	return shaderBlob; // get
 }
 
-// CG2_05_01_page_5
-D3D12_CPU_DESCRIPTOR_HANDLE
-GetCPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap,
-	uint32_t descriptorSize, uint32_t index) {
-	D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	handleCPU.ptr += (descriptorSize * index);
-	return handleCPU;
-}
 
-D3D12_GPU_DESCRIPTOR_HANDLE
-GetGPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap,
-	uint32_t descriptorSize, uint32_t index) {
-	D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-	handleGPU.ptr += (descriptorSize * index);
-	return handleGPU;
-}
 
 /// CG_02_06
 MaterialData LoadMaterialTemplateFile(const std::string& directoryPath,
@@ -923,6 +910,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	CoInitializeEx(0, COINIT_MULTITHREADED);
 
+	//消した定義の代わり
+	HRESULT hr = S_OK;
+
 	// 誰も補足しなかった場合(Unhandled),補足する関数を登録
 	// main関数はじまってすぐに登録するとよい
 	SetUnhandledExceptionFilter(ExportDump);
@@ -1009,23 +999,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//// ウィンドウを表示する
 	//ShowWindow(hwnd, SW_SHOW);
 
+	//ポインタ
+	DirectXCommon* dxCommon = nullptr;
 
 
+	//DirectXの初期化
+	dxCommon = new DirectXCommon();
+	dxCommon->Initialize();
 
-
-
-
-
-#ifdef _DEBUG
-
-	Microsoft::WRL::ComPtr<ID3D12Debug1> debugController = nullptr; // COM
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
-		// デバックレイヤーを有効化する
-		debugController->EnableDebugLayer();
-		// さらに6PU側でもチェックリストを行うようにする
-		debugController->SetEnableGPUBasedValidation(TRUE);
-	}
-#endif // _DEBUG
+	//デバイスの取得
+	auto dxgiFactory = dxCommon->GetDxgiFactory();
+	auto device = dxCommon->GetDevice();
 
 	//==XAudioエンジンのインスタンスを生成==//
 	HRESULT result = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
@@ -1037,61 +1021,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 
-	// DXGIファクトリーの生成
-	Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr; // com
-	// HRESULTはWindows系のエラー子どであり
-	// 関数が成功したかをSUCCEEDEDマクロで判定できる
-	HRESULT hr = CreateDXGIFactory(IID_PPV_ARGS(dxgiFactory.GetAddressOf()));
-	// 初期化の根本的な部分でエラーが出た場合はプログラムが間違っているか、どうにもできない場合が多いのでassertにしておく
-	assert(SUCCEEDED(hr));
-	// 使用するアダプタ用の変数,最初にnullptrを入れておく
-	IDXGIAdapter4* useAdapter = nullptr; // com
-	// よい順にアダプタを頼む
-	for (UINT i = 0; dxgiFactory->EnumAdapterByGpuPreference(
-		i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-		IID_PPV_ARGS(&useAdapter))
-		!= DXGI_ERROR_NOT_FOUND;
-		++i) {
 
-		// アダプターの情報を取得する
-		DXGI_ADAPTER_DESC3 adapterDesc{}; // com
-		hr = useAdapter->GetDesc3(&adapterDesc); // comGet
-		assert(SUCCEEDED(hr)); // 取得できないのは一大事
-		// ソフトウェアアダプタでなければ採用!
-		if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) { // get
-			// 採用したアダプタの情報をログに出力wstringの方なので注意
-			Log(logStream,
-				ConvertString(std::format(L"Use Adapater:{}\n",
-										  adapterDesc.Description))); // get
-			break;
-		}
-		useAdapter = nullptr; // ソフトウェアアダプタの場合は見なかったことにする
-	}
-
-	// 適切なアダプタが見つからなかったので起動できない
-	assert(useAdapter != nullptr);
-	Microsoft::WRL::ComPtr<ID3D12Device> device = nullptr;
-	// 昨日レベルとログ出力用の文字列
-	D3D_FEATURE_LEVEL featureLevels[] = {
-		D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0
-	};
-
-	const char* featureLevelStrings[] = { "12.2", "12.1", "12.0" };
-	// 高い順に生成できるか試していく
-	for (size_t i = 0; i < _countof(featureLevels); ++i) {
-		// 採用したアダプターでデバイスを生成
-		hr = D3D12CreateDevice(useAdapter, featureLevels[i], IID_PPV_ARGS(&device));
-		// 指定した機能レベルでデバイスは生成できたか確認
-		if (SUCCEEDED(hr)) {
-			// 生成できたのでログ出力を行ってループを抜ける
-			Log(logStream,
-				std::format("FeatureLevel : {}\n", featureLevelStrings[i]));
-			break;
-		}
-	}
-	// デバイスの生成が上手くいかなかったので起動できない
-	assert(device != nullptr);
-	Log(logStream, "Complete create D3D12Device!!!\n"); // 初期化完了のログを出す
 
 	//DirectInputの初期化
 	IDirectInput8* directInput = nullptr;
@@ -1991,6 +1921,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	/*SoundUnload(&soundData1);*/
 	xAudio2.Reset();
 
+	//DirectX解放
+	delete dxCommon;
 
 	// WindowsAPI解放
 	winApp->Finalize();

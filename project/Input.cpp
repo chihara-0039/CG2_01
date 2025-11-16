@@ -9,10 +9,14 @@ namespace {
 
 void Input::Initialize(WinApp* winApp) {
     
-    //借りてきたWinAppのインスタンスを記録
+    assert(winApp);
     this->winApp_ = winApp;
 
-    // DirectInput 本体をメンバに保持（親を生かし続ける）
+    // WinApp から HWND / HINSTANCE をもらう
+    hInstance_ = winApp_->GetHInstance();
+    hwnd_ = winApp_->GetHwnd();
+
+    // DirectInput 本体をメンバに保持
     HRESULT hr = DirectInput8Create(
         hInstance_, DIRECTINPUT_VERSION, IID_IDirectInput8,
         reinterpret_cast<void**>(directInput_.GetAddressOf()), nullptr);
