@@ -2,14 +2,28 @@
 #include <wrl.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
+#include <dxcapi.h>
 #include <cstdint>
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <format>
 
 class WinApp;
+
+//=== グローバルヘルパー関数の宣言 ===
+namespace DirectX { struct TexMetadata; };
 
 class DirectXCommon {
 public:
 	DirectXCommon();
 	~DirectXCommon();
+
+	//シェーダーのコンパイル
+	Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
+	const std::wstring& filepath,
+	const wchar_t* profile,
+	std::ostream& os);
 
 	// ★ main.cpp で作った各種 ComPtr をここに渡す形にする
 	void Initialize(
@@ -22,6 +36,7 @@ public:
 		Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap);
 
+	
 	void PreDraw();
 	void PostDraw();
 
@@ -32,6 +47,7 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetCommandQueue() const { return commandQueue_; }
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> GetSwapChain() const { return swapChain_; }
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetSRVDescriptorHeap() const { return srvDescriptorHeap_; }
+
 
 	const D3D12_VIEWPORT& GetViewport() const { return viewport_; }
 	const D3D12_RECT& GetScissorRect() const { return scissorRect_; }
@@ -73,4 +89,32 @@ private:
 	ComPtrFence fence_ = nullptr;
 	uint64_t    fenceVal_ = 0;
 	HANDLE      fenceEvent_ = nullptr;
+
+	//getter
+	ID3D12Device* GetDevicePtr() const { return device_.Get(); }
+	ID3D12GraphicsCommandList* GetCommandListPtr() const { return commandList_.Get(); }
+
+	// DXC 関連
+	Microsoft::WRL::ComPtr<IDxcUtils>       dxcUtils_;
+	Microsoft::WRL::ComPtr<IDxcCompiler3>   dxcCompiler_;
+	Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
+
 };
+
+//=== グローバルヘルパー関数の宣言 ===
+Microsoft::WRL::ComPtr<ID3D12Resource>
+CreateBufferResource(ID3D12Device* device, size_t sizeInBytes);
+
+Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>
+CreateDescriptorHeap(
+	Microsoft::WRL::ComPtr<ID3D12Device> device,
+	D3D12_DESCRIPTOR_HEAP_TYPE heapType,
+	UINT numDescriptors,
+	bool shaderVisivle);
+
+namespace DirectX { struct TexMetadata; }  // これがまだ無ければ追加
+
+Microsoft::WRL::ComPtr<ID3D12Resource>
+CreateTextureResource(
+	Microsoft::WRL::ComPtr<ID3D12Device> device,
+	const DirectX::TexMetadata& metadata);

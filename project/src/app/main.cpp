@@ -15,6 +15,8 @@
 #include <vector>
 #include "Input.h"
 #include "DirectXCommon.h"
+#include <DirectXTex.h>
+#include <D3DResourceLeakChecker.h>
 
 //----------------------------
 // Windows API / COM 関連
@@ -62,9 +64,6 @@
 #pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
-
-
-
 
 
 struct Vector2 {
@@ -456,94 +455,7 @@ std::string ConvertString(const std::wstring& str) {
 	return result;
 }
 
-//=== D3D12バッファリソース作成（UPLOADヒープ） ===
-Microsoft::WRL::ComPtr<ID3D12Resource>
-CreateBufferResource(ID3D12Device* device, size_t sizeInBytes) {
 
-	// 頂点リソース用のヒープの設定02_03
-	D3D12_HEAP_PROPERTIES uploadHeapProperties{};
-	uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD; // Uploadheapを使う
-	// 頂点リソースの設定02_03
-	D3D12_RESOURCE_DESC vertexResourceDesc{};
-	// バッファリソース。テクスチャの場合はまた別の設定をする02_03
-	vertexResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	vertexResourceDesc.Width = sizeInBytes; // リソースのサイズ　02_03
-	// バッファの場合はこれらは１にする決まり02_03
-	vertexResourceDesc.Height = 1;
-	vertexResourceDesc.DepthOrArraySize = 1;
-	vertexResourceDesc.MipLevels = 1;
-	vertexResourceDesc.SampleDesc.Count = 1;
-	// バッファの場合はこれにする決まり02_03
-	vertexResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-	// 実際に頂点リソースを作る02_03
-	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource = nullptr;
-	HRESULT hr = device->CreateCommittedResource(
-		&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &vertexResourceDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-		IID_PPV_ARGS(&vertexResource));
-	assert(SUCCEEDED(hr));
-
-	return vertexResource;
-}
-
-//=== D3D12ディスクリプタヒープ作成 ===
-Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>
-CreateDescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
-	D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors,
-	bool shaderVisivle) {
-	// ディスクリプタヒープの生成02_02
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescriptorHeap = nullptr;
-
-	D3D12_DESCRIPTOR_HEAP_DESC DescriptorHeapDesc{};
-	DescriptorHeapDesc.Type = heapType;
-	DescriptorHeapDesc.NumDescriptors = numDescriptors;
-	DescriptorHeapDesc.Flags = shaderVisivle
-		? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-		: D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-
-	HRESULT hr = device->CreateDescriptorHeap(&DescriptorHeapDesc,
-		IID_PPV_ARGS(&DescriptorHeap));
-	// ディスクリプタヒープが作れなかったので起動できない
-	assert(SUCCEEDED(hr)); // 1
-	return DescriptorHeap;
-}
-
-//=== D3D12テクスチャリソース作成（DEFAULTヒープ） ===
-Microsoft::WRL::ComPtr<ID3D12Resource>
-CreateTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device,
-	const DirectX::TexMetadata& metadata) {
-	// 1.metadataをもとにResourceの設定
-	D3D12_RESOURCE_DESC resourceDesc{};
-	resourceDesc.Width = UINT(metadata.width); // Textureの幅
-	resourceDesc.Height = UINT(metadata.height); // Textureの高さ
-	resourceDesc.MipLevels = UINT16(metadata.mipLevels); // mipdmapの数
-	resourceDesc.DepthOrArraySize = UINT16(metadata.arraySize); // 奥行き　or 配列Textureの配列数
-	resourceDesc.Format = metadata.format; // TextureのFormat
-	resourceDesc.SampleDesc.Count = 1; // サンプリングカウント。1固定
-	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(
-		metadata.dimension); // Textureの次元数　普段使っているのは二次元
-	// 2.利用するHeapの設定。非常に特殊な運用。02_04exで一般的なケース版がある
-	D3D12_HEAP_PROPERTIES heapProperties{};
-	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT; // 細かい設定を行う//03_00EX
-	// heapProperties.CPUPageProperty =
-	//     D3D12_CPU_PAGE_PROPERTY_WRITE_BACK; //
-	//     WriteBaackポリシーでCPUアクセス可能
-	// heapProperties.MemoryPoolPreference =
-	//     D3D12_MEMORY_POOL_L0; // プロセッサの近くに配置
-
-	// 3.Resourceを生成する
-	Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
-	HRESULT hr = device->CreateCommittedResource(
-		&heapProperties, // Heapの固定
-		D3D12_HEAP_FLAG_NONE, // Heapの特殊な設定。特になし
-		&resourceDesc, // Resourceの設定
-		D3D12_RESOURCE_STATE_COPY_DEST, // 初回のResourceState.Textureは基本読むだけ//03_00EX
-		nullptr, // Clear最適地。使わないのでnullptr
-		IID_PPV_ARGS(&resource)); // 作成するResourceポインタへのポインタ
-	assert(SUCCEEDED(hr));
-	return resource;
-}
 
 // データを転送するUploadTextureData関数を作る03_00EX
 [[nodiscard]] // 03_00EX
@@ -699,98 +611,6 @@ void GenerateSphereVertices(VertexData* vertices, int kSubdivision,
 			vertices[startIndex + 5] = vertB;
 		}
 	}
-}
-
-// D3Dリソースリークチェック用のクラス
-struct D3DResourceLeakChecker {
-	~D3DResourceLeakChecker() {
-		Microsoft::WRL::ComPtr<IDXGIDebug1> debug;
-
-		// DXGIのデバッグインターフェースを取得
-		if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&debug)))) {
-			// DXGI全体のリソースチェック（アプリが作ったリソースがまだ残ってるか確認）
-			debug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
-			debug->ReportLiveObjects(DXGI_DEBUG_APP, DXGI_DEBUG_RLO_ALL);
-			debug->ReportLiveObjects(DXGI_DEBUG_D3D12, DXGI_DEBUG_RLO_ALL);
-		}
-	}
-};
-
-
-// CompileShader関数02_00
-Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
-	// CompilerするSHaderファイルへのパス02_00
-	const std::wstring& filepath,
-	// Compilerに使用するprofile02_00
-	const wchar_t* profile,
-	// 初期化で生成したものを3つ02_00
-	Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils,
-	Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler,
-	Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler,
-	std::ostream& os) {
-	// ここの中身を書いていく02_00
-	// 1.hlslファイルを読み込む02_00
-	// これからシェーダーをコンパイルする旨をログに出す02_00
-	Log(os, ConvertString(std::format(L"Begin CompileShader,path:{},profike:{}\n", filepath, profile)));
-	// hlslファイルを読む02_00
-	Microsoft::WRL::ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
-	HRESULT hr = dxcUtils->LoadFile(filepath.c_str(), nullptr, &shaderSource);
-	// 読めなかったら止める02_00
-	assert(SUCCEEDED(hr));
-	// 読み込んだファイルの内容を設定する02_00
-	DxcBuffer shaderSourceBuffer;
-	shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
-	shaderSourceBuffer.Size = shaderSource->GetBufferSize();
-	shaderSourceBuffer.Encoding = DXC_CP_UTF8; // UTF8の文字コードであることを通知02_00
-	// 2.Compileする
-	LPCWSTR arguments[] = {
-		filepath.c_str(), // コンパイル対象のhlslファイル名02_00
-		L"-E",
-		L"main", // エントリーポイントの指定。基本的にmain以外にはしない02_00
-		L"-T",
-		profile, // shaderProfileの設定02_00
-		L"-Zi",
-		L"-Qembed_debug", // デバック用の設定を埋め込む02_00
-		L"-Od", /// 最適化を外しておく02_00
-		L"-Zpr" // メモリレイアウトは行優先02_00
-
-	};
-	// 実際にShaderをコンパイルする02_00
-	Microsoft::WRL::ComPtr<IDxcResult> shaderResult = nullptr;
-	hr = dxcCompiler->Compile(
-
-		&shaderSourceBuffer, // 読み込んだファイル02_00
-		arguments, // コンパイルオプション02_00
-		_countof(arguments), // コンパイルオプションの数02_00
-		includeHandler.Get(), // includeが含まれた諸々02_00
-		IID_PPV_ARGS(&shaderResult) // コンパイル結果02_00
-	);
-	// コンパイルエラーではなくdxcが起動できないなど致命的な状況02_00
-	assert(SUCCEEDED(hr));
-	// 3.警告、エラーが出ていないか確認する02_00
-	// 警告.エラーが出ていたらログに出して止める02_00
-	IDxcBlobUtf8* shaderError = nullptr;
-	shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
-	if (shaderError != nullptr && shaderError->GetStringLength() != 0) {
-		Log(os, shaderError->GetStringPointer());
-		// 警告、エラーダメ絶対02_00
-		assert(false);
-	}
-	// 4.Compile結果を受け取って返す02_00
-	// コンパイル結果から実行用のバイナリ部分を取得02_00
-	Microsoft::WRL::ComPtr<IDxcBlob> shaderBlob = nullptr;
-	hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob),
-		nullptr);
-	assert(SUCCEEDED(hr));
-	// 成功したログを出す02_00
-	Log(os,
-		ConvertString(std::format(L"Compile Succeeded, path:{}, profike:{}\n ",
-								  filepath, profile)));
-	// もう使わないリソースを解放02_00
-	// shaderSource->Release();
-	// shaderResult->Release();
-	// 実行用のバイナリを返却02_00
-	return shaderBlob; // get
 }
 
 
@@ -1151,18 +971,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 
-	// dxcCompilerを初期化CG2_02_00
-	IDxcUtils* dxcUtils = nullptr;
-	IDxcCompiler3* dxcCompiler = nullptr;
-	hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils));
-	assert(SUCCEEDED(hr));
-	hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
-	assert(SUCCEEDED(hr));
+	//// dxcCompilerを初期化CG2_02_00
+	//IDxcUtils* dxcUtils = nullptr;
+	//IDxcCompiler3* dxcCompiler = nullptr;
+	//hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils));
+	//assert(SUCCEEDED(hr));
+	//hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
+	//assert(SUCCEEDED(hr));
 
 	// 現時点でincludeはしないがincludeに対応するための設定を行っておく
-	IDxcIncludeHandler* includHandler = nullptr;
+	/*IDxcIncludeHandler* includHandler = nullptr;
 	hr = dxcUtils->CreateDefaultIncludeHandler(&includHandler);
-	assert(SUCCEEDED(hr));
+	assert(SUCCEEDED(hr));*/
 	// ==== ルートシグネチャを作る準備 ====
 	// RootSignature作成02_00
 	// 頂点データの形式を使っていいよ！というフラグを立てる
@@ -1334,19 +1154,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	rasterizerDesc.FrontCounterClockwise = FALSE;
 
 	// シェーダーのコンパイル
-	auto vs = L"Resources/shaders/hlsl/Object3d.VS.hlsl";
-	auto ps = L"Resources/shaders/hlsl/Object3d.PS.hlsl";
-	auto vsBlob = CompileShader(vs, L"vs_6_0", dxcUtils, dxcCompiler, includHandler, logStream);
-	auto psBlob = CompileShader(ps, L"ps_6_0", dxcUtils, dxcCompiler, includHandler, logStream);
+	auto vsPath = std::wstring(L"Resources/shaders/hlsl/Object3d.VS.hlsl");
+	auto psPath = std::wstring(L"Resources/shaders/hlsl/Object3d.PS.hlsl");
 
 
-	// Shaderをコンパイルする
-	Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"Resources/shaders/hlsl/Object3d.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler,
-		includHandler, logStream);
+	// DirectXCommon 内の DXC を使ってコンパイル
+	Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob =
+		dxCommon->CompileShader(vsPath, L"vs_6_0", logStream);
 	assert(vertexShaderBlob != nullptr);
 
-	Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"Resources/shaders/hlsl/Object3d.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler,
-		includHandler, logStream);
+	Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob =
+		dxCommon->CompileShader(psPath, L"ps_6_0", logStream);
 	assert(pixelShaderBlob != nullptr);
 
 	// PSOを生成する
