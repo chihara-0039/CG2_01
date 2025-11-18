@@ -8,6 +8,7 @@
 #include <string>
 #include <sstream>
 #include <format>
+#include <chrono>
 
 class WinApp;
 
@@ -98,6 +99,12 @@ private:
 	Microsoft::WRL::ComPtr<IDxcUtils>       dxcUtils_;
 	Microsoft::WRL::ComPtr<IDxcCompiler3>   dxcCompiler_;
 	Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
+
+	//FPS固定初期化
+	void InitializeFixFPS();
+	//FPS固定更新
+	void UpdateFixFPS();
+	std::chrono::steady_clock::time_point reference_;
 
 };
 

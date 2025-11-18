@@ -2,6 +2,7 @@
 #include "WinApp.h"
 #include <cassert>
 #include <format>
+#include <thread>
 #include <DirectXTex.h>
 
 using namespace Microsoft::WRL;
@@ -170,6 +171,9 @@ void DirectXCommon::Initialize(
 
     fenceEvent_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     assert(fenceEvent_ != nullptr);
+
+    //FPS 固定用の初期化
+    InitializeFixFPS();
 }
 
 void DirectXCommon::PreDraw() {
@@ -246,6 +250,9 @@ void DirectXCommon::PostDraw() {
         fence_->SetEventOnCompletion(fenceVal_, fenceEvent_);
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
+
+    //ここで1フレームの経過時間を調整して60FPS固定にする
+    UpdateFixFPS();
 
     // 次フレーム用にリセット
     hr = commandAllocator_->Reset();
@@ -399,4 +406,35 @@ CreateTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device,
         IID_PPV_ARGS(&resource)); // 作成するResourceポインタへのポインタ
     assert(SUCCEEDED(hr));
     return resource;
+}
+
+// FPS固定初期化
+void DirectXCommon::InitializeFixFPS() {
+	reference_ = std::chrono::steady_clock::now();
+}
+
+void DirectXCommon::UpdateFixFPS() {
+    using namespace std::chrono;
+
+    // 1/60秒分の時間（マイクロ秒）
+    const microseconds kMinTime(static_cast<int64_t>(1000000.0f / 60.0f));
+    // 1/60秒より少し短い時間（半端なリフレッシュレート対策用）
+    const microseconds kMinCheckTime(static_cast<int64_t>(1000000.0f / 65.0f));
+
+    // 現在時間
+    const steady_clock::time_point now = steady_clock::now();
+    // 前フレームからの経過時間
+    const microseconds elapsed = duration_cast<microseconds>(now - reference_);
+
+    // 60Hz 付近のモニタでは、VSYNC だけだと待ち過ぎになることがあるので
+    // 「十分に短いフレームのときだけ」追加でスリープする
+    if (elapsed < kMinCheckTime) {
+        // 1/60秒に達するまで 1マイクロ秒ずつ sleep する
+        while (steady_clock::now() - reference_ < kMinTime) {
+            std::this_thread::sleep_for(microseconds(1));
+        }
+    }
+
+    // 次フレーム用に基準時間を更新
+    reference_ = steady_clock::now();
 }

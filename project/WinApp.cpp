@@ -1,8 +1,11 @@
 #include "WinApp.h"
 #include <cstdint>
+#include <mmsystem.h>
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
+
+#pragma comment(lib, "winmm.lib")
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -43,6 +46,8 @@ void WinApp::Initialize() {
 
 	// ウィンドウを表示する
 	ShowWindow(hwnd, SW_SHOW);
+
+	timeBeginPeriod(1);  // システムタイマの精度を 1ms に上げる
 }
 
 //ウィンドウプロシージャ
