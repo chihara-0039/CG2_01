@@ -1,0 +1,21 @@
+Use Adapater:NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel : 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader,path:Particle.VS.hlsl,profike:vs_6_0
+
+Particle.VS.hlsl:3:1: error: unknown type name 'VSOutput'
+VSOutput main(VSInput input)
+^
+Particle.VS.hlsl:3:15: error: unknown type name 'VSInput'
+VSOutput main(VSInput input)
+              ^
+Particle.VS.hlsl:5:5: error: unknown type name 'VSOutput'
+    VSOutput output;
+    ^
+Particle.VS.hlsl:7:31: error: use of undeclared identifier 'gInstancingData'
+    TransformationMatrix tm = gInstancingData[input.instanceId];
+                              ^
+

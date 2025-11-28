@@ -1,21 +1,24 @@
 #include "Particle.hlsli"
 
-// VS 側インスタンシング行列（t0）
-// ルートシグネチャで「頂点シェーダ可視の SRV テーブル t0」に紐付ける
-StructuredBuffer<TransformationMatrix> gTransformationMatrices : register(t0);
+// VS 用：インスタンシング情報 (RootParameter[1], t0)
+//  → C++ 側の instancingSrvDesc で StructuredBuffer<TransformationMatrix> として作っている
+StructuredBuffer<TransformationMatrix> gInstanceMatrices : register(t0);
 
-VertexShaderOutput main(VertexShaderInput input, uint32_t instanceId : SV_InstanceID)
+VertexOutput main(VertexInput vin, uint instanceId : SV_InstanceID)
 {
-    VertexShaderOutput o;
+    VertexOutput vout;
 
-    float4x4 wvp = gTransformationMatrices[instanceId].WVP;
-    float4x4 world = gTransformationMatrices[instanceId].World;
+    // このインスタンスの行列を取得
+    TransformationMatrix m = gInstanceMatrices[instanceId];
 
-    o.position = mul(input.position, wvp);
+    // 位置変換（C++ 側で row-major で作っているので mul(v, M) 形式）
+    vout.position = mul(vin.position, m.WVP);
 
-    // ※ 正確には法線行列（world の 3x3 逆転置）だが、ひとまず world の 3x3 でOK
-    o.normal = normalize(mul(input.normal, (float3x3) world));
-    o.texcoord = input.texcoord;
+    // 法線をワールド空間に変換（回転＋スケール部分だけ取り出す）
+    float3x3 world3x3 = (float3x3) m.World;
+    vout.normal = mul(vin.normal, world3x3);
 
-    return o;
+    vout.texcoord = vin.texcoord;
+
+    return vout;
 }

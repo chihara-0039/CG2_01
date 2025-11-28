@@ -1,27 +1,32 @@
-// Particle.hlsli
+// 共通構造体
 
-// === VS I/O ===
-struct VertexShaderInput
+struct VertexInput
 {
-    float4 position : POSITION;
+    float4 position : POSITION0;
     float2 texcoord : TEXCOORD0;
-    float3 normal : NORMAL;
+    float3 normal : NORMAL0;
 };
 
-struct VertexShaderOutput
+struct VertexOutput
 {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
-    float3 normal : NORMAL;
+    float3 normal : NORMAL0;
 };
 
-// === ConstantBuffer 用の構造体 ===
+// C++側の struct とレイアウトを合わせる
 struct Material
 {
     float4 color;
-    int enableLighting; // レイアウト合わせ
-    float3 _pad;
+    int enableLighting;
+    float3 padding;
     float4x4 uvTransform;
+};
+
+struct TransformationMatrix
+{
+    float4x4 WVP;
+    float4x4 World;
 };
 
 struct DirectionalLight
@@ -31,13 +36,14 @@ struct DirectionalLight
     float intensity;
 };
 
-struct TransformationMatrix
+// b0 : マテリアル
+cbuffer CbMaterial : register(b0)
 {
-    float4x4 WVP;
-    float4x4 World;
+    Material gMaterial;
 };
 
-// === ピクセルシェーダ用リソース（PS: t0 / s0）===
-// ※ ここでだけ宣言する。PS側で二重に宣言しない。
-Texture2D<float4> gTexture : register(t0);
-SamplerState gSampler : register(s0);
+// b1 : 平行光源
+cbuffer CbDirectionalLight : register(b1)
+{
+    DirectionalLight gDirectionalLight;
+}

@@ -1,0 +1,16 @@
+Begin CompileShader,path:Resources/shaders/hlsl/Object3d.VS.hlsl,profike:vs_6_0
+
+Compile Succeeded, path:Resources/shaders/hlsl/Object3d.VS.hlsl, profike:vs_6_0
+ 
+Begin CompileShader,path:Resources/shaders/hlsl/Object3d.PS.hlsl,profike:ps_6_0
+
+Compile Succeeded, path:Resources/shaders/hlsl/Object3d.PS.hlsl, profike:ps_6_0
+ 
+Begin CompileShader,path:Resources/shaders/hlsl/Object3d.VS.hlsl,profike:vs_6_0
+
+Compile Succeeded, path:Resources/shaders/hlsl/Object3d.VS.hlsl, profike:vs_6_0
+ 
+Begin CompileShader,path:Resources/shaders/hlsl/Object3d.PS.hlsl,profike:ps_6_0
+
+Compile Succeeded, path:Resources/shaders/hlsl/Object3d.PS.hlsl, profike:ps_6_0
+ 

@@ -1,35 +1,28 @@
 #include "Particle.hlsli"
 
-// PS の CBV（b0, b1）
-ConstantBuffer<Material> gMaterial : register(b0);
+// PS 用：テクスチャ (RootParameter[2], t0)
+Texture2D gTexture : register(t0);
+// サンプラはルートシグネチャで static sampler s0 として作っている想定
+SamplerState gSampler : register(s0);
 
-
-// gTexture / gSampler は hlsli で宣言済み。ここで再宣言しない。
-
-struct PixelShaderOutput
+float4 main(VertexOutput pin) : SV_TARGET
 {
-    float32_t4 color : SV_Target0;
-};
+    // テクスチャ取得
+    float4 texColor = gTexture.Sample(gSampler, pin.texcoord);
 
-PixelShaderOutput main(VertexShaderOutput input)
-{
-    PixelShaderOutput output;
+    // とりあえず「ライティング ON なら平行光源をかける」くらいの簡易処理
+    float3 color = texColor.rgb * gMaterial.color.rgb;
+    float alpha = texColor.a * gMaterial.color.a;
 
-    // UV 変換
-    float4 uv = float4(input.texcoord, 0.0f, 1.0f);
-    float4 uvTransformed = mul(uv, gMaterial.uvTransform);
-
-    // サンプル
-    float32_t4 tex = gTexture.Sample(gSampler, uvTransformed.xy);
-
-    //色合成
-    output.color = gMaterial.color * tex;
-
-    // 透過破棄（必要に応じて閾値調整）
-    if (output.color.a == 0.0f)
+    if (gMaterial.enableLighting != 0)
     {
-        discard;
+        float3 N = normalize(pin.normal);
+        float3 L = -normalize(gDirectionalLight.direction); // 光の逆方向
+        float NdotL = saturate(dot(N, L));
+
+        float3 lightColor = gDirectionalLight.color.rgb * gDirectionalLight.intensity;
+        color *= (NdotL * lightColor);
     }
 
-    return output;
+    return float4(color, alpha);
 }
