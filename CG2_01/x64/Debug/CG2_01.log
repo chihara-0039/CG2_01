@@ -1,4 +1,55 @@
-﻿  main.cpp
-  CG2_01.vcxproj -> C:\Users\CG2\generated\CG2_01\x64\Debug\CG2_01.exe
-          1 個のファイルをコピーしました。
-          1 個のファイルをコピーしました。
+﻿  imgui.cpp
+  imgui_demo.cpp
+  imgui_draw.cpp
+  imgui_impl_dx12.cpp
+  imgui_impl_win32.cpp
+  imgui_tables.cpp
+  imgui_widgets.cpp
+  main.cpp
+libcpmtd.lib(wlocale.obj) : error LNK2001: 外部シンボル _calloc_dbg は未解決です
+libcpmtd.lib(xlocale.obj) : error LNK2001: 外部シンボル _calloc_dbg は未解決です
+main.obj : error LNK2001: 外部シンボル _calloc_dbg は未解決です
+libcpmtd.lib(tzdb.obj) : error LNK2001: 外部シンボル _calloc_dbg は未解決です
+libcpmtd.lib(_tolower.obj) : error LNK2001: 外部シンボル _calloc_dbg は未解決です
+libcpmtd.lib(locale.obj) : error LNK2001: 外部シンボル _calloc_dbg は未解決です
+libcpmtd.lib(wlocale.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(xlocale.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(xwcsxfrm.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(StlCompareStringA.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(cout.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(cerr.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(locale.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(StlLCMapStringA.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+main.obj : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(filesystem.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(tzdb.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(locale0.obj) : error LNK2001: 外部シンボル _free_dbg は未解決です
+libcpmtd.lib(xlocale.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(xwcsxfrm.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(StlCompareStringA.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(cerr.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(locale.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(StlLCMapStringA.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(wlocale.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+main.obj : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(filesystem.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(locale0.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(cout.obj) : error LNK2001: 外部シンボル _malloc_dbg は未解決です
+libcpmtd.lib(locale.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+libcpmtd.lib(wlocale.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+libcpmtd.lib(xlocale.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+libcpmtd.lib(xonce.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+libcpmtd.lib(tzdb.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+libcpmtd.lib(cout.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+libcpmtd.lib(cerr.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+main.obj : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+DirectXTex.lib(DirectXTexMipMaps.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+DirectXTex.lib(DirectXTexD3D12.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+libcpmtd.lib(xtime.obj) : error LNK2001: 外部シンボル _CrtDbgReport は未解決です
+libcpmtd.lib(_tolower.obj) : error LNK2019: 未解決の外部シンボル _wcsdup_dbg が関数 _Getctype で参照されました
+libcpmtd.lib(xstrcoll.obj) : error LNK2001: 外部シンボル _wcsdup_dbg は未解決です
+libcpmtd.lib(xmbtowc.obj) : error LNK2019: 未解決の外部シンボル _CrtDbgReportW が関数 _Mbrtowc で参照されました
+libcpmtd.lib(StlLCMapStringA.obj) : error LNK2001: 外部シンボル _CrtDbgReportW は未解決です
+libcpmtd.lib(StlCompareStringA.obj) : error LNK2001: 外部シンボル _CrtDbgReportW は未解決です
+libcpmtd.lib(locale.obj) : error LNK2019: 未解決の外部シンボル _realloc_dbg が関数 "private: static void __cdecl std::locale::_Locimp::_Locimp_Addfac(class std::locale::_Locimp *,class std::locale::facet *,unsigned __int64)" (?_Locimp_Addfac@_Locimp@locale@std@@CAXPEAV123@PEAVfacet@23@_K@Z) で参照されました
+C:\Users\CG2\generated\CG2_01\x64\Debug\CG2_01.exe : fatal error LNK1120: 7 件の未解決の外部参照
