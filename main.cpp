@@ -1911,8 +1911,30 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			ImGui::SliderAngle("Cam Rot Y", &cameraTransform.rotate.y, -180.0f, 180.0f);
 			ImGui::SliderAngle("Cam Rot Z", &cameraTransform.rotate.z, -180.0f, 180.0f);
 
+			if (ImGui::Button("View From Side (-X)")) {
+				// 左側から横を見る用の固定値
+				cameraTransform.translate = { -10.0f, 0.0f, 10.0f };
+				cameraTransform.rotate.x = 0.0f;
+				cameraTransform.rotate.y = float(M_PI) * 0.5f;   // +90°
+				cameraTransform.rotate.z = 0.0f;
+			}
+
+			if (ImGui::Button("View From Front")) {
+				// 正面から見る元の状態
+				cameraTransform.translate = { 0.0f, 0.0f, -5.0f };
+				cameraTransform.rotate = { 0.0f, 0.0f, 0.0f };
+			}
+
+
 			// ---- インスタンスのデバッグ ----
 			ImGui::SeparatorText("Instance Transform");
+
+			// ★ 全インスタンス共通の回転（ImGui でいじる用）
+			static Vector3 instanceGlobalRotate = { 0.0f, 0.0f, 0.0f };
+			ImGui::SeparatorText("Instance Global Rotate");
+			ImGui::SliderAngle("Global Rot X", &instanceGlobalRotate.x, -180.0f, 180.0f);
+			ImGui::SliderAngle("Global Rot Y", &instanceGlobalRotate.y, -180.0f, 180.0f);
+			ImGui::SliderAngle("Global Rot Z", &instanceGlobalRotate.z, -180.0f, 180.0f);
 
 			// どのインスタンスを見るか選ぶためのインデックス
 			static int instanceIndex = 0;
@@ -1995,10 +2017,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 			// インスタンスごとのWVP行列を計算して書き込む
 			for (uint32_t index = 0; index < kNumInstance; ++index) {
-				Matrix4x4 worldMatrix = MakeAffineMatrix(
-					transforms[index].scale, transforms[index].rotate, transforms[index].translate);
 
-				// ★ viewProjectionMatrix を使うのが正解
+				// 個別回転 ＋ 全体回転
+				Vector3 totalRotate = {
+					transforms[index].rotate.x + instanceGlobalRotate.x,
+					transforms[index].rotate.y + instanceGlobalRotate.y,
+					transforms[index].rotate.z + instanceGlobalRotate.z,
+				};
+
+				Matrix4x4 worldMatrix = MakeAffineMatrix(
+					transforms[index].scale, totalRotate, transforms[index].translate);
+
 				Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, viewProjectionMatrix);
 
 				instancingData[index].WVP = worldViewProjectionMatrix;
