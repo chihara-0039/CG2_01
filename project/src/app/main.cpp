@@ -15,6 +15,8 @@
 #include <vector>
 #include "Input.h"
 #include "DirectXCommon.h"
+#include <SpriteCommon.h>
+#include <Sprite.h>
 #include <DirectXTex.h>
 #include <D3DResourceLeakChecker.h>
 
@@ -838,6 +840,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	input = new Input();
 	input->Initialize(winApp);
 
+
+	
 	//====================
 	// DirectX デバイス作成
 	//====================
@@ -945,7 +949,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// ====================
 	// DirectXCommon の初期化
 	// ====================
-	dxCommon = new DirectXCommon();
+	std::unique_ptr<DirectXCommon> dxCommon = std::make_unique<DirectXCommon>();
 	dxCommon->Initialize(
 		winApp,
 		dxgiFactory,
@@ -955,6 +959,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		commandList,
 		swapChain,
 		srvDescriptorHeap);
+
+	//	====================
+	//	スプライト共通部の初期化
+	//	====================
+
+	SpriteCommon* spriteCommon;
+	//スプライト共通部の初期化
+	//spriteCommon = new SpriteCommon;
+	spriteCommon->Initialize(dxCommon);
+
+	//スプライトの初期化
+	/*Sprite* sprite = nullptr;
+	sprite->Initialize();*/
+
 
 	// SwapChainからResourceを引っ張ってくる
 	Microsoft::WRL::ComPtr<ID3D12Resource> swapChainResources[2] = {
@@ -1545,8 +1563,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		materialDataSprite->uvTransform = uvTransformMatrix;
 
 		// 描画準備----------------------------------------------------------------
+		// DirectXの描画準備処理を行う
 		dxCommon->PreDraw();
 
+		//Spriteの描画準備
+		spriteCommon->PreDraw();
 
 		// RootSignatureを設定。PS0に設定しているけど別途設定が必要
 		commandList->SetGraphicsRootSignature(rootSignature.Get());
@@ -1614,6 +1635,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 音声データ開放
 	/*SoundUnload(&soundData1);*/
 	xAudio2.Reset();
+
+	//Sprite解放
+	/*delete sprite;
+	sprite = nullptr;*/
+	delete spriteCommon;
+	spriteCommon = nullptr;
+	
 
 	//DirectX解放
 	delete dxCommon;
