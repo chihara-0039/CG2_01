@@ -9,26 +9,23 @@ using Microsoft::WRL::ComPtr;
 
 void SpriteCommon::Initialize(DirectXCommon* dxCommon) {
     assert(dxCommon);
-    dxCommon_ = dxCommon;
+    assert(dxCommon->GetDevice());
 
     CreateRootSignature();
     CreateGraphicsPipeline();
 }
 
 void SpriteCommon::PreDraw() {
-    auto commandList = dxCommon_->GetCommandList();
-    ID3D12GraphicsCommandList* list = commandList.Get();
+    assert(dxCommon_);
+    auto commandList = dxCommon_->GetCommandList().Get();  // ★追加
 
-    // ルートシグネチャ & PSO 設定
-    list->SetGraphicsRootSignature(rootSignature_.Get());
-    list->SetPipelineState(pipelineState_.Get());
-
-    // スプライトは TRIANGLESTRIP で描画
-    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    commandList->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList->SetPipelineState(pipelineState_.Get());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
 void SpriteCommon::CreateGraphicsPipeline() {
-    auto device = dxCommon_->GetDevice();
+    auto device = dxCommon_->GetDevicePtr();
     assert(device);
 
     std::ostringstream log; // シェーダーコンパイル用ログ

@@ -37,17 +37,23 @@ public:
 		Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap);
 
-	
+
 	void PreDraw();
 	void PostDraw();
 
 	// 必要な getter
-	Microsoft::WRL::ComPtr<IDXGIFactory7> GetDxgiFactory() const { return dxgiFactory_; }
-	Microsoft::WRL::ComPtr<ID3D12Device> GetDevice() const { return device_; }
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> GetCommandList() const { return commandList_; }
-	Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetCommandQueue() const { return commandQueue_; }
-	Microsoft::WRL::ComPtr<IDXGISwapChain4> GetSwapChain() const { return swapChain_; }
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetSRVDescriptorHeap() const { return srvDescriptorHeap_; }
+	const Microsoft::WRL::ComPtr<IDXGIFactory7>& GetDxgiFactory() const { return dxgiFactory_; }
+	const Microsoft::WRL::ComPtr<ID3D12Device>& GetDevice() const { return device_; }
+	const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& GetCommandList() const { return commandList_; }
+	const Microsoft::WRL::ComPtr<ID3D12CommandQueue>& GetCommandQueue() const { return commandQueue_; }
+	const Microsoft::WRL::ComPtr<IDXGISwapChain4>& GetSwapChain() const { return swapChain_; }
+	const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& GetSRVDescriptorHeap() const { return srvDescriptorHeap_; }
+
+	// 生ポインタ getter（main / ImGui / helper 用）
+	ID3D12Device* GetDevicePtr() const { return device_.Get(); }
+	ID3D12GraphicsCommandList* GetCommandListPtr() const { return commandList_.Get(); }
+	ID3D12DescriptorHeap* GetSRVDescriptorHeapPtr() const { return srvDescriptorHeap_.Get(); }
+
 
 
 	const D3D12_VIEWPORT& GetViewport() const { return viewport_; }
@@ -90,11 +96,6 @@ private:
 	ComPtrFence fence_ = nullptr;
 	uint64_t    fenceVal_ = 0;
 	HANDLE      fenceEvent_ = nullptr;
-
-	//getter
-	ID3D12Device* GetDevicePtr() const { return device_.Get(); }
-	ID3D12GraphicsCommandList* GetCommandListPtr() const { return commandList_.Get(); }
-
 	// DXC 関連
 	Microsoft::WRL::ComPtr<IDxcUtils>       dxcUtils_;
 	Microsoft::WRL::ComPtr<IDxcCompiler3>   dxcCompiler_;

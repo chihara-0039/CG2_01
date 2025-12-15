@@ -3,14 +3,14 @@
 #include <cwchar>
 
 namespace StringUtility {
-	//string‚ğwstring‚É•ÏŠ·‚·‚é
+	//stringã‚’wstringã«å¤‰æ›ã™ã‚‹
 	std::wstring ConvertString(const std::string& str) {
 		size_t size = str.size();
 		std::wstring wstr(size, L' ');
 		mbstowcs_s(nullptr, &wstr[0], size + 1, str.c_str(), size);
 		return wstr;
 	}
-	//wstring‚ğstring‚É•ÏŠ·‚·‚é
+	//wstringã‚’stringã«å¤‰æ›ã™ã‚‹
 	std::string ConvertString(const std::wstring& str) {
 		size_t size = str.size();
 		std::string sstr(size, ' ');

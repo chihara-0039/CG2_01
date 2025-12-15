@@ -14,8 +14,9 @@
 #include <string>
 #include <vector>
 #include "Input.h"
+#include "MyMath.h"
 #include "DirectXCommon.h"
-#include <SpriteCommon.h>
+#include "SpriteCommon.h"
 #include <Sprite.h>
 #include <DirectXTex.h>
 #include <D3DResourceLeakChecker.h>
@@ -67,28 +68,10 @@
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
 
+using namespace Math;
 
-struct Vector2 {
-	float x, y;
-};
-struct Vector3 {
-	float x, y, z;
-};
-struct Vector4 {
-	float x, y, z, w;
-};
-struct Matrix3x3 {
-	float m[3][3];
-};
-struct Matrix4x4 {
-	float m[4][4];
-};
 
-struct Transform {
-	Vector3 scale;
-	Vector3 rotate;
-	Vector3 translate;
-};
+
 // 頂点、マテリアル関連
 struct VertexData {
 	Vector4 position;
@@ -192,201 +175,7 @@ float waveTime = 0.0f;
 // 関数の作成///
 //////////////
 #pragma region 行列関数
-// 単位行列の作成
-Matrix4x4 MakeIdentity4x4() {
-	Matrix4x4 result{};
-	for (int i = 0; i < 4; ++i)
-		result.m[i][i] = 1.0f;
-	return result;
-}
-// 拡大縮小行列S
-Matrix4x4 Matrix4x4MakeScaleMatrix(const Vector3& s) {
-	Matrix4x4 result = {};
-	result.m[0][0] = s.x;
-	result.m[1][1] = s.y;
-	result.m[2][2] = s.z;
-	result.m[3][3] = 1.0f;
-	return result;
-}
 
-// X軸回転行列R
-Matrix4x4 MakeRotateXMatrix(float radian) {
-	Matrix4x4 result = {};
-
-	result.m[0][0] = 1.0f;
-	result.m[1][1] = std::cos(radian);
-	result.m[1][2] = std::sin(radian);
-	result.m[2][1] = -std::sin(radian);
-	result.m[2][2] = std::cos(radian);
-	result.m[3][3] = 1.0f;
-
-	return result;
-}
-// Y軸回転行列R
-Matrix4x4 MakeRotateYMatrix(float radian) {
-	Matrix4x4 result = {};
-
-	result.m[0][0] = std::cos(radian);
-	result.m[0][2] = std::sin(radian);
-	result.m[1][1] = 1.0f;
-	result.m[2][0] = -std::sin(radian);
-	result.m[2][2] = std::cos(radian);
-	result.m[3][3] = 1.0f;
-
-	return result;
-}
-// Z軸回転行列R
-Matrix4x4 MakeRotateZMatrix(float radian) {
-	Matrix4x4 result = {};
-
-	result.m[0][0] = std::cos(radian);
-	result.m[0][1] = -std::sin(radian);
-	result.m[1][0] = std::sin(radian);
-	result.m[1][1] = std::cos(radian);
-	result.m[2][2] = 1.0f;
-	result.m[3][3] = 1.0f;
-
-	return result;
-}
-
-// 平行移動行列T
-Matrix4x4 MakeTranslateMatrix(const Vector3& tlanslate) {
-	Matrix4x4 result = {};
-	result.m[0][0] = 1.0f;
-	result.m[1][1] = 1.0f;
-	result.m[2][2] = 1.0f;
-	result.m[3][3] = 1.0f;
-	result.m[3][0] = tlanslate.x;
-	result.m[3][1] = tlanslate.y;
-	result.m[3][2] = tlanslate.z;
-
-	return result;
-}
-// 行列の積
-Matrix4x4 Multiply(const Matrix4x4& m1, const Matrix4x4& m2) {
-	Matrix4x4 result{};
-	for (int i = 0; i < 4; ++i)
-		for (int j = 0; j < 4; ++j)
-			for (int k = 0; k < 4; ++k)
-				result.m[i][j] += m1.m[i][k] * m2.m[k][j];
-	return result;
-}
-// ワールドマトリックス、メイクアフィン
-Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate,
-	const Vector3& translate) {
-	Matrix4x4 scaleMatrix = Matrix4x4MakeScaleMatrix(scale);
-	Matrix4x4 rotateX = MakeRotateXMatrix(rotate.x);
-	Matrix4x4 rotateY = MakeRotateYMatrix(rotate.y);
-	Matrix4x4 rotateZ = MakeRotateZMatrix(rotate.z);
-	Matrix4x4 rotateMatrix = Multiply(Multiply(rotateX, rotateY), rotateZ);
-	Matrix4x4 translateMatrix = MakeTranslateMatrix(translate);
-
-	Matrix4x4 worldMatrix = Multiply(Multiply(scaleMatrix, rotateMatrix), translateMatrix);
-	return worldMatrix;
-}
-// 4x4 行列の逆行列を計算する関数
-Matrix4x4 Inverse(Matrix4x4 m) {
-	Matrix4x4 result;
-	float det;
-	int i;
-
-	result.m[0][0] = m.m[1][1] * m.m[2][2] * m.m[3][3] - m.m[1][1] * m.m[2][3] * m.m[3][2] - m.m[2][1] * m.m[1][2] * m.m[3][3] + m.m[2][1] * m.m[1][3] * m.m[3][2] + m.m[3][1] * m.m[1][2] * m.m[2][3] - m.m[3][1] * m.m[1][3] * m.m[2][2];
-
-	result.m[0][1] = -m.m[0][1] * m.m[2][2] * m.m[3][3] + m.m[0][1] * m.m[2][3] * m.m[3][2] + m.m[2][1] * m.m[0][2] * m.m[3][3] - m.m[2][1] * m.m[0][3] * m.m[3][2] - m.m[3][1] * m.m[0][2] * m.m[2][3] + m.m[3][1] * m.m[0][3] * m.m[2][2];
-
-	result.m[0][2] = m.m[0][1] * m.m[1][2] * m.m[3][3] - m.m[0][1] * m.m[1][3] * m.m[3][2] - m.m[1][1] * m.m[0][2] * m.m[3][3] + m.m[1][1] * m.m[0][3] * m.m[3][2] + m.m[3][1] * m.m[0][2] * m.m[1][3] - m.m[3][1] * m.m[0][3] * m.m[1][2];
-
-	result.m[0][3] = -m.m[0][1] * m.m[1][2] * m.m[2][3] + m.m[0][1] * m.m[1][3] * m.m[2][2] + m.m[1][1] * m.m[0][2] * m.m[2][3] - m.m[1][1] * m.m[0][3] * m.m[2][2] - m.m[2][1] * m.m[0][2] * m.m[1][3] + m.m[2][1] * m.m[0][3] * m.m[1][2];
-
-	result.m[1][0] = -m.m[1][0] * m.m[2][2] * m.m[3][3] + m.m[1][0] * m.m[2][3] * m.m[3][2] + m.m[2][0] * m.m[1][2] * m.m[3][3] - m.m[2][0] * m.m[1][3] * m.m[3][2] - m.m[3][0] * m.m[1][2] * m.m[2][3] + m.m[3][0] * m.m[1][3] * m.m[2][2];
-
-	result.m[1][1] = m.m[0][0] * m.m[2][2] * m.m[3][3] - m.m[0][0] * m.m[2][3] * m.m[3][2] - m.m[2][0] * m.m[0][2] * m.m[3][3] + m.m[2][0] * m.m[0][3] * m.m[3][2] + m.m[3][0] * m.m[0][2] * m.m[2][3] - m.m[3][0] * m.m[0][3] * m.m[2][2];
-
-	result.m[1][2] = -m.m[0][0] * m.m[1][2] * m.m[3][3] + m.m[0][0] * m.m[1][3] * m.m[3][2] + m.m[1][0] * m.m[0][2] * m.m[3][3] - m.m[1][0] * m.m[0][3] * m.m[3][2] - m.m[3][0] * m.m[0][2] * m.m[1][3] + m.m[3][0] * m.m[0][3] * m.m[1][2];
-
-	result.m[1][3] = m.m[0][0] * m.m[1][2] * m.m[2][3] - m.m[0][0] * m.m[1][3] * m.m[2][2] - m.m[1][0] * m.m[0][2] * m.m[2][3] + m.m[1][0] * m.m[0][3] * m.m[2][2] + m.m[2][0] * m.m[0][2] * m.m[1][3] - m.m[2][0] * m.m[0][3] * m.m[1][2];
-
-	result.m[2][0] = m.m[1][0] * m.m[2][1] * m.m[3][3] - m.m[1][0] * m.m[2][3] * m.m[3][1] - m.m[2][0] * m.m[1][1] * m.m[3][3] + m.m[2][0] * m.m[1][3] * m.m[3][1] + m.m[3][0] * m.m[1][1] * m.m[2][3] - m.m[3][0] * m.m[1][3] * m.m[2][1];
-
-	result.m[2][1] = -m.m[0][0] * m.m[2][1] * m.m[3][3] + m.m[0][0] * m.m[2][3] * m.m[3][1] + m.m[2][0] * m.m[0][1] * m.m[3][3] - m.m[2][0] * m.m[0][3] * m.m[3][1] - m.m[3][0] * m.m[0][1] * m.m[2][3] + m.m[3][0] * m.m[0][3] * m.m[2][1];
-
-	result.m[2][2] = m.m[0][0] * m.m[1][1] * m.m[3][3] - m.m[0][0] * m.m[1][3] * m.m[3][1] - m.m[1][0] * m.m[0][1] * m.m[3][3] + m.m[1][0] * m.m[0][3] * m.m[3][1] + m.m[3][0] * m.m[0][1] * m.m[1][3] - m.m[3][0] * m.m[0][3] * m.m[1][1];
-
-	result.m[2][3] = -m.m[0][0] * m.m[1][1] * m.m[2][3] + m.m[0][0] * m.m[1][3] * m.m[2][1] + m.m[1][0] * m.m[0][1] * m.m[2][3] - m.m[1][0] * m.m[0][3] * m.m[2][1] - m.m[2][0] * m.m[0][1] * m.m[1][3] + m.m[2][0] * m.m[0][3] * m.m[1][1];
-
-	result.m[3][0] = -m.m[1][0] * m.m[2][1] * m.m[3][2] + m.m[1][0] * m.m[2][2] * m.m[3][1] + m.m[2][0] * m.m[1][1] * m.m[3][2] - m.m[2][0] * m.m[1][2] * m.m[3][1] - m.m[3][0] * m.m[1][1] * m.m[2][2] + m.m[3][0] * m.m[1][2] * m.m[2][1];
-
-	result.m[3][1] = m.m[0][0] * m.m[2][1] * m.m[3][2] - m.m[0][0] * m.m[2][2] * m.m[3][1] - m.m[2][0] * m.m[0][1] * m.m[3][2] + m.m[2][0] * m.m[0][2] * m.m[3][1] + m.m[3][0] * m.m[0][1] * m.m[2][2] - m.m[3][0] * m.m[0][2] * m.m[2][1];
-
-	result.m[3][2] = -m.m[0][0] * m.m[1][1] * m.m[3][2] + m.m[0][0] * m.m[1][2] * m.m[3][1] + m.m[1][0] * m.m[0][1] * m.m[3][2] - m.m[1][0] * m.m[0][2] * m.m[3][1] - m.m[3][0] * m.m[0][1] * m.m[1][2] + m.m[3][0] * m.m[0][2] * m.m[1][1];
-
-	result.m[3][3] = m.m[0][0] * m.m[1][1] * m.m[2][2] - m.m[0][0] * m.m[1][2] * m.m[2][1] - m.m[1][0] * m.m[0][1] * m.m[2][2] + m.m[1][0] * m.m[0][2] * m.m[2][1] + m.m[2][0] * m.m[0][1] * m.m[1][2] - m.m[2][0] * m.m[0][2] * m.m[1][1];
-
-	det = m.m[0][0] * result.m[0][0] + m.m[0][1] * result.m[1][0] + m.m[0][2] * result.m[2][0] + m.m[0][3] * result.m[3][0];
-
-	if (det == 0)
-		return Matrix4x4{}; // またはエラー処理
-
-	det = 1.0f / det;
-
-	for (i = 0; i < 4; i++)
-		for (int j = 0; j < 4; j++)
-			result.m[i][j] = result.m[i][j] * det;
-
-	return result;
-}
-// 透視投影行列
-Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspectRatio,
-	float nearClip, float farClip) {
-	Matrix4x4 result = {};
-
-	float f = 1.0f / std::tan(fovY / 2.0f);
-
-	result.m[0][0] = f / aspectRatio;
-	result.m[1][1] = f;
-	result.m[2][2] = farClip / (farClip - nearClip);
-	result.m[2][3] = 1.0f;
-	result.m[3][2] = -(nearClip * farClip) / (farClip - nearClip);
-	return result;
-}
-// 正射影行列
-Matrix4x4 MakeOrthographicMatrix(float left, float top, float right,
-	float bottom, float nearClip, float farClip) {
-	Matrix4x4 m = {};
-
-	m.m[0][0] = 2.0f / (right - left);
-	m.m[1][1] = 2.0f / (top - bottom);
-	m.m[2][2] = 1.0f / (farClip - nearClip);
-	m.m[3][0] = -(right + left) / (right - left);
-	m.m[3][1] = -(top + bottom) / (top - bottom);
-	m.m[3][2] = -nearClip / (farClip - nearClip);
-	m.m[3][3] = 1.0f;
-
-	return m;
-}
-// ビューポート変換行列
-Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height,
-	float minDepth, float maxDepth) {
-	Matrix4x4 m = {};
-
-	// 行0：X方向スケーリングと移動
-	m.m[0][0] = width / 2.0f;
-	m.m[1][1] = -height / 2.0f;
-	m.m[2][2] = maxDepth - minDepth;
-	m.m[3][0] = left + width / 2.0f;
-	m.m[3][1] = top + height / 2.0f;
-	m.m[3][2] = minDepth;
-	m.m[3][3] = 1.0f;
-
-	return m;
-}
-// 正規化関数
-Vector3 Normalize(const Vector3& v) {
-	float length = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-	if (length == 0.0f)
-		return { 0.0f, 0.0f, 0.0f };
-	return { v.x / length, v.y / length, v.z / length };
-}
 #pragma endregion
 
 //===エラーハンドリング用の身にダンプ出力関数===///
@@ -811,27 +600,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	//SoundPlayWave(xAudio2.Get(), soundData1); // 音声再生
 
-	//DirectInputの初期化
-	IDirectInput8* directInput = nullptr;
-	result = DirectInput8Create(
-		winApp->GetHInstance(), DIRECTINPUT_VERSION, IID_IDirectInput8,
-		(void**)&directInput, nullptr);
-	assert(SUCCEEDED(result));
-
 	//キーボードデバイスの生成
-	IDirectInputDevice8* keyboard = nullptr;
-	result = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
-	assert(SUCCEEDED(result));
-
-	//入力データ形式のセット
-	result = keyboard->SetDataFormat(&c_dfDIKeyboard);  //標準形式のセット
-	assert(SUCCEEDED(result));
-	//協調モードのセット
-
-	//排他制御レベルのセット
-	result = keyboard->SetCooperativeLevel(
-		winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
-	assert(SUCCEEDED(result));
+	// DirectInput の生初期化は削除（Input クラスで一元管理）
+	// ※ ここで directInput/keyboard を触らないこと（例外/リークの原因になる）
 
 	//ポインタ
 	Input* input = nullptr;
@@ -841,11 +612,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	input->Initialize(winApp);
 
 
-	
+
 	//====================
 	// DirectX デバイス作成
 	//====================
-	
+
 	Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr;
 	hr = CreateDXGIFactory(IID_PPV_ARGS(&dxgiFactory));
 	assert(SUCCEEDED(hr));
@@ -947,9 +718,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			128, true);
 
 	// ====================
-	// DirectXCommon の初期化
-	// ====================
-	std::unique_ptr<DirectXCommon> dxCommon = std::make_unique<DirectXCommon>();
+// DirectXCommon の初期化
+// ====================
+	dxCommon = new DirectXCommon();  // ★ これが必要（nullptrのまま呼ぶと死ぬ）
 	dxCommon->Initialize(
 		winApp,
 		dxgiFactory,
@@ -960,14 +731,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		swapChain,
 		srvDescriptorHeap);
 
-	//	====================
-	//	スプライト共通部の初期化
-	//	====================
+	// ====================
+	// スプライト共通部の初期化
+	// ====================
+	SpriteCommon* spriteCommon = new SpriteCommon();
+	spriteCommon->Initialize(dxCommon);  // ★ .get() は消す
 
-	SpriteCommon* spriteCommon;
-	//スプライト共通部の初期化
-	//spriteCommon = new SpriteCommon;
-	spriteCommon->Initialize(dxCommon);
+
 
 	//スプライトの初期化
 	/*Sprite* sprite = nullptr;
@@ -1441,6 +1211,37 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// スフィア作成_05_00_OTHER
 	// GenerateSphereVertices(vertexData, kSubdivision, 0.5f);
 
+
+//============================================================
+// 初期化で記録したコマンド（テクスチャUpload等）をここで実行して確定させる
+// ※ これをやらないと、PreDraw の Reset が失敗したり、テクスチャ状態が未確定で例外/警告の原因になる
+//============================================================
+	{
+		HRESULT hrInit = commandList->Close();
+		assert(SUCCEEDED(hrInit));
+
+		ID3D12CommandList* lists[] = { commandList.Get() };
+		commandQueue->ExecuteCommandLists(1, lists);
+
+		Microsoft::WRL::ComPtr<ID3D12Fence> initFence;
+		hrInit = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&initFence));
+		assert(SUCCEEDED(hrInit));
+
+		const UINT64 fenceValue = 1;
+		hrInit = commandQueue->Signal(initFence.Get(), fenceValue);
+		assert(SUCCEEDED(hrInit));
+
+		HANDLE fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+		assert(fenceEvent != nullptr);
+
+		if (initFence->GetCompletedValue() < fenceValue) {
+			hrInit = initFence->SetEventOnCompletion(fenceValue, fenceEvent);
+			assert(SUCCEEDED(hrInit));
+			WaitForSingleObject(fenceEvent, INFINITE);
+		}
+		CloseHandle(fenceEvent);
+	}
+
 	// ImGuiの初期化。詳細はさして重要ではないので解説は省略する。02_03
 	// こういうもんである02_03
 	IMGUI_CHECKVERSION();
@@ -1462,11 +1263,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		// Windowにメッセージが来てたら最優先で処理させる
 		if (winApp->ProcessMessage()) {
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-
 			break;
 		}
+
+		// 入力はフレーム先頭で更新（PushKey/TriggerKey の前）
+		input->Update();
 
 		if (input->PushKey(DIK_SPACE)) { OutputDebugStringA("PUSH\n"); }
 		if (input->TriggerKey(DIK_SPACE)) { OutputDebugStringA("TRIGGER\n"); }
@@ -1508,11 +1309,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::End();
 
 		// ImGuiの内部コマンドを生成する02_03
-		ImGui::
-			Render(); // ImGui終わりの場所。描画の前02_03--------------------------
+		ImGui::Render(); // ImGui終わりの場所。描画の前02_03--------------------------
 
-		//入力の更新
-		input->Update();
+
 
 		// 押されたキーに応じて処理を行う
 		if (input->PushKey(DIK_0)) {
@@ -1562,61 +1361,93 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			uvTransformMatrix, MakeTranslateMatrix(uvTransformSprite.translate));
 		materialDataSprite->uvTransform = uvTransformMatrix;
 
-		// 描画準備----------------------------------------------------------------
-		// DirectXの描画準備処理を行う
+
+
+
+
+		// ---------------------------
+		// クリア＆共通前処理
+		// ---------------------------
 		dxCommon->PreDraw();
 
-		//Spriteの描画準備
-		spriteCommon->PreDraw();
+		auto commandList = dxCommon->GetCommandListPtr();
+		auto srvHeap = dxCommon->GetSRVDescriptorHeapPtr();
 
-		// RootSignatureを設定。PS0に設定しているけど別途設定が必要
+
+		// SRV ヒープ（テクスチャ/ImGui 共用）を必ずセット
+		ID3D12DescriptorHeap* heaps[] = { dxCommon->GetSRVDescriptorHeapPtr() };
+		commandList->SetDescriptorHeaps(1, heaps);
+
+		// ===========================
+		// 1. 3Dオブジェクト描画
+		// ===========================
+
+		// 3D 用 RootSignature / PSO セット
 		commandList->SetGraphicsRootSignature(rootSignature.Get());
-		commandList->SetPipelineState(graphicsPinelineState.Get()); // PS0を設定
-		commandList->IASetVertexBuffers(0, 1, &vertexBufferView); // VBVを設定
-		// 形状を設定。PS0に設定しているものとはまた別。同じものを設定すると考えていけばよい
+		commandList->SetPipelineState(graphicsPinelineState.Get());
+
+		// 3D の IA 設定
+		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+		// 3D 用 SRV / CBV
 		commandList->SetGraphicsRootDescriptorTable(
 			2, useMonstarBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
 
-		// マテリアルCbufferの場所を設定05_03変更
 		commandList->SetGraphicsRootConstantBufferView(
-			0, materialResource->GetGPUVirtualAddress()); // ここでmaterialResource使え
+			0, materialResource->GetGPUVirtualAddress());
 
-		// wvp用のCBufferの場所を設定02_02
 		commandList->SetGraphicsRootConstantBufferView(
 			1, wvpResource->GetGPUVirtualAddress());
-		// 平行光源用のCbufferの場所を設定05_03
+
 		commandList->SetGraphicsRootConstantBufferView(
 			3, directionalLightResource->GetGPUVirtualAddress());
 
-		// 描画！(DRAWCALL/ドローコール)。３頂点で１つのインスタンス。インスタンスについては今後_05_00_OHTER
-		// commandList->DrawInstanced(kNumVertices, 1, 0, 0);
-		// obj
-		commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0,
-			0); // オブジェクトのやつ
-		// マテリアルCbufferの場所を設定05_03変更これ書くとUvChackerがちゃんとする
-		commandList->SetGraphicsRootConstantBufferView(
-			0, materialResourceSprite->GetGPUVirtualAddress()); // ここでmaterialResource使え
+		// 3D ドロー
+		commandList->DrawInstanced(
+			UINT(modelData.vertices.size()), 1, 0, 0);
 
-		// 描画
+		// ===========================
+		// 2. スプライト描画
+		// ===========================
+
+		// ★ここで Sprite 用 PSO / RootSignature に切り替え
+		spriteCommon->PreDraw();
+
+		// スプライト用 CBV（マテリアル）
+		commandList->SetGraphicsRootConstantBufferView(
+			0, materialResourceSprite->GetGPUVirtualAddress());
+
+		// スプライト用 SRV
 		commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
-		// spriteの描画04_00
+
+		// スプライト用 VBV / IBV
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
-		// IBVを設定
 		commandList->IASetIndexBuffer(&indexBufferViewSprite);
 
+		// スプライト用 Transform CBV
 		commandList->SetGraphicsRootConstantBufferView(
 			1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
-		// UvChecker
-		commandList->DrawIndexedInstanced(6, 1, 0, 0, 0); // 左上のやつ
 
-		//  描画の最後です//----------------------------------------------------
-		//   実際のcommandListのImGuiの描画コマンドを積む
-		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList.Get());
+		// スプライト描画
+		commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
+		// ===========================
+		// 3. ImGui 描画
+		// ===========================
+		// ImGui は描画直前に SRV ヒープを再セットしておく（ヒープ未設定事故の予防）
+		{
+			ID3D12DescriptorHeap* imguiHeaps[] = { srvDescriptorHeap.Get() };
+			commandList->SetDescriptorHeaps(1, imguiHeaps);
+		}
 
+		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+
+		// ---------------------------
+		// 後処理（Present とかリセット）
+		// ---------------------------
 		dxCommon->PostDraw();
+
 
 	}
 
@@ -1641,7 +1472,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	sprite = nullptr;*/
 	delete spriteCommon;
 	spriteCommon = nullptr;
-	
+
 
 	//DirectX解放
 	delete dxCommon;
@@ -1659,4 +1490,3 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 }
-
