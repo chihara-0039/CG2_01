@@ -542,7 +542,9 @@ GetGPUDescriptorHandle(ID3D12DescriptorHeap* heap, UINT descriptorSize, UINT ind
 //  Windwsアプリでの円とリポウント(main関数)
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+#ifdef _DEBUG
 	D3DResourceLeakChecker leakChecker;
+#endif
 
 	CoInitializeEx(0, COINIT_MULTITHREADED);
 

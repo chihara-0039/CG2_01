@@ -269,8 +269,11 @@ Microsoft::WRL::ComPtr<IDxcBlob> DirectXCommon::CompileShader(
     std::ostream& os) {
 
     // ログ
+    const wchar_t* safeProfile = profile ? profile : L"(null)";
+
     Log(os, ConvertString(std::format(
-        L"Begin CompileShader, path:{}, profile:{}\n", filepath, profile)));
+        L"Begin CompileShader, path:{}, profile:{}\n", filepath, safeProfile)));
+
 
     // hlslファイルを読む
     Microsoft::WRL::ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
