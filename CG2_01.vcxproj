@@ -52,7 +52,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
@@ -62,8 +62,18 @@
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" ""$(TargetDir)dxcompiler.dll"
-copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll"</Command>
+      <Command>if not exist "$(TargetDir)" mkdir "$(TargetDir)"
+
+if exist "$(WindowsSdkDir)bin\$(WindowsTargetPlatformVersion)\x64\dxcompiler.dll" (
+  copy /Y "$(WindowsSdkDir)bin\$(WindowsTargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &gt;nul
+)
+
+if exist "$(WindowsSdkDir)bin\$(WindowsTargetPlatformVersion)\x64\dxil.dll" (
+  copy /Y "$(WindowsSdkDir)bin\$(WindowsTargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &gt;nul
+)
+
+exit /b 0
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
