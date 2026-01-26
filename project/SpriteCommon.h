@@ -1,27 +1,29 @@
 #pragma once
 #include "DirectXCommon.h"
+#include "TextureManager.h" // 追加
 #include <wrl.h>
 #include <d3d12.h>
+#include <memory>
 
 class SpriteCommon {
 public:
-    // 初期化（DirectXCommon へのポインタを受け取る）
     void Initialize(DirectXCommon* dxCommon);
 
-    // 共通描画設定（毎フレーム呼ぶ）
+    // 共通描画設定（ルートシグネチャ設定など）
     void PreDraw();
 
-    // getter（後で Sprite から使う）
     DirectXCommon* GetDxCommon() const { return dxCommon_; }
+    TextureManager* GetTextureManager() { return textureManager_.get(); }
+    ID3D12RootSignature* GetRootSignature() { return rootSignature_.Get(); }
+    ID3D12PipelineState* GetPipelineState() { return pipelineState_.Get(); }
 
 private:
-    // ルートシグネチャ作成
     void CreateRootSignature();
-    // グラフィックスパイプライン生成
     void CreateGraphicsPipeline();
 
 private:
     DirectXCommon* dxCommon_ = nullptr;
+    std::unique_ptr<TextureManager> textureManager_; // 追加
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_ = nullptr;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_ = nullptr;

@@ -1,100 +1,73 @@
 #include "WinApp.h"
 #include <cstdint>
 #include <mmsystem.h>
+
+// ImGuiなどを使う場合
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
-#include "externals/imgui/imgui_impl_dx12.h"
 
-#pragma comment(lib, "winmm.lib")
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+#pragma comment(lib, "winmm.lib")
+
 void WinApp::Initialize() {
+    HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
 
-	HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
+    // --- メンバ変数名 wc_ に統一 ---
+    wc_.lpfnWndProc = WindowProc;
+    wc_.lpszClassName = L"CG2WindowClass";
+    wc_.hInstance = GetModuleHandle(nullptr);
+    wc_.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    RegisterClass(&wc_);
 
-	
-	// ウィンドウプロシージャ
-	wc.lpfnWndProc = WindowProc;
-	// ウィンドウクラス名(何でもよい)
-	wc.lpszClassName = L"CG2WindowClass";
-	// インスタンスバンドル
-	wc.hInstance = GetModuleHandle(nullptr);
-	// カーソル
-	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-	// ウィンドウクラスを登録する
-	RegisterClass(&wc);
+    RECT wrc = { 0, 0, kClientWidth, kClientHeight };
+    AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
 
-	// ウィンドウサイズを表す構造体体にクライアント領域を入れる
-	RECT wrc = { 0, 0, kClientWidth, kClientHeight };
+    // --- メンバ変数名 hwnd_ に統一 ---
+    hwnd_ = CreateWindow(
+        wc_.lpszClassName,
+        L"CG2",
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        wrc.right - wrc.left,
+        wrc.bottom - wrc.top,
+        nullptr,
+        nullptr,
+        wc_.hInstance,
+        nullptr);
 
-	// クライアント領域をもとに実際のサイズにwrcを変更してもらう
-	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
-
-	// ウィンドウの生成
-	hwnd = CreateWindow(wc.lpszClassName, // 利用するクラス名
-		L"CG2", // タイトルバーの文字(何でもよい)
-		WS_OVERLAPPEDWINDOW, // よく見るウィンドウスタイル
-		CW_USEDEFAULT, // 表示X座標(Windowsに任せる)
-		CW_USEDEFAULT, // 表示Y座標(WindowsOSに任せる)
-		wrc.right - wrc.left, // ウィンドウ横幅
-		wrc.bottom - wrc.top, // ウィンドウ縦幅
-		nullptr, // 親ウィンドウハンドル
-		nullptr, // メニューハンドル
-		wc.hInstance, // インスタンスハンドル
-		nullptr); // オプション
-
-	// ウィンドウを表示する
-	ShowWindow(hwnd, SW_SHOW);
-
-	timeBeginPeriod(1);  // システムタイマの精度を 1ms に上げる
-}
-
-//ウィンドウプロシージャ
-LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-	if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
-		return true;
-	}
-
-	//メッセージに応じてゲーム固有の処理
-	switch (msg) {
-	case WM_CLOSE:            // ×ボタン
-	DestroyWindow(hwnd);  // 実ウィンドウ破棄を指示
-	return 0;
-
-	case WM_DESTROY:          // 破棄完了
-	PostQuitMessage(0);   // ← これが重要。メインループへ WM_QUIT を送る
-	return 0;
-	}
-
-	//標準のメッセージ処理を行う
-	return DefWindowProc(hwnd, msg, wparam, lparam);
-};
-
-
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd,
-	UINT msg,
-	WPARAM wParam,
-	LPARAM lParam);
-
-
-bool WinApp::ProcessMessage() {
-
-	MSG msg{};
-
-	if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-	}
-
-	if (msg.message == WM_QUIT) {
-		return true;
-	}
-
-	return false;
+    ShowWindow(hwnd_, SW_SHOW);
+    timeBeginPeriod(1);
 }
 
 void WinApp::Finalize() {
-	CloseWindow(hwnd);
-	CoUninitialize();
+    CloseWindow(hwnd_);
+    CoUninitialize();
+}
+
+bool WinApp::ProcessMessage() {
+    MSG msg{};
+    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+    if (msg.message == WM_QUIT) {
+        return true;
+    }
+    return false;
+}
+
+LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
+        return true;
+    }
+
+    switch (msg) {
+    case WM_CLOSE:
+    PostQuitMessage(0);
+    return 0;
+    }
+    return DefWindowProc(hwnd, msg, wparam, lparam);
 }

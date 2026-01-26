@@ -1,128 +1,84 @@
 #pragma once
-#include <wrl.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
+#include <wrl.h>
 #include <dxcapi.h>
 #include <cstdint>
-#include <iostream>
 #include <string>
-#include <sstream>
-#include <format>
 #include <chrono>
+
+#pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "dxcompiler.lib")
 
 class WinApp;
 
-//=== グローバルヘルパー関数の宣言 ===
-namespace DirectX { struct TexMetadata; };
-
 class DirectXCommon {
-public:
-	DirectXCommon();
-	~DirectXCommon();
+public: // サブクラス定義
+    template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-	//シェーダーのコンパイル
-	Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
-	const std::wstring& filepath,
-	const wchar_t* profile,
-	std::ostream& os);
+public: // メンバ関数
+    DirectXCommon() = default;
+    ~DirectXCommon() = default;
 
-	// ★ main.cpp で作った各種 ComPtr をここに渡す形にする
-	void Initialize(
-		WinApp* winApp,
-		Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory,
-		Microsoft::WRL::ComPtr<ID3D12Device> device,
-		Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,
-		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator,
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList,
-		Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
-		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap);
+    // 初期化
+    void Initialize(WinApp* winApp);
 
+    // 描画前処理
+    void PreDraw();
+    // 描画後処理
+    void PostDraw();
 
-	void PreDraw();
-	void PostDraw();
+    // シェーダーコンパイル
+    ComPtr<IDxcBlob> CompileShader(
+        const std::wstring& filePath,
+        const wchar_t* profile);
 
-	// 必要な getter
-	const Microsoft::WRL::ComPtr<IDXGIFactory7>& GetDxgiFactory() const { return dxgiFactory_; }
-	const Microsoft::WRL::ComPtr<ID3D12Device>& GetDevice() const { return device_; }
-	const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& GetCommandList() const { return commandList_; }
-	const Microsoft::WRL::ComPtr<ID3D12CommandQueue>& GetCommandQueue() const { return commandQueue_; }
-	const Microsoft::WRL::ComPtr<IDXGISwapChain4>& GetSwapChain() const { return swapChain_; }
-	const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& GetSRVDescriptorHeap() const { return srvDescriptorHeap_; }
+    // ゲッター
+    ID3D12Device* GetDevice() const { return device_.Get(); }
+    ID3D12GraphicsCommandList* GetCommandList() const { return commandList_.Get(); }
+    size_t GetBackBufferCount() const { return 2; }
 
-	// 生ポインタ getter（main / ImGui / helper 用）
-	ID3D12Device* GetDevicePtr() const { return device_.Get(); }
-	ID3D12GraphicsCommandList* GetCommandListPtr() const { return commandList_.Get(); }
-	ID3D12DescriptorHeap* GetSRVDescriptorHeapPtr() const { return srvDescriptorHeap_.Get(); }
+private: // メンバ関数(内部処理)
+    void InitializeDevice();
+    void InitializeCommand();
+    void InitializeSwapChain();
+    void InitializeRenderTargetView();
+    void InitializeDepthStencilView();
+    void InitializeFence();
+    void InitializeDXC();
+    void InitializeFixFPS();
+    void UpdateFixFPS();
 
+private: // メンバ変数
+    WinApp* winApp_ = nullptr;
 
+    // DirectX主要オブジェクト
+    ComPtr<IDXGIFactory7> dxgiFactory_;
+    ComPtr<ID3D12Device> device_;
+    ComPtr<ID3D12CommandQueue> commandQueue_;
+    ComPtr<ID3D12CommandAllocator> commandAllocator_;
+    ComPtr<ID3D12GraphicsCommandList> commandList_;
+    ComPtr<IDXGISwapChain4> swapChain_;
 
-	const D3D12_VIEWPORT& GetViewport() const { return viewport_; }
-	const D3D12_RECT& GetScissorRect() const { return scissorRect_; }
-	D3D12_CPU_DESCRIPTOR_HANDLE* GetRtvHandles() { return rtvHandles_; }
+    // RTV (レンダーターゲットビュー)
+    ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap_;
+    ComPtr<ID3D12Resource> swapChainResources_[2];
 
-private:
-	using ComPtrFactory = Microsoft::WRL::ComPtr<IDXGIFactory7>;
-	using ComPtrDevice = Microsoft::WRL::ComPtr<ID3D12Device>;
-	using ComPtrQueue = Microsoft::WRL::ComPtr<ID3D12CommandQueue>;
-	using ComPtrAllocator = Microsoft::WRL::ComPtr<ID3D12CommandAllocator>;
-	using ComPtrCmdList = Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>;
-	using ComPtrSwapChain = Microsoft::WRL::ComPtr<IDXGISwapChain4>;
-	using ComPtrHeap = Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>;
-	using ComPtrResource = Microsoft::WRL::ComPtr<ID3D12Resource>;
-	using ComPtrFence = Microsoft::WRL::ComPtr<ID3D12Fence>;
+    // DSV (深度ステンシルビュー)
+    ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;
+    ComPtr<ID3D12Resource> depthStencilResource_;
 
-	WinApp* winApp_ = nullptr;
+    // フェンス (同期用)
+    ComPtr<ID3D12Fence> fence_;
+    uint64_t fenceValue_ = 0;
+    HANDLE fenceEvent_ = nullptr;
 
-	ComPtrFactory   dxgiFactory_ = nullptr;
-	ComPtrDevice    device_ = nullptr;
-	ComPtrQueue     commandQueue_ = nullptr;
-	ComPtrAllocator commandAllocator_ = nullptr;
-	ComPtrCmdList   commandList_ = nullptr;
-	ComPtrSwapChain swapChain_ = nullptr;
-	ComPtrHeap      srvDescriptorHeap_ = nullptr;
+    // DXC (シェーダーコンパイラ)
+    ComPtr<IDxcUtils> dxcUtils_;
+    ComPtr<IDxcCompiler3> dxcCompiler_;
+    ComPtr<IDxcIncludeHandler> includeHandler_;
 
-	// RTV / DSV 関連
-	ComPtrHeap      rtvDescriptorHeap_ = nullptr;
-	ComPtrHeap      dsvDescriptorHeap_ = nullptr;
-	ComPtrResource  swapChainResources_[2]{};
-	ComPtrResource  depthStencilResource_ = nullptr;
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles_[2]{};
-
-	// ビューポート / シザー
-	D3D12_VIEWPORT viewport_{};
-	D3D12_RECT     scissorRect_{};
-
-	// フェンス
-	ComPtrFence fence_ = nullptr;
-	uint64_t    fenceVal_ = 0;
-	HANDLE      fenceEvent_ = nullptr;
-	// DXC 関連
-	Microsoft::WRL::ComPtr<IDxcUtils>       dxcUtils_;
-	Microsoft::WRL::ComPtr<IDxcCompiler3>   dxcCompiler_;
-	Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
-
-	//FPS固定初期化
-	void InitializeFixFPS();
-	//FPS固定更新
-	void UpdateFixFPS();
-	std::chrono::steady_clock::time_point reference_;
-
+    // FPS制御
+    std::chrono::steady_clock::time_point reference_;
 };
-
-//=== グローバルヘルパー関数の宣言 ===
-Microsoft::WRL::ComPtr<ID3D12Resource>
-CreateBufferResource(ID3D12Device* device, size_t sizeInBytes);
-
-Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>
-CreateDescriptorHeap(
-	Microsoft::WRL::ComPtr<ID3D12Device> device,
-	D3D12_DESCRIPTOR_HEAP_TYPE heapType,
-	UINT numDescriptors,
-	bool shaderVisivle);
-
-namespace DirectX { struct TexMetadata; }  // これがまだ無ければ追加
-
-Microsoft::WRL::ComPtr<ID3D12Resource>
-CreateTextureResource(
-	Microsoft::WRL::ComPtr<ID3D12Device> device,
-	const DirectX::TexMetadata& metadata);
