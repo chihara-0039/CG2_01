@@ -20,9 +20,13 @@
 // #include "imgui.h"
 // ...
 
+
 #pragma comment(lib, "dxguid.lib")
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+
     // リソースリークチェック用
     struct D3DResourceLeakChecker {
         ~D3DResourceLeakChecker() {
@@ -53,6 +57,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     TextureManager* textureManager = new TextureManager();
     textureManager->Initialize(dxCommon);
 
+    spriteCommon->SetTextureManager(textureManager);
+
     // ==============================
     // 2. リソースの読み込み・生成
     // ==============================
@@ -60,7 +66,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ★修正: ここにあった descriptorHeaps の行は削除しました（ここにあっても意味がないため）
 
     // 画像読み込み (Resourcesフォルダにある場合)
-    uint32_t textureHandle = textureManager->LoadTexture("Resources/uvChecker.png");
+    uint32_t textureHandle = textureManager->LoadTexture("C:/Users/CG2/generated/CG2_01/project/Resources/uvChecker.png");
 
     // スプライト生成
     Sprite* sprite = new Sprite();
@@ -114,6 +120,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     winApp->Finalize();
     delete winApp;
+
+    CoUninitialize();
 
     return 0;
 }

@@ -13,9 +13,13 @@ public:
     void PreDraw();
 
     DirectXCommon* GetDxCommon() const { return dxCommon_; }
-    TextureManager* GetTextureManager() { return textureManager_.get(); }
+    TextureManager* GetTextureManager() { return textureManager_; }
     ID3D12RootSignature* GetRootSignature() { return rootSignature_.Get(); }
     ID3D12PipelineState* GetPipelineState() { return pipelineState_.Get(); }
+
+    void SetTextureManager(TextureManager* textureManager) {
+        textureManager_ = textureManager;
+    }
 
 private:
     void CreateRootSignature();
@@ -23,7 +27,7 @@ private:
 
 private:
     DirectXCommon* dxCommon_ = nullptr;
-    std::unique_ptr<TextureManager> textureManager_; // 追加
+    TextureManager* textureManager_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_ = nullptr;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_ = nullptr;
