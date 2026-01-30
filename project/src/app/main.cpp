@@ -17,9 +17,7 @@
 #include "Sprite.h"
 
 // ImGuiを使用する場合はコメントアウトを外してパスを通してください
-// #include "imgui.h"
-// ...
-
+#include "imgui.h"
 
 #pragma comment(lib, "dxguid.lib")
 
