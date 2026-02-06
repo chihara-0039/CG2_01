@@ -198,16 +198,15 @@ namespace Math {
     }
 
     // 正射影
-    Matrix4x4 MakeOrthographicMatrix(float left, float top, float right,
-                                     float bottom, float nearClip, float farClip) {
-        Matrix4x4 m{};
+    Matrix4x4 Math::MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip) {
+        Matrix4x4 m = {};
         m.m[0][0] = 2.0f / (right - left);
         m.m[1][1] = 2.0f / (top - bottom);
         m.m[2][2] = 1.0f / (farClip - nearClip);
-        m.m[3][0] = -(right + left) / (right - left);
-        m.m[3][1] = -(top + bottom) / (top - bottom);
-        m.m[3][2] = -nearClip / (farClip - nearClip);
         m.m[3][3] = 1.0f;
+        m.m[3][0] = (left + right) / (left - right);
+        m.m[3][1] = (top + bottom) / (bottom - top);
+        m.m[3][2] = nearClip / (nearClip - farClip);
         return m;
     }
 

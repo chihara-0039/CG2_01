@@ -1,89 +1,49 @@
 #include "Input.h"
 #include <cassert>
-#include <cstring>
-
-namespace {
-    constexpr BYTE kPressedMask = 0x80; // DirectInput の「押下」ビット
-}
-
 
 void Input::Initialize(WinApp* winApp) {
-    
-    assert(winApp);
-    this->winApp_ = winApp;
+    winApp_ = winApp;
+    HRESULT hr;
 
-    // WinApp から HWND / HINSTANCE をもらう
-    hInstance_ = winApp_->GetHInstance();
-    hwnd_ = winApp_->GetHwnd();
-
-    // DirectInput 本体をメンバに保持
-    HRESULT hr = DirectInput8Create(
-        hInstance_, DIRECTINPUT_VERSION, IID_IDirectInput8,
-        reinterpret_cast<void**>(directInput_.GetAddressOf()), nullptr);
+    // DirectInputオブジェクトの生成
+    hr = DirectInput8Create(
+        winApp->GetHInstance(), DIRECTINPUT_VERSION, IID_IDirectInput8,
+        (void**)&directInput_, nullptr);
     assert(SUCCEEDED(hr));
 
-    // デバイスの確保
-    EnsureDevice_();
-}
+    // キーボードデバイスの生成
+    hr = directInput_->CreateDevice(GUID_SysKeyboard, &keyboard_, nullptr);
+    assert(SUCCEEDED(hr));
 
-bool Input::EnsureDevice_() {
-    if (!directInput_) return false;
+    // 入力データ形式のセット
+    hr = keyboard_->SetDataFormat(&c_dfDIKeyboard);
+    assert(SUCCEEDED(hr));
 
-    if (!keyboard_) {
-        HRESULT hr = directInput_->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(), nullptr);
-        if (FAILED(hr)) { keyboard_.Reset(); return false; }
-
-        hr = keyboard_->SetDataFormat(&c_dfDIKeyboard);
-        if (FAILED(hr)) { keyboard_.Reset(); return false; }
-
-        hr = keyboard_->SetCooperativeLevel(hwnd_,
-                 DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
-        if (FAILED(hr)) { keyboard_.Reset(); return false; }
-    }
-    return true;
-}
-
-bool Input::PushKey(BYTE keyNumber) {
-    // 押下フラグ(0x80)で判定するのがDirectInputの定石
-    return (key[keyNumber] & kPressedMask) != 0;
-}
-
-bool Input::TriggerKey(BYTE keyNumber) {
-    // 「前フレームは離していた && 今フレームで押された」
-    const bool wasDown = (keyPre[keyNumber] & kPressedMask) != 0;
-    const bool isDown = (key[keyNumber] & kPressedMask) != 0;
-    return (!wasDown && isDown);
+    // 排他制御レベルのセット
+    hr = keyboard_->SetCooperativeLevel(
+        winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+    assert(SUCCEEDED(hr));
 }
 
 void Input::Update() {
-    // 親 or 子が無効なら作り直しを試みる
-    if (!directInput_) {
-        if (FAILED(DirectInput8Create(hInstance_, DIRECTINPUT_VERSION, IID_IDirectInput8,
-                                      reinterpret_cast<void**>(directInput_.GetAddressOf()), nullptr))) {
-            return; // 今フレームは諦める
-        }
-    }
-    if (!EnsureDevice_()) return;
+    HRESULT hr;
 
-    // Acquire リトライ（Alt+Tab 等）
-    HRESULT hr = keyboard_->Acquire();
-    if (FAILED(hr)) {
-        keyboard_->Unacquire();
-        hr = keyboard_->Acquire();
-        if (FAILED(hr)) return; // 未取得ならこのフレームは未入力扱い
-    }
+    // 前回のキー入力を保存
+    memcpy(keyPre_, key_, sizeof(key_));
 
-    //前回のキー入力を保存
-    memcpy(keyPre, key, sizeof(key));
-    
-    hr = keyboard_->GetDeviceState(sizeof(key), key);
-    if (FAILED(hr)) {
-        // 入力ロスト等。次フレーム以降に再取得を試みる。
-        keyboard_->Unacquire();
-        std::memset(key, 0, sizeof(key));
-    }
+    // キーボード情報の取得開始
+    keyboard_->Acquire();
 
-
+    // 全キーの入力状態を取得する
+    hr = keyboard_->GetDeviceState(sizeof(key_), key_);
 }
 
+bool Input::PushKey(BYTE keyNumber) {
+    // 0以外なら押されている
+    return key_[keyNumber];
+}
 
+bool Input::TriggerKey(BYTE keyNumber) {
+    // 今押されていて、前は押されていなかったらトリガー
+    return key_[keyNumber] && !keyPre_[keyNumber];
+}

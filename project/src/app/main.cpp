@@ -10,7 +10,7 @@
 
 #include "WinApp.h"
 #include "DirectXCommon.h"
-#include "TextureManager.h" 
+#include "TextureManager.h"
 #include "SpriteCommon.h"
 #include "Input.h"
 #include "Logger.h"
@@ -61,17 +61,30 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 2. リソースの読み込み・生成
     // ==============================
 
-    // ★修正: ここにあった descriptorHeaps の行は削除しました（ここにあっても意味がないため）
+    // 画像読み込み（1回だけ！）
+    // ※パスはご自身の環境に合わせて調整してください
+    uint32_t textureHandle = textureManager->LoadTexture("Resources/uvChecker.png");
 
-    // 画像読み込み (Resourcesフォルダにある場合)
-    uint32_t textureHandle = textureManager->LoadTexture("C:/Users/CG2/generated/CG2_01/project/Resources/uvChecker.png");
+    // --- A. 元画像用スプライト（背景用） ---
+    Sprite* spriteOriginal = new Sprite();
+    spriteOriginal->Initialize(spriteCommon, textureHandle);
 
-    // スプライト生成
-    Sprite* sprite = new Sprite();
-    sprite->Initialize(spriteCommon, textureHandle);
+    // 左側に配置
+    spriteOriginal->SetPosition({ 100.0f, 100.0f });
+    spriteOriginal->SetSize({ 200.0f, 200.0f }); // 見やすくちょっと縮小
 
-    sprite->SetPosition({ 100.0f, 100.0f });
-    sprite->SetSize({ 100.0f, 100.0f });
+    // --- B. 切り抜き用スプライト（操作キャラ用） ---
+    Sprite* spriteCropped = new Sprite();
+    spriteCropped->Initialize(spriteCommon, textureHandle); // ★同じハンドルを使う
+
+    // 右側に配置（座標管理用変数）
+    Vector2 croppedPosition = { 400.0f, 100.0f };
+    spriteCropped->SetPosition(croppedPosition);
+
+    // ★ここで切り抜き設定（ループの外でOK）
+    // 画像の (0, 0) から 64x64 切り抜く
+    spriteCropped->SetTextureRect({ 0.0f, 0.0f }, { 64.0f, 64.0f });
+    spriteCropped->SetSize({ 64.0f, 64.0f }); // サイズも合わせる
 
 
     // ==============================
@@ -84,7 +97,30 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
         // --- 更新処理 ---
         input->Update();
-        sprite->Update();
+
+        // ★★★ 移動処理（切り抜きキャラの方を動かす） ★★★
+        const float kSpeed = 5.0f;
+
+        if (input->PushKey(DIK_RIGHT)) {
+            croppedPosition.x += kSpeed;
+        }
+        if (input->PushKey(DIK_LEFT)) {
+            croppedPosition.x -= kSpeed;
+        }
+        if (input->PushKey(DIK_UP)) {
+            croppedPosition.y -= kSpeed;
+        }
+        if (input->PushKey(DIK_DOWN)) {
+            croppedPosition.y += kSpeed;
+        }
+
+        // 移動した座標をスプライトに反映
+        spriteCropped->SetPosition(croppedPosition);
+
+        // ★2つとも更新する
+        spriteOriginal->Update();
+        spriteCropped->Update();
+
 
         // --- 描画処理 ---
         dxCommon->PreDraw();      // 画面クリア
@@ -94,13 +130,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         // 描画コマンド
         // ------------------------------
 
-        // ★★★ ここが一番重要です！ ★★★
-        // 毎フレーム「今からテクスチャの保管場所(Heap)を使うよ」とCommandListに伝える必要があります。
+        // ★ Heap設定（これを忘れると描画されません）
         ID3D12DescriptorHeap* descriptorHeaps[] = { textureManager->GetSrvHeap() };
         dxCommon->GetCommandList()->SetDescriptorHeaps(1, descriptorHeaps);
 
-        // その後にDrawを呼ぶ
-        sprite->Draw();
+        // ★2つとも描画する
+        spriteOriginal->Draw();
+        spriteCropped->Draw();
 
         // ------------------------------
 
@@ -110,7 +146,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ==============================
     // 4. 終了処理
     // ==============================
-    delete sprite;
+    // 作ったものはすべて解放
+    delete spriteOriginal;
+    delete spriteCropped;
+
     delete textureManager;
     delete spriteCommon;
     delete input;

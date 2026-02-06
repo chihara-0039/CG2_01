@@ -29,6 +29,7 @@ private:
     // 内部用：テクスチャデータ構造体
     struct TextureData {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource;
         D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCPU;
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandleGPU;
         D3D12_RESOURCE_DESC resourceDesc;
