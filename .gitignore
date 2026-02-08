@@ -27,13 +27,13 @@ Release/
 *.res
 *.sbr
 
-# --- Binary Output (今回の指摘箇所対策) ---
+# --- Binary Output () ---
 # すべてのフォルダでexe, dll, libを無視する設定
 *.exe
 *.dll
 *.lib
 
-# --- Custom Output Folders (今回の指摘箇所対策) ---
+# --- Custom Output Folders () ---
 # プロジェクト特有の生成フォルダを無視
 generated/
 **/generated/
