@@ -134,12 +134,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
       <AdditionalLibraryDirectories>$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)enjine\scene;$(SolutionDir)project\externals\DirectXTex\Bin\Desktop_2022_Win10\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>set "DEST=$(ProjectDir)..\generated\outputs\$(Configuration)\"
-if not exist "%DEST%" mkdir "%DEST%"
-
-copy /Y "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\dxcompiler.dll" "%DEST%dxcompiler.dll"
-copy /Y "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\dxil.dll" "%DEST%dxil.dll"
-</Command>
+      <Command>copy /y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(OutDir)"
+copy /y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
