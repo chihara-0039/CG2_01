@@ -35,7 +35,7 @@ Release/
 
 # --- Custom Output Folders (今回の指摘箇所対策) ---
 # プロジェクト特有の生成フォルダを無視
-generated/
+#generated/
 **/generated/
 project/..$generated/
 
