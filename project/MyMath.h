@@ -48,26 +48,20 @@ namespace Math {
     Matrix4x4 Multiply(const Matrix4x4& m1, const Matrix4x4& m2);
 
     // アフィン行列
-    Matrix4x4 MakeAffineMatrix(const Vector3& scale,
-                               const Vector3& rotate,
-                               const Vector3& translate);
+    Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate);
 
-    // 逆行列
-    Matrix4x4 Inverse(Matrix4x4 m);
+    // 逆行列 (引数を const Matrix4x4& に統一)
+    Matrix4x4 Inverse(const Matrix4x4& m);
 
     // 透視投影行列
-    Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspectRatio,
-                                       float nearClip, float farClip);
+    Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip);
 
-    // 正射影行列
-    Matrix4x4 MakeOrthographicMatrix(float left, float top, float right,
-                                     float bottom, float nearClip, float farClip);
+    // 正射影行列 (Spriteで必要)
+    Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip);
 
-    // ビューポート変換行列
-    Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height,
-                                 float minDepth, float maxDepth);
+    // ビューポート行列 (Spriteで必要)
+    Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
 
     // 正規化
     Vector3 Normalize(const Vector3& v);
-
-} // namespace Math
+}

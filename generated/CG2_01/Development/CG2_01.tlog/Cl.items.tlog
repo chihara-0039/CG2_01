@@ -9,7 +9,10 @@ C:\Users\CG2\generated\CG2_01\project\externals\imgui\imgui_tables.cpp;C:\Users\
 C:\Users\CG2\generated\CG2_01\project\externals\imgui\imgui_widgets.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\imgui_widgets.obj
 C:\Users\CG2\generated\CG2_01\project\Input.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\Input.obj
 C:\Users\CG2\generated\CG2_01\project\Logger.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\Logger.obj
+C:\Users\CG2\generated\CG2_01\project\Model.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\Model.obj
 C:\Users\CG2\generated\CG2_01\project\MyMath.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\MyMath.obj
+C:\Users\CG2\generated\CG2_01\project\Object3d.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\Object3d.obj
+C:\Users\CG2\generated\CG2_01\project\Object3dCommon.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\Object3dCommon.obj
 C:\Users\CG2\generated\CG2_01\project\Sprite.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\Sprite.obj
 C:\Users\CG2\generated\CG2_01\project\SpriteCommon.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\SpriteCommon.obj
 C:\Users\CG2\generated\CG2_01\project\src\app\main.cpp;C:\Users\CG2\generated\CG2_01\generated\CG2_01\Development\main.obj

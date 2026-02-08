@@ -162,12 +162,27 @@ void DirectXCommon::InitializeDXC() {
 }
 
 ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, const wchar_t* profile) {
+    // --- デバッグログ：何を読み込もうとしているか出力 ---
+    OutputDebugStringW(L"----------------------------------------\n");
+    OutputDebugStringW(L"Begin CompileShader: ");
+    OutputDebugStringW(filePath.c_str());
+    OutputDebugStringW(L"\n");
+
     // 1. hlslファイルを読む
     ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
     HRESULT hr = dxcUtils_->LoadFile(filePath.c_str(), nullptr, &shaderSource);
-    assert(SUCCEEDED(hr));
 
-    // 2. コンパイル引数
+    // ★ここが最重要：ファイルが見つからなかったらエラーを出して止める
+    if (FAILED(hr)) {
+        OutputDebugStringA("ERROR: Failed to load shader file.\n");
+        OutputDebugStringA("Please check if the file path is correct and the file exists.\n");
+        OutputDebugStringW(filePath.c_str()); // 失敗したパスを表示
+        OutputDebugStringA("\n----------------------------------------\n");
+        assert(false && "Shader File Not Found!"); // ここで止まるはず
+        return nullptr;
+    }
+
+    // 2. コンパイル引数準備
     DxcBuffer shaderSourceBuffer;
     shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
     shaderSourceBuffer.Size = shaderSource->GetBufferSize();
@@ -182,7 +197,7 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
         L"-Zpr",
     };
 
-    // 3. コンパイル
+    // 3. コンパイル実行
     ComPtr<IDxcResult> shaderResult = nullptr;
     hr = dxcCompiler_->Compile(
         &shaderSourceBuffer,
@@ -190,20 +205,34 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
         _countof(arguments),
         includeHandler_.Get(),
         IID_PPV_ARGS(&shaderResult));
-    assert(SUCCEEDED(hr));
 
-    // エラー確認
-    ComPtr<IDxcBlobUtf8> shaderError = nullptr;
-    shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
-    if (shaderError != nullptr && shaderError->GetStringLength() != 0) {
-        std::string errorMsg = shaderError->GetStringPointer();
-        // ログ出力など必要ならここで行う
-        assert(false && "Shader Compile Error");
+    // コンパイル自体の失敗チェック
+    if (FAILED(hr)) {
+        OutputDebugStringA("ERROR: DxcCompiler::Compile failed completely.\n");
+        assert(false);
+        return nullptr;
     }
 
+    // 4. エラーメッセージ取得
+    ComPtr<IDxcBlobUtf8> shaderError = nullptr;
+    shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
+
+    if (shaderError != nullptr && shaderError->GetStringLength() != 0) {
+        std::string errorMsg = shaderError->GetStringPointer();
+        OutputDebugStringA("----------------------------------------\n");
+        OutputDebugStringA("HLSL Compile Error:\n");
+        OutputDebugStringA(errorMsg.c_str());
+        OutputDebugStringA("----------------------------------------\n");
+        assert(false && "Shader Compile Error"); // 文法ミスならここで止まる
+    }
+
+    // 5. 結果の取得
     ComPtr<IDxcBlob> shaderBlob = nullptr;
     hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
     assert(SUCCEEDED(hr));
+
+    OutputDebugStringA("CompileShader Success!\n");
+    OutputDebugStringA("----------------------------------------\n");
 
     return shaderBlob;
 }
