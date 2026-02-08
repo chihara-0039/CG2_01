@@ -22,9 +22,6 @@
     <Filter Include="ソース ファイル\render">
       <UniqueIdentifier>{ff047a05-8fdb-4780-90cc-0a4faa8c254d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソース ファイル\shader">
-      <UniqueIdentifier>{cb882ec1-1666-4623-9189-b495a824f071}</UniqueIdentifier>
-    </Filter>
     <Filter Include="ソース ファイル\assets">
       <UniqueIdentifier>{cdcbeaaf-9cfc-43c2-9ad3-1874240f26ec}</UniqueIdentifier>
     </Filter>
@@ -39,6 +36,9 @@
     </Filter>
     <Filter Include="ソース ファイル\externals">
       <UniqueIdentifier>{e8e422ea-f8f0-4705-ae29-09cc2a6a003c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\math\shader">
+      <UniqueIdentifier>{cb882ec1-1666-4623-9189-b495a824f071}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -66,14 +66,55 @@
     <ClCompile Include="src\app\main.cpp">
       <Filter>ソース ファイル\app</Filter>
     </ClCompile>
+    <ClCompile Include="Input.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="WinApp.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="DirectXCommon.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="StringUtility.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="Logger.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="D3DResourceLeakChecker.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="SpriteCommon.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="Sprite.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="MyMath.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="TextureManager.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="Object3dCommon.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="Model.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="Object3d.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Resources\shaders\hlsl\Object3d.PS.hlsl">
-      <Filter>ソース ファイル\shader</Filter>
+      <Filter>ソース ファイル\math\shader</Filter>
     </FxCompile>
     <FxCompile Include="Resources\shaders\hlsl\Object3d.VS.hlsl">
-      <Filter>ソース ファイル\shader</Filter>
+      <Filter>ソース ファイル\math\shader</Filter>
     </FxCompile>
+    <FxCompile Include="Resources\shaders\hlsl\Sprite.VS.hlsl" />
+    <FxCompile Include="Resources\shaders\hlsl\Sprite.PS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h">
@@ -100,10 +141,49 @@
     <ClInclude Include="externals\imgui\imstb_truetype.h">
       <Filter>imgui</Filter>
     </ClInclude>
+    <ClInclude Include="Input.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="WinApp.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="DirectXCommon.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="StringUtility.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Logger.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="D3DResourceLeakChecker.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="SpriteCommon.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Sprite.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="MyMath.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="TextureManager.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Object3dCommon.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Model.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Object3d.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\Object3d.hlsli">
-      <Filter>ソース ファイル\shader</Filter>
+      <Filter>ソース ファイル\math\shader</Filter>
     </None>
   </ItemGroup>
 </Project>
