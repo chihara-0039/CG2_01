@@ -62,6 +62,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Input* input = new Input();
     input->Initialize(winApp);
 
+
     // 2. マネージャ・コモン初期化
     TextureManager* textureManager = new TextureManager();
     textureManager->Initialize(dxCommon);
