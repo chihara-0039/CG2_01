@@ -113,8 +113,12 @@
     <FxCompile Include="Resources\shaders\hlsl\Object3d.VS.hlsl">
       <Filter>ソース ファイル\math\shader</Filter>
     </FxCompile>
-    <FxCompile Include="Resources\shaders\hlsl\Sprite.VS.hlsl" />
-    <FxCompile Include="Resources\shaders\hlsl\Sprite.PS.hlsl" />
+    <FxCompile Include="Resources\shaders\hlsl\Sprite.PS.hlsl">
+      <Filter>ソース ファイル\math\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Resources\shaders\hlsl\Sprite.VS.hlsl">
+      <Filter>ソース ファイル\math\shader</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h">
