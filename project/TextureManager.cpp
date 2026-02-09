@@ -78,6 +78,7 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
     }
     assert(textures_.size() < kMaxTextures);
 
+
     // 2. ファイル読み込み (DirectXTex)
     DirectX::ScratchImage image;
     std::wstring wFilePath = ConvertString(filePath);
