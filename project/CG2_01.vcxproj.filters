@@ -105,6 +105,9 @@
     <ClCompile Include="Object3d.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="ParticleManager.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Resources\shaders\hlsl\Object3d.PS.hlsl">
@@ -117,6 +120,12 @@
       <Filter>ソース ファイル\math\shader</Filter>
     </FxCompile>
     <FxCompile Include="Resources\shaders\hlsl\Sprite.VS.hlsl">
+      <Filter>ソース ファイル\math\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Resources\shaders\hlsl\Particle.PS.hlsl">
+      <Filter>ソース ファイル\math\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Resources\shaders\hlsl\Particle.VS.hlsl">
       <Filter>ソース ファイル\math\shader</Filter>
     </FxCompile>
   </ItemGroup>
@@ -184,9 +193,15 @@
     <ClInclude Include="Object3d.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="ParticleManager.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\Object3d.hlsli">
+      <Filter>ソース ファイル\math\shader</Filter>
+    </None>
+    <None Include="Resources\shaders\hlsl\Particle.hlsli">
       <Filter>ソース ファイル\math\shader</Filter>
     </None>
   </ItemGroup>

@@ -82,8 +82,13 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
     DirectX::ScratchImage image;
     std::wstring wFilePath = ConvertString(filePath);
     HRESULT hr = DirectX::LoadFromWICFile(wFilePath.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+    // ★ここで失敗を検知して止める
     if (FAILED(hr)) {
-        assert(false && "LoadTexture Failed");
+        // コンソールに失敗したファイル名を表示
+        std::string message = "Failed to load texture: " + filePath + "\n";
+        OutputDebugStringA(message.c_str());
+        assert(SUCCEEDED(hr)); // ここで強制停止させる
+        return 0;
     }
 
     // 3. ミップマップ生成
