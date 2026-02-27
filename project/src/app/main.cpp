@@ -19,6 +19,7 @@
 #include "Object3dCommon.h"
 #include "Object3d.h"
 #include "Model.h"
+#include "ModelManager.h"
 
 // ★追加：パーティクルマネージャー
 #include "ParticleManager.h"
@@ -30,9 +31,9 @@ Object3d* CreateObject(Object3dCommon* common, Model* model, Vector3 pos, std::v
     Object3d* obj = new Object3d();
     obj->Initialize(common);
     obj->SetModel(model);
-    obj->SetPosition(pos);
+    obj->SetPosition({ 0.0f, -2.0f, 5.0f });
     obj->SetScale({ 1.0f, 1.0f, 1.0f });
-    obj->SetRotation({ 0.0f, 3.14f, 0.0f });
+    obj->SetRotation({ 1.57f, 0.0f, 0.0f });
     list.push_back(obj);
     return obj;
 }
@@ -67,8 +68,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     std::vector<Object3d*> objectList;
     CreateObject(object3dCommon, modelPlane, { 0, 0, 0 }, objectList);
 
+	// 複数のオブジェクトを配置するための初期化
+	ModelManager::Initialize(object3dCommon);
+
     // スプライト
-    uint32_t texHandle = textureManager->LoadTexture("project/Resources/uvChecker.png");
+    uint32_t texHandle = textureManager->LoadTexture("Resources/uvChecker.png");
     Sprite* sprite = new Sprite();
     sprite->Initialize(spriteCommon, texHandle);
     sprite->SetPosition({ 10, 10 });
@@ -77,7 +81,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Transform cameraTransform = { {1,1,1}, {0.3f, 0, 0}, {0, 5, -10} };
 
     while (true) {
-        if (winApp->ProcessMessage()) break;
+        if (winApp->ProcessMessage()) { 
+            break;
+        }
         input->Update();
 
         // --- 更新処理 ---
@@ -103,6 +109,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         // ★追加：パーティクルの更新
         particleManager->Update(viewMatrix, projectionMatrix);
 
+        // カメラをセット
+        //ModelManager::SetCamera(view, projection);
+
         // --- 描画処理 ---
         dxCommon->PreDraw();
 
@@ -110,11 +119,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         ID3D12DescriptorHeap* descriptorHeaps[] = { textureManager->GetSrvHeap() };
         dxCommon->GetCommandList()->SetDescriptorHeaps(1, descriptorHeaps);
 
+
+
         // 3Dオブジェクト描画
         object3dCommon->PreDraw();
         for (Object3d* obj : objectList) {
             obj->Draw();
         }
+
+        // ★ 関数一つで何個でも出せる！
+        ModelManager::Draw("plane.obj", { 0, 0, 0 });
+        /*ModelManager::Draw("enemy.obj", { 2, 0, 5 }, { 0, 1.57f, 0 });
+        ModelManager::Draw("tree.obj", { -5, 0, 10 }, { 0, 0, 0 }, { 2, 2, 2 });*/
 
         // ★追加：パーティクル描画
         // (Object3dのPreDrawで共通設定がされているので、そのまま描画可能だが、
@@ -129,16 +145,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     }
 
     // --- 解放 ---
-    for (Object3d* obj : objectList) delete obj;
-    delete modelPlane;
-    delete sprite;
-    delete particleManager; // ★忘れずに削除
-    delete object3dCommon;
-    delete spriteCommon;
-    delete textureManager;
-    delete input;
-    delete dxCommon;
-    delete winApp;
+    for (Object3d* obj : objectList) {
+        delete obj;
+        delete modelPlane;
+        delete sprite;
+        delete particleManager; // ★忘れずに削除
+        delete object3dCommon;
+        delete spriteCommon;
+        delete textureManager;
+        delete input;
+        delete dxCommon;
+        delete winApp;
+    }
 
     return 0;
 }
