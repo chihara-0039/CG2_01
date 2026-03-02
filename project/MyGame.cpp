@@ -1,6 +1,10 @@
 #include "MyGame.h"
 #include "externals/imgui/imgui.h"
 
+#include "externals/imgui/imgui.h"
+#include "externals/imgui/imgui_impl_win32.h"
+#include "externals/imgui/imgui_impl_dx12.h"
+
 void MyGame::Initialize() {
     // --- 基盤初期化 ---
     winApp = new WinApp(); winApp->Initialize();
@@ -36,6 +40,30 @@ void MyGame::Initialize() {
     sprite->Initialize(spriteCommon, texHandle);
 
     cameraTransform = { {1,1,1}, {0.3f, 0, 0}, {0, 5, -10} };
+
+#ifdef USE_IMGUI
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplWin32_Init(winApp->GetHwnd());
+
+    ID3D12Device* device = dxCommon->GetDevice();
+    ID3D12DescriptorHeap* srvHeap = textureManager->GetSrvHeap();
+
+    // SRV 0番をImGui専用にする
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = srvHeap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE gpu = srvHeap->GetGPUDescriptorHandleForHeapStart();
+
+    ImGui_ImplDX12_Init(
+        device,
+        2, // バックバッファ数（あなたのswapchainは2想定）
+        DXGI_FORMAT_R8G8B8A8_UNORM, // DirectXCommon.cppのswapchain formatに一致
+        srvHeap,
+        cpu,
+        gpu
+    );
+#endif
 }
 
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
@@ -62,7 +90,9 @@ void MyGame::Update() {
     ImGui::End();
 
     input->Update();
-    if (input->TriggerKey(DIK_SPACE)) particleManager->Emit({ 0,0,0 }, 10);
+    if (input->TriggerKey(DIK_SPACE)) {
+        particleManager->Emit({ 0,0,0 }, 10);
+    }
 
     Matrix4x4 cameraWorld = Math::MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
     Matrix4x4 view = Math::Inverse(cameraWorld);
@@ -74,6 +104,15 @@ void MyGame::Update() {
     }
     sprite->Update();
     particleManager->Update(view, projection);
+
+#ifdef USE_IMGUI
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    // まずは確実に見えるデモを出す
+    ImGui::ShowDemoWindow();
+#endif
 }
 
 void MyGame::Draw() {
@@ -95,6 +134,7 @@ void MyGame::Draw() {
     // --- ImGuiの描画実行 ---
     dxCommon->EndImGui();
 
+
     dxCommon->PostDraw();
 }
 
@@ -105,4 +145,10 @@ void MyGame::Finalize() {
     delete sprite; delete particleManager; delete object3dCommon;
     delete spriteCommon; delete textureManager; delete input;
     delete dxCommon; delete winApp;
+
+#ifdef USE_IMGUI
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+#endif
 }
