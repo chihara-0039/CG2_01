@@ -5,6 +5,10 @@
 #include <format>
 #include <thread>
 
+#include "externals/imgui/imgui.h"
+#include "externals/imgui/imgui_impl_win32.h"
+#include "externals/imgui/imgui_impl_dx12.h"
+
 using namespace Microsoft::WRL;
 
 void DirectXCommon::Initialize(WinApp* winApp) {
@@ -19,6 +23,27 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     InitializeDepthStencilView();
     InitializeFence();
     InitializeDXC();
+
+    // --- ImGui用SRVヒープ作成 ---
+    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+    desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    desc.NumDescriptors = 1;
+    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvHeap_));
+
+    // --- ImGui初期化 ---
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplWin32_Init(winApp_->GetHwnd());
+    ImGui_ImplDX12_Init(
+        device_.Get(),
+        2, // バッファ数
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        imguiSrvHeap_.Get(),
+        imguiSrvHeap_->GetCPUDescriptorHandleForHeapStart(),
+        imguiSrvHeap_->GetGPUDescriptorHandleForHeapStart()
+    );
 }
 
 void DirectXCommon::InitializeDevice() {
@@ -335,4 +360,20 @@ void DirectXCommon::UpdateFixFPS() {
         }
     }
     reference_ = steady_clock::now();
+}
+
+// 描画の準備
+void DirectXCommon::BeginImGui() {
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+}
+
+// 描画の実行 (PostDrawの直前などで呼ぶ)
+void DirectXCommon::EndImGui() {
+    ImGui::Render();
+    // コマンドリストにImGuiの描画コマンドを積む
+    ID3D12DescriptorHeap* heaps[] = { imguiSrvHeap_.Get() };
+    commandList_->SetDescriptorHeaps(1, heaps);
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList_.Get());
 }

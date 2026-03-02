@@ -9,6 +9,10 @@
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+
+
+
+
 #pragma comment(lib, "winmm.lib")
 
 void WinApp::Initialize() {
@@ -60,6 +64,7 @@ bool WinApp::ProcessMessage() {
 }
 
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+    // ImGuiのメッセージ処理を優先
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
         return true;
     }

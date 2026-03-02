@@ -24,6 +24,9 @@ public: // メンバ関数
     // 初期化
     void Initialize(WinApp* winApp);
 
+    void BeginImGui();
+    void EndImGui();
+
     // 描画前処理
     void PreDraw();
     // 描画後処理
@@ -50,6 +53,8 @@ private: // メンバ関数(内部処理)
     void InitializeFixFPS();
     void UpdateFixFPS();
 
+    
+
 private: // メンバ変数
     WinApp* winApp_ = nullptr;
 
@@ -68,6 +73,9 @@ private: // メンバ変数
     // DSV (深度ステンシルビュー)
     ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;
     ComPtr<ID3D12Resource> depthStencilResource_;
+
+	// SRV (シェーダーリソースビュー) - ImGui用
+    ComPtr<ID3D12DescriptorHeap> imguiSrvHeap_;
 
     // フェンス (同期用)
     ComPtr<ID3D12Fence> fence_;
