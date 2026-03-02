@@ -1,4 +1,5 @@
 #include "MyGame.h"
+#include "externals/imgui/imgui.h"
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
@@ -76,6 +77,18 @@ Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
 }
 
 void MyGame::Update() {
+
+    // ImGuiの受付開始
+    dxCommon->BeginImGui();
+
+    // デバッグUIの定義
+    ImGui::Begin("Debug Window");
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    if (ImGui::Button("Reset Camera")) {
+        cameraTransform.translate = { 0,0,-10 };
+    }
+    ImGui::End();
+
     input->Update();
     if (input->TriggerKey(DIK_SPACE)) {
         particleManager->Emit({ 0,0,0 }, 10);
@@ -118,13 +131,13 @@ void MyGame::Draw() {
     spriteCommon->PreDraw();
     sprite->Draw();
 
-#ifdef USE_IMGUI
-    ImGui::Render();
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), dxCommon_->GetCommandList());
-#endif
+    // --- ImGuiの描画実行 ---
+    dxCommon->EndImGui();
+
 
     dxCommon->PostDraw();
 }
+
 
 void MyGame::Finalize() {
     for (Object3d* obj : objectList) delete obj;
