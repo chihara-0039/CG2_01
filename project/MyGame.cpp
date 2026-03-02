@@ -98,7 +98,6 @@ void MyGame::Draw() {
     dxCommon->PostDraw();
 }
 
-
 void MyGame::Finalize() {
     for (Object3d* obj : objectList) delete obj;
     for (Model* m : models) delete m;
