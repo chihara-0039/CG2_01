@@ -153,7 +153,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
     psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
     psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
     psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
-    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
     psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
 
     psoDesc.DepthStencilState.DepthEnable = TRUE;
