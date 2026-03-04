@@ -17,7 +17,7 @@ void WinApp::Initialize() {
 
     // --- メンバ変数名 wc_ に統一 ---
     wc_.lpfnWndProc = WindowProc;
-    wc_.lpszClassName = L"CG2WindowClass";
+    wc_.lpszClassName = "CG2WindowClass";
     wc_.hInstance = GetModuleHandle(nullptr);
     wc_.hCursor = LoadCursor(nullptr, IDC_ARROW);
     RegisterClass(&wc_);
@@ -28,7 +28,7 @@ void WinApp::Initialize() {
     // --- メンバ変数名 hwnd_ に統一 ---
     hwnd_ = CreateWindow(
         wc_.lpszClassName,
-        L"CG2",
+        "CG2",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
