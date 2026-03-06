@@ -3,6 +3,10 @@
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 
+#include "externals/imgui/imgui.h"
+#include "externals/imgui/imgui_impl_win32.h"
+#include "externals/imgui/imgui_impl_dx12.h"
+
 void MyGame::Initialize() {
     // --- 基盤初期化 (std::make_unique を使用) ---
     winApp = std::make_unique<WinApp>();
@@ -65,8 +69,10 @@ void MyGame::Initialize() {
     sprite = std::make_unique<Sprite>();
     sprite->Initialize(spriteCommon.get(), texHandle);
 
+
     // カメラ
     camera = std::make_unique<Camera>();
+
 }
 
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
@@ -94,7 +100,9 @@ void MyGame::Update() {
     ImGui::End();
 
     input->Update();
-    if (input->TriggerKey(DIK_SPACE)) particleManager->Emit({ 0,0,0 }, 10);
+    if (input->TriggerKey(DIK_SPACE)) {
+        particleManager->Emit({ 0,0,0 }, 10);
+    }
 
     camera->Update();
 
@@ -103,7 +111,9 @@ void MyGame::Update() {
         obj->Update();
     }
     sprite->Update();
+
     particleManager->Update(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+
 }
 
 void MyGame::Draw() {
@@ -122,7 +132,18 @@ void MyGame::Draw() {
     dxCommon->PostDraw();
 }
 
+
 void MyGame::Finalize() {
-    // delete 命令は一切不要！
-    // メンバ変数の unique_ptr たちが、MyGame が消えるときに自動で適切な順番で解放してくれます。
+
+    for (Object3d* obj : objectList) delete obj;
+    for (Model* m : models) delete m;
+    delete sprite; delete particleManager; delete object3dCommon;
+    delete spriteCommon; delete textureManager; delete input;
+    delete dxCommon; delete winApp;
+
+#ifdef USE_IMGUI
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+#endif
 }
