@@ -61,8 +61,10 @@ bool WinApp::ProcessMessage() {
 
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     // ImGuiのメッセージ処理を優先
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
-        return true;
+    if (ImGui::GetCurrentContext() != nullptr) {
+        if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
+            return true;
+        }
     }
 
     switch (msg) {

@@ -1,79 +1,109 @@
 #include "MyGame.h"
 #include "externals/imgui/imgui.h"
+#include "externals/imgui/imgui_impl_win32.h"
+#include "externals/imgui/imgui_impl_dx12.h"
 
 void MyGame::Initialize() {
-    // --- 基盤初期化 ---
-    winApp = new WinApp(); winApp->Initialize();
-    dxCommon = new DirectXCommon(); dxCommon->Initialize(winApp);
-    input = new Input(); input->Initialize(winApp);
-    textureManager = new TextureManager(); textureManager->Initialize(dxCommon);
-    spriteCommon = new SpriteCommon(); spriteCommon->SetTextureManager(textureManager);
-    spriteCommon->Initialize(dxCommon);
-    object3dCommon = new Object3dCommon(); object3dCommon->SetTextureManager(textureManager);
-    object3dCommon->Initialize(dxCommon);
-    particleManager = new ParticleManager(); particleManager->Initialize(dxCommon, textureManager);
+    // --- 基盤初期化 (std::make_unique を使用) ---
+    winApp = std::make_unique<WinApp>();
+    winApp->Initialize();
 
-    // --- モデル読み込み (各1回ずつ) ---
-    Model* modelPlane = Model::CreateFromOBJ(dxCommon, "Resources", "plane.obj", textureManager);
-    Model* modelAxis = Model::CreateFromOBJ(dxCommon, "Resources", "axis.obj", textureManager);
-    models.push_back(modelPlane);
-    models.push_back(modelAxis);
+    dxCommon = std::make_unique<DirectXCommon>();
+    dxCommon->Initialize(winApp.get()); // ポインタを渡す場合は .get() を使う
+
+    textureManager = std::make_unique<TextureManager>();
+    textureManager->Initialize(dxCommon.get());
+
+    // 2. ここで ImGui の初期化を一本化する
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplWin32_Init(winApp->GetHwnd());
+    ImGui_ImplDX12_Init(
+        dxCommon->GetDevice(),
+        2, // フレームバッファ数
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        textureManager->GetSrvHeap(),
+        textureManager->GetSrvHeap()->GetCPUDescriptorHandleForHeapStart(),
+        textureManager->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart()
+    );
+
+    input = std::make_unique<Input>();
+    input->Initialize(winApp.get());
+
+    
+    spriteCommon = std::make_unique<SpriteCommon>();
+    spriteCommon->SetTextureManager(textureManager.get());
+    spriteCommon->Initialize(dxCommon.get());
+
+    object3dCommon = std::make_unique<Object3dCommon>();
+    object3dCommon->SetTextureManager(textureManager.get());
+    object3dCommon->Initialize(dxCommon.get());
+
+    particleManager = std::make_unique<ParticleManager>();
+    particleManager->Initialize(dxCommon.get(), textureManager.get());
+
+    // --- モデル読み込み ---
+    // modelPlane 自体も unique_ptr としてリストに追加
+    auto modelPlane = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources", "plane.obj", textureManager.get()));
+    auto modelAxis = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources", "axis.obj", textureManager.get()));
+
+    // get() で生ポインタを取得して CreateObject に渡す
+    Model* pPlane = modelPlane.get();
+    Model* pAxis = modelAxis.get();
+
+    models.push_back(std::move(modelPlane)); // 所有権をリストへ移動
+    models.push_back(std::move(modelAxis));
 
     // --- オブジェクト生成 ---
-    // 1つ目: 床
-    Object3d* floor = CreateObject(modelPlane, { 0.0f, 0.0f, 0.0f });
-    floor->SetScale({ 10.0f, 1.0f, 10.0f });
-
-    // 2つ目: 右側の軸
-    CreateObject(modelAxis, { 2.0f, 0.0f, 0.0f });
-
-    // 3つ目: 左側の軸
-    CreateObject(modelAxis, { -2.0f, 0.0f, 0.0f });
+    CreateObject(pPlane, { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
+    CreateObject(pAxis, { 2.0f, 0.0f, 0.0f });
+    CreateObject(pAxis, { -2.0f, 0.0f, 0.0f });
 
     // スプライト
     uint32_t texHandle = textureManager->LoadTexture("Resources/uvChecker.png");
-    sprite = new Sprite();
-    sprite->Initialize(spriteCommon, texHandle);
+    sprite = std::make_unique<Sprite>();
+    sprite->Initialize(spriteCommon.get(), texHandle);
 
-    cameraTransform = { {1,1,1}, {0.3f, 0, 0}, {0, 5, -10} };
+    // カメラ
+    camera = std::make_unique<Camera>();
 }
 
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
-    Object3d* obj = new Object3d();
-    obj->Initialize(object3dCommon);
+    auto obj = std::make_unique<Object3d>();
+    obj->Initialize(object3dCommon.get());
     obj->SetModel(model);
     obj->SetPosition(pos);
-    obj->SetRotation({ 1.57f, 0.0f, 0.0f }); // デフォルトで寝かせる
-    objectList.push_back(obj); // ここでリストに追加されるので、Draw()で自動描画される
-    return obj;
+    obj->SetRotation({ 1.57f, 0.0f, 0.0f });
+
+    Object3d* pObj = obj.get();
+    objectList.push_back(std::move(obj)); // リストに移動
+    return pObj;
 }
 
 void MyGame::Update() {
-
-    // ImGuiの受付開始
     dxCommon->BeginImGui();
-
-    // デバッグUIの定義
-    ImGui::Begin("Debug Window");
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-    if (ImGui::Button("Reset Camera")) {
-        cameraTransform.translate = { 0,0,-10 };
+    ImGui::Begin("Camera Control");
+    ImGui::DragFloat3("Position", &camera->transform.translate.x, 0.1f);
+    ImGui::SliderFloat3("Rotation", &camera->transform.rotate.x, -3.14f, 3.14f);
+    ImGui::SliderFloat("FOV", &camera->fovY, 0.01f, 1.5f);
+    if (ImGui::Button("Reset")) {
+        camera->transform.translate = { 0, 5, -10 };
+        camera->transform.rotate = { 0.3f, 0, 0 };
     }
     ImGui::End();
 
     input->Update();
     if (input->TriggerKey(DIK_SPACE)) particleManager->Emit({ 0,0,0 }, 10);
 
-    Matrix4x4 cameraWorld = Math::MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
-    Matrix4x4 view = Math::Inverse(cameraWorld);
-    Matrix4x4 projection = Math::MakePerspectiveFovMatrix(0.45f, (float)WinApp::kClientWidth / (float)WinApp::kClientHeight, 0.1f, 100.0f);
+    camera->Update();
 
-    for (Object3d* obj : objectList) {
-        obj->SetCamera(view, projection);
+    for (auto& obj : objectList) { // auto& で受ける
+        obj->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         obj->Update();
     }
     sprite->Update();
-    particleManager->Update(view, projection);
+    particleManager->Update(camera->GetViewMatrix(), camera->GetProjectionMatrix());
 }
 
 void MyGame::Draw() {
@@ -81,27 +111,18 @@ void MyGame::Draw() {
     ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
     dxCommon->GetCommandList()->SetDescriptorHeaps(1, heaps);
 
-    // 3D描画 (リスト内の全オブジェクトをループで描画)
     object3dCommon->PreDraw();
-    for (Object3d* obj : objectList) {
-        obj->Draw();
-    }
+    for (auto& obj : objectList) obj->Draw();
     particleManager->Draw();
 
-    // 2D描画
     spriteCommon->PreDraw();
     sprite->Draw();
 
-    // --- ImGuiの描画実行 ---
     dxCommon->EndImGui();
-
     dxCommon->PostDraw();
 }
 
 void MyGame::Finalize() {
-    for (Object3d* obj : objectList) delete obj;
-    for (Model* m : models) delete m;
-    delete sprite; delete particleManager; delete object3dCommon;
-    delete spriteCommon; delete textureManager; delete input;
-    delete dxCommon; delete winApp;
+    // delete 命令は一切不要！
+    // メンバ変数の unique_ptr たちが、MyGame が消えるときに自動で適切な順番で解放してくれます。
 }

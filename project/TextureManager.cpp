@@ -69,6 +69,12 @@ void TextureManager::Initialize(DirectXCommon* dxCommon) {
     assert(SUCCEEDED(hr));
 
     descriptorSizeSRV_ = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+#ifdef USE_IMGUI
+    TextureData reserve;
+    reserve.resource = nullptr;
+    textures_.push_back(reserve);
+#endif
 }
 
 uint32_t TextureManager::LoadTexture(const std::string& filePath) {
