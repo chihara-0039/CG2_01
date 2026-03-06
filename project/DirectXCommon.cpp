@@ -4,6 +4,7 @@
 #include <cassert>
 #include <format>
 #include <thread>
+#include <stdexcept>
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
@@ -25,25 +26,13 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     InitializeDXC();
 
     // --- ImGui用SRVヒープ作成 ---
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+    /*D3D12_DESCRIPTOR_HEAP_DESC desc = {};
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     desc.NumDescriptors = 1;
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvHeap_));
+    device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvHeap_));*/
 
-    // --- ImGui初期化 ---
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    ImGui_ImplWin32_Init(winApp_->GetHwnd());
-    ImGui_ImplDX12_Init(
-        device_.Get(),
-        2, // バッファ数
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-        imguiSrvHeap_.Get(),
-        imguiSrvHeap_->GetCPUDescriptorHandleForHeapStart(),
-        imguiSrvHeap_->GetGPUDescriptorHandleForHeapStart()
-    );
+    
 }
 
 void DirectXCommon::InitializeDevice() {
@@ -197,14 +186,14 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
     HRESULT hr = dxcUtils_->LoadFile(filePath.c_str(), nullptr, &shaderSource);
 
-    // ★ここが最重要：ファイルが見つからなかったらエラーを出して止める
+    // ★ここが最重要：ファイルが見つからなかったら例外を投げる
     if (FAILED(hr)) {
         OutputDebugStringA("ERROR: Failed to load shader file.\n");
         OutputDebugStringA("Please check if the file path is correct and the file exists.\n");
         OutputDebugStringW(filePath.c_str()); // 失敗したパスを表示
         OutputDebugStringA("\n----------------------------------------\n");
-        assert(false && "Shader File Not Found!"); // ここで止まるはず
-        return nullptr;
+        std::string pathStr(filePath.begin(), filePath.end());
+        throw std::runtime_error("Shader File Not Found: " + pathStr);
     }
 
     // 2. コンパイル引数準備
@@ -234,8 +223,7 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     // コンパイル自体の失敗チェック
     if (FAILED(hr)) {
         OutputDebugStringA("ERROR: DxcCompiler::Compile failed completely.\n");
-        assert(false);
-        return nullptr;
+        throw std::runtime_error("DxcCompiler::Compile failed");
     }
 
     // 4. エラーメッセージ取得
@@ -248,7 +236,7 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
         OutputDebugStringA("HLSL Compile Error:\n");
         OutputDebugStringA(errorMsg.c_str());
         OutputDebugStringA("----------------------------------------\n");
-        assert(false && "Shader Compile Error"); // 文法ミスならここで止まる
+        throw std::runtime_error(std::string("HLSL Compile Error: ") + errorMsg);
     }
 
     // 5. 結果の取得
@@ -364,6 +352,8 @@ void DirectXCommon::UpdateFixFPS() {
 
 // 描画の準備
 void DirectXCommon::BeginImGui() {
+    // If ImGui context is not created, skip calling backend NewFrame
+    if (ImGui::GetCurrentContext() == nullptr) return;
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
@@ -371,9 +361,15 @@ void DirectXCommon::BeginImGui() {
 
 // 描画の実行 (PostDrawの直前などで呼ぶ)
 void DirectXCommon::EndImGui() {
+    // If ImGui context is not created, skip
+    if (ImGui::GetCurrentContext() == nullptr) return;
+
     ImGui::Render();
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    if (draw_data == nullptr) return;
+
     // コマンドリストにImGuiの描画コマンドを積む
-    ID3D12DescriptorHeap* heaps[] = { imguiSrvHeap_.Get() };
-    commandList_->SetDescriptorHeaps(1, heaps);
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList_.Get());
+    /*ID3D12DescriptorHeap* heaps[] = { imguiSrvHeap_.Get() };
+    commandList_->SetDescriptorHeaps(1, heaps);*/
+    ImGui_ImplDX12_RenderDrawData(draw_data, commandList_.Get());
 }
