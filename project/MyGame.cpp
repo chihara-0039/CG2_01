@@ -1,7 +1,6 @@
 #include "MyGame.h"
 #include "externals/imgui/imgui.h"
 
-
 void MyGame::Initialize() {
     // --- 基盤初期化 ---
     winApp = new WinApp();
