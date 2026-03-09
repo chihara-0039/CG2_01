@@ -10,6 +10,10 @@
 #include "Object3d.h"
 #include "Model.h"
 #include "Sprite.h"
+#include "Camera.h"
+#include "StageMap.h"
+#include "StageRenderer.h"
+
 
 
 class MyGame {
@@ -21,6 +25,19 @@ public:
     bool IsRunning() { return !winApp->ProcessMessage(); }
 
 private:
+
+    enum class AppMode {
+        DebugView,   // 今の確認用
+        StageEditor, // これから作るエディター
+        GamePlay     // 後で本編
+    };
+
+    struct DebugDrawFlags {
+        bool show3DObjects = true;
+        bool showSprite = true;
+        bool showParticles = true;
+    };
+
     // 基盤系
     WinApp* winApp = nullptr;
     DirectXCommon* dxCommon = nullptr;
@@ -34,7 +51,17 @@ private:
     std::vector<Object3d*> objectList;
     std::vector<Model*> models; // モデル解放用
     Sprite* sprite = nullptr;
-    Transform cameraTransform;
+    std::unique_ptr<Camera> camera;
+    StageRenderer* stageRenderer_ = nullptr;
+
+    AppMode currentMode_ = AppMode::DebugView;
+    DebugDrawFlags debugFlags_;
+	StageMap stageMap_;
+
+    void UpdateImGui();
+    void UpdateDebugView();
+    void UpdateStageEditor();
+    void UpdateGamePlay();
 
     // ヘルパー関数
     Object3d* CreateObject(Model* model, Vector3 pos);
