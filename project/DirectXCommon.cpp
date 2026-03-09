@@ -37,7 +37,7 @@ void DirectXCommon::Initialize(WinApp* winApp) {
 
 void DirectXCommon::InitializeDevice() {
     // DXGIファクトリーの生成
-#ifdef _DEBUG
+#ifdef _Development
     ComPtr<ID3D12Debug1> debugController = nullptr;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
         debugController->EnableDebugLayer();
@@ -66,7 +66,7 @@ void DirectXCommon::InitializeDevice() {
     }
     assert(device_ != nullptr);
 
-#ifdef _DEBUG
+#ifdef _Development
     // デバッグ時のエラー停止設定
     ComPtr<ID3D12InfoQueue> infoQueue = nullptr;
     if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
@@ -94,6 +94,7 @@ void DirectXCommon::InitializeSwapChain() {
     swapChainDesc.Width = WinApp::kClientWidth;
     swapChainDesc.Height = WinApp::kClientHeight;
     swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    //swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.BufferCount = 2;

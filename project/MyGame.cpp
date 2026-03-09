@@ -7,57 +7,37 @@
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 
+
 void MyGame::Initialize() {
-    // --- 基盤初期化 (std::make_unique を使用) ---
-    winApp = std::make_unique<WinApp>();
+    // --- 基盤初期化 ---
+    winApp = new WinApp();
     winApp->Initialize();
 
-    dxCommon = std::make_unique<DirectXCommon>();
-    dxCommon->Initialize(winApp.get()); // ポインタを渡す場合は .get() を使う
+    dxCommon = new DirectXCommon();
+    dxCommon->Initialize(winApp);
 
-    textureManager = std::make_unique<TextureManager>();
-    textureManager->Initialize(dxCommon.get());
+    input = new Input();
+    input->Initialize(winApp);
 
-    // 2. ここで ImGui の初期化を一本化する
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    ImGui_ImplWin32_Init(winApp->GetHwnd());
-    ImGui_ImplDX12_Init(
-        dxCommon->GetDevice(),
-        2, // フレームバッファ数
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-        textureManager->GetSrvHeap(),
-        textureManager->GetSrvHeap()->GetCPUDescriptorHandleForHeapStart(),
-        textureManager->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart()
-    );
+    textureManager = new TextureManager();
+    textureManager->Initialize(dxCommon);
 
-    input = std::make_unique<Input>();
-    input->Initialize(winApp.get());
+    spriteCommon = new SpriteCommon();
+    spriteCommon->SetTextureManager(textureManager);
+    spriteCommon->Initialize(dxCommon);
 
-    
-    spriteCommon = std::make_unique<SpriteCommon>();
-    spriteCommon->SetTextureManager(textureManager.get());
-    spriteCommon->Initialize(dxCommon.get());
+    object3dCommon = new Object3dCommon();
+    object3dCommon->SetTextureManager(textureManager);
+    object3dCommon->Initialize(dxCommon);
 
-    object3dCommon = std::make_unique<Object3dCommon>();
-    object3dCommon->SetTextureManager(textureManager.get());
-    object3dCommon->Initialize(dxCommon.get());
+    particleManager = new ParticleManager();
+    particleManager->Initialize(dxCommon, textureManager);
 
-    particleManager = std::make_unique<ParticleManager>();
-    particleManager->Initialize(dxCommon.get(), textureManager.get());
-
-    // --- モデル読み込み ---
-    // modelPlane 自体も unique_ptr としてリストに追加
-    auto modelPlane = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources", "plane.obj", textureManager.get()));
-    auto modelAxis = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources", "axis.obj", textureManager.get()));
-
-    // get() で生ポインタを取得して CreateObject に渡す
-    Model* pPlane = modelPlane.get();
-    Model* pAxis = modelAxis.get();
-
-    models.push_back(std::move(modelPlane)); // 所有権をリストへ移動
-    models.push_back(std::move(modelAxis));
+    // --- モデル読み込み (各1回ずつ) ---
+    Model* modelPlane = Model::CreateFromOBJ(dxCommon, "Resources", "plane.obj", textureManager);
+    Model* modelAxis = Model::CreateFromOBJ(dxCommon, "Resources", "axis.obj", textureManager);
+    models.push_back(modelPlane);
+    models.push_back(modelAxis);
 
     // --- オブジェクト生成 ---
     CreateObject(pPlane, { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
@@ -73,6 +53,21 @@ void MyGame::Initialize() {
     // カメラ
     camera = std::make_unique<Camera>();
 
+	//テストでステージ配置を初期化
+    stageMap_.Initialize(16, 8, 16);
+
+    // テスト用に少しだけ置く
+    stageMap_.SetBlock(0, 0, 0, BlockType::Ground);
+    stageMap_.SetBlock(1, 0, 0, BlockType::Ground);
+    stageMap_.SetBlock(2, 0, 0, BlockType::Ground);
+    stageMap_.SetBlock(2, 1, 0, BlockType::Wall);
+    stageMap_.SetBlock(3, 0, 1, BlockType::BubblePickup);
+    stageMap_.SetBlock(4, 0, 2, BlockType::Goal);
+    
+	// ステージマップからステージ描画オブジェクトを生成
+    stageRenderer_ = new StageRenderer();
+    stageRenderer_->Initialize(object3dCommon);
+    stageRenderer_->BuildFromStageMap(stageMap_);
 }
 
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
@@ -89,45 +84,171 @@ Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
 
 void MyGame::Update() {
     dxCommon->BeginImGui();
-    ImGui::Begin("Camera Control");
-    ImGui::DragFloat3("Position", &camera->transform.translate.x, 0.1f);
-    ImGui::SliderFloat3("Rotation", &camera->transform.rotate.x, -3.14f, 3.14f);
-    ImGui::SliderFloat("FOV", &camera->fovY, 0.01f, 1.5f);
-    if (ImGui::Button("Reset")) {
-        camera->transform.translate = { 0, 5, -10 };
-        camera->transform.rotate = { 0.3f, 0, 0 };
-    }
-    ImGui::End();
 
     input->Update();
-    if (input->TriggerKey(DIK_SPACE)) {
-        particleManager->Emit({ 0,0,0 }, 10);
+    UpdateImGui();
+
+    switch (currentMode_) {
+    case AppMode::DebugView:
+    UpdateDebugView();
+    break;
+
+    case AppMode::StageEditor:
+    UpdateStageEditor();
+    break;
+
+    case AppMode::GamePlay:
+    UpdateGamePlay();
+    break;
     }
 
     camera->Update();
 
-    for (auto& obj : objectList) { // auto& で受ける
-        obj->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-        obj->Update();
+    const Matrix4x4& view = camera->GetViewMatrix();
+    const Matrix4x4& proj = camera->GetProjectionMatrix();
+
+	// 3Dオブジェクトの更新
+    if (debugFlags_.show3DObjects) {
+        for (Object3d* obj : objectList) {
+            obj->SetCamera(view, proj);
+            obj->Update();
+        }
     }
-    sprite->Update();
 
-    particleManager->Update(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+	// ステージ描画オブジェクトの更新
+    if (stageRenderer_) {
+        stageRenderer_->SetCamera(view, proj);
+        stageRenderer_->Update();
+    }
 
+	// スプライトの更新
+    if (debugFlags_.showSprite) {
+        sprite->Update();
+    }
+
+	// パーティクルの更新
+    if (debugFlags_.showParticles) {
+        particleManager->Update(view, proj);
+    }
+}
+
+//パーティクル発生のテスト（スペースキーを押すと発生）
+void MyGame::UpdateDebugView() {
+    if (input->TriggerKey(DIK_SPACE)) {
+        particleManager->Emit({ 0, 0, 0 }, 10);
+    }
+}
+
+void MyGame::UpdateStageEditor() {
+    // まだ空でOK
+    // 次にカーソル移動やブロック配置を入れる
+}
+
+void MyGame::UpdateGamePlay() {
+    // まだ空でOK
+    // 後でプレイヤー処理を入れる
+}
+
+void MyGame::UpdateImGui() {
+    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(340, 520), ImGuiCond_Always);
+
+    ImGui::Begin("Debug Window");
+
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+        1000.0f / ImGui::GetIO().Framerate,
+        ImGui::GetIO().Framerate);
+
+    // モード切替
+    int modeIndex = 0;
+    switch (currentMode_) {
+    case AppMode::DebugView:   modeIndex = 0; break;
+    case AppMode::StageEditor: modeIndex = 1; break;
+    case AppMode::GamePlay:    modeIndex = 2; break;
+    }
+
+    const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay" };
+    if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
+        switch (modeIndex) {
+        case 0: currentMode_ = AppMode::DebugView; break;
+        case 1: currentMode_ = AppMode::StageEditor; break;
+        case 2: currentMode_ = AppMode::GamePlay; break;
+        }
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Draw Flags");
+    ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
+    ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
+    ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
+
+    ImGui::Separator();
+    if (ImGui::TreeNode("Camera")) {
+        Transform& camTf = camera->GetTransform();
+
+        ImGui::DragFloat3("Position", &camTf.translate.x, 0.1f);
+        ImGui::DragFloat3("Rotation", &camTf.rotate.x, 0.01f);
+        ImGui::SliderFloat("FOV", camera->GetFovPtr(), 0.01f, 3.14f);
+
+        if (ImGui::Button("Reset Camera")) {
+            camera->SetPosition({ 0.0f, 5.0f, -10.0f });
+            camera->SetRotation({ 0.3f, 0.0f, 0.0f });
+            camera->SetFov(0.45f);
+        }
+
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("StageMap Info")) {
+        ImGui::Text("Size: %d x %d x %d",
+            stageMap_.GetWidth(),
+            stageMap_.GetHeight(),
+            stageMap_.GetDepth());
+
+        const MapCell* cell = stageMap_.GetCell(2, 1, 0);
+        if (cell) {
+            ImGui::Text("Cell(2,1,0) type = %d", static_cast<int>(cell->type));
+            ImGui::Text("Cell(2,1,0) solid = %s", cell->isSolid ? "true" : "false");
+        }
+
+        ImGui::TreePop();
+    }
+
+    ImGui::End();
 }
 
 void MyGame::Draw() {
     dxCommon->PreDraw();
+
     ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
     dxCommon->GetCommandList()->SetDescriptorHeaps(1, heaps);
+    if (debugFlags_.show3DObjects) {
+        object3dCommon->PreDraw();
 
-    object3dCommon->PreDraw();
-    for (auto& obj : objectList) obj->Draw();
-    particleManager->Draw();
+		// 3Dオブジェクトの描画
+        if (currentMode_ == AppMode::DebugView) {
+            for (Object3d* obj : objectList) {
+                obj->Draw();
+            }
+        }
 
-    spriteCommon->PreDraw();
-    sprite->Draw();
 
+		// ステージ描画オブジェクトの描画
+        if (currentMode_ == AppMode::StageEditor && stageRenderer_) {
+            stageRenderer_->Draw();
+        }
+    }
+
+	// パーティクル描画は3Dオブジェクトの後にするのが見栄え的に良いと思う
+    if (debugFlags_.showParticles) {
+        particleManager->Draw();
+    }
+
+	// スプライト描画は最後にするのが基本
+    if (debugFlags_.showSprite) {
+        spriteCommon->PreDraw();
+        sprite->Draw();
+    }
     dxCommon->EndImGui();
     dxCommon->PostDraw();
 }
@@ -141,9 +262,8 @@ void MyGame::Finalize() {
     delete spriteCommon; delete textureManager; delete input;
     delete dxCommon; delete winApp;
 
-#ifdef USE_IMGUI
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
-#endif
+    if (stageRenderer_) {
+        delete stageRenderer_;
+        stageRenderer_ = nullptr;
+    }
 }

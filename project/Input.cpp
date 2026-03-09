@@ -59,8 +59,8 @@ void Input::Update() {
     // 全キーの入力状態を取得する
     hr = keyboard_->GetDeviceState(sizeof(key_), key_);
     if (FAILED(hr)) {
-        // If failed (e.g., device lost), zero the state. Do not assert at runtime.
-        std::memset(key_, 0, sizeof(key_));
+        keyboard_->Acquire();
+        hr = keyboard_->GetDeviceState(sizeof(key_), key_);
     }
 }
 
