@@ -11,6 +11,8 @@
 #include "Model.h"
 #include "Sprite.h"
 #include "Camera.h"
+#include "StageMap.h"
+#include "StageRenderer.h"
 
 
 
@@ -50,9 +52,11 @@ private:
     std::vector<Model*> models; // モデル解放用
     Sprite* sprite = nullptr;
     std::unique_ptr<Camera> camera;
+    StageRenderer* stageRenderer_ = nullptr;
 
     AppMode currentMode_ = AppMode::DebugView;
     DebugDrawFlags debugFlags_;
+	StageMap stageMap_;
 
     void UpdateImGui();
     void UpdateDebugView();

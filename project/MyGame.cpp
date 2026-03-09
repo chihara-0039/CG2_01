@@ -50,7 +50,23 @@ void MyGame::Initialize() {
     sprite->Initialize(spriteCommon, texHandle);
 
     camera = std::make_unique<Camera>();
+
+
+	//テストでステージ配置を初期化
+    stageMap_.Initialize(16, 8, 16);
+
+    // テスト用に少しだけ置く
+    stageMap_.SetBlock(0, 0, 0, BlockType::Ground);
+    stageMap_.SetBlock(1, 0, 0, BlockType::Ground);
+    stageMap_.SetBlock(2, 0, 0, BlockType::Ground);
+    stageMap_.SetBlock(2, 1, 0, BlockType::Wall);
+    stageMap_.SetBlock(3, 0, 1, BlockType::BubblePickup);
+    stageMap_.SetBlock(4, 0, 2, BlockType::Goal);
     
+	// ステージマップからステージ描画オブジェクトを生成
+    stageRenderer_ = new StageRenderer();
+    stageRenderer_->Initialize(object3dCommon);
+    stageRenderer_->BuildFromStageMap(stageMap_);
 }
 
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
@@ -88,6 +104,7 @@ void MyGame::Update() {
     const Matrix4x4& view = camera->GetViewMatrix();
     const Matrix4x4& proj = camera->GetProjectionMatrix();
 
+	// 3Dオブジェクトの更新
     if (debugFlags_.show3DObjects) {
         for (Object3d* obj : objectList) {
             obj->SetCamera(view, proj);
@@ -95,10 +112,18 @@ void MyGame::Update() {
         }
     }
 
+	// ステージ描画オブジェクトの更新
+    if (stageRenderer_) {
+        stageRenderer_->SetCamera(view, proj);
+        stageRenderer_->Update();
+    }
+
+	// スプライトの更新
     if (debugFlags_.showSprite) {
         sprite->Update();
     }
 
+	// パーティクルの更新
     if (debugFlags_.showParticles) {
         particleManager->Update(view, proj);
     }
@@ -171,6 +196,21 @@ void MyGame::UpdateImGui() {
         ImGui::TreePop();
     }
 
+    if (ImGui::TreeNode("StageMap Info")) {
+        ImGui::Text("Size: %d x %d x %d",
+            stageMap_.GetWidth(),
+            stageMap_.GetHeight(),
+            stageMap_.GetDepth());
+
+        const MapCell* cell = stageMap_.GetCell(2, 1, 0);
+        if (cell) {
+            ImGui::Text("Cell(2,1,0) type = %d", static_cast<int>(cell->type));
+            ImGui::Text("Cell(2,1,0) solid = %s", cell->isSolid ? "true" : "false");
+        }
+
+        ImGui::TreePop();
+    }
+
     ImGui::End();
 }
 
@@ -182,15 +222,27 @@ void MyGame::Draw() {
 
     if (debugFlags_.show3DObjects) {
         object3dCommon->PreDraw();
-        for (Object3d* obj : objectList) {
-            obj->Draw();
+
+		// 3Dオブジェクトの描画
+        if (currentMode_ == AppMode::DebugView) {
+            for (Object3d* obj : objectList) {
+                obj->Draw();
+            }
+        }
+
+
+		// ステージ描画オブジェクトの描画
+        if (currentMode_ == AppMode::StageEditor && stageRenderer_) {
+            stageRenderer_->Draw();
         }
     }
 
+	// パーティクル描画は3Dオブジェクトの後にするのが見栄え的に良いと思う
     if (debugFlags_.showParticles) {
         particleManager->Draw();
     }
 
+	// スプライト描画は最後にするのが基本
     if (debugFlags_.showSprite) {
         spriteCommon->PreDraw();
         sprite->Draw();
@@ -206,4 +258,9 @@ void MyGame::Finalize() {
     delete sprite; delete particleManager; delete object3dCommon;
     delete spriteCommon; delete textureManager; delete input;
     delete dxCommon; delete winApp;
+
+    if (stageRenderer_) {
+        delete stageRenderer_;
+        stageRenderer_ = nullptr;
+    }
 }
