@@ -1,5 +1,11 @@
 #include "MyGame.h"
 #include "externals/imgui/imgui.h"
+#include "externals/imgui/imgui_impl_win32.h"
+#include "externals/imgui/imgui_impl_dx12.h"
+
+#include "externals/imgui/imgui.h"
+#include "externals/imgui/imgui_impl_win32.h"
+#include "externals/imgui/imgui_impl_dx12.h"
 
 
 void MyGame::Initialize() {
@@ -34,23 +40,18 @@ void MyGame::Initialize() {
     models.push_back(modelAxis);
 
     // --- オブジェクト生成 ---
-    // 1つ目: 床
-    Object3d* floor = CreateObject(modelPlane, { 0.0f, 0.0f, 0.0f });
-    floor->SetScale({ 10.0f, 1.0f, 10.0f });
-
-    // 2つ目: 右側の軸
-    CreateObject(modelAxis, { 2.0f, 0.0f, 0.0f });
-
-    // 3つ目: 左側の軸
-    CreateObject(modelAxis, { -2.0f, 0.0f, 0.0f });
+    CreateObject(pPlane, { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
+    CreateObject(pAxis, { 2.0f, 0.0f, 0.0f });
+    CreateObject(pAxis, { -2.0f, 0.0f, 0.0f });
 
     // スプライト
     uint32_t texHandle = textureManager->LoadTexture("Resources/uvChecker.png");
-    sprite = new Sprite();
-    sprite->Initialize(spriteCommon, texHandle);
+    sprite = std::make_unique<Sprite>();
+    sprite->Initialize(spriteCommon.get(), texHandle);
 
+
+    // カメラ
     camera = std::make_unique<Camera>();
-
 
 	//テストでステージ配置を初期化
     stageMap_.Initialize(16, 8, 16);
@@ -70,13 +71,15 @@ void MyGame::Initialize() {
 }
 
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
-    Object3d* obj = new Object3d();
-    obj->Initialize(object3dCommon);
+    auto obj = std::make_unique<Object3d>();
+    obj->Initialize(object3dCommon.get());
     obj->SetModel(model);
     obj->SetPosition(pos);
-    obj->SetRotation({ 1.57f, 0.0f, 0.0f }); // デフォルトで寝かせる
-    objectList.push_back(obj); // ここでリストに追加されるので、Draw()で自動描画される
-    return obj;
+    obj->SetRotation({ 1.57f, 0.0f, 0.0f });
+
+    Object3d* pObj = obj.get();
+    objectList.push_back(std::move(obj)); // リストに移動
+    return pObj;
 }
 
 void MyGame::Update() {
@@ -219,7 +222,6 @@ void MyGame::Draw() {
 
     ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
     dxCommon->GetCommandList()->SetDescriptorHeaps(1, heaps);
-
     if (debugFlags_.show3DObjects) {
         object3dCommon->PreDraw();
 
@@ -247,12 +249,13 @@ void MyGame::Draw() {
         spriteCommon->PreDraw();
         sprite->Draw();
     }
-
     dxCommon->EndImGui();
     dxCommon->PostDraw();
 }
 
+
 void MyGame::Finalize() {
+
     for (Object3d* obj : objectList) delete obj;
     for (Model* m : models) delete m;
     delete sprite; delete particleManager; delete object3dCommon;
