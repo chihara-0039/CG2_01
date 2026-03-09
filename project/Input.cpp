@@ -36,6 +36,10 @@ void Input::Update() {
 
     // 全キーの入力状態を取得する
     hr = keyboard_->GetDeviceState(sizeof(key_), key_);
+    if (FAILED(hr)) {
+        keyboard_->Acquire();
+        hr = keyboard_->GetDeviceState(sizeof(key_), key_);
+    }
 }
 
 bool Input::PushKey(BYTE keyNumber) {
