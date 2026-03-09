@@ -7,7 +7,6 @@
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 
-
 void MyGame::Initialize() {
     // --- 基盤初期化 ---
     winApp = new WinApp();
