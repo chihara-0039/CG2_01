@@ -1,44 +1,64 @@
 #include "StageRenderer.h"
 #include <cassert>
 
+// 解放
+StageRenderer::~StageRenderer() {
+    Clear();
+
+    delete groundModel_;
+    groundModel_ = nullptr;
+
+    delete wallModel_;
+    wallModel_ = nullptr;
+
+    delete bubbleModel_;
+    bubbleModel_ = nullptr;
+
+    delete goalModel_;
+    goalModel_ = nullptr;
+}
+
+// ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス
 void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
     assert(object3dCommon);
     object3dCommon_ = object3dCommon;
-}
 
-void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
-    Clear();
-
-    // 仮モデル設定
-    // 今は全部 plane を流用してもOK
-    // あとで block.obj とか bubble.obj に差し替えればいい
+	// 仮モデル設定
     groundModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
         "Resources",
-        "plane.obj",
+        "block.obj",
         object3dCommon_->GetTextureManager()
     );
 
+	// 仮モデル設定
     wallModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
         "Resources",
-        "plane.obj",
+        "block.obj",
         object3dCommon_->GetTextureManager()
     );
 
+	// 仮モデル設定
     bubbleModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
         "Resources",
-        "plane.obj",
+        "block.obj",
         object3dCommon_->GetTextureManager()
     );
 
+	// 仮モデル設定
     goalModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
         "Resources",
-        "plane.obj",
+        "block.obj",
         object3dCommon_->GetTextureManager()
     );
+}
+
+
+void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
+    Clear();
 
     for (int y = 0; y < stageMap.GetHeight(); y++) {
         for (int z = 0; z < stageMap.GetDepth(); z++) {
@@ -146,18 +166,6 @@ void StageRenderer::Clear() {
         delete obj;
     }
     objects_.clear();
-
-    delete groundModel_;
-    groundModel_ = nullptr;
-
-    delete wallModel_;
-    wallModel_ = nullptr;
-
-    delete bubbleModel_;
-    bubbleModel_ = nullptr;
-
-    delete goalModel_;
-    goalModel_ = nullptr;
 }
 
 Object3d* StageRenderer::CreateStageObject(
