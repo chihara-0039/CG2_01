@@ -13,7 +13,7 @@
 #include "Camera.h"
 #include "StageMap.h"
 #include "StageRenderer.h"
-
+#include "MapCursor.h"
 
 
 class MyGame {
@@ -46,6 +46,7 @@ private:
     SpriteCommon* spriteCommon = nullptr;
     Object3dCommon* object3dCommon = nullptr;
     ParticleManager* particleManager = nullptr;
+    BlockType selectedBlockType_ = BlockType::Ground;
 
     // オブジェクト管理
     std::vector<Object3d*> objectList;
@@ -53,6 +54,7 @@ private:
     Sprite* sprite = nullptr;
     std::unique_ptr<Camera> camera;
     StageRenderer* stageRenderer_ = nullptr;
+	MapCursor* mapCursor_ = nullptr;
 
     AppMode currentMode_ = AppMode::DebugView;
     DebugDrawFlags debugFlags_;
