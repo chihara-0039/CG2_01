@@ -7,8 +7,8 @@
 
 class StageRenderer {
 public:
-    StageRenderer() = default;
-    ~StageRenderer() = default;
+    
+    ~StageRenderer();
 
     void Initialize(Object3dCommon* object3dCommon);
     void BuildFromStageMap(const StageMap& stageMap);
