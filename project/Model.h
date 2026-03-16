@@ -26,11 +26,14 @@ public:
 private:
     void LoadObjFile(const std::string& directoryPath, const std::string& filename);
     void CreateBuffers(DirectXCommon* dxCommon);
-
+    std::string textureFilePath_ = "Resources/uvChecker.png";
 private:
     std::vector<ModelVertexData> vertices_;
     uint32_t textureHandle_ = 0;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
+
+	//マテリアル情報を保持する構造体とリスト
+    void LoadMaterialFile(const std::string& directoryPath, const std::string& filename);
 };
