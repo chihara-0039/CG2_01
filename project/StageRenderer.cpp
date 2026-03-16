@@ -47,6 +47,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
         object3dCommon_->GetTextureManager()
     );
 
+
 	// 仮モデル設定
     goalModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
