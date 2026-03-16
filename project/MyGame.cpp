@@ -324,7 +324,23 @@ void MyGame::UpdateImGui() {
 
     ImGui::Separator();
     if (currentMode_ == AppMode::StageEditor && ImGui::TreeNode("StageEditor Settings")) {
-        if (ImGui::DragFloat3("Block Scale", &editorBlockScale_.x, 0.01f, 0.1f, 5.0f)) {
+
+        if (ImGui::SliderFloat("Uniform Block Scale", &editorUniformBlockScale_, 0.1f, 3.0f)) {
+            editorBlockScale_ = {
+                editorUniformBlockScale_,
+                editorUniformBlockScale_,
+                editorUniformBlockScale_
+            };
+
+            if (stageRenderer_) {
+                stageRenderer_->SetBlockScale(editorBlockScale_);
+                stageRenderer_->BuildFromStageMap(stageMap_);
+            }
+        }
+
+        ImGui::DragFloat3("Block Scale XYZ", &editorBlockScale_.x, 0.01f, 0.1f, 5.0f);
+        if (ImGui::Button("Apply Block Scale")) {
+
             if (stageRenderer_) {
                 stageRenderer_->SetBlockScale(editorBlockScale_);
                 stageRenderer_->BuildFromStageMap(stageMap_);

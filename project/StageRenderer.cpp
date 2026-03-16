@@ -120,7 +120,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
                 CreateStageObject(
                     wallModel_,
                     position,
-                    { 1.0f, 1.0f, 1.0f },
+                    blockScale_,
                     { 0.0f, 0.0f, 0.0f }
                 );
                 break;
