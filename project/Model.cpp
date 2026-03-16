@@ -27,7 +27,7 @@ void Model::Initialize(DirectXCommon* dxCommon, const std::string& directoryPath
     // 3. テクスチャ読み込み
     if (textureManager) {
         // パスが不安な場合は、ここでフルパスを組み立てるか確認ログを出す
-        textureHandle_ = textureManager->LoadTexture("Resources/uvChecker.png");
+        textureHandle_ = textureManager->LoadTexture(textureFilePath_);
     }
 }
 
@@ -89,6 +89,10 @@ void Model::LoadObjFile(const std::string& directoryPath, const std::string& fil
                 // とりあえず今回はそのまま入れてみる
                 vertices_.push_back(v);
             }
+        } else if (identifier == "mtllib") {
+            std::string mtlFilename;
+            ss >> mtlFilename;
+            LoadMaterialFile(directoryPath, mtlFilename);
         }
     }
 
@@ -135,6 +139,32 @@ void Model::CreateBuffers(DirectXCommon* dxCommon) {
     vertexBufferView_.SizeInBytes = sizeIB;
     vertexBufferView_.StrideInBytes = sizeof(ModelVertexData);
 }
+
+void Model::LoadMaterialFile(const std::string& directoryPath, const std::string& filename) {
+    std::string fullPath = directoryPath + "/" + filename;
+    std::ifstream file(fullPath);
+    if (!file.is_open()) {
+        OutputDebugStringA(("Warning: Failed to open material file: " + fullPath + "\n").c_str());
+        return;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string identifier;
+        ss >> identifier;
+
+        if (identifier == "map_Kd") {
+            std::string textureFilename;
+            ss >> textureFilename;
+
+            textureFilePath_ = directoryPath + "/" + textureFilename;
+            OutputDebugStringA(("Texture from MTL: " + textureFilePath_ + "\n").c_str());
+            return;
+        }
+    }
+}
+
 void Model::Draw(ID3D12GraphicsCommandList* commandList) {
     // ★安全策：バッファがない場合は描画しない
     if (!vertexBuffer_) {

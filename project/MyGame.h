@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <memory> // unique_ptr のために必須
 #include "WinApp.h"
 #include "DirectXCommon.h"
 #include "TextureManager.h"
@@ -11,10 +12,10 @@
 #include "Model.h"
 #include "Sprite.h"
 #include "Camera.h"
+
 #include "StageMap.h"
 #include "StageRenderer.h"
 #include "MapCursor.h"
-
 
 class MyGame {
 public:
@@ -25,6 +26,7 @@ public:
     bool IsRunning() { return !winApp->ProcessMessage(); }
 
 private:
+
 
     enum class AppMode {
         DebugView,   // 今の確認用
@@ -67,6 +69,7 @@ private:
 
     // ヘルパー関数
     Object3d* CreateObject(Model* model, Vector3 pos);
+
 
     Vector3 editorBlockScale_{ 1.0f, 1.0f, 1.0f };
     float editorUniformBlockScale_ = 1.0f;

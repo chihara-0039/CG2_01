@@ -1,5 +1,7 @@
 #include "MyGame.h"
 #include "externals/imgui/imgui.h"
+#include "externals/imgui/imgui_impl_win32.h"
+#include "externals/imgui/imgui_impl_dx12.h"
 
 // デバッグ用：BlockTypeを文字列に変換
 static const char* BlockTypeToString(BlockType type) {
@@ -47,14 +49,8 @@ void MyGame::Initialize() {
     models.push_back(modelAxis);
 
     // --- オブジェクト生成 ---
-    // 1つ目: 床
-    Object3d* floor = CreateObject(modelPlane, { 0.0f, 0.0f, 0.0f });
-    floor->SetScale({ 10.0f, 1.0f, 10.0f });
-
-    // 2つ目: 右側の軸
+    CreateObject(modelPlane, { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
     CreateObject(modelAxis, { 2.0f, 0.0f, 0.0f });
-
-    // 3つ目: 左側の軸
     CreateObject(modelAxis, { -2.0f, 0.0f, 0.0f });
 
     // スプライト
@@ -62,8 +58,9 @@ void MyGame::Initialize() {
     sprite = new Sprite();
     sprite->Initialize(spriteCommon, texHandle);
 
-    camera = std::make_unique<Camera>();
 
+    // カメラ
+    camera = std::make_unique<Camera>();
 
 	//テストでステージ配置を初期化
     stageMap_.Initialize(16, 8, 16);
@@ -93,11 +90,11 @@ Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
     obj->Initialize(object3dCommon);
     obj->SetModel(model);
     obj->SetPosition(pos);
-    obj->SetRotation({ 1.57f, 0.0f, 0.0f }); // デフォルトで寝かせる
-    objectList.push_back(obj); // ここでリストに追加されるので、Draw()で自動描画される
+    obj->SetRotation({ 1.57f, 0.0f, 0.0f });
+
+    objectList.push_back(obj);
     return obj;
 }
-
 void MyGame::Update() {
     dxCommon->BeginImGui();
 
@@ -327,6 +324,7 @@ void MyGame::UpdateImGui() {
 
     ImGui::Separator();
     if (currentMode_ == AppMode::StageEditor && ImGui::TreeNode("StageEditor Settings")) {
+
         if (ImGui::SliderFloat("Uniform Block Scale", &editorUniformBlockScale_, 0.1f, 3.0f)) {
             editorBlockScale_ = {
                 editorUniformBlockScale_,
@@ -342,12 +340,12 @@ void MyGame::UpdateImGui() {
 
         ImGui::DragFloat3("Block Scale XYZ", &editorBlockScale_.x, 0.01f, 0.1f, 5.0f);
         if (ImGui::Button("Apply Block Scale")) {
+
             if (stageRenderer_) {
                 stageRenderer_->SetBlockScale(editorBlockScale_);
                 stageRenderer_->BuildFromStageMap(stageMap_);
             }
         }
-
         ImGui::TreePop();
     }
 
@@ -362,7 +360,6 @@ void MyGame::Draw() {
 
     ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
     dxCommon->GetCommandList()->SetDescriptorHeaps(1, heaps);
-
     if (debugFlags_.show3DObjects) {
         object3dCommon->PreDraw();
 
@@ -395,12 +392,13 @@ void MyGame::Draw() {
         spriteCommon->PreDraw();
         sprite->Draw();
     }
-
     dxCommon->EndImGui();
     dxCommon->PostDraw();
 }
 
+
 void MyGame::Finalize() {
+
     for (Object3d* obj : objectList) delete obj;
     for (Model* m : models) delete m;
     delete sprite; delete particleManager; delete object3dCommon;

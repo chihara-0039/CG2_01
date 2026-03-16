@@ -47,6 +47,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
         object3dCommon_->GetTextureManager()
     );
 
+
 	// 仮モデル設定
     goalModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
@@ -101,7 +102,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
                 CreateStageObject(
                     bubbleModel_,
                     position,
-                    { 0.7f, 0.7f, 0.7f },
+                    { blockScale_.x * 0.7f, blockScale_.y * 0.7f, blockScale_.z * 0.7f },
                     { 0.0f, 0.0f, 0.0f }
                 );
                 break;
@@ -110,7 +111,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
                 CreateStageObject(
                     goalModel_,
                     position,
-                    { 0.8f, 0.8f, 0.8f },
+                    { blockScale_.x * 0.8f, blockScale_.y * 0.8f, blockScale_.z * 0.8f },
                     { 0.0f, 0.0f, 0.0f }
                 );
                 break;

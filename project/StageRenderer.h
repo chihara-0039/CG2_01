@@ -16,6 +16,9 @@ public:
 	void SetBlockScale(const Vector3& scale) { blockScale_ = scale; }
     const Vector3& GetBlockScale() const { return blockScale_; }
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection);
+    void SetBlockScale(const Vector3& scale) { blockScale_ = scale; }
+    const Vector3& GetBlockScale() const { return blockScale_; }
+
     void Update();
     void Draw();
 
@@ -28,6 +31,8 @@ private:
     Model* wallModel_ = nullptr;
     Model* bubbleModel_ = nullptr;
     Model* goalModel_ = nullptr;
+
+    Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };
 
     std::vector<Object3d*> objects_;
     Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };
