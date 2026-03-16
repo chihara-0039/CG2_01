@@ -1,20 +1,32 @@
 #include "MyGame.h"
+#include <memory>
+#include <Windows.h>
+#include <exception>
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    MyGame* game = new MyGame();
+    std::unique_ptr<MyGame> game = std::make_unique<MyGame>();
 
-    // 1. 初期化
-    game->Initialize();
+    try {
+        // 初期化
+        game->Initialize();
+    }
+    catch (const std::exception& e) {
+        MessageBoxA(nullptr, e.what(), "Initialization Error", MB_ICONERROR | MB_OK);
+        return -1;
+    }
+    catch (...) {
+        MessageBoxA(nullptr, "Unknown error during initialization.", "Initialization Error", MB_ICONERROR | MB_OK);
+        return -1;
+    }
 
-    // 2. メインループ
+    // メインループ
     while (game->IsRunning()) {
         game->Update();
         game->Draw();
     }
 
-    // 3. 解放
+    // 解放処理
     game->Finalize();
-    delete game;
 
     return 0;
 }

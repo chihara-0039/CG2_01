@@ -69,6 +69,12 @@ void TextureManager::Initialize(DirectXCommon* dxCommon) {
     assert(SUCCEEDED(hr));
 
     descriptorSizeSRV_ = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+#ifdef USE_IMGUI
+    TextureData reserve;
+    reserve.resource = nullptr;
+    textures_.push_back(reserve);
+#endif
 }
 
 uint32_t TextureManager::LoadTexture(const std::string& filePath) {
@@ -233,6 +239,16 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
     fileMap_[filePath] = index;
 
     return index;
+
+#ifdef USE_IMGUI
+    // SRVの0番はImGuiのフォント用に予約する（Textureは1番から）
+    textures_.resize(1);
+
+    // 念のため、0番のCPU/GPUハンドルだけは埋めておく（resourceはnullptrのままでOK）
+    textures_[0].srvHandleCPU = srvHeap_->GetCPUDescriptorHandleForHeapStart();
+    textures_[0].srvHandleGPU = srvHeap_->GetGPUDescriptorHandleForHeapStart();
+    textures_[0].resourceDesc = {};
+#endif
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureHandle) {

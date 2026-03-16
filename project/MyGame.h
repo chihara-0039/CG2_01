@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <memory> // unique_ptr のために必須
 #include "WinApp.h"
 #include "DirectXCommon.h"
 #include "TextureManager.h"
@@ -11,10 +12,10 @@
 #include "Model.h"
 #include "Sprite.h"
 #include "Camera.h"
+
 #include "StageMap.h"
 #include "StageRenderer.h"
 #include "MapCursor.h"
-
 
 class MyGame {
 public:
@@ -25,6 +26,7 @@ public:
     bool IsRunning() { return !winApp->ProcessMessage(); }
 
 private:
+
 
     enum class AppMode {
         DebugView,   // 今の確認用
@@ -68,6 +70,19 @@ private:
     // ヘルパー関数
     Object3d* CreateObject(Model* model, Vector3 pos);
 
-	// エディターモード用の関数
-    Vector3 editorBlockScale_{ 1.0f, 1.0f, 1.0f };
+
+    /// <summary>
+	/// ImGuiの表示フラグ。
+    /// </summary>
+    bool showImGui_ = true;
+
+    // カメラパラメータ（すでに cameraTransform を持ってるならそれを使う）
+    Vector3 camTranslate_{ 0, 1.0f, -10.0f };
+    Vector3 camRotate_{ 0, 0, 0 };
+    float camFovY_ = 0.45f;
+    float camNear_ = 0.1f;
+    float camFar_ = 1000.0f;
+
+    // ImGuiが使うSRVの予約index（例：0番を予約）
+    uint32_t imguiSrvIndex_ = 0;
 };
