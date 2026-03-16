@@ -32,6 +32,8 @@ public: // メンバ関数
     // 描画後処理
     void PostDraw();
 
+	void FinalizeImGui();
+
     // シェーダーコンパイル
     ComPtr<IDxcBlob> CompileShader(
         const std::wstring& filePath,
