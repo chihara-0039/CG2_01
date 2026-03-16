@@ -42,3 +42,4 @@ project/..$generated/
 # --- Other ---
 .DS_Store
 Thumbs.db
+/project/camera.cpp
