@@ -13,6 +13,8 @@ public:
     void Initialize(Object3dCommon* object3dCommon);
     void BuildFromStageMap(const StageMap& stageMap);
 
+	void SetBlockScale(const Vector3& scale) { blockScale_ = scale; }
+    const Vector3& GetBlockScale() const { return blockScale_; }
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection);
     void Update();
     void Draw();
@@ -28,7 +30,9 @@ private:
     Model* goalModel_ = nullptr;
 
     std::vector<Object3d*> objects_;
+    Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };
 
 private:
     Object3d* CreateStageObject(Model* model, const Vector3& position, const Vector3& scale, const Vector3& rotation);
+
 };

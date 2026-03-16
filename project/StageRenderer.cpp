@@ -51,7 +51,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
     goalModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
         "Resources",
-        "block.obj",
+        "star.obj",
         object3dCommon_->GetTextureManager()
     );
 }
@@ -80,21 +80,19 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
                 switch (cell->type) {
                 case BlockType::Ground:
-                // plane.obj を床っぽく寝かせる
                 CreateStageObject(
                     groundModel_,
                     position,
-                    { 1.0f, 1.0f, 1.0f },
-                    { 1.57f, 0.0f, 0.0f }
+                    blockScale_,
+                    { 0.0f, 0.0f, 0.0f }
                 );
                 break;
 
                 case BlockType::Wall:
-                // 仮で立てる
                 CreateStageObject(
                     wallModel_,
                     position,
-                    { 1.0f, 1.0f, 1.0f },
+                    blockScale_,
                     { 0.0f, 0.0f, 0.0f }
                 );
                 break;
@@ -121,7 +119,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
                 CreateStageObject(
                     wallModel_,
                     position,
-                    { 1.0f, 1.0f, 1.0f },
+                    blockScale_,
                     { 0.0f, 0.0f, 0.0f }
                 );
                 break;
