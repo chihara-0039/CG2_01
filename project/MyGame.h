@@ -85,4 +85,6 @@ private:
 
     // ImGuiが使うSRVの予約index（例：0番を予約）
     uint32_t imguiSrvIndex_ = 0;
+
+    Vector3 editorBlockScale_{ 1.0f, 1.0f, 1.0f };
 };

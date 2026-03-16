@@ -12,8 +12,15 @@ public:
     const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }
     const Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }
 
+    // 追加
+    Transform& GetTransform() { return transform; }
+    float* GetFovPtr() { return &fovY; }
+
+    void SetPosition(const Vector3& pos) { transform.translate = pos; }
+    void SetRotation(const Vector3& rot) { transform.rotate = rot; }
+    void SetFov(float fov) { fovY = fov; }
+
 public:
-    // ImGuiから直接触れるように public にしておくと便利です
     Transform transform;
     float fovY;
     float aspectRatio;
@@ -23,6 +30,4 @@ public:
 private:
     Matrix4x4 viewMatrix_;
     Matrix4x4 projectionMatrix_;
-
-
 };
