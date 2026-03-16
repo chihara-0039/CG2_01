@@ -25,32 +25,12 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     InitializeFence();
     InitializeDXC();
 
-    // --- ImGuiの初期化 ---
-    // 1. Context作成
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-
-    // 2. Win32バックエンドの初期化
-    ImGui_ImplWin32_Init(winApp_->GetHwnd());
-
-    // 3. DX12用SRVヒープの作成 (ImGuiのフォントテクスチャ用)
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+    // --- ImGui用SRVヒープ作成 ---
+    /*D3D12_DESCRIPTOR_HEAP_DESC desc = {};
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     desc.NumDescriptors = 1;
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    HRESULT hr = device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvHeap_));
-    assert(SUCCEEDED(hr));
-
-    // 4. DX12バックエンドの初期化
-    ImGui_ImplDX12_Init(
-        device_.Get(),
-        2, // バックバッファ数
-        DXGI_FORMAT_R8G8B8A8_UNORM, // swapChainDesc.Formatと合わせる
-        imguiSrvHeap_.Get(),
-        imguiSrvHeap_->GetCPUDescriptorHandleForHeapStart(),
-        imguiSrvHeap_->GetGPUDescriptorHandleForHeapStart()
-    );
+    device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvHeap_));*/
 
     
 }
@@ -390,14 +370,7 @@ void DirectXCommon::EndImGui() {
     if (draw_data == nullptr) return;
 
     // コマンドリストにImGuiの描画コマンドを積む
-    ID3D12DescriptorHeap* heaps[] = { imguiSrvHeap_.Get() };
-    commandList_->SetDescriptorHeaps(1, heaps);
+    /*ID3D12DescriptorHeap* heaps[] = { imguiSrvHeap_.Get() };
+    commandList_->SetDescriptorHeaps(1, heaps);*/
     ImGui_ImplDX12_RenderDrawData(draw_data, commandList_.Get());
-}
-
-// DirectXCommon.h に Finalize() を追加するか、デストラクタで実行
-void DirectXCommon::FinalizeImGui() {
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
 }
