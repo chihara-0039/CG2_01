@@ -12,6 +12,7 @@ struct ModelVertexData {
     Vector3 normal;
 };
 
+
 class Model {
 public:
     // OBJファイルからモデル生成 (ディレクトリパスとファイル名を分けて渡す)
