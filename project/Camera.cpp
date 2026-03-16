@@ -11,6 +11,7 @@ Camera::Camera() {
     Update();
 }
 
+
 void Camera::Update() {
     // 1. ビュー行列の計算
     // アフィン変換行列の逆行列をビュー行列とする
