@@ -27,6 +27,8 @@ public:
     bool TriggerKey(BYTE keyNumber);
 
 private:
+
+
     WinApp* winApp_ = nullptr;
 
     ComPtr<IDirectInput8> directInput_;

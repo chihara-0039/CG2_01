@@ -61,6 +61,7 @@ bool WinApp::ProcessMessage() {
 }
 
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+#ifdef USE_IMGUI
     // ImGuiのメッセージ処理を優先
     if (ImGui::GetCurrentContext() != nullptr) {
         if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
@@ -68,6 +69,7 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         }
     }
 
+#endif
     switch (msg) {
     case WM_CLOSE:
     PostQuitMessage(0);
