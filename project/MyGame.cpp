@@ -79,6 +79,7 @@ void MyGame::Initialize() {
 	// ステージマップからステージ描画オブジェクトを生成
     stageRenderer_ = new StageRenderer();
     stageRenderer_->Initialize(object3dCommon);
+    stageRenderer_->SetBlockScale(editorBlockScale_);
     stageRenderer_->BuildFromStageMap(stageMap_);
 
 	// マップカーソルの初期化
@@ -321,6 +322,17 @@ void MyGame::UpdateImGui() {
     if (ImGui::TreeNode("Cursor Info")) {
         const Int3& cursor = mapCursor_->GetIndex();
         ImGui::Text("Cursor Index: (%d, %d, %d)", cursor.x, cursor.y, cursor.z);
+        ImGui::TreePop();
+    }
+
+    ImGui::Separator();
+    if (currentMode_ == AppMode::StageEditor && ImGui::TreeNode("StageEditor Settings")) {
+        if (ImGui::DragFloat3("Block Scale", &editorBlockScale_.x, 0.01f, 0.1f, 5.0f)) {
+            if (stageRenderer_) {
+                stageRenderer_->SetBlockScale(editorBlockScale_);
+                stageRenderer_->BuildFromStageMap(stageMap_);
+            }
+        }
         ImGui::TreePop();
     }
 

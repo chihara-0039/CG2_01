@@ -67,4 +67,7 @@ private:
 
     // ヘルパー関数
     Object3d* CreateObject(Model* model, Vector3 pos);
+
+	// エディターモード用の関数
+    Vector3 editorBlockScale_{ 1.0f, 1.0f, 1.0f };
 };
