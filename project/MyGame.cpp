@@ -3,10 +3,6 @@
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 
-#include "externals/imgui/imgui.h"
-#include "externals/imgui/imgui_impl_win32.h"
-#include "externals/imgui/imgui_impl_dx12.h"
-
 // デバッグ用：BlockTypeを文字列に変換
 static const char* BlockTypeToString(BlockType type) {
     switch (type) {
@@ -53,14 +49,14 @@ void MyGame::Initialize() {
     models.push_back(modelAxis);
 
     // --- オブジェクト生成 ---
-    CreateObject(pPlane, { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
-    CreateObject(pAxis, { 2.0f, 0.0f, 0.0f });
-    CreateObject(pAxis, { -2.0f, 0.0f, 0.0f });
+    CreateObject(modelPlane, { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
+    CreateObject(modelAxis, { 2.0f, 0.0f, 0.0f });
+    CreateObject(modelAxis, { -2.0f, 0.0f, 0.0f });
 
     // スプライト
     uint32_t texHandle = textureManager->LoadTexture("Resources/uvChecker.png");
-    sprite = std::make_unique<Sprite>();
-    sprite->Initialize(spriteCommon.get(), texHandle);
+    sprite = new Sprite();
+    sprite->Initialize(spriteCommon, texHandle);
 
 
     // カメラ
@@ -90,17 +86,15 @@ void MyGame::Initialize() {
 }
 
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
-    auto obj = std::make_unique<Object3d>();
-    obj->Initialize(object3dCommon.get());
+    Object3d* obj = new Object3d();
+    obj->Initialize(object3dCommon);
     obj->SetModel(model);
     obj->SetPosition(pos);
     obj->SetRotation({ 1.57f, 0.0f, 0.0f });
 
-    Object3d* pObj = obj.get();
-    objectList.push_back(std::move(obj)); // リストに移動
-    return pObj;
+    objectList.push_back(obj);
+    return obj;
 }
-
 void MyGame::Update() {
     dxCommon->BeginImGui();
 
