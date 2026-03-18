@@ -1,4 +1,5 @@
 #include "MyGame.h"
+#include "ModelManager.h"
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
@@ -102,6 +103,16 @@ void MyGame::Update() {
 #endif
 
     input->Update();
+
+    // 2. カメラの更新（Blender風操作を適用）
+#ifdef USE_IMGUI
+    // ImGuiに触っていない時だけカメラを動かすようにすると操作しやすいです
+    if (!ImGui::GetIO().WantCaptureMouse) {
+        camera->UpdateBlenderStyle(input);
+    }
+#else
+    camera->UpdateBlenderStyle(input);
+#endif
    
     switch (currentMode_) {
     case AppMode::DebugView:
@@ -407,12 +418,28 @@ void MyGame::Draw() {
 
 
 void MyGame::Finalize() {
+    ModelManager::Finalize();
 
-    for (Object3d* obj : objectList) delete obj;
-    for (Model* m : models) delete m;
-    delete sprite; delete particleManager; delete object3dCommon;
-    delete spriteCommon; delete textureManager; delete input;
-    delete dxCommon; delete winApp;
+#ifdef USE_IMGUI
+    dxCommon->FinalizeImGui();
+#endif
+
+    for (Object3d* obj : objectList) {
+        delete obj;
+    }
+
+    for (Model* m : models) {
+        delete m;
+    }
+
+    delete sprite;
+    delete particleManager;
+    delete object3dCommon;
+    delete spriteCommon;
+    delete textureManager;
+    delete input;
+    delete dxCommon; // 基盤は最後の方
+    delete winApp;
 
     if (stageRenderer_) {
         delete stageRenderer_;

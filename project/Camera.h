@@ -19,6 +19,9 @@ public:
     void SetRotation(const Vector3& rot) { transform_.rotate = rot; }
     void SetFov(float fov) { fov_ = fov; }
 
+    // Blender風操作を更新 (Inputポインタを受け取る)
+    void UpdateBlenderStyle(const class Input* input);
+
     // ImGui等で直接触れるようにTransformを公開、または参照を返す
     Transform& GetTransform() { return transform_; }
     float* GetFovPtr() { return &fov_; }
@@ -32,4 +35,7 @@ private:
 
     Matrix4x4 viewMatrix_;
     Matrix4x4 projectionMatrix_;
+
+    Vector3 target_ = { 8.0f, 0.0f, 8.0f }; // 注視点 (ステージの中心付近をデフォルトに)
+    float distance_ = 20.0f;              // 注視点からの距離
 };
