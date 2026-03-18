@@ -25,6 +25,8 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     InitializeFence();
     InitializeDXC();
 
+#ifdef USE_IMGUI
+
     // --- ImGuiの初期化 ---
     // 1. Context作成
     IMGUI_CHECKVERSION();
@@ -52,12 +54,12 @@ void DirectXCommon::Initialize(WinApp* winApp) {
         imguiSrvHeap_->GetGPUDescriptorHandleForHeapStart()
     );
 
-    
+#endif
 }
 
 void DirectXCommon::InitializeDevice() {
     // DXGIファクトリーの生成
-#ifdef _Development
+#ifdef USE_IMGUI
     ComPtr<ID3D12Debug1> debugController = nullptr;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
         debugController->EnableDebugLayer();
@@ -86,7 +88,7 @@ void DirectXCommon::InitializeDevice() {
     }
     assert(device_ != nullptr);
 
-#ifdef _Development
+#ifdef USE_IMGUI
     // デバッグ時のエラー停止設定
     ComPtr<ID3D12InfoQueue> infoQueue = nullptr;
     if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
@@ -373,15 +375,20 @@ void DirectXCommon::UpdateFixFPS() {
 
 // 描画の準備
 void DirectXCommon::BeginImGui() {
+
+#ifdef USE_IMGUI
     // If ImGui context is not created, skip calling backend NewFrame
     if (ImGui::GetCurrentContext() == nullptr) return;
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
+#endif
 }
 
 // 描画の実行 (PostDrawの直前などで呼ぶ)
 void DirectXCommon::EndImGui() {
+
+#ifdef USE_IMGUI
     // If ImGui context is not created, skip
     if (ImGui::GetCurrentContext() == nullptr) return;
 
@@ -392,7 +399,9 @@ void DirectXCommon::EndImGui() {
     // コマンドリストにImGuiの描画コマンドを積む
     ID3D12DescriptorHeap* heaps[] = { imguiSrvHeap_.Get() };
     commandList_->SetDescriptorHeaps(1, heaps);
+
     ImGui_ImplDX12_RenderDrawData(draw_data, commandList_.Get());
+#endif
 }
 
 // DirectXCommon.h に Finalize() を追加するか、デストラクタで実行

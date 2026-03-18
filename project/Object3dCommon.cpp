@@ -166,7 +166,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
     target.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
     psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;

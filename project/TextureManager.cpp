@@ -258,3 +258,4 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureHand
 const D3D12_RESOURCE_DESC& TextureManager::GetResourceDesc(uint32_t textureHandle) {
     return textures_[textureHandle].resourceDesc;
 }
+

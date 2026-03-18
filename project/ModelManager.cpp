@@ -14,11 +14,11 @@ void ModelManager::Initialize(Object3dCommon* common) {
     internalObject_->Initialize(common_);
 }
 
-void ModelManager::Finalize() {
-    for (auto& pair : models_) { delete pair.second; }
-    models_.clear();
-    delete internalObject_;
-}
+//void ModelManager::Finalize() {
+//    for (auto& pair : models_) { delete pair.second; }
+//    models_.clear();
+//    delete internalObject_;
+//}
 
 void ModelManager::SetCamera(const Matrix4x4& view, const Matrix4x4& projection) {
     viewMatrix_ = view;
@@ -42,4 +42,19 @@ void ModelManager::Draw(const std::string& modelName, const Vector3& pos, const 
     // 3. 更新と描画
     internalObject_->Update();
     internalObject_->Draw();
+}
+
+void ModelManager::Finalize() {
+    // 1. 各モデルをループで回して delete する
+    for (auto& pair : models_) {
+        delete pair.second; // Modelの実体を消す
+    }
+    // 2. マップ自体を空にする
+    models_.clear();
+
+	// 3. 使い回しオブジェクトも delete する
+    if (internalObject_) {
+        delete internalObject_;
+        internalObject_ = nullptr;
+    }
 }

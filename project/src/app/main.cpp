@@ -1,9 +1,11 @@
 #include "MyGame.h"
+#include "D3DResourceLeakChecker.h"
 #include <memory>
 #include <Windows.h>
 #include <exception>
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    D3DResourceLeakChecker leakChecker;
     std::unique_ptr<MyGame> game = std::make_unique<MyGame>();
 
     try {

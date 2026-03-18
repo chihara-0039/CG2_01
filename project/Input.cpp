@@ -12,9 +12,12 @@ void Input::Initialize(WinApp* winApp) {
         reinterpret_cast<void**>(directInput_.GetAddressOf()), nullptr);
     assert(SUCCEEDED(hr));
 
-    // キーボードデバイスの生成
+    // デバイス生成
     // Ensure directInput_ is valid before creating the device
     if (directInput_) {
+
+		// --- キーボードの初期化 ---
+
         hr = directInput_->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(), nullptr);
         assert(SUCCEEDED(hr));
 
@@ -25,6 +28,19 @@ void Input::Initialize(WinApp* winApp) {
         // 排他制御レベルのセット
         hr = keyboard_->SetCooperativeLevel(
             winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+        assert(SUCCEEDED(hr));
+
+		// --- マウスの初期化 ---
+
+		// マウスデバイスの生成
+        hr = directInput_->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(), nullptr);
+        assert(SUCCEEDED(hr));
+
+		// 入力データ形式のセット
+        hr = mouse_->SetDataFormat(&c_dfDIMouse);
+        assert(SUCCEEDED(hr));
+        // マウスはウィンドウ外でも動くように NONEXCLUSIVE を設定
+        hr = mouse_->SetCooperativeLevel(winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
         assert(SUCCEEDED(hr));
 
         // 初回はキー状態をゼロで初期化
@@ -62,14 +78,37 @@ void Input::Update() {
         keyboard_->Acquire();
         hr = keyboard_->GetDeviceState(sizeof(key_), key_);
     }
+
+    // --- マウス情報の取得 ---
+    DIMOUSESTATE mouseData;
+    hr = mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseData);
+    if (FAILED(hr)) {
+        // ウィンドウがアクティブでない場合は再取得を試みる
+        mouse_->Acquire();
+        mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseData);
+    }
+
+    // 使いやすい形式に変換して保存
+    mouseState_.x = mouseData.lX;
+    mouseState_.y = mouseData.lY;
+    mouseState_.wheel = mouseData.lZ;
+    for (int i = 0; i < 3; i++) {
+        mouseState_.buttons[i] = (mouseData.rgbButtons[i] & 0x80) != 0;
+    }
 }
 
-bool Input::PushKey(BYTE keyNumber) {
-    // 0以外なら押されている
-    return key_[keyNumber] != 0;
+// キーが押されているか判定
+bool Input::PushKey(BYTE keyNumber) const {
+    if (key_[keyNumber]) {
+        return true;
+    }
+    return false;
 }
 
-bool Input::TriggerKey(BYTE keyNumber) {
-    // 今押されていて、前は押されていなかったらトリガー
-    return (key_[keyNumber] != 0) && (keyPre_[keyNumber] == 0);
+// キーがトリガーされたか（押した瞬間）判定
+bool Input::TriggerKey(BYTE keyNumber) const {
+    if (key_[keyNumber] && !keyPre_[keyNumber]) {
+        return true;
+    }
+    return false;
 }
