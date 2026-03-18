@@ -25,6 +25,7 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     InitializeFence();
     InitializeDXC();
 
+
 #ifdef USE_IMGUI
 
     // --- ImGuiの初期化 ---
@@ -41,18 +42,7 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     desc.NumDescriptors = 1;
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    HRESULT hr = device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvHeap_));
-    assert(SUCCEEDED(hr));
-
-    // 4. DX12バックエンドの初期化
-    ImGui_ImplDX12_Init(
-        device_.Get(),
-        2, // バックバッファ数
-        DXGI_FORMAT_R8G8B8A8_UNORM, // swapChainDesc.Formatと合わせる
-        imguiSrvHeap_.Get(),
-        imguiSrvHeap_->GetCPUDescriptorHandleForHeapStart(),
-        imguiSrvHeap_->GetGPUDescriptorHandleForHeapStart()
-    );
+    device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvHeap_));*/
 
 #endif
 }
@@ -409,4 +399,5 @@ void DirectXCommon::FinalizeImGui() {
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
+
 }
