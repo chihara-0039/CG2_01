@@ -96,7 +96,7 @@ Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
     return obj;
 }
 void MyGame::Update() {
-#ifdef _Development
+#ifdef USE_IMGUI
     dxCommon->BeginImGui();
     UpdateImGui();
 #endif
@@ -248,7 +248,7 @@ void MyGame::UpdateGamePlay() {
     // 後でプレイヤー処理を入れる
 }
 
-#ifdef _Development
+#ifdef USE_IMGUI
 void MyGame::UpdateImGui() {
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(340, 520), ImGuiCond_Always);
@@ -398,7 +398,7 @@ void MyGame::Draw() {
         sprite->Draw();
     }
 
-#ifdef _Development
+#ifdef USE_IMGUI
     dxCommon->EndImGui();
 #endif
 
