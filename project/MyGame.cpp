@@ -416,7 +416,6 @@ void MyGame::Draw() {
     dxCommon->PostDraw();
 }
 
-
 void MyGame::Finalize() {
     ModelManager::Finalize();
 
