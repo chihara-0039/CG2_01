@@ -215,7 +215,12 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
         OutputDebugStringA("Please check if the file path is correct and the file exists.\n");
         OutputDebugStringW(filePath.c_str()); // 失敗したパスを表示
         OutputDebugStringA("\n----------------------------------------\n");
-        std::string pathStr(filePath.begin(), filePath.end());
+        // 警告回避：一文字ずつ明示的に char にキャストして変換する
+        std::string pathStr;
+        for (wchar_t w : filePath) {
+            pathStr += static_cast<char>(w);
+        }
+
         throw std::runtime_error("Shader File Not Found: " + pathStr);
     }
 
