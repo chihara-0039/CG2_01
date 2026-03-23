@@ -35,7 +35,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
     wallModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
         "Resources",
-        "block.obj",
+        "wall.obj",
         object3dCommon_->GetTextureManager()
     );
 
