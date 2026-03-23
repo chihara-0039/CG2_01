@@ -1,5 +1,8 @@
+#include <filesystem>
+
 #include "MyGame.h"
 #include "ModelManager.h"
+
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
@@ -98,6 +101,8 @@ Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
     objectList.push_back(obj);
     return obj;
 }
+
+// --- 更新処理 ---
 void MyGame::Update() {
 #ifdef USE_IMGUI
     dxCommon->BeginImGui();
@@ -173,6 +178,22 @@ void MyGame::UpdateDebugView() {
     }
 }
 
+void MyGame::RefreshStageList() {
+    stageFiles_.clear();
+    std::string path = "Resources/Stages/";
+
+    // フォルダがなければ作成する
+    if (!std::filesystem::exists(path)) {
+        std::filesystem::create_directories(path);
+    }
+
+    // フォルダ内の .txt ファイルをリストに詰める
+    for (const auto& entry : std::filesystem::directory_iterator(path)) {
+        if (entry.path().extension() == ".txt") {
+            stageFiles_.push_back(entry.path().stem().string()); // ファイル名（拡張子なし）を取得
+        }
+    }
+}
 
 void MyGame::UpdateStageEditor() {
 
@@ -306,6 +327,51 @@ void MyGame::UpdateImGui() {
     ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
     ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
 
+	// ステージエディタ関連のUI
+    ImGui::Separator();
+    ImGui::Text("--- Stage MySet Manager ---");
+
+    // 1. 新規保存
+    ImGui::InputText("Save Name", newStageName_, IM_ARRAYSIZE(newStageName_));
+    if (ImGui::Button("Save As New")) {
+        std::string path = "Resources/Stages/" + std::string(newStageName_) + ".txt";
+        stageMap_.SaveToFile(path);
+        RefreshStageList(); // リストを更新
+    }
+
+    ImGui::Spacing();
+
+    // 2. ステージリスト
+    ImGui::Text("Saved Stages:");
+    if (ImGui::BeginListBox("##StageList", ImVec2(-FLT_MIN, 150))) {
+        for (int n = 0; n < (int)stageFiles_.size(); n++) {
+            const bool is_selected = (selectedStageIndex_ == n);
+            if (ImGui::Selectable(stageFiles_[n].c_str(), is_selected)) {
+                selectedStageIndex_ = n;
+            }
+        }
+        ImGui::EndListBox();
+    }
+
+    // 3. 選択したステージへの操作
+    if (selectedStageIndex_ != -1 && selectedStageIndex_ < (int)stageFiles_.size()) {
+        std::string selectedName = stageFiles_[selectedStageIndex_];
+        std::string fullPath = "Resources/Stages/" + selectedName + ".txt";
+
+        if (ImGui::Button("Load Selected")) {
+            stageMap_.LoadFromFile(fullPath);
+            if (stageRenderer_) {
+                stageRenderer_->BuildFromStageMap(stageMap_);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Overwrite (Save)")) {
+            stageMap_.SaveToFile(fullPath);
+        }
+    }
+
+    if (ImGui::Button("Refresh List")) { RefreshStageList(); }
+
 	// カメラの情報表示と操作
     ImGui::Separator();
     if (ImGui::TreeNode("Camera")) {
@@ -379,27 +445,6 @@ void MyGame::UpdateImGui() {
 
 	// デバッグ用：現在選択中のブロックタイプを表示
     ImGui::Text("Selected Block: %s", BlockTypeToString(selectedBlockType_));
-
-
-	// ステージデータの保存と読み込み
-    ImGui::Separator();
-    ImGui::Text("Stage Data");
-
-    // 保存ボタン
-    if (ImGui::Button("Save Stage")) {
-        stageMap_.SaveToFile("Resources/stageData.txt");
-    }
-
-    ImGui::SameLine();
-
-    // 読み込みボタン
-    if (ImGui::Button("Load Stage")) {
-        stageMap_.LoadFromFile("Resources/stageData.txt");
-        // 読み込んだ後に描画用オブジェクトを再構築する
-        if (stageRenderer_) {
-            stageRenderer_->BuildFromStageMap(stageMap_);
-        }
-    }
 
 
     ImGui::End();

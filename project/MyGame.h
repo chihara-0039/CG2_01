@@ -1,6 +1,8 @@
 #pragma once
 #include <vector>
 #include <memory> // unique_ptr のために必須
+#include <filesystem>
+
 #include "WinApp.h"
 #include "DirectXCommon.h"
 #include "TextureManager.h"
@@ -12,7 +14,6 @@
 #include "Model.h"
 #include "Sprite.h"
 #include "Camera.h"
-
 #include "StageMap.h"
 #include "StageRenderer.h"
 #include "MapCursor.h"
@@ -23,17 +24,20 @@ public:
     void Update();
     void Draw();
     void Finalize();
+    
+	// アプリが終了していないか
     bool IsRunning() { return !winApp->ProcessMessage(); }
 
 private:
 
-
+	// アプリのモード
     enum class AppMode {
         DebugView,   // 今の確認用
         StageEditor, // これから作るエディター
         GamePlay     // 後で本編
     };
 
+	// デバッグ表示のフラグ
     struct DebugDrawFlags {
         bool show3DObjects = true;
         bool showSprite = true;
@@ -58,19 +62,26 @@ private:
     StageRenderer* stageRenderer_ = nullptr;
 	MapCursor* mapCursor_ = nullptr;
 
+	// アプリのモード管理
     AppMode currentMode_ = AppMode::DebugView;
     DebugDrawFlags debugFlags_;
 	StageMap stageMap_;
 
     void UpdateImGui();
     void UpdateDebugView();
+	void RefreshStageList();
     void UpdateStageEditor();
     void UpdateGamePlay();
 
     // ヘルパー関数
     Object3d* CreateObject(Model* model, Vector3 pos);
 
-
+	// エディタ用のUI制御変数
     Vector3 editorBlockScale_{ 1.0f, 1.0f, 1.0f };
     float editorUniformBlockScale_ = 1.0f;
+
+	// ステージファイルの管理
+    std::vector<std::string> stageFiles_; // 見つかったステージ名リスト
+    char newStageName_[64] = "new_stage"; // 新規保存用の名前入力バッファ
+    int selectedStageIndex_ = -1;         // リストで選択中の番号
 };
