@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <cstdint>
+#include <string>
 
 // 3次元整数座標
 struct Int3 {
@@ -14,7 +15,7 @@ enum class BlockType : uint32_t {
     None = 0,
     Ground,
     Wall,
-    Stair,
+    Star,
     BubblePickup,
     Goal,
     PlayerStart
@@ -34,6 +35,11 @@ public:
 
     // サイズ指定で初期化
     void Initialize(int width, int height, int depth);
+
+    // ステージデータをファイルに保存する
+    void SaveToFile(const std::string& filename);
+    // ファイルからステージデータを読み込む
+    void LoadFromFile(const std::string& filename);
 
     // 全消し
     void Clear();

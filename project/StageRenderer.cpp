@@ -116,7 +116,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
                 );
                 break;
 
-                case BlockType::Stair:
+                case BlockType::Star:
                 CreateStageObject(
                     wallModel_,
                     position,

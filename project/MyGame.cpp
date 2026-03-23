@@ -10,7 +10,7 @@ static const char* BlockTypeToString(BlockType type) {
     case BlockType::None:         return "None";
     case BlockType::Ground:       return "Ground";
     case BlockType::Wall:         return "Wall";
-    case BlockType::Stair:        return "Stair";
+    case BlockType::Star:         return "Star";
     case BlockType::BubblePickup: return "BubblePickup";
     case BlockType::Goal:         return "Goal";
     case BlockType::PlayerStart:  return "PlayerStart";
@@ -18,6 +18,7 @@ static const char* BlockTypeToString(BlockType type) {
     }
 }
 
+// --- MyGameクラスの実装 ---
 void MyGame::Initialize() {
     // --- 基盤初期化 ---
     winApp = new WinApp();
@@ -86,6 +87,7 @@ void MyGame::Initialize() {
     mapCursor_->SetIndex({ 0, 0, 0 }, stageMap_);
 }
 
+// ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
     Object3d* obj = new Object3d();
     obj->Initialize(object3dCommon);
@@ -182,10 +184,10 @@ void MyGame::UpdateStageEditor() {
         mapCursor_->Move(1, 0, 0, stageMap_);
     }
     if (input->TriggerKey(DIK_W)) {
-        mapCursor_->Move(0, 0, -1, stageMap_);
+        mapCursor_->Move(0, 0, 1, stageMap_);
     }
     if (input->TriggerKey(DIK_S)) {
-        mapCursor_->Move(0, 0, 1, stageMap_);
+        mapCursor_->Move(0, 0, -1, stageMap_);
     }
     if (input->TriggerKey(DIK_Q)) {
         mapCursor_->Move(0, 1, 0, stageMap_);
@@ -197,24 +199,31 @@ void MyGame::UpdateStageEditor() {
     // 現在カーソル位置
     const Int3& cursor = mapCursor_->GetIndex();
 
+	// ブロック配置や削除を行った後、ステージ描画オブジェクトを再構築する必要があるか
     bool needRebuild = false;
 
     // ブロック配置
+	// 今は数字キー1～4で4種類のブロックを配置できるようにしています
+	// 例えば、1がGround、2がWall、3がBubblePickup、4がGoalなど
+	// ここはお好みでキーやブロックの種類を変更してください
     if (input->TriggerKey(DIK_1)) {
         selectedBlockType_ = BlockType::Ground;
         stageMap_.SetBlock(cursor, selectedBlockType_);
         needRebuild = true;
     }
+	
     if (input->TriggerKey(DIK_2)) {
         selectedBlockType_ = BlockType::Wall;
         stageMap_.SetBlock(cursor, selectedBlockType_);
         needRebuild = true;
     }
+    
     if (input->TriggerKey(DIK_3)) {
         selectedBlockType_ = BlockType::BubblePickup;
         stageMap_.SetBlock(cursor, selectedBlockType_);
         needRebuild = true;
     }
+
     if (input->TriggerKey(DIK_4)) {
         selectedBlockType_ = BlockType::Goal;
         stageMap_.SetBlock(cursor, selectedBlockType_);
@@ -222,7 +231,7 @@ void MyGame::UpdateStageEditor() {
     }
 
     // 削除
-    if (input->TriggerKey(DIK_BACKSPACE)) {
+    if (input->TriggerKey(DIK_SPACE)) {
         stageMap_.RemoveBlock(cursor);
         needRebuild = true;
     }
@@ -232,6 +241,7 @@ void MyGame::UpdateStageEditor() {
         stageRenderer_->BuildFromStageMap(stageMap_);
     }
 
+	// カメラ操作（Blender風の操作もできるようにしているので、そちらとキーが被らないように注意してください）
     Transform& camTf = camera->GetTransform();
 
     if (input->PushKey(DIK_J)) {
@@ -260,6 +270,7 @@ void MyGame::UpdateGamePlay() {
 }
 
 #ifdef USE_IMGUI
+// ImGuiの更新と描画
 void MyGame::UpdateImGui() {
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(340, 520), ImGuiCond_Always);
@@ -278,6 +289,7 @@ void MyGame::UpdateImGui() {
     case AppMode::GamePlay:    modeIndex = 2; break;
     }
 
+	// ImGuiのコンボボックスでモード切替
     const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay" };
     if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
         switch (modeIndex) {
@@ -287,6 +299,7 @@ void MyGame::UpdateImGui() {
         }
     }
 
+	// 描画オプション
     ImGui::Separator();
     ImGui::Text("Draw Flags");
     ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
@@ -328,7 +341,7 @@ void MyGame::UpdateImGui() {
         ImGui::TreePop();
     }
 
-    
+	// マップカーソルの情報表示
     ImGui::Separator();
     if (ImGui::TreeNode("Cursor Info")) {
         const Int3& cursor = mapCursor_->GetIndex();
@@ -336,6 +349,7 @@ void MyGame::UpdateImGui() {
         ImGui::TreePop();
     }
 
+	// ステージエディタ用の設定項目
     ImGui::Separator();
     if (currentMode_ == AppMode::StageEditor && ImGui::TreeNode("StageEditor Settings")) {
 
@@ -365,6 +379,28 @@ void MyGame::UpdateImGui() {
 
 	// デバッグ用：現在選択中のブロックタイプを表示
     ImGui::Text("Selected Block: %s", BlockTypeToString(selectedBlockType_));
+
+
+	// ステージデータの保存と読み込み
+    ImGui::Separator();
+    ImGui::Text("Stage Data");
+
+    // 保存ボタン
+    if (ImGui::Button("Save Stage")) {
+        stageMap_.SaveToFile("Resources/stageData.txt");
+    }
+
+    ImGui::SameLine();
+
+    // 読み込みボタン
+    if (ImGui::Button("Load Stage")) {
+        stageMap_.LoadFromFile("Resources/stageData.txt");
+        // 読み込んだ後に描画用オブジェクトを再構築する
+        if (stageRenderer_) {
+            stageRenderer_->BuildFromStageMap(stageMap_);
+        }
+    }
+
 
     ImGui::End();
 }
