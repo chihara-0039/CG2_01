@@ -63,6 +63,12 @@ void MyGame::Initialize() {
     sprite = new Sprite();
     sprite->Initialize(spriteCommon, texHandle);
 
+    // プレイヤーの生成（既存のモデルリストからモデルを渡す）
+    player_ = new Player();
+    player_->Initialize(object3dCommon, models[0]); 
+
+	// プレイヤーの初期位置をステージの中心付近に設定
+	player_->SetPosition({ 0.0f, 1.5f, 0.0f });
 
     // カメラ
     camera = std::make_unique<Camera>();
@@ -121,24 +127,32 @@ void MyGame::Update() {
     camera->UpdateBlenderStyle(input);
 #endif
    
-    switch (currentMode_) {
-    case AppMode::DebugView:
-    UpdateDebugView();
-    break;
+    // --- ImGuiに入力中（WantCaptureKeyboardがtrue）ならゲーム側の入力を無視する ---
+    if (!ImGui::GetIO().WantCaptureKeyboard) {
+        switch (currentMode_) {
+        case AppMode::DebugView:
+        UpdateDebugView();
+        break;
 
-    case AppMode::StageEditor:
-    UpdateStageEditor();
-    break;
+        case AppMode::StageEditor:
+        UpdateStageEditor(); // 名前入力中はここが呼ばれなくなる
+        break;
 
-    case AppMode::GamePlay:
-    UpdateGamePlay();
-    break;
+        case AppMode::GamePlay:
+        UpdateGamePlay();
+        break;
+        }
     }
 
     camera->Update();
 
     const Matrix4x4& view = camera->GetViewMatrix();
     const Matrix4x4& proj = camera->GetProjectionMatrix();
+
+    // --- プレイヤーに最新のカメラ行列を教える ---
+    if (player_) {
+        player_->SetCamera(view, proj);
+    }
 
 	// 3Dオブジェクトの更新
     if (debugFlags_.show3DObjects) {
@@ -286,8 +300,9 @@ void MyGame::UpdateStageEditor() {
 }
 
 void MyGame::UpdateGamePlay() {
-    // まだ空でOK
-    // 後でプレイヤー処理を入れる
+    if (player_) {
+        player_->Update(input, stageMap_);
+    }
 }
 
 #ifdef USE_IMGUI
@@ -363,11 +378,59 @@ void MyGame::UpdateImGui() {
             if (stageRenderer_) {
                 stageRenderer_->BuildFromStageMap(stageMap_);
             }
+
+            // --- 追加：PlayerStartブロックを探してプレイヤーを移動させる ---
+            bool foundStart = false;
+
+			// ステージマップは3次元なので、Y軸を固定してX-Z平面を探索する形になります
+            for (int y = 0; y < stageMap_.GetHeight(); ++y) {
+				// ステージマップは3次元なので、Y軸を固定してX-Z平面を探索する形になります
+                for (int z = 0; z < stageMap_.GetDepth(); ++z) {
+					// ステージマップを全探索してPlayerStartブロックを探す
+                    for (int x = 0; x < stageMap_.GetWidth(); ++x) {
+                        // セルを取得して、タイプが PlayerStart かチェック
+                        const MapCell* cell = stageMap_.GetCell(x, y, z);
+						// PlayerStartブロックが見つかったら
+                        if (cell && cell->type == BlockType::PlayerStart) {
+                            // そのブロックの少し上にプレイヤーを配置
+                            player_->SetPosition({ (float)x, (float)y + 1.1f, (float)z });
+							
+                            // 見つけたらフラグを立ててループを抜ける
+                            foundStart = true;
+                            break;
+                        }
+                    }
+					// PlayerStartブロックが見つかったら、残りのループは回さない
+                    if (foundStart) break;
+                }
+				// PlayerStartブロックが見つかったら、残りのループは回さない
+                if (foundStart) break;
+            }
         }
+
         ImGui::SameLine();
         if (ImGui::Button("Overwrite (Save)")) {
             stageMap_.SaveToFile(fullPath);
         }
+
+        // --- ここから追加：削除ボタン ---
+        ImGui::SameLine();
+
+        // ボタンの色を赤系に変更（色相 0.0=赤）
+        ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(0.0f, 0.7f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
+
+        if (ImGui::Button("Delete")) {
+            // 1. 物理ファイルを削除
+            std::filesystem::remove(fullPath);
+            // 2. リストを最新の状態に更新
+            RefreshStageList();
+            // 3. 削除した項目が選択されたままだと危ないのでリセット
+            selectedStageIndex_ = -1;
+        }
+
+        ImGui::PopStyleColor(3); // 色設定を戻す
     }
 
     if (ImGui::Button("Refresh List")) { RefreshStageList(); }
@@ -460,6 +523,11 @@ void MyGame::Draw() {
     if (debugFlags_.show3DObjects) {
         object3dCommon->PreDraw();
 
+		// プレイヤーの描画は3Dオブジェクトの描画の中で行う（プレイヤーもObject3dを使っているため）
+        if (currentMode_ == AppMode::GamePlay && player_) {
+            player_->Draw();
+        }
+
 		// 3Dオブジェクトの描画
         if (currentMode_ == AppMode::DebugView) {
             for (Object3d* obj : objectList) {
@@ -469,11 +537,13 @@ void MyGame::Draw() {
 
 
 		// ステージ描画オブジェクトの描画
-        if (currentMode_ == AppMode::StageEditor) {
+        if (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay) {
             if (stageRenderer_) {
                 stageRenderer_->Draw();
             }
-            if (mapCursor_) {
+
+            // カーソルはエディタモードのときだけ出す
+            if (currentMode_ == AppMode::StageEditor && mapCursor_) {
                 mapCursor_->Draw();
             }
         }
@@ -512,6 +582,7 @@ void MyGame::Finalize() {
         delete m;
     }
 
+    delete player_;
     delete sprite;
     delete particleManager;
     delete object3dCommon;
@@ -520,6 +591,7 @@ void MyGame::Finalize() {
     delete input;
     delete dxCommon; // 基盤は最後の方
     delete winApp;
+
 
     if (stageRenderer_) {
         delete stageRenderer_;

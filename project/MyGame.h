@@ -17,6 +17,7 @@
 #include "StageMap.h"
 #include "StageRenderer.h"
 #include "MapCursor.h"
+#include "Player.h"
 
 class MyGame {
 public:
@@ -84,4 +85,7 @@ private:
     std::vector<std::string> stageFiles_; // 見つかったステージ名リスト
     char newStageName_[64] = "new_stage"; // 新規保存用の名前入力バッファ
     int selectedStageIndex_ = -1;         // リストで選択中の番号
+
+	// プレイヤー
+    Player* player_ = nullptr;
 };
