@@ -12,7 +12,7 @@ public:
     void Initialize(Object3dCommon* common, Model* model);
 
     // 更新：移動・重力・当たり判定の処理
-    void Update(const Input* input, const StageMap& map);
+    void Update(const Input* input, const StageMap& map, float cameraRotY);
 
     // 描画：内部で持っている Object3d を描画
     void Draw();
@@ -35,6 +35,7 @@ private:
 private:
     Object3d* object_ = nullptr;    // プレイヤーの見た目
     Vector3 position_ = { 0, 0, 0 }; // 世界座標
+    Vector3 rotation_ = { 0, 0, 0 };
     Vector3 velocity_ = { 0, 0, 0 }; // 速度（落下速度を管理）
 
     // 当たり判定の大きさ（中心からの半径）

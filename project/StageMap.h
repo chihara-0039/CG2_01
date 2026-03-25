@@ -15,6 +15,7 @@ enum class BlockType : uint32_t {
     None = 0,
     Ground,
     Wall,
+    Ladder,
     Star,
     BubblePickup,
     Goal,
@@ -26,6 +27,8 @@ struct MapCell {
     BlockType type = BlockType::None;
     int variant = 0;      // 見た目違い用。今は使わなくてOK
     bool isSolid = false; // 当たり判定用
+	float rotationX = 0.0f; // X軸回転（オブジェクトの向きを変えたい）
+	float rotationY = 0.0f; // Y軸回転（オブジェクトの向きを変えたい）
 };
 
 class StageMap {

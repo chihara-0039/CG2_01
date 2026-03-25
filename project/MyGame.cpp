@@ -13,6 +13,7 @@ static const char* BlockTypeToString(BlockType type) {
     case BlockType::None:         return "None";
     case BlockType::Ground:       return "Ground";
     case BlockType::Wall:         return "Wall";
+	case BlockType::Ladder:       return "Ladder";
     case BlockType::Star:         return "Star";
     case BlockType::BubblePickup: return "BubblePickup";
     case BlockType::Goal:         return "Goal";
@@ -211,6 +212,12 @@ void MyGame::RefreshStageList() {
 
 void MyGame::UpdateStageEditor() {
 
+    // 現在カーソル位置
+    const Int3& cursor = mapCursor_->GetIndex();
+
+    // ブロック配置や削除を行った後、ステージ描画オブジェクトを再構築する必要があるか
+    bool needRebuild = false;
+
     // カーソル移動
     if (input->TriggerKey(DIK_A)) {
         mapCursor_->Move(-1, 0, 0, stageMap_);
@@ -231,39 +238,56 @@ void MyGame::UpdateStageEditor() {
         mapCursor_->Move(0, -1, 0, stageMap_);
     }
 
-    // 現在カーソル位置
-    const Int3& cursor = mapCursor_->GetIndex();
+    if (input->TriggerKey(DIK_R)) {
+        MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+        if (cell && cell->type != BlockType::None) {
+            // 90度 (π/2) ずつ回転させる
+            cell->rotationY += 1.5708f;
+            needRebuild = true;
+        }
+    }
 
-	// ブロック配置や削除を行った後、ステージ描画オブジェクトを再構築する必要があるか
-    bool needRebuild = false;
+    
 
     // ブロック配置
 	// 今は数字キー1～4で4種類のブロックを配置できるようにしています
 	// 例えば、1がGround、2がWall、3がBubblePickup、4がGoalなど
 	// ここはお好みでキーやブロックの種類を変更してください
+    
+	// 地面
     if (input->TriggerKey(DIK_1)) {
         selectedBlockType_ = BlockType::Ground;
         stageMap_.SetBlock(cursor, selectedBlockType_);
         needRebuild = true;
     }
 	
+	// 壁
     if (input->TriggerKey(DIK_2)) {
         selectedBlockType_ = BlockType::Wall;
         stageMap_.SetBlock(cursor, selectedBlockType_);
         needRebuild = true;
     }
     
+	// バブルピックアップ
     if (input->TriggerKey(DIK_3)) {
         selectedBlockType_ = BlockType::BubblePickup;
         stageMap_.SetBlock(cursor, selectedBlockType_);
         needRebuild = true;
     }
 
+	// ゴール
     if (input->TriggerKey(DIK_4)) {
         selectedBlockType_ = BlockType::Goal;
         stageMap_.SetBlock(cursor, selectedBlockType_);
         needRebuild = true;
     }
+
+    // はしご
+    if(input->TriggerKey(DIK_5)) {
+        selectedBlockType_ = BlockType::Ladder;
+        stageMap_.SetBlock(cursor, selectedBlockType_);
+        needRebuild = true;
+	}
 
     // 削除
     if (input->TriggerKey(DIK_SPACE)) {
@@ -301,7 +325,8 @@ void MyGame::UpdateStageEditor() {
 
 void MyGame::UpdateGamePlay() {
     if (player_) {
-        player_->Update(input, stageMap_);
+        // 第3引数にカメラのY軸回転角を渡すように変更
+        player_->Update(input, stageMap_, camera->GetTransform().rotate.y);
     }
 }
 
