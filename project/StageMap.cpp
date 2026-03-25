@@ -20,17 +20,18 @@ void StageMap::SaveToFile(const std::string& filename) {
     std::ofstream ofs(filename);
     if (!ofs.is_open()) return;
 
-    // 1. マップのサイズを書き込む
     ofs << width_ << " " << height_ << " " << depth_ << "\n";
 
-    // 2. 全てのセルの情報を書き込む
     for (int y = 0; y < height_; ++y) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
                 const MapCell* cell = GetCell(x, y, z);
-                // 座標とブロックの種類をスペース区切りで保存
-                // (x, y, z, blockType)
-                ofs << x << " " << y << " " << z << " " << static_cast<int>(cell->type) << "\n";
+                if (cell->type == BlockType::None) continue; // 空ブロックは保存しない（ファイル軽量化）
+
+                // ★回転角 (rotationX, rotationY) も保存する
+                ofs << x << " " << y << " " << z << " "
+                    << static_cast<int>(cell->type) << " "
+                    << cell->rotationX << " " << cell->rotationY << "\n";
             }
         }
     }
@@ -41,15 +42,20 @@ void StageMap::LoadFromFile(const std::string& filename) {
     std::ifstream ifs(filename);
     if (!ifs.is_open()) return;
 
-    // 1. サイズを読み込んで再初期化
     int w, h, d;
     ifs >> w >> h >> d;
-    Initialize(w, h, d); // 既存の初期化関数
+    Initialize(w, h, d);
 
-    // 2. データの読み込み
     int x, y, z, type;
-    while (ifs >> x >> y >> z >> type) {
-        SetBlock(x, y, z, static_cast<BlockType>(type)); // 既存の配置関数
+    float rotX, rotY;
+    // ★ 6つの値をセットで読み込む
+    while (ifs >> x >> y >> z >> type >> rotX >> rotY) {
+        SetBlock(x, y, z, static_cast<BlockType>(type));
+        MapCell* cell = GetCell(x, y, z);
+        if (cell) {
+            cell->rotationX = rotX;
+            cell->rotationY = rotY;
+        }
     }
     ifs.close();
 }
