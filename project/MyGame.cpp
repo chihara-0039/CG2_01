@@ -19,6 +19,7 @@ static const char* BlockTypeToString(BlockType type) {
     case BlockType::BubblePickup: return "BubblePickup";
     case BlockType::Goal:         return "Goal";
     case BlockType::PlayerStart:  return "PlayerStart";
+    case BlockType::Door:         return "Door";
     default:                      return "Unknown";
     }
 }
@@ -289,6 +290,42 @@ void MyGame::UpdateStageEditor() {
         stageMap_.SetBlock(cursor, selectedBlockType_);
         needRebuild = true;
 	}
+
+    if (input->TriggerKey(DIK_6))
+    {
+        selectedBlockType_ = BlockType::Door;
+        stageMap_.SetBlock(cursor, selectedBlockType_);
+        if (!isWaitingForSecondDoor_)
+        {
+            // ▼ 1つ目のドアを置いた時
+            firstDoorIndex_ = cursor;
+            isWaitingForSecondDoor_ = true;// 2つ目待ち状態へ
+
+            // (オプション) この段階ではまだワープ先がないので自分自身をセットしておく
+            MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+            if (cell)
+            {
+                cell->doorTargetIndex = cursor;
+            }
+        }
+        else
+        {
+            // ▼ 2つ目のドアを置いた時
+
+                // 1. 2つ目のドアのワープ先を「1つ目のドア」に設定
+            MapCell* cell2 = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+            if (cell2) cell2->doorTargetIndex = firstDoorIndex_;
+
+            // 2. 1つ目のドアのワープ先を「今置いた2つ目のドア」に設定
+            MapCell* cell1 = stageMap_.GetCell(firstDoorIndex_.x, firstDoorIndex_.y, firstDoorIndex_.z);
+            if (cell1) cell1->doorTargetIndex = cursor;
+
+            // 3. ペアリング完了！状態をリセットして次のペア作りに備える
+            isWaitingForSecondDoor_ = false;
+        }
+        needRebuild = true;
+        
+    }
 
     // 削除
     if (input->TriggerKey(DIK_SPACE)) {

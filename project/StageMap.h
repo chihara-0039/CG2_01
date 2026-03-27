@@ -19,7 +19,8 @@ enum class BlockType : uint32_t {
     Star,
     BubblePickup,
     Goal,
-    PlayerStart
+    PlayerStart,
+    Door
 };
 
 // 1マス分のデータ
@@ -29,6 +30,7 @@ struct MapCell {
     bool isSolid = false; // 当たり判定用
 	float rotationX = 0.0f; // X軸回転（オブジェクトの向きを変えたい）
 	float rotationY = 0.0f; // Y軸回転（オブジェクトの向きを変えたい）
+    Int3 doorTargetIndex = { 0,0,0 };
 };
 
 class StageMap {
