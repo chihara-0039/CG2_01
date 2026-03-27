@@ -89,7 +89,11 @@ private:
 	// プレイヤー
     Player* player_ = nullptr;
 
+
+    // 3/27 佐倉追加　ゴール判定変数
+    bool isGoalReached_ = false;
     // ドア
     bool isWaitingForSecondDoor_ = false; // 2つ目のドア配置待ちか？
     Int3 firstDoorIndex_ = { -1, -1, -1 };  // 1つ目に置いたドアの座標
+
 };
