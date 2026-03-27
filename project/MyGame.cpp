@@ -293,6 +293,30 @@ void MyGame::UpdateStageEditor() {
     if (input->TriggerKey(DIK_6))
     {
         selectedBlockType_ = BlockType::Door;
+        MapCell* oldCell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+
+        if (oldCell && oldCell->type == BlockType::Door) {
+            Int3 target = oldCell->doorTargetIndex;
+
+            // 1. すでに別のドアとペアリング済みの場合、相手のリンクを切る
+            // （ワープ先が自分自身ではない場合＝ペアがいる）
+            if (target.x != cursor.x || target.y != cursor.y || target.z != cursor.z) {
+                MapCell* pairedCell = stageMap_.GetCell(target.x, target.y, target.z);
+                if (pairedCell && pairedCell->type == BlockType::Door) {
+                    // 相手のワープ先を相手自身の座標に戻す（リンク解除）
+                    pairedCell->doorTargetIndex = target;
+                }
+            }
+
+            // 2. ペアリング待機中（1つ目のドア）を消してしまった場合のキャンセル処理
+            if (isWaitingForSecondDoor_ &&
+                firstDoorIndex_.x == cursor.x &&
+                firstDoorIndex_.y == cursor.y &&
+                firstDoorIndex_.z == cursor.z) {
+
+                isWaitingForSecondDoor_ = false; // 2つ目待ちをキャンセル
+            }
+        }
         stageMap_.SetBlock(cursor, selectedBlockType_);
         if (!isWaitingForSecondDoor_)
         {
