@@ -150,6 +150,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::BubblePickup:
     case BlockType::Goal:
     case BlockType::PlayerStart:
+    case BlockType::Door:
     cell.isSolid = false;
     break;
 

@@ -13,7 +13,10 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 	object_->SetRotation({ 0.0f, 0.0f, 0.0f });
 }
 
-void Player::Update(const Input* input, const StageMap& map, float cameraRotY) {
+void Player::Update(const Input* input, const StageMap& map, float cameraRotY)
+{
+	stageMap_ = &map;
+	input_ = input;
 	// --- 1. ハシゴ判定 ---
 	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
 	int gyBottom = static_cast<int>(std::floor(position_.y + 0.1f));
@@ -119,10 +122,33 @@ void Player::Update(const Input* input, const StageMap& map, float cameraRotY) {
 		}
 	}
 
+	DoorWarp();
+
 	// --- 表示更新 ---
 	object_->SetPosition(position_);
 	object_->SetRotation(rotation_);
 	object_->Update();
+}
+
+void Player::DoorWarp()
+{
+	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
+	int gyBottom = static_cast<int>(std::floor(position_.y + 0.1f));
+	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+	const MapCell* cell = stageMap_->GetCell(gx, gyBottom, gz);
+
+	if (cell && cell->type == BlockType::Door && input_->TriggerKey(DIK_F))
+	{
+		Int3 doorWarpTarget = cell->doorTargetIndex;
+
+		position_.x = static_cast<float>(doorWarpTarget.x);
+		position_.y = static_cast<float>(doorWarpTarget.y);
+		position_.z = static_cast<float>(doorWarpTarget.z);
+
+		velocity_ = { 0.0f,0.0f,0.0f };
+	}
+
 }
 
 // 衝突判定ロジック
