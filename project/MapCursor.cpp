@@ -38,7 +38,16 @@ void MapCursor::Update() {
         return;
     }
 
-    cursorObject_->SetPosition(IndexToWorldPosition());
+    // 1. 現在のインデックスから基本のワールド座標を取得
+    Vector3 pos = IndexToWorldPosition();
+
+    // 2. ★ここで高さを調整！ (例: 0.2f だけ上に浮かせる)
+    pos.y += -0.16f;
+
+    cursorObject_->SetPosition(pos);
+    // モデルに対してスケールをセットする
+    cursorObject_->SetScale(scale_);
+
     cursorObject_->Update();
 }
 

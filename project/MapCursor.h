@@ -14,6 +14,7 @@ public:
     void Draw();
 
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection);
+    void SetScale(const Vector3& scale) { scale_ = scale; }
 
     void Move(int dx, int dy, int dz, const StageMap& stageMap);
     void SetIndex(const Int3& index, const StageMap& stageMap);
@@ -26,6 +27,8 @@ private:
     Object3d* cursorObject_ = nullptr;
 
     Int3 index_{ 0, 0, 0 };
+
+	Vector3 scale_ = { 1.2f, 1.2f, 1.2f }; // デフォルトのスケール（少し大きめ）
 
 private:
     void ClampToStage(const StageMap& stageMap);
