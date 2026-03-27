@@ -62,6 +62,11 @@ private:
     std::unique_ptr<Camera> camera;
     StageRenderer* stageRenderer_ = nullptr;
 	MapCursor* mapCursor_ = nullptr;
+    // ★ 2. これを追加（実体を持たせるため）
+    //std::unique_ptr<StageCamera> gameplayCamera_;
+    // 代わりに、回転角だけ MyGame で持っておく
+    float gameCameraAngle_ = 0.0f;
+    float targetCameraAngle_ = 0.0f;
 
 	// アプリのモード管理
     AppMode currentMode_ = AppMode::DebugView;
@@ -89,6 +94,8 @@ private:
 	// プレイヤー
     Player* player_ = nullptr;
 
+    // カメラの現在の回転角度をクラスで保持する
+    float cameraAngle_ = 0.0f;
 
     // 3/27 佐倉追加　ゴール判定変数
     bool isGoalReached_ = false;
