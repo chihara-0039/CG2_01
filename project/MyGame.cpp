@@ -97,6 +97,7 @@ void MyGame::Initialize() {
     mapCursor_ = new MapCursor();
     mapCursor_->Initialize(object3dCommon);
     mapCursor_->SetIndex({ 0, 0, 0 }, stageMap_);
+    mapCursor_->SetScale({ 0.9f, 0.9f, 0.9f });
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
