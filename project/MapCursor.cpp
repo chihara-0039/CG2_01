@@ -17,7 +17,7 @@ void MapCursor::Initialize(Object3dCommon* object3dCommon) {
     cursorModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
         "Resources",
-        "axis.obj",
+        "choice.obj",
         object3dCommon_->GetTextureManager()
     );
 
