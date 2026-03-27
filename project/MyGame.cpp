@@ -1,6 +1,7 @@
 #include <filesystem>
 
 #include "MyGame.h"
+#include "Goal.h"
 #include "ModelManager.h"
 
 #include "externals/imgui/imgui.h"
@@ -327,6 +328,14 @@ void MyGame::UpdateGamePlay() {
     if (player_) {
         // 第3引数にカメラのY軸回転角を渡すように変更
         player_->Update(input, stageMap_, camera->GetTransform().rotate.y);
+
+        // 3/27 佐倉追加 
+        if (!isGoalReached_) {
+            if (Goal::Check(player_->GetPosition(), player_->GetRadius(), stageMap_)) {
+                OutputDebugStringA("GOAL!\n");
+                isGoalReached_ = true;
+            }
+        }
     }
 }
 

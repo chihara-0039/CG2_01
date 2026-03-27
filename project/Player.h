@@ -28,6 +28,9 @@ public:
         }
     }
 
+    // 3/27 佐倉追加
+    const Vector3& GetRadius()const { return radius_; }
+
 private:
     // マップのブロックと衝突しているかチェックするヘルパー
     bool CheckCollision(const Vector3& pos, const StageMap& map);
@@ -47,4 +50,7 @@ private:
 
     float jumpSpeed_ = 0.3f;    // ジャンプの初速度（高さ）
     bool isGrounded_ = false;   // 接地フラグ
+
+   
+
 };

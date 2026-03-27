@@ -88,4 +88,7 @@ private:
 
 	// プレイヤー
     Player* player_ = nullptr;
+
+    // 3/27 佐倉追加　ゴール判定変数
+    bool isGoalReached_ = false;
 };
