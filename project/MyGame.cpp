@@ -50,7 +50,7 @@ void MyGame::Initialize() {
     particleManager = new ParticleManager();
     particleManager->Initialize(dxCommon, textureManager);
 
-    // --- モデル読み込み (各1回ずつ) ---
+    // --- モデル読み込み ---
     Model* modelPlane = Model::CreateFromOBJ(dxCommon, "Resources", "block.obj", textureManager);
     Model* modelAxis = Model::CreateFromOBJ(dxCommon, "Resources", "axis.obj", textureManager);
     models.push_back(modelPlane);
@@ -66,38 +66,71 @@ void MyGame::Initialize() {
     sprite = new Sprite();
     sprite->Initialize(spriteCommon, texHandle);
 
-    // プレイヤーの生成（既存のモデルリストからモデルを渡す）
+    // プレイヤーの生成
     player_ = new Player();
-    player_->Initialize(object3dCommon, models[0]); 
+    player_->Initialize(object3dCommon, models[0]);
+    player_->SetPosition({ 0.0f, 1.5f, 0.0f });
 
-	// プレイヤーの初期位置をステージの中心付近に設定
-	player_->SetPosition({ 0.0f, 1.5f, 0.0f });
-
-    // カメラ
+    // エディタ用カメラ
     camera = std::make_unique<Camera>();
 
-	//テストでステージ配置を初期化
+    // 1. ステージマップのサイズ初期化
     stageMap_.Initialize(16, 8, 16);
 
-    // テスト用に少しだけ置く
-    stageMap_.SetBlock(0, 0, 0, BlockType::Ground);
-    stageMap_.SetBlock(1, 0, 0, BlockType::Ground);
-    stageMap_.SetBlock(2, 0, 0, BlockType::Ground);
-    stageMap_.SetBlock(2, 1, 0, BlockType::Wall);
-    stageMap_.SetBlock(3, 0, 1, BlockType::BubblePickup);
-    stageMap_.SetBlock(4, 0, 2, BlockType::Goal);
-    
-	// ステージマップからステージ描画オブジェクトを生成
+    // ステージファイル一覧を更新しておく
+    RefreshStageList();
+
+    // --- 3. ビルド設定による初期化分岐 ---
+#ifdef NDEBUG
+    // 【Releaseビルド時】直接ゲームを開始する
+    currentMode_ = AppMode::GamePlay;
+
+    // "Stage1.txt" があれば自動ロード
+    std::string startStage = "Resources/Stages/Stage1.txt";
+    if (std::filesystem::exists(startStage)) {
+        stageMap_.LoadFromFile(startStage);
+
+        // PlayerStartブロックを探してプレイヤーを配置
+        bool foundStart = false;
+        for (int y = 0; y < stageMap_.GetHeight(); ++y) {
+            for (int z = 0; z < stageMap_.GetDepth(); ++z) {
+                for (int x = 0; x < stageMap_.GetWidth(); ++x) {
+                    const MapCell* cell = stageMap_.GetCell(x, y, z);
+                    if (cell && cell->type == BlockType::PlayerStart) {
+                        player_->SetPosition({ (float)x, (float)y + 1.1f, (float)z });
+                        foundStart = true;
+                        break;
+                    }
+                }
+                if (foundStart) break;
+            }
+            if (foundStart) break;
+        }
+    }
+#else
+    // 【Debugビルド時】
+    currentMode_ = AppMode::GamePlay;
+
+    // 2. ★手動配置を消して、保存した「プロトタイプ」をロードする
+    std::string prototypePath = "Resources/Stages/prototype.txt"; // 保存したファイル名に合わせてください
+    if (std::filesystem::exists(prototypePath)) {
+        stageMap_.LoadFromFile(prototypePath);
+    }
+#endif
+
+    // ステージ描画オブジェクトの生成と構築
     stageRenderer_ = new StageRenderer();
     stageRenderer_->Initialize(object3dCommon);
     stageRenderer_->SetBlockScale(editorBlockScale_);
     stageRenderer_->BuildFromStageMap(stageMap_);
 
-	// マップカーソルの初期化
+    // マップカーソルの初期化
     mapCursor_ = new MapCursor();
     mapCursor_->Initialize(object3dCommon);
     mapCursor_->SetIndex({ 0, 0, 0 }, stageMap_);
     mapCursor_->SetScale({ 0.9f, 0.9f, 0.9f });
+
+    cameraAngle_ = 1.5708f; // ★ここで開始時の向きを調整！
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -120,19 +153,29 @@ void MyGame::Update() {
 #endif
 
     input->Update();
-
+    bool isGuiCaptured = false;
     // 2. カメラの更新（Blender風操作を適用）
 #ifdef USE_IMGUI
-    // ImGuiに触っていない時だけカメラを動かすようにすると操作しやすいです
-    if (!ImGui::GetIO().WantCaptureMouse) {
-        camera->UpdateBlenderStyle(input);
+    // ★修正ポイント：Release時は ImGui::GetIO() を呼ばないようにガードする
+    // または、DebugView か StageEditor の時だけ判定するようにする
+    
+    if (currentMode_ != AppMode::GamePlay) {
+        // マウスとキーボードの両方のキャプチャ状態を確認
+        isGuiCaptured = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
     }
-#else
-    camera->UpdateBlenderStyle(input);
+
 #endif
+
+    // --- 3. カメラの更新 ---
+    if (!isGuiCaptured) {
+        // GamePlay モードの時は、旋回カメラを使うので Blender風操作はスキップ
+        if (currentMode_ != AppMode::GamePlay) {
+            camera->UpdateBlenderStyle(input);
+        }
+    }
    
     // --- ImGuiに入力中（WantCaptureKeyboardがtrue）ならゲーム側の入力を無視する ---
-    if (!ImGui::GetIO().WantCaptureKeyboard) {
+    if (!isGuiCaptured) {
         switch (currentMode_) {
         case AppMode::DebugView:
         UpdateDebugView();
@@ -387,20 +430,35 @@ void MyGame::UpdateStageEditor() {
 }
 
 void MyGame::UpdateGamePlay() {
-    if (player_) {
-        // 第3引数にカメラのY軸回転角を渡すように変更
-        player_->Update(input, stageMap_, camera->GetTransform().rotate.y);
+    const float rotateSpeed = 0.025f;
+    if (input->PushKey(DIK_Q)) cameraAngle_ -= rotateSpeed;
+    if (input->PushKey(DIK_E)) cameraAngle_ += rotateSpeed;
 
-        // 3/27 佐倉追加 
-        if (!isGoalReached_) {
-            if (Goal::Check(player_->GetPosition(), player_->GetRadius(), stageMap_)) {
-                OutputDebugStringA("GOAL!\n");
-                isGoalReached_ = true;
-            }
-        }
+    // --- ここが修正ポイント ---
+    // マップ全体のサイズ（16）ではなく、実際のブロックの範囲（0〜9）の中心を軸にする
+    Vector3 pivot = {
+        4.0f, // (最大9 + 最小0) / 2 
+        10.0f,
+        4.5f  // (最大9 + 最小0) / 2 
+    };
+
+    // カメラの距離と高さ
+    float distance = 35.0f;
+    float height = 22.0f;
+
+    // 座標計算
+    Vector3 pos;
+    pos.x = pivot.x - std::sin(cameraAngle_) * distance;
+    pos.y = pivot.y + height;
+    pos.z = pivot.z - std::cos(cameraAngle_) * distance;
+
+    camera->SetPosition(pos);
+    camera->SetRotation({ 0.75f, cameraAngle_, 0.0f });
+
+    if (player_) {
+        player_->Update(input, stageMap_, cameraAngle_);
     }
 }
-
 #ifdef USE_IMGUI
 // ImGuiの更新と描画
 void MyGame::UpdateImGui() {
