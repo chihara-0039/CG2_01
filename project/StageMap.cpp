@@ -32,6 +32,13 @@ void StageMap::SaveToFile(const std::string& filename) {
                 ofs << x << " " << y << " " << z << " "
                     << static_cast<int>(cell->type) << " "
                     << cell->rotationX << " " << cell->rotationY << "\n";
+
+                if (cell->type == BlockType::Door)
+                {
+                    ofs << cell->doorTargetIndex.x << " "
+                        << cell->doorTargetIndex.y << " "
+                        << cell->doorTargetIndex.z << " ";
+                }
             }
         }
     }
@@ -55,6 +62,15 @@ void StageMap::LoadFromFile(const std::string& filename) {
         if (cell) {
             cell->rotationX = rotX;
             cell->rotationY = rotY;
+        }
+        if (cell->type == BlockType::Door) {
+            ifs >> cell->doorTargetIndex.x
+                >> cell->doorTargetIndex.y
+                >> cell->doorTargetIndex.z;
+        }
+        else {
+            // ドア以外のブロックならワープ先は初期値にしておく
+            cell->doorTargetIndex = { 0, 0, 0 };
         }
     }
     ifs.close();
