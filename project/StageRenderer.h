@@ -30,6 +30,7 @@ private:
     Model* bubbleModel_ = nullptr;
     Model* goalModel_ = nullptr;
     Model* ladderModel_ = nullptr;
+    Model* doorModel_ = nullptr;
 
     std::vector<Object3d*> objects_;
     Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };

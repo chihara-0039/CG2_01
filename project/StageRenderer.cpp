@@ -21,6 +21,9 @@ StageRenderer::~StageRenderer() {
 
 	delete ladderModel_;
 	ladderModel_ = nullptr;
+
+	delete doorModel_;
+	doorModel_ = nullptr;
 }
 
 // ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス
@@ -66,6 +69,14 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetDxCommon(),
 		"Resources",
 		"star.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
+	// ドアモデル設定
+	doorModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources",
+		"door.obj",
 		object3dCommon_->GetTextureManager()
 	);
 }
@@ -174,6 +185,16 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					{ 0.0f, 0.0f, 0.0f }
 				);
 				break;
+				
+				// ブロックの種類が Door (ドア) の場合
+				case BlockType::Door:
+					CreateStageObject(
+						doorModel_,
+						position,
+						{ 0.6f, 0.6f, 0.6f },
+						{ 0.0f, 0.0f, 0.0f }
+					);
+					break;
 
 				// ブロックの種類が不明な場合は何もしない
 				default:

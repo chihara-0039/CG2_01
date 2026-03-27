@@ -88,4 +88,8 @@ private:
 
 	// プレイヤー
     Player* player_ = nullptr;
+
+    // ドア
+    bool isWaitingForSecondDoor_ = false; // 2つ目のドア配置待ちか？
+    Int3 firstDoorIndex_ = { -1, -1, -1 };  // 1つ目に置いたドアの座標
 };
