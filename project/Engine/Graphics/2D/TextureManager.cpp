@@ -26,6 +26,7 @@ static std::wstring ConvertString(const std::string& str) {
     return wstrTo;
 }
 
+
 // データ転送関数
 [[nodiscard]]
 
