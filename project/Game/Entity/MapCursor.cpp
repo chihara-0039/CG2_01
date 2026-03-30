@@ -16,7 +16,7 @@ void MapCursor::Initialize(Object3dCommon* object3dCommon) {
     // カーソルは見やすさ優先で axis を使う
     cursorModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
-        "Resources",
+        "Resources/Models/choice",
         "choice.obj",
         object3dCommon_->GetTextureManager()
     );

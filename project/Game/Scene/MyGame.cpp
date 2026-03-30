@@ -51,8 +51,8 @@ void MyGame::Initialize() {
     particleManager->Initialize(dxCommon, textureManager);
 
     // --- モデル読み込み ---
-    Model* modelPlane = Model::CreateFromOBJ(dxCommon, "Resources", "block.obj", textureManager);
-    Model* modelAxis = Model::CreateFromOBJ(dxCommon, "Resources", "axis.obj", textureManager);
+    Model* modelPlane = Model::CreateFromOBJ(dxCommon, "Resources/Models/block", "block.obj", textureManager);
+    Model* modelAxis = Model::CreateFromOBJ(dxCommon, "Resources/Models/axis", "axis.obj", textureManager);
     models.push_back(modelPlane);
     models.push_back(modelAxis);
 
@@ -62,7 +62,7 @@ void MyGame::Initialize() {
     CreateObject(modelAxis, { -2.0f, 0.0f, 0.0f });
 
     // スプライト
-    uint32_t texHandle = textureManager->LoadTexture("Resources/uvChecker.png");
+    uint32_t texHandle = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
     sprite = new Sprite();
     sprite->Initialize(spriteCommon, texHandle);
 
