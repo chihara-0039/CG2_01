@@ -98,7 +98,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)engine;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -125,7 +125,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)engine;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -151,7 +151,7 @@ copy /y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(OutDir)"<
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)engine;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
@@ -182,7 +182,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)engine;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -198,9 +198,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Camera.cpp" />
-    <ClCompile Include="D3DResourceLeakChecker.cpp" />
-    <ClCompile Include="DirectXCommon.cpp" />
+    <ClCompile Include="Engine\Utility\Camera.cpp" />
+    <ClCompile Include="Engine\Utility\D3DResourceLeakChecker.cpp" />
+    <ClCompile Include="Engine\Base\DirectXCommon.cpp" />
     <ClCompile Include="externals\imgui\imgui.cpp" />
     <ClCompile Include="externals\imgui\imgui_demo.cpp" />
     <ClCompile Include="externals\imgui\imgui_draw.cpp" />
@@ -208,29 +208,29 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="externals\imgui\imgui_impl_win32.cpp" />
     <ClCompile Include="externals\imgui\imgui_tables.cpp" />
     <ClCompile Include="externals\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="Goal.cpp" />
-    <ClCompile Include="Input.cpp" />
-    <ClCompile Include="Logger.cpp" />
-    <ClCompile Include="MapCursor.cpp" />
-    <ClCompile Include="Model.cpp" />
-    <ClCompile Include="ModelManager.cpp" />
-    <ClCompile Include="MyGame.cpp" />
-    <ClCompile Include="MyMath.cpp" />
-    <ClCompile Include="Object3d.cpp" />
-    <ClCompile Include="Object3dCommon.cpp" />
-    <ClCompile Include="ParticleManager.cpp" />
-    <ClCompile Include="Player.cpp" />
-    <ClCompile Include="Sprite.cpp" />
-    <ClCompile Include="SpriteCommon.cpp" />
+    <ClCompile Include="Game\Entity\Goal.cpp" />
+    <ClCompile Include="Engine\Base\Input.cpp" />
+    <ClCompile Include="Engine\Base\Logger.cpp" />
+    <ClCompile Include="Game\Entity\MapCursor.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\Model.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
+    <ClCompile Include="Game\Scene\MyGame.cpp" />
+    <ClCompile Include="Engine\Math\MyMath.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\Object3d.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\Object3dCommon.cpp" />
+    <ClCompile Include="Engine\Graphics\Particle\ParticleManager.cpp" />
+    <ClCompile Include="Game\Player\Player.cpp" />
+    <ClCompile Include="Engine\Graphics\2D\Sprite.cpp" />
+    <ClCompile Include="Engine\Graphics\2D\SpriteCommon.cpp" />
     <ClCompile Include="src\app\main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Depelopment|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Depelopment|x64'">true</WholeProgramOptimization>
     </ClCompile>
-    <ClCompile Include="StageMap.cpp" />
-    <ClCompile Include="StageRenderer.cpp" />
-    <ClCompile Include="StringUtility.cpp" />
-    <ClCompile Include="TextureManager.cpp" />
-    <ClCompile Include="WinApp.cpp" />
+    <ClCompile Include="Game\Stage\StageMap.cpp" />
+    <ClCompile Include="Game\Stage\StageRenderer.cpp" />
+    <ClCompile Include="Engine\Base\StringUtility.cpp" />
+    <ClCompile Include="Engine\Graphics\2D\TextureManager.cpp" />
+    <ClCompile Include="Engine\Base\WinApp.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Resources\shaders\hlsl\Particle.PS.hlsl">
@@ -297,9 +297,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Camera.h" />
-    <ClInclude Include="D3DResourceLeakChecker.h" />
-    <ClInclude Include="DirectXCommon.h" />
+    <ClInclude Include="Engine\Utility\Camera.h" />
+    <ClInclude Include="Engine\Utility\D3DResourceLeakChecker.h" />
+    <ClInclude Include="Engine\Base\DirectXCommon.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="externals\imgui\imgui.h" />
     <ClInclude Include="externals\imgui\imgui_impl_dx12.h" />
@@ -308,25 +308,25 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="externals\imgui\imstb_rectpack.h" />
     <ClInclude Include="externals\imgui\imstb_textedit.h" />
     <ClInclude Include="externals\imgui\imstb_truetype.h" />
-    <ClInclude Include="Goal.h" />
-    <ClInclude Include="Input.h" />
-    <ClInclude Include="Logger.h" />
-    <ClInclude Include="MapCursor.h" />
-    <ClInclude Include="Model.h" />
-    <ClInclude Include="ModelManager.h" />
-    <ClInclude Include="MyGame.h" />
-    <ClInclude Include="MyMath.h" />
-    <ClInclude Include="Object3d.h" />
-    <ClInclude Include="Object3dCommon.h" />
-    <ClInclude Include="ParticleManager.h" />
-    <ClInclude Include="Player.h" />
-    <ClInclude Include="Sprite.h" />
-    <ClInclude Include="SpriteCommon.h" />
-    <ClInclude Include="StageMap.h" />
-    <ClInclude Include="StageRenderer.h" />
-    <ClInclude Include="StringUtility.h" />
-    <ClInclude Include="TextureManager.h" />
-    <ClInclude Include="WinApp.h" />
+    <ClInclude Include="Game\Entity\Goal.h" />
+    <ClInclude Include="Engine\Base\Input.h" />
+    <ClInclude Include="Engine\Base\Logger.h" />
+    <ClInclude Include="Game\Entity\MapCursor.h" />
+    <ClInclude Include="Engine\Graphics\3D\Model.h" />
+    <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
+    <ClInclude Include="Game\Scene\MyGame.h" />
+    <ClInclude Include="Engine\Math\MyMath.h" />
+    <ClInclude Include="Engine\Graphics\3D\Object3d.h" />
+    <ClInclude Include="Engine\Graphics\3D\Object3dCommon.h" />
+    <ClInclude Include="Engine\Graphics\Particle\ParticleManager.h" />
+    <ClInclude Include="Game\Player\Player.h" />
+    <ClInclude Include="Engine\Graphics\2D\Sprite.h" />
+    <ClInclude Include="Engine\Graphics\2D\SpriteCommon.h" />
+    <ClInclude Include="Game\Stage\StageMap.h" />
+    <ClInclude Include="Game\Stage\StageRenderer.h" />
+    <ClInclude Include="Engine\Base\StringUtility.h" />
+    <ClInclude Include="Engine\Graphics\2D\TextureManager.h" />
+    <ClInclude Include="Engine\Base\WinApp.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\Particle.hlsli">

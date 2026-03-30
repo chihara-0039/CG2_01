@@ -34,7 +34,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// 地面モデル1設定
 	groundModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources",
+		"Resources/Models/block",
 		"block.obj",
 		object3dCommon_->GetTextureManager()
 	);
@@ -42,7 +42,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// 壁モデル1設定
 	wallModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources",
+		"Resources/Models/wall",
 		"wall.obj",
 		object3dCommon_->GetTextureManager()
 	);
@@ -50,7 +50,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// はしごモデル設定
 	ladderModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources",
+		"Resources/Models/ladder",
 		"ladder.obj",
 		object3dCommon_->GetTextureManager()
 	);
@@ -58,7 +58,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// 仮モデル設定
 	bubbleModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources",
+		"Resources/Models/block",
 		"block.obj",
 		object3dCommon_->GetTextureManager()
 	);
@@ -67,7 +67,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// ゴールモデル設定
 	goalModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources",
+		"Resources/Models/star",
 		"star.obj",
 		object3dCommon_->GetTextureManager()
 	);
@@ -75,7 +75,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// ドアモデル設定
 	doorModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources",
+		"Resources/Models/door",
 		"door.obj",
 		object3dCommon_->GetTextureManager()
 	);
