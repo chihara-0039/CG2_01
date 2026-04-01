@@ -124,6 +124,11 @@ void Player::Update(const Input* input, const StageMap& map, float cameraRotY)
 
 	DoorWarp();
 
+	if (position_.y < -10.0f)
+	{
+		Respawn();
+	}
+
 	// --- 表示更新 ---
 	object_->SetPosition(position_);
 	object_->SetRotation(rotation_);
@@ -175,6 +180,13 @@ bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
 		}
 	}
 	return false;
+}
+
+void Player::Respawn()
+{
+	position_ = respawnPosition;
+	velocity_ = { 0.0f,0.0f,0.0f };
+	rotation_ = { 0.0f,0.0f,0.0f };
 }
 
 void Player::Draw() {
