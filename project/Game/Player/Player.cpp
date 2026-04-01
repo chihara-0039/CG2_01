@@ -13,6 +13,45 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 	object_->SetRotation({ 0.0f, 0.0f, 0.0f });
 }
 
+//4/1 佐倉　プレイヤー透過関数
+bool Player::CheckHiddenByWall(const Vector3& cameraPos, const StageMap& map)
+{
+	Vector3 dir;
+	dir.x = position_.x - cameraPos.x;
+	dir.y = position_.y - cameraPos.y;
+	dir.z = position_.z - cameraPos.z;
+
+	float length = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+	if (length == 0) return false;
+
+	// 正規化
+	dir.x /= length;
+	dir.y /= length;
+	dir.z /= length;
+
+	float step = 0.2f;
+
+	for (float t = 0; t < length; t += step) {
+		Vector3 checkPos;
+		checkPos.x = cameraPos.x + dir.x * t;
+		checkPos.y = cameraPos.y + dir.y * t;
+		checkPos.z = cameraPos.z + dir.z * t;
+
+		int gx = static_cast<int>(std::floor(checkPos.x + 0.5f));
+		int gy = static_cast<int>(std::floor(checkPos.y));
+		int gz = static_cast<int>(std::floor(checkPos.z + 0.5f));
+
+		const MapCell* cell = map.GetCell(gx, gy, gz);
+
+		if (cell && cell->isSolid) {
+			return true; // 壁あり
+		}
+	}
+
+	return false;
+}
+
+
 void Player::Update(const Input* input, const StageMap& map, float cameraRotY)
 {
 	stageMap_ = &map;
@@ -122,6 +161,15 @@ void Player::Update(const Input* input, const StageMap& map, float cameraRotY)
 		}
 	}
 
+	// カメラ位置（簡易的な追従カメラ想定）
+	Vector3 cameraPos = {
+		position_.x - std::sin(cameraRotY) * 10.0f,
+		position_.y + 5.0f,
+		position_.z - std::cos(cameraRotY) * 10.0f
+	};
+
+	isHidden_ = CheckHiddenByWall(cameraPos, map);
+
 	DoorWarp();
 
 	// --- 表示更新 ---
@@ -176,8 +224,16 @@ bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
 	return false;
 }
 
+
 void Player::Draw() {
 	if (object_) {
+
+		if (isHidden_) {
+			object_->SetColor({ 1.0f, 1.0f, 1.0f, 0.3f }); // 半透明
+		} else {
+			object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		}
+
 		object_->Draw();
 	}
 }

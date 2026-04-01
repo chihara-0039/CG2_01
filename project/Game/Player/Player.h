@@ -36,6 +36,9 @@ private:
     // マップのブロックと衝突しているかチェックするヘルパー
     bool CheckCollision(const Vector3& pos, const StageMap& map);
 
+    //4/1 佐倉追加　プレイヤー透過関数
+    bool CheckHiddenByWall(const Vector3& cameraPos, const StageMap&map);
+
 private:
     Object3d* object_ = nullptr;    // プレイヤーの見た目
     Vector3 position_ = { 0, 0, 0 }; // 世界座標
@@ -56,4 +59,6 @@ private:
 
     const Input* input_ = nullptr;
 
+    //4/1 佐倉追加　プレイヤー透過変数
+    bool isHidden_ = false;
 };
