@@ -130,7 +130,6 @@ void Player::Update(const Input* input, const StageMap& map, float cameraRotY)
 	object_->Update();
 }
 
-
 void Player::DoorWarp()
 {
 	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
