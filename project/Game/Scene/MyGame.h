@@ -27,7 +27,6 @@ public:
     void Finalize();
 
     
-    
 	// アプリが終了していないか
     bool IsRunning() { return !winApp->ProcessMessage(); }
 
