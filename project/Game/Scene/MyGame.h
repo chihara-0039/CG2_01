@@ -25,6 +25,8 @@ public:
     void Update();
     void Draw();
     void Finalize();
+
+    
     
 	// アプリが終了していないか
     bool IsRunning() { return !winApp->ProcessMessage(); }
@@ -35,7 +37,8 @@ private:
     enum class AppMode {
         DebugView,   // 今の確認用
         StageEditor, // これから作るエディター
-        GamePlay     // 後で本編
+        GamePlay,     // 後で本編
+        GamePlay_BlockPlace // ブロックを置ける用の画面を追加(エンドフィールの工業画面のやつ)04/01 秋元
     };
 
 	// デバッグ表示のフラグ
@@ -78,6 +81,8 @@ private:
 	void RefreshStageList();
     void UpdateStageEditor();
     void UpdateGamePlay();
+    // 配置画面用の更新関数を宣言
+    void UpdateGamePlayBlockPlace(); // 04/01 秋元
 
     // ヘルパー関数
     Object3d* CreateObject(Model* model, Vector3 pos);
@@ -102,5 +107,8 @@ private:
     // ドア
     bool isWaitingForSecondDoor_ = false; // 2つ目のドア配置待ちか？
     Int3 firstDoorIndex_ = { -1, -1, -1 };  // 1つ目に置いたドアの座標
+
+    // 置けるブロックの所持数 04/01 秋元
+    int placeableBlockCount_ = 0;
 
 };

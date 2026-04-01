@@ -188,6 +188,11 @@ void MyGame::Update() {
         case AppMode::GamePlay:
         UpdateGamePlay();
         break;
+
+        // ブロックを置けるようになる画面 04/01 秋元
+        case AppMode::GamePlay_BlockPlace:
+        UpdateGamePlayBlockPlace();
+        break;
         }
     }
 
@@ -458,6 +463,41 @@ void MyGame::UpdateGamePlay() {
     if (player_) {
         player_->Update(input, stageMap_, cameraAngle_);
     }
+
+    /*==================================================
+     ブロックを置けるようになる画面の切り替え
+    ==================================================*/
+
+    // --- ① アイテム取得処理 ---
+    // プレイヤーの足元や中心の座標を取得
+    Vector3 pPos;
+    if (player_)
+    {
+         pPos = player_->GetPosition();
+    }
+    int gx = static_cast<int>(std::floor(pPos.x + 0.5f));
+    int gy = static_cast<int>(std::floor(pPos.y + 0.5f)); // 腰の高さなどで判定
+    int gz = static_cast<int>(std::floor(pPos.z + 0.5f));
+
+    MapCell* cell = stageMap_.GetCell(gx, gy, gz);
+    if (cell && cell->type == BlockType::BubblePickup) { // Starを置けるブロックアイテムとする
+        placeableBlockCount_++; // 所持数を増やす
+        stageMap_.RemoveBlock(gx, gy, gz); // マップからアイテムを消す
+        stageRenderer_->BuildFromStageMap(stageMap_); // 見た目を更新
+    }
+
+    // --- ② 配置モードへの切り替え処理 ---
+    // 例えば [Q]キー を押したら配置モードへ
+    if (input->TriggerKey(DIK_TAB) && placeableBlockCount_ > 0) 
+    {
+        currentMode_ = AppMode::GamePlay_BlockPlace; // モード切替
+
+        // カーソルをプレイヤーの目の前や現在地にセットする
+        mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
+    }
+    /*==================================================
+    ブロックを置けるようになる画面の切り替え
+     ==================================================*/
 }
 #ifdef USE_IMGUI
 // ImGuiの更新と描画
@@ -691,13 +731,15 @@ void MyGame::Draw() {
 
 
 		// ステージ描画オブジェクトの描画
-        if (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay) {
+        // || currentMode_ == AppMode::GamePlay_BlockPlace 04/01 秋元
+        if (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
             if (stageRenderer_) {
                 stageRenderer_->Draw();
             }
 
-            // カーソルはエディタモードのときだけ出す
-            if (currentMode_ == AppMode::StageEditor && mapCursor_) {
+            // カーソルはエディタモードとブロックを置くときだけ出す
+            // || currentMode_ == AppMode::GamePlay_BlockPlace これを追加 04/01 秋元
+            if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
                 mapCursor_->Draw();
             }
         }
@@ -755,5 +797,80 @@ void MyGame::Finalize() {
     if (mapCursor_) {
         delete mapCursor_;
         mapCursor_ = nullptr;
+    }
+}
+
+/// <summary>
+/// ブロックを置けるようになる画面 04/01 秋元
+/// </summary>
+void MyGame::UpdateGamePlayBlockPlace()
+{
+    // 現在カーソル位置
+    const Int3& cursor = mapCursor_->GetIndex();
+
+    if (input->TriggerKey(DIK_A)) {
+        mapCursor_->Move(-1, 0, 0, stageMap_);
+    }
+    if (input->TriggerKey(DIK_D)) {
+        mapCursor_->Move(1, 0, 0, stageMap_);
+    }
+    if (input->TriggerKey(DIK_W)) {
+        mapCursor_->Move(0, 0, 1, stageMap_);
+    }
+    if (input->TriggerKey(DIK_S)) {
+        mapCursor_->Move(0, 0, -1, stageMap_);
+    }
+    if (input->TriggerKey(DIK_Q)) {
+        mapCursor_->Move(0, 1, 0, stageMap_);
+    }
+    if (input->TriggerKey(DIK_E)) {
+        mapCursor_->Move(0, -1, 0, stageMap_);
+    }
+
+    // カーソルの座標を更新
+    mapCursor_->Update();
+
+    // ② ブロックを置く決定処理 (Enterキー)
+    if (input->TriggerKey(DIK_RETURN)) {
+        Int3 cursorPos = mapCursor_->GetIndex();
+
+        // カーソルの位置に何もない（None）場合のみ置けるようにする
+        if (stageMap_.GetCell(cursorPos)->type == BlockType::None) {
+
+            // ブロックを配置！
+            stageMap_.SetBlock(cursorPos, BlockType::Ground); // 足場を置く
+            stageRenderer_->BuildFromStageMap(stageMap_);     // 描画モデルを再構築（超重要）
+
+            placeableBlockCount_--; // 所持数を減らす
+            currentMode_ = AppMode::GamePlay; // 通常のプレイ画面に戻る
+        }
+    }
+
+    // ③ キャンセルして戻る処理 (Qキーでもう一度戻るなど)
+    if (input->TriggerKey(DIK_TAB))
+    {
+        currentMode_ = AppMode::GamePlay;
+    }
+
+    // カメラ操作（Blender風の操作もできるようにしているので、そちらとキーが被らないように注意してください）
+    Transform& camTf = camera->GetTransform();
+
+    if (input->PushKey(DIK_J)) {
+        camTf.rotate.y -= 0.02f;
+    }
+    if (input->PushKey(DIK_L)) {
+        camTf.rotate.y += 0.02f;
+    }
+    if (input->PushKey(DIK_I)) {
+        camTf.translate.z += 0.2f;
+    }
+    if (input->PushKey(DIK_K)) {
+        camTf.translate.z -= 0.2f;
+    }
+    if (input->PushKey(DIK_U)) {
+        camTf.translate.y += 0.2f;
+    }
+    if (input->PushKey(DIK_O)) {
+        camTf.translate.y -= 0.2f;
     }
 }

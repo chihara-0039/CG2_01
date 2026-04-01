@@ -58,8 +58,8 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// 仮モデル設定
 	bubbleModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources/Models/block",
-		"block.obj",
+		"Resources/Models/soapBubbles",
+		"soapBubbles.obj",
 		object3dCommon_->GetTextureManager()
 	);
 
