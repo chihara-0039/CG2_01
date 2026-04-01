@@ -32,12 +32,6 @@ public:
     const Vector3& GetRadius()const { return radius_; }
     void DoorWarp();
 
-    // 04/01 小林追加：リスポーン
-    void SetRespawnPosition(const Vector3& pos) { respawnPosition = pos; }
-    void Respawn();
-    //リスポーン用の座標
-    Vector3 respawnPosition = { 0.0f,1.5f,0.0f };
-
 private:
     // マップのブロックと衝突しているかチェックするヘルパー
     bool CheckCollision(const Vector3& pos, const StageMap& map);
