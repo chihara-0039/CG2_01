@@ -340,6 +340,7 @@ void MyGame::UpdateStageEditor() {
         needRebuild = true;
 	}
 
+    // ドア
     if (input->TriggerKey(DIK_6))
     {
         selectedBlockType_ = BlockType::Door;
@@ -398,6 +399,15 @@ void MyGame::UpdateStageEditor() {
         }
         needRebuild = true;
         
+    }
+
+    // プレイヤーのスタート位置
+    if (input->TriggerKey(DIK_7))
+    {
+        selectedBlockType_ = BlockType::PlayerStart;
+        stageMap_.SetBlock(cursor, selectedBlockType_);
+        player_->SetPosition({ float(cursor.x),float(cursor.y),float(cursor.z) });
+        needRebuild = true;
     }
 
     // 削除
