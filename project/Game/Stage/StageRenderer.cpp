@@ -55,7 +55,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetTextureManager()
 	);
 
-	// 仮モデル設定
+	// シャボン玉モデル設定
 	bubbleModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
 		"Resources/Models/soapBubbles",
