@@ -175,7 +175,8 @@ void MyGame::Update() {
     // ★修正ポイント：Release時は ImGui::GetIO() を呼ばないようにガードする
     // または、DebugView か StageEditor の時だけ判定するようにする
     
-    isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
+    // マウスとキーボードの両方をガード
+    isGuiCaptured = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
 
 #endif
 
