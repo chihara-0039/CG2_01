@@ -828,50 +828,57 @@ void MyGame::Draw() {
             skydomeObject_->Draw();
         }
 
-		// プレイヤーの描画は3Dオブジェクトの描画の中で行う（プレイヤーもObject3dを使っているため）
-        if (currentMode_ == AppMode::GamePlay && player_) {
-            player_->Draw();
-        }
+            // --- 天球の描画（背景として最初に描く） ---
+            if (skydomeObject_) {
+                skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                skydomeObject_->Draw();
+            }
 
-		// 3Dオブジェクトの描画
-        if (currentMode_ == AppMode::DebugView) {
-            for (Object3d* obj : objectList) {
-                obj->Draw();
+            // プレイヤーの描画は3Dオブジェクトの描画の中で行う（プレイヤーもObject3dを使っているため）
+            if (currentMode_ == AppMode::GamePlay && player_) {
+                player_->Draw();
+            }
+
+            // 3Dオブジェクトの描画
+            if (currentMode_ == AppMode::DebugView) {
+                for (Object3d* obj : objectList) {
+                    obj->Draw();
+                }
+            }
+
+
+            // ステージ描画オブジェクトの描画
+            // || currentMode_ == AppMode::GamePlay_BlockPlace 04/01 秋元
+            if (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
+                if (stageRenderer_) {
+                    stageRenderer_->Draw();
+                }
+
+                // カーソルはエディタモードとブロックを置くときだけ出す
+                // || currentMode_ == AppMode::GamePlay_BlockPlace これを追加 04/01 秋元
+                if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
+                    mapCursor_->Draw();
+                }
             }
         }
 
-
-		// ステージ描画オブジェクトの描画
-        // || currentMode_ == AppMode::GamePlay_BlockPlace 04/01 秋元
-        if (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
-            if (stageRenderer_) {
-                stageRenderer_->Draw();
-            }
-
-            // カーソルはエディタモードとブロックを置くときだけ出す
-            // || currentMode_ == AppMode::GamePlay_BlockPlace これを追加 04/01 秋元
-            if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
-                mapCursor_->Draw();
-            }
+        // パーティクル描画は3Dオブジェクトの後にするのが見栄え的に良いと思う
+        if (debugFlags_.showParticles) {
+            particleManager->Draw();
         }
-    }
 
-	// パーティクル描画は3Dオブジェクトの後にするのが見栄え的に良いと思う
-    if (debugFlags_.showParticles) {
-        particleManager->Draw();
-    }
-
-	// スプライト描画は最後にするのが基本
-    if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
-        spriteCommon->PreDraw();
-        sprite->Draw();
-    }
+        // スプライト描画は最後にするのが基本
+        if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
+            spriteCommon->PreDraw();
+            sprite->Draw();
+        }
 
 #ifdef USE_IMGUI
-    dxCommon->EndImGui();
+        dxCommon->EndImGui();
 #endif
 
-    dxCommon->PostDraw();
+        dxCommon->PostDraw();
+    }
 }
 
 void MyGame::Finalize() {
