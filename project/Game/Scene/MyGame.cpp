@@ -821,7 +821,7 @@ void MyGame::Draw() {
 
             dxCommon->PostDraw();
             return; // ←ここ重要！他の描画しない
-
+        }
         // --- 天球の描画（背景として最初に描く） ---
         if (skydomeObject_) {
             skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
