@@ -167,6 +167,8 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::Goal:
     case BlockType::PlayerStart:
     case BlockType::Door:
+    case BlockType::PSwitch:
+    case BlockType::PBlock:
     cell.isSolid = false;
     break;
 
