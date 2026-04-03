@@ -12,7 +12,7 @@ public:
     void Initialize(Object3dCommon* common, Model* model);
 
     // 更新：移動・重力・当たり判定の処理
-    void Update(const Input* input, const StageMap& map, float cameraRotY);
+    void Update(const Input* input,  StageMap& map, float cameraRotY);
 
     // 描画：内部で持っている Object3d を描画
     void Draw();
@@ -30,11 +30,15 @@ public:
 
     // 3/27 佐倉追加
     const Vector3& GetRadius()const { return radius_; }
-    void DoorWarp();
+    void DoorWarp(const StageMap& map);
 
     // 04/01 小林追加：リスポーン
     void SetRespawnPosition(const Vector3& pos) { respawnPosition = pos; }
     void Respawn();
+
+    // Pスイッチの追加 04/03 秋元
+    void PSwitchUpdate(StageMap& map);
+    
     //リスポーン用の座標
     Vector3 respawnPosition = { 0.0f,1.5f,0.0f };
 
@@ -57,8 +61,6 @@ private:
 
     float jumpSpeed_ = 0.3f;    // ジャンプの初速度（高さ）
     bool isGrounded_ = false;   // 接地フラグ
-   
-    const StageMap* stageMap_ = nullptr;
 
     const Input* input_ = nullptr;
 
