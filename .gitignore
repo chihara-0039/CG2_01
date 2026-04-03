@@ -42,3 +42,6 @@ project/..$generated/
 # --- Other ---
 .DS_Store
 Thumbs.db
+
+# ImGuiの設定ファイルを無視する
+imgui.ini
