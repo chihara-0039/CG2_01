@@ -131,6 +131,7 @@ void MyGame::Initialize() {
     mapCursor_->SetScale({ 0.9f, 0.9f, 0.9f });
 
     cameraAngle_ = 1.5708f; // ★ここで開始時の向きを調整！
+    cameraPitch_ = 0.75f;
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -449,11 +450,19 @@ void MyGame::UpdateGamePlay() {
     if (input->PushKey(DIK_Q)) cameraAngle_ -= rotateSpeed;
     if (input->PushKey(DIK_E)) cameraAngle_ += rotateSpeed;
 
+    //4/3佐倉
+    //縦回転追加
+    if (input->PushKey(DIK_Z)) cameraPitch_ += rotateSpeed;
+    if (input->PushKey(DIK_C)) cameraPitch_ -= rotateSpeed;
+
+    // ★上下の制限（絶対必要）
+    cameraPitch_ = std::clamp(cameraPitch_, 0.1f, 1.2f);
+
     // --- ここが修正ポイント ---
     // マップ全体のサイズ（16）ではなく、実際のブロックの範囲（0〜9）の中心を軸にする
     Vector3 pivot = {
         4.0f, // (最大9 + 最小0) / 2 
-        10.0f,
+        9.0f,
         4.5f  // (最大9 + 最小0) / 2 
     };
 
@@ -463,12 +472,17 @@ void MyGame::UpdateGamePlay() {
 
     // 座標計算
     Vector3 pos;
-    pos.x = pivot.x - std::sin(cameraAngle_) * distance;
-    pos.y = pivot.y + height;
-    pos.z = pivot.z - std::cos(cameraAngle_) * distance;
+
+    //4/3佐倉　縦回転計算追加
+    
+
+
+    pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
+    pos.y = pivot.y + std::sin(cameraPitch_) * height;
+    pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
 
     camera->SetPosition(pos);
-    camera->SetRotation({ 0.75f, cameraAngle_, 0.0f });
+    camera->SetRotation({cameraPitch_, cameraAngle_, 0.0f });
 
     if (player_) {
         player_->Update(input, stageMap_, cameraAngle_);
