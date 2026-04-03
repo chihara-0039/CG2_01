@@ -83,6 +83,11 @@ private:
     // 配置画面用の更新関数を宣言
     void UpdateGamePlayBlockPlace(); // 04/01 秋元
 
+    // ギミック用のImGuiの追加 04/03 秋元
+    void DrawEditorToolbar();
+    // ★配置実行用の共通関数 04/01 秋元
+    void ApplyPlacement();    
+
     // ヘルパー関数
     Object3d* CreateObject(Model* model, Vector3 pos);
 

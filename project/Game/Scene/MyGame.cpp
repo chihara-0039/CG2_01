@@ -151,6 +151,7 @@ void MyGame::Update() {
 #ifdef USE_IMGUI
     dxCommon->BeginImGui();
     UpdateImGui();
+    DrawEditorToolbar(); // ★追加：新しいエディタ窓 04/03 秋元
 #endif
 
     input->Update();
@@ -896,5 +897,162 @@ void MyGame::UpdateGamePlayBlockPlace()
     }
     if (input->PushKey(DIK_O)) {
         camTf.translate.y -= 0.2f;
+    }
+}
+
+/// <summary>
+///  ギミック用のImGui 04/03 秋元
+/// </summary>
+void MyGame::DrawEditorToolbar()
+{
+    // ステージエディタモードの時だけ表示する
+    if (currentMode_ != AppMode::StageEditor) return;
+
+    // ウィンドウの設定（位置やサイズを固定したい場合はここを調整）
+    ImGui::SetNextWindowPos(ImVec2(360, 10), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(200, 400), ImGuiCond_FirstUseEver);
+
+    if (ImGui::Begin("Editor Toolbar", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("1. Select Gimmick");
+        ImGui::Separator();
+
+        // ギミックごとのボタン
+        // 選択中のものは色を変えるとかっこいいです
+        BlockType types[] = {
+            BlockType::Ground, BlockType::Wall, BlockType::Ladder,
+            BlockType::Star, BlockType::BubblePickup, BlockType::Goal,
+            BlockType::PlayerStart, BlockType::Door
+        };
+
+        for (auto type : types) {
+            bool isSelected = (selectedBlockType_ == type);
+            if (isSelected) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f)); // 選択中は緑っぽく
+            }
+
+            if (ImGui::Button(BlockTypeToString(type), ImVec2(180, 30))) {
+                selectedBlockType_ = type;
+            }
+
+            if (isSelected) ImGui::PopStyleColor();
+        }
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::Text("2. Action");
+        // --- 回転ボタン (Rキーの機能) ---
+        if (ImGui::Button("Rotate (R)", ImVec2(-FLT_MIN, 30))) {
+            const Int3& cursor = mapCursor_->GetIndex();
+            MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+            if (cell && cell->type != BlockType::None) {
+                cell->rotationY += 1.5708f; // 90度回転
+                if (stageRenderer_) stageRenderer_->BuildFromStageMap(stageMap_);
+            }
+        }
+
+        ImGui::Spacing();
+
+        // 配置実行ボタン
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
+        if (ImGui::Button("PLACE (Enter)", ImVec2(180, 40))) {
+            ApplyPlacement();
+        }
+        ImGui::PopStyleColor();
+
+        if (input->TriggerKey(DIK_RETURN))
+        {
+            ApplyPlacement();
+        }
+
+        if (ImGui::Button("REMOVE (Space)", ImVec2(180, 40))) {
+            stageMap_.RemoveBlock(mapCursor_->GetIndex());
+            stageRenderer_->BuildFromStageMap(stageMap_);
+        }
+
+        if (input->TriggerKey(DIK_BACKSPACE))
+        {
+            stageMap_.RemoveBlock(mapCursor_->GetIndex());
+            stageRenderer_->BuildFromStageMap(stageMap_);
+        }
+        
+    }
+    ImGui::End();
+}
+
+/// <summary>
+///  ギミックで複雑な処理持ちのやつをここに入れる 04/03 秋元
+/// </summary>
+void MyGame::ApplyPlacement()
+{
+    const Int3& cursor = mapCursor_->GetIndex();
+    MapCell* oldCell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+    // ドアの場合の特殊処理（既存のコードから移植）
+    if (selectedBlockType_ == BlockType::Door) 
+    {
+        if (oldCell && oldCell->type == BlockType::Door) {
+            Int3 target = oldCell->doorTargetIndex;
+
+            // 1. すでに別のドアとペアリング済みの場合、相手のリンクを切る
+            // （ワープ先が自分自身ではない場合＝ペアがいる）
+            if (target.x != cursor.x || target.y != cursor.y || target.z != cursor.z) {
+                MapCell* pairedCell = stageMap_.GetCell(target.x, target.y, target.z);
+                if (pairedCell && pairedCell->type == BlockType::Door) {
+                    // 相手のワープ先を相手自身の座標に戻す（リンク解除）
+                    pairedCell->doorTargetIndex = target;
+                }
+            }
+
+            // 2. ペアリング待機中（1つ目のドア）を消してしまった場合のキャンセル処理
+            if (isWaitingForSecondDoor_ &&
+                firstDoorIndex_.x == cursor.x &&
+                firstDoorIndex_.y == cursor.y &&
+                firstDoorIndex_.z == cursor.z) {
+
+                isWaitingForSecondDoor_ = false; // 2つ目待ちをキャンセル
+            }
+        }
+        // ※ longContentからコピーしたドアのペアリング処理
+        stageMap_.SetBlock(cursor, BlockType::Door);
+        if (!isWaitingForSecondDoor_)
+        {
+            // ▼ 1つ目のドアを置いた時
+            firstDoorIndex_ = cursor;
+            isWaitingForSecondDoor_ = true;// 2つ目待ち状態へ
+
+            // (オプション) この段階ではまだワープ先がないので自分自身をセットしておく
+            MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+            if (cell)
+            {
+                cell->doorTargetIndex = cursor;
+            }
+        }
+        else
+        {
+            // ▼ 2つ目のドアを置いた時
+
+                // 1. 2つ目のドアのワープ先を「1つ目のドア」に設定
+            MapCell* cell2 = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+            if (cell2) cell2->doorTargetIndex = firstDoorIndex_;
+
+            // 2. 1つ目のドアのワープ先を「今置いた2つ目のドア」に設定
+            MapCell* cell1 = stageMap_.GetCell(firstDoorIndex_.x, firstDoorIndex_.y, firstDoorIndex_.z);
+            if (cell1) cell1->doorTargetIndex = cursor;
+
+            // 3. ペアリング完了！状態をリセットして次のペア作りに備える
+            isWaitingForSecondDoor_ = false;
+        }
+    }
+    else {
+        // 通常のブロック
+        stageMap_.SetBlock(cursor, selectedBlockType_);
+        if (selectedBlockType_ == BlockType::PlayerStart) {
+            player_->SetPosition({ (float)cursor.x, (float)cursor.y + 1.1f, (float)cursor.z });
+        }
+    }
+
+    // 再構築
+    if (stageRenderer_) {
+        stageRenderer_->BuildFromStageMap(stageMap_);
     }
 }
