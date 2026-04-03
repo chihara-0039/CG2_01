@@ -50,6 +50,10 @@ void MyGame::Initialize() {
     particleManager = new ParticleManager();
     particleManager->Initialize(dxCommon, textureManager);
 
+    //4/3追加
+    titleScene_ = std::make_unique<TitleScene>();
+    titleScene_->Initialize(object3dCommon, input);
+
     // --- モデル読み込み ---
     Model* modelPlane = Model::CreateFromOBJ(dxCommon, "Resources/Models/block", "block.obj", textureManager);
     Model* modelAxis = Model::CreateFromOBJ(dxCommon, "Resources/Models/axis", "axis.obj", textureManager);
@@ -108,8 +112,12 @@ void MyGame::Initialize() {
         }
     }
 #else
+
+    //4/3佐倉タイトルから開始に変更
+
     // 【Debugビルド時】
-    currentMode_ = AppMode::GamePlay;
+    currentMode_ = AppMode::Title;
+
 
     // 2. ★手動配置を消して、保存した「プロトタイプ」をロードする
     std::string prototypePath = "Resources/Stages/prototype.txt"; // 保存したファイル名に合わせてください
@@ -179,6 +187,11 @@ void MyGame::Update() {
     // --- ImGuiに入力中（WantCaptureKeyboardがtrue）ならゲーム側の入力を無視する ---
     if (!isGuiCaptured) {
         switch (currentMode_) {
+
+        case AppMode::Title:
+        UpdateTitle();//4/3佐倉　追加
+        break;
+
         case AppMode::DebugView:
         UpdateDebugView();
         break;
@@ -764,6 +777,21 @@ void MyGame::Draw() {
     if (debugFlags_.show3DObjects) {
         object3dCommon->PreDraw();
 
+        if (currentMode_ == AppMode::Title) {
+
+            if (titleScene_) {
+                titleScene_->Draw();
+            }
+
+#ifdef USE_IMGUI
+            dxCommon->EndImGui();
+#endif
+
+            dxCommon->PostDraw();
+            return; // ←ここ重要！他の描画しない
+
+        }
+
 		// プレイヤーの描画は3Dオブジェクトの描画の中で行う（プレイヤーもObject3dを使っているため）
         if (currentMode_ == AppMode::GamePlay && player_) {
             player_->Draw();
@@ -919,6 +947,16 @@ void MyGame::UpdateGamePlayBlockPlace()
     }
     if (input->PushKey(DIK_O)) {
         camTf.translate.y -= 0.2f;
+    }
+}
+
+void MyGame::UpdateTitle() {
+    if (titleScene_) {
+        titleScene_->Update();
+    //シーン変化用のキー入力
+        if (titleScene_->IsFinished()) {
+            currentMode_ = AppMode::GamePlay;
+        }
     }
 }
 
