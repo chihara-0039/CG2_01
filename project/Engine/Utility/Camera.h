@@ -1,5 +1,8 @@
 #pragma once
 #include "MyMath.h"
+#include <Windows.h>
+
+class Input;
 
 class Camera {
 public:
@@ -20,7 +23,7 @@ public:
     void SetFov(float fov) { fov_ = fov; }
 
     // Blender風操作を更新 (Inputポインタを受け取る)
-    void UpdateBlenderStyle(const class Input* input);
+    void UpdateBlenderStyle(const class Input* input, bool isGuiCaptured, HWND hwnd);
 
     // ImGui等で直接触れるようにTransformを公開、または参照を返す
     Transform& GetTransform() { return transform_; }

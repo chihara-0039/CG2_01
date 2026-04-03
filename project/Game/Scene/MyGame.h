@@ -118,5 +118,8 @@ private:
 
     // 置けるブロックの所持数 04/01 秋元
     int placeableBlockCount_ = 0;
+
+    Model* skydomeModel_ = nullptr;
+    Object3d* skydomeObject_ = nullptr;
    
 };
