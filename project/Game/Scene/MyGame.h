@@ -127,5 +127,7 @@ private:
 
     //4/3佐倉
     std::unique_ptr<TitleScene> titleScene_;
+    Model* skydomeModel_ = nullptr;
+    Object3d* skydomeObject_ = nullptr;
    
 };

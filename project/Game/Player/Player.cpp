@@ -13,9 +13,8 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 	object_->SetRotation({ 0.0f, 0.0f, 0.0f });
 }
 
-void Player::Update(const Input* input, const StageMap& map, float cameraRotY)
+void Player::Update(const Input* input,StageMap& map, float cameraRotY)
 {
-	stageMap_ = &map;
 	input_ = input;
 	// --- 1. ハシゴ判定 ---
 	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
@@ -70,7 +69,9 @@ void Player::Update(const Input* input, const StageMap& map, float cameraRotY)
 			}
 		}
 		isGrounded_ = true;
-	} else {
+	} 
+	else
+	{
 		// --- 【通常移動モード】（ここが消えていたのでフリーズしていました） ---
 
 		// 入力方向をカメラの回転に合わせる
@@ -126,8 +127,9 @@ void Player::Update(const Input* input, const StageMap& map, float cameraRotY)
 	{
 		Respawn();
 	}
-
-	DoorWarp();
+	PSwitchUpdate(map);
+	DoorWarp(map);
+	
 
 	// --- 表示更新 ---
 	object_->SetPosition(position_);
@@ -135,13 +137,13 @@ void Player::Update(const Input* input, const StageMap& map, float cameraRotY)
 	object_->Update();
 }
 
-void Player::DoorWarp()
+void Player::DoorWarp(const StageMap& map)
 {
 	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
 	int gyBottom = static_cast<int>(std::floor(position_.y + 0.1f));
 	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
 
-	const MapCell* cell = stageMap_->GetCell(gx, gyBottom, gz);
+	const MapCell* cell = map.GetCell(gx, gyBottom, gz);
 
 	if (cell && cell->type == BlockType::Door && input_->TriggerKey(DIK_F))
 	{
@@ -175,6 +177,15 @@ bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
 				if (cell && cell->isSolid) {
 					return true; // 壁または地面にぶつかった
 				}
+
+				// 秋元追加 04/03
+				if (cell && cell->type == BlockType::PBlock) {
+					// PスイッチがONの時だけ「壁」として扱う
+					if (map.IsPSwitchActive()) {
+						return true;
+					}
+					return false; // OFFの時は通り抜けられる
+				}
 			}
 		}
 	}
@@ -186,6 +197,25 @@ void Player::Respawn()
 	position_ = respawnPosition;
 	velocity_ = { 0.0f,0.0f,0.0f };
 	rotation_ = { 0.0f,0.0f,0.0f };
+}
+
+void Player::PSwitchUpdate(StageMap& map)
+{
+	// プレイヤーの中心座標から足元のインデックスを計算
+	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
+	// 0.1fだと浮いている判定になりやすいので、少し余裕を持たせるか
+	// 現在の座標(position_.y)の真下を正確に狙います
+	int gyBottom = static_cast<int>(std::floor(position_.y - 0.05f));
+	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+	const MapCell* cellBelow = map.GetCell(gx, gyBottom, gz);
+
+	if (cellBelow) {
+		// Pスイッチの判定
+		if (cellBelow && cellBelow->type == BlockType::PSwitch) {
+			map.SetPSwitchActive(true); // これで needsRebuild_ が true になる
+		}
+	}
 }
 
 void Player::Draw() {

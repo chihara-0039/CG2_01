@@ -20,7 +20,9 @@ enum class BlockType : uint32_t {
     BubblePickup,
     Goal,
     PlayerStart,
-    Door
+    Door,
+    PSwitch,
+    PBlock
 };
 
 // 1マス分のデータ
@@ -73,6 +75,17 @@ public:
     int GetHeight() const { return height_; }
     int GetDepth() const { return depth_; }
 
+    // スイッチ取得
+    void SetPSwitchActive(bool active) {
+        if (isPSwitchActive_ != active) {
+            isPSwitchActive_ = active;
+            needsRebuild_ = true; // ★状態が変わったらフラグを立てる
+        }
+    }
+    bool NeedsRebuild() const { return needsRebuild_; }
+    void ClearRebuildFlag() { needsRebuild_ = false; }
+    bool IsPSwitchActive() const { return isPSwitchActive_; }
+
 private:
     int width_ = 0;
     int height_ = 0;
@@ -83,4 +96,7 @@ private:
 private:
     int ToIndex(int x, int y, int z) const;
     static MapCell MakeCell(BlockType type, int variant);
+
+    bool isPSwitchActive_ = false; // Pスイッチの状態
+    bool needsRebuild_ = false; // ★追加
 };
