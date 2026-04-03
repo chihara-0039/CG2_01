@@ -118,6 +118,20 @@ void MyGame::Initialize() {
     }
 #endif
 
+    // 1. モデルのロード（フォルダとファイル名に注意）
+    skydomeModel_ = Model::CreateFromOBJ(dxCommon, "Resources/Models/skydome", "skydome.obj", textureManager);
+
+    // 2. オブジェクトの生成と初期化
+    skydomeObject_ = new Object3d();
+    skydomeObject_->Initialize(object3dCommon);
+    skydomeObject_->SetModel(skydomeModel_);
+
+    // 3. 設定：空は自ら光るのでライトをオフにする
+    skydomeObject_->SetEnableLighting(false);
+
+    // 4. 設定：ステージを包むサイズにする（500〜1000程度）
+    skydomeObject_->SetScale({ 500.0f, 500.0f, 500.0f });
+
     // ステージ描画オブジェクトの生成と構築
     stageRenderer_ = new StageRenderer();
     stageRenderer_->Initialize(object3dCommon);
@@ -161,20 +175,22 @@ void MyGame::Update() {
     // ★修正ポイント：Release時は ImGui::GetIO() を呼ばないようにガードする
     // または、DebugView か StageEditor の時だけ判定するようにする
     
-    if (currentMode_ != AppMode::GamePlay) {
-        // マウスとキーボードの両方のキャプチャ状態を確認
-        isGuiCaptured = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
-    }
+    isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
 
 #endif
 
     // --- 3. カメラの更新 ---
-    if (!isGuiCaptured) {
-        // GamePlay モードの時は、旋回カメラを使うので Blender風操作はスキップ
-        if (currentMode_ != AppMode::GamePlay) {
-            camera->UpdateBlenderStyle(input);
-        }
+    if (currentMode_ != AppMode::GamePlay) {
+        camera->UpdateBlenderStyle(input, isGuiCaptured, winApp->GetHwnd());
     }
+
+    if (skydomeObject_) {
+        // 天球の座標を常にカメラと同じにする
+        skydomeObject_->SetPosition(camera->GetPosition());
+        skydomeObject_->Update();
+    }
+
+    
    
     // --- ImGuiに入力中（WantCaptureKeyboardがtrue）ならゲーム側の入力を無視する ---
     if (!isGuiCaptured) {
@@ -206,6 +222,12 @@ void MyGame::Update() {
     // --- プレイヤーに最新のカメラ行列を教える ---
     if (player_) {
         player_->SetCamera(view, proj);
+    }
+
+    // ★ 修正1：ウィンドウが最前面にない場合は即リターンして何もしない
+    // これにより、ウィンドウ外をクリックした瞬間の挙動を無視できます
+    if (GetActiveWindow() != winApp->GetHwnd()) {
+        return;
     }
 
 	// 3Dオブジェクトの更新
@@ -752,9 +774,10 @@ void MyGame::UpdateImGui() {
 
 
     ImGui::End();
+#endif
 }
 
-#endif
+
 
 void MyGame::Draw() {
     dxCommon->PreDraw();
@@ -763,6 +786,12 @@ void MyGame::Draw() {
     dxCommon->GetCommandList()->SetDescriptorHeaps(1, heaps);
     if (debugFlags_.show3DObjects) {
         object3dCommon->PreDraw();
+
+        // --- 天球の描画（背景として最初に描く） ---
+        if (skydomeObject_) {
+            skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+            skydomeObject_->Draw();
+        }
 
 		// プレイヤーの描画は3Dオブジェクトの描画の中で行う（プレイヤーもObject3dを使っているため）
         if (currentMode_ == AppMode::GamePlay && player_) {
@@ -825,6 +854,8 @@ void MyGame::Finalize() {
         delete m;
     }
 
+    delete skydomeObject_;
+    delete skydomeModel_;
     delete player_;
     delete sprite;
     delete particleManager;
@@ -835,6 +866,8 @@ void MyGame::Finalize() {
     delete dxCommon; // 基盤は最後の方
     delete winApp;
 
+    skydomeObject_ = nullptr;
+    skydomeModel_ = nullptr;
 
     if (stageRenderer_) {
         delete stageRenderer_;

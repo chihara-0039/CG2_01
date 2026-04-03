@@ -24,41 +24,29 @@ void Camera::Update() {
     projectionMatrix_ = Math::MakePerspectiveFovMatrix(fov_, aspectRatio_, nearClip_, farClip_);
 }
 
-void Camera::UpdateBlenderStyle(const Input* input) {
-    // 前回の修正で Input.h をインクルードしたので、
-    // ここで GetMouseState() や DIK_LSHIFT が使えるようになります。
-    const auto& mouse = input->GetMouseState();
-    const float rotateSpeed = 0.005f;
-    const float panSpeed = 0.02f;
-
-    // 1. 回転 (マウス中ボタンのみ)
-    if (mouse.buttons[2] && !input->PushKey(DIK_LSHIFT)) {
-        transform_.rotate.y += mouse.x * rotateSpeed;
-        transform_.rotate.x += mouse.y * rotateSpeed;
+void Camera::UpdateBlenderStyle(Input* input, bool isGuiCaptured, HWND hwnd) {
+    // 1. 鉄壁のガード処理
+    // ウィンドウにフォーカスがない、または ImGui を触っている時は何もしない
+    if (GetActiveWindow() != hwnd || isGuiCaptured) {
+        return;
     }
 
-    // 2. パン/並行移動 (Shift + マウス中ボタン)
-    if (mouse.buttons[2] && input->PushKey(DIK_LSHIFT)) {
-        // カメラの現在の回転から向きを計算
-        Matrix4x4 matRot = Math::Multiply(Math::MakeRotateXMatrix(transform_.rotate.x), Math::MakeRotateYMatrix(transform_.rotate.y));
+    // 2. マウスの状態を取得 (Inputクラスの MouseState 構造体)
+    const MouseState& mouseState = input->GetMouseState();
 
-        // カメラのローカル軸（X:右, Y:上）に沿って注視点を移動させる
-        target_.x -= (matRot.m[0][0] * mouse.x - matRot.m[1][0] * mouse.y) * panSpeed;
-        target_.y += (matRot.m[0][1] * mouse.x - matRot.m[1][1] * mouse.y) * panSpeed;
-        target_.z -= (matRot.m[0][2] * mouse.x - matRot.m[1][2] * mouse.y) * panSpeed;
+    // 3. 右ボタン(buttons[1]) または 中ボタン(buttons[2]) が押されているか判定
+    if (mouseState.buttons[1] || mouseState.buttons[2]) {
+
+        // --- 4. 移動量（x, y）を使って回転を更新 ---
+        // MouseState の x, y は DirectInput から取得した「前フレームからの移動量」です
+        float deltaX = (float)mouseState.x;
+        float deltaY = (float)mouseState.y;
+
+        // 回転角に反映 (0.005f は操作感に合わせて調整してください)
+        transform_.rotate.y += deltaX * 0.005f;
+        transform_.rotate.x += deltaY * 0.005f;
+
+        // 5. 行列を更新して画面に反映させる
+        Update();
     }
-
-    // 3. ズーム (マウスホイール)
-    distance_ -= mouse.wheel * 0.01f;
-    if (distance_ < 1.0f) distance_ = 1.0f; // 寄りすぎ防止
-
-    // --- 最終的な座標計算 (注視点 + 回転 + 距離) ---
-    Matrix4x4 matRot = Math::Multiply(Math::MakeRotateXMatrix(transform_.rotate.x), Math::MakeRotateYMatrix(transform_.rotate.y));
-    Vector3 offset = { 0, 0, -distance_ };
-
-    transform_.translate.x = target_.x + (offset.x * matRot.m[0][0] + offset.y * matRot.m[1][0] + offset.z * matRot.m[2][0]);
-    transform_.translate.y = target_.y + (offset.x * matRot.m[0][1] + offset.y * matRot.m[1][1] + offset.z * matRot.m[2][1]);
-    transform_.translate.z = target_.z + (offset.x * matRot.m[0][2] + offset.y * matRot.m[1][2] + offset.z * matRot.m[2][2]);
-
-    Update(); // View行列の再計算
 }
