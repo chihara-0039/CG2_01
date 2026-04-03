@@ -64,4 +64,11 @@ namespace Math {
 
     // 正規化
     Vector3 Normalize(const Vector3& v);
+
+    // ベクトルの減算 (v1 - v2)
+    Vector3 Subtract(const Vector3& v1, const Vector3& v2);
+    // ベクトルの外積
+    Vector3 Cross(const Vector3& v1, const Vector3& v2);
+    // ビュー行列 (LookAt) の作成
+    Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vector3& up);
 }

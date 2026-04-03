@@ -17,6 +17,9 @@ public:
     // 描画：内部で持っている Object3d を描画
     void Draw();
 
+	// 影の描画：ライトカメラの行列を渡して影を描く
+    void DrawShadow(const Matrix4x4& lightViewProjection);
+
     // 座標の設定と取得
     void SetPosition(const Vector3& pos) { position_ = pos; }
     const Vector3& GetPosition() const { return position_; }

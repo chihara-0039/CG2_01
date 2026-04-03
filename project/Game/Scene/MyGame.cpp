@@ -148,6 +148,13 @@ void MyGame::Initialize() {
 
     cameraAngle_ = 1.5708f; // ★ここで開始時の向きを調整！
     cameraPitch_ = 0.75f;
+
+    // ★ 影の初期化
+    shadowMap_ = std::make_unique<ShadowMap>();
+    shadowMap_->Initialize(dxCommon);
+
+    lightCamera_ = std::make_unique<LightCamera>();
+    lightCamera_->Initialize();
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -262,6 +269,11 @@ void MyGame::Update() {
     if (debugFlags_.showParticles) {
         particleManager->Update(view, proj);
     }
+
+    // ★ ライトカメラの更新
+    // プレイヤーの位置に合わせて影の範囲を動かすことで、常に綺麗な影を出します
+    Vector3 lightDir = { 0.5f, -1.0f, 0.5f }; // ライトの向き（Object3dCommonの設定に合わせる）
+    lightCamera_->Update(lightDir, player_->GetPosition());
 }
 
 //パーティクル発生のテスト（スペースキーを押すと発生）
@@ -789,64 +801,133 @@ void MyGame::UpdateImGui() {
 
 
 void MyGame::Draw() {
+    auto commandList = dxCommon->GetCommandList();
+
+    // ==========================================================
+    // 【パス1】 シャドウマップへの描き込み（影の生成）
+    // ==========================================================
+    // 影用テクスチャを書き込み可能状態にしてクリアします
+    shadowMap_->PreDraw(commandList);
+
+	// 3Dオブジェクトの描画に必要な共通設定をセット
+    commandList->SetGraphicsRootSignature(object3dCommon->GetRootSignature());
+
+    // 影書き込み専用のパイプライン（色計算なし）をセット
+    commandList->SetPipelineState(object3dCommon->GetShadowPipelineState());
+
+	// 描画するプリミティブの形状を指定（ここでは三角形リスト）
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // ライトから見た行列（ViewProjection）を取得
+    const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
+
+    // ステージ上の全オブジェクトの影を書き込み
+    for (Object3d* obj : objectList) {
+        if (obj) {
+            obj->DrawShadow(lightVP);
+        }
+    }
+
+    // プレイヤーの影も書き込み
+    if (player_) {
+        player_->DrawShadow(lightVP);
+    }
+
+    // 書き込み終了。これ以降はテクスチャとして読み込めるようになります
+    shadowMap_->PostDraw(commandList);
+
+
+    // ==========================================================
+    // 【パス2】 メイン描画（通常のレンダリング ＋ 影の適用）
+    // ==========================================================
+    // 画面全体をクリアして、通常の描画準備を開始
     dxCommon->PreDraw();
 
-    ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
-    dxCommon->GetCommandList()->SetDescriptorHeaps(1, heaps);
+    // 3Dオブジェクトの表示フラグがONの場合のみ描画処理を行います
     if (debugFlags_.show3DObjects) {
+        // --- 1. ディスクリプタヒープのセット ---
+        // 通常のテクスチャヒープと、影用テクスチャのヒープを両方GPUに教えます
+        ID3D12DescriptorHeap* heaps[] = {
+            textureManager->GetSrvHeap(),
+            shadowMap_->GetSrvHeap()
+        };
+        commandList->SetDescriptorHeaps(2, heaps);
+
+        // --- 2. 共通設定の適用 ---
+        // 通常の3D描画用パイプラインとルートシグネチャをセット
         object3dCommon->PreDraw();
 
-        // --- 天球の描画（背景として最初に描く） ---
+        // ★エンジン層の肝：5番目のスロット(t1)に影テクスチャを渡します
+        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+
+        // --- 3. 背景（天球）の描画 ---
         if (skydomeObject_) {
+            // カメラ行列をセットして描画
             skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
             skydomeObject_->Draw();
         }
 
-		// プレイヤーの描画は3Dオブジェクトの描画の中で行う（プレイヤーもObject3dを使っているため）
-        if (currentMode_ == AppMode::GamePlay && player_) {
-            player_->Draw();
-        }
+        // --- 4. モードに応じたメインオブジェクトの描画 ---
+        // プレイモードやエディタモードでのステージ・プレイヤー描画
+        if (currentMode_ == AppMode::StageEditor ||
+            currentMode_ == AppMode::GamePlay ||
+            currentMode_ == AppMode::GamePlay_BlockPlace) {
 
-		// 3Dオブジェクトの描画
-        if (currentMode_ == AppMode::DebugView) {
-            for (Object3d* obj : objectList) {
-                obj->Draw();
-            }
-        }
-
-
-		// ステージ描画オブジェクトの描画
-        // || currentMode_ == AppMode::GamePlay_BlockPlace 04/01 秋元
-        if (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
             if (stageRenderer_) {
                 stageRenderer_->Draw();
             }
 
-            // カーソルはエディタモードとブロックを置くときだけ出す
-            // || currentMode_ == AppMode::GamePlay_BlockPlace これを追加 04/01 秋元
+            if (player_) {
+                player_->Draw();
+            }
+
+            // エディタ中またはブロック配置中のみカーソルを表示
             if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
                 mapCursor_->Draw();
             }
         }
+
+        // デバッグビューモード時のみ、リスト内の全オブジェクトを描画
+        if (currentMode_ == AppMode::DebugView) {
+            for (Object3d* obj : objectList) {
+                if (obj) {
+                    obj->Draw();
+                }
+            }
+            // デバッグビューでもプレイヤーは描画
+            if (player_) {
+                player_->Draw();
+            }
+        }
     }
 
-	// パーティクル描画は3Dオブジェクトの後にするのが見栄え的に良いと思う
+    // --- 5. パーティクルの描画 ---
+    // 3Dオブジェクトの後に描画することで、透けて見えるようになります
     if (debugFlags_.showParticles) {
+        // パーティクルがテクスチャヒープを必要とする場合のために再セット
+        ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
+        commandList->SetDescriptorHeaps(1, particleHeaps);
         particleManager->Draw();
     }
 
-	// スプライト描画は最後にするのが基本
+    // --- 6. スプライト（UI等）の描画 ---
+    // 最後に描画することで、画面の最前面に表示されます
     if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
         spriteCommon->PreDraw();
-        sprite->Draw();
+        if (sprite) {
+            sprite->Draw();
+        }
     }
 
+    // --- 7. ImGuiの描画処理 ---
 #ifdef USE_IMGUI
     dxCommon->EndImGui();
 #endif
 
+    // すべての描画コマンドを確定させ、画面を更新します
     dxCommon->PostDraw();
 }
+
 
 void MyGame::Finalize() {
     ModelManager::Finalize();

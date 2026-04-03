@@ -185,6 +185,42 @@ namespace Math {
         return m;
     }
 
+    // ベクトルの減算
+    Vector3 Subtract(const Vector3& v1, const Vector3& v2) {
+        return { v1.x - v2.x, v1.y - v2.y, v1.z - v2.z };
+    }
+
+    // ベクトルの外積 (2つのベクトルに垂直なベクトルを求める)
+    Vector3 Cross(const Vector3& v1, const Vector3& v2) {
+        return {
+            v1.y * v2.z - v1.z * v2.y,
+            v1.z * v2.x - v1.x * v2.z,
+            v1.x * v2.y - v1.y * v2.x
+        };
+    }
+
+    // ビュー行列 (LookAt) の作成：特定の場所から特定の方向を見る行列
+    Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vector3& up) {
+        // 1. Z軸 (視線方向) を算出
+        Vector3 zAxis = Normalize(Subtract(target, eye));
+        // 2. X軸 (右方向) を算出：上方向と視線方向の外積
+        Vector3 xAxis = Normalize(Cross(up, zAxis));
+        // 3. Y軸 (上方向) を算出：視線方向と右方向の外積
+        Vector3 yAxis = Cross(zAxis, xAxis);
+
+        Matrix4x4 result = MakeIdentity4x4();
+        result.m[0][0] = xAxis.x; result.m[0][1] = yAxis.x; result.m[0][2] = zAxis.x;
+        result.m[1][0] = xAxis.y; result.m[1][1] = yAxis.y; result.m[1][2] = zAxis.y;
+        result.m[2][0] = xAxis.z; result.m[2][1] = yAxis.z; result.m[2][2] = zAxis.z;
+
+        // カメラの位置成分を反映 (内積を使った移動成分の計算)
+        result.m[3][0] = -(xAxis.x * eye.x + xAxis.y * eye.y + xAxis.z * eye.z);
+        result.m[3][1] = -(yAxis.x * eye.x + yAxis.y * eye.y + yAxis.z * eye.z);
+        result.m[3][2] = -(zAxis.x * eye.x + zAxis.y * eye.y + zAxis.z * eye.z);
+
+        return result;
+    }
+
     // 正規化
     Vector3 Normalize(const Vector3& v) {
         float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);

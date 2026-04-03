@@ -18,6 +18,8 @@
 #include "StageRenderer.h"
 #include "MapCursor.h"
 #include "Player.h"
+#include "ShadowMap.h"
+#include "LightCamera.h"
 
 class MyGame {
 public:
@@ -119,7 +121,12 @@ private:
     // 置けるブロックの所持数 04/01 秋元
     int placeableBlockCount_ = 0;
 
+	// スカイドーム
     Model* skydomeModel_ = nullptr;
     Object3d* skydomeObject_ = nullptr;
+
+    // 影用リソース
+    std::unique_ptr<ShadowMap> shadowMap_;
+    std::unique_ptr<LightCamera> lightCamera_;
    
 };

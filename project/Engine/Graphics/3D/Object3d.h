@@ -21,10 +21,16 @@ public:
     void Update();
     void Draw();
 
+	// モデルと変換の設定
     void SetModel(Model* model) { model_ = model; }
+	// 変換のセッター
     void SetPosition(const Vector3& position) { transform_.translate = position; }
+	// 回転はラジアンで指定することを想定
     void SetRotation(const Vector3& rotation) { transform_.rotate = rotation; }
+	// 拡大縮小は1.0fが等倍で、0.5fなら半分、2.0fなら2倍になるイメージ
     void SetScale(const Vector3& scale) { transform_.scale = scale; }
+	// 影描画用の関数を追加
+    void DrawShadow(const Matrix4x4& lightViewProjection);
 
     // カメラ設定
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection) {

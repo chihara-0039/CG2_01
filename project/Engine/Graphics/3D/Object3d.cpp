@@ -2,6 +2,7 @@
 #include "TextureManager.h" // GetSrvHandleGPUを使うために必要
 #include <cassert>
 
+// 初期化関数。Object3dCommonへのポインタを受け取ります
 void Object3d::Initialize(Object3dCommon* object3dCommon) {
     assert(object3dCommon);
     object3dCommon_ = object3dCommon;
@@ -30,6 +31,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon) {
     materialData_->uvTransform = Math::MakeIdentity4x4();
 }
 
+// 毎フレーム呼び出す更新関数。ワールド行列とWVP行列を計算して定数バッファに転送します
 void Object3d::Update() {
     Matrix4x4 worldMatrix = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
     Matrix4x4 wvpMatrix = Math::Multiply(worldMatrix, Math::Multiply(viewMatrix_, projectionMatrix_));
@@ -38,6 +40,7 @@ void Object3d::Update() {
     transformationData_->World = worldMatrix;
 }
 
+// UV変換のセッター。引数にスケール、回転、平行移動をまとめた Transform 構造体を受け取ります
 void Object3d::SetUVTransform(const Transform& t) {
     if (materialData_) {
         Matrix4x4 w = Math::MakeAffineMatrix(t.scale, t.rotate, t.translate);
@@ -45,6 +48,7 @@ void Object3d::SetUVTransform(const Transform& t) {
     }
 }
 
+// 描画関数。モデルがセットされていない場合は何もしない
 void Object3d::Draw() {
     if (!model_) return;
     auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
@@ -63,4 +67,29 @@ void Object3d::Draw() {
     }
 
     model_->Draw(commandList);
+}
+
+// 影描画用の関数。引数にライトの ViewProjection 行列を受け取ります
+void Object3d::DrawShadow(const Matrix4x4& lightViewProjection) {
+    if (!model_) return;
+
+    // 1. ライト視点での WVP 行列を計算
+    // すでに Update() で計算済みの World 行列を活用します
+    Matrix4x4 worldViewProjection = Math::Multiply(transformationData_->World, lightViewProjection);
+
+    // 2. メイン描画(Camera視点)の行列を壊さないよう、一時的に保存して上書き
+    Matrix4x4 backupWVP = transformationData_->WVP;
+    transformationData_->WVP = worldViewProjection;
+
+    // 3. コマンドを積む
+    auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
+
+    // ルートパラメータ 1番（Transform）に定数バッファをセット
+    commandList->SetGraphicsRootConstantBufferView(1, transformationResource_->GetGPUVirtualAddress());
+
+    // モデル（頂点バッファ）の描画。引数に commandList が必要です
+    model_->Draw(commandList);
+
+    // 4. メイン描画のために行列を元に戻す
+    transformationData_->WVP = backupWVP;
 }
