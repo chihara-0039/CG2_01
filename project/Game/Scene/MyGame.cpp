@@ -448,16 +448,40 @@ void MyGame::UpdateStageEditor() {
 
 void MyGame::UpdateGamePlay() {
     const float rotateSpeed = 0.025f;
+
     if (input->PushKey(DIK_Q)) cameraAngle_ -= rotateSpeed;
     if (input->PushKey(DIK_E)) cameraAngle_ += rotateSpeed;
 
     //4/3佐倉
     //縦回転追加
-    if (input->PushKey(DIK_Z)) cameraPitch_ += rotateSpeed;
-    if (input->PushKey(DIK_C)) cameraPitch_ -= rotateSpeed;
+    //4/3　佐倉　カメラ回転制限用変数
 
-    // ★上下の制限（絶対必要）
-    cameraPitch_ = std::clamp(cameraPitch_, 0.1f, 1.2f);
+    const float minPitch = 0.4f;
+    const float maxPitch = 1.5f;
+    const float upperLimit = 3.0f;
+
+    if (input->PushKey(DIK_Z)) {
+        cameraPitch_ += rotateSpeed;
+
+        // ★上方向専用の制限
+        if (cameraPitch_ > upperLimit) {
+            cameraPitch_ = upperLimit;
+        }
+    }
+
+    if (input->PushKey(DIK_C)) {
+        cameraPitch_ -= rotateSpeed;
+
+        // 下限チェック（ここだけ制限）
+        if (cameraPitch_ < minPitch) {
+            cameraPitch_ = minPitch;
+        }
+    }
+
+    // 上限はまとめて制限
+    if (cameraPitch_ > maxPitch) {
+        cameraPitch_ = maxPitch;
+    }
 
     // --- ここが修正ポイント ---
     // マップ全体のサイズ（16）ではなく、実際のブロックの範囲（0〜9）の中心を軸にする
@@ -469,15 +493,13 @@ void MyGame::UpdateGamePlay() {
 
     // カメラの距離と高さ
     float distance = 35.0f;
-    float height = 22.0f;
+    float height = 20.0f;
 
     // 座標計算
     Vector3 pos;
 
     //4/3佐倉　縦回転計算追加
     
-
-
     pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
     pos.y = pivot.y + std::sin(cameraPitch_) * height;
     pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
