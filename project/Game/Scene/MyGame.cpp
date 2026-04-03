@@ -946,7 +946,18 @@ void MyGame::DrawEditorToolbar()
         }
         ImGui::PopStyleColor();
 
+        if (input->TriggerKey(DIK_RETURN))
+        {
+            ApplyPlacement();
+        }
+
         if (ImGui::Button("REMOVE (Space)", ImVec2(180, 40))) {
+            stageMap_.RemoveBlock(mapCursor_->GetIndex());
+            stageRenderer_->BuildFromStageMap(stageMap_);
+        }
+
+        if (input->TriggerKey(DIK_BACKSPACE))
+        {
             stageMap_.RemoveBlock(mapCursor_->GetIndex());
             stageRenderer_->BuildFromStageMap(stageMap_);
         }
