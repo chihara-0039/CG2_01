@@ -18,6 +18,7 @@
 #include "StageRenderer.h"
 #include "MapCursor.h"
 #include "Player.h"
+#include"TitleScene.h"
 
 class MyGame {
 public:
@@ -34,6 +35,7 @@ private:
 
 	// アプリのモード
     enum class AppMode {
+        Title,
         DebugView,   // 今の確認用
         StageEditor, // これから作るエディター
         GamePlay,     // 後で本編
@@ -80,8 +82,12 @@ private:
 	void RefreshStageList();
     void UpdateStageEditor();
     void UpdateGamePlay();
+
     // 配置画面用の更新関数を宣言
     void UpdateGamePlayBlockPlace(); // 04/01 秋元
+
+    //4/3佐倉タイトル用キー入力関数
+    void UpdateTitle();
 
     // ギミック用のImGuiの追加 04/03 秋元
     void DrawEditorToolbar();
@@ -119,6 +125,8 @@ private:
     // 置けるブロックの所持数 04/01 秋元
     int placeableBlockCount_ = 0;
 
+    //4/3佐倉
+    std::unique_ptr<TitleScene> titleScene_;
     Model* skydomeModel_ = nullptr;
     Object3d* skydomeObject_ = nullptr;
    
