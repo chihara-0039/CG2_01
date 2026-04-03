@@ -110,4 +110,12 @@ private:
     // 置けるブロックの所持数 04/01 秋元
     int placeableBlockCount_ = 0;
 
+    //4/1 佐倉
+    //カメラの現在の回転角度をクラスで保存
+
+    float cameraAngle_ = 0.0f;
+
+    //4/1 佐倉
+    //縦回転用変数
+    float cameraPitch_ = 0.75f;
 };
