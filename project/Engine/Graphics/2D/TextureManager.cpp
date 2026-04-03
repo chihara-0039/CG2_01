@@ -384,3 +384,36 @@ const D3D12_RESOURCE_DESC& TextureManager::GetResourceDesc(uint32_t textureHandl
     return textures_[textureHandle].resourceDesc;
 }
 
+uint32_t TextureManager::RegisterExternalTexture(ID3D12Resource* resource) {
+    assert(textures_.size() < kMaxTextures);
+
+    // 1. 新しい空きスロットを確保
+    uint32_t index = static_cast<uint32_t>(textures_.size());
+    TextureData data;
+    data.resource = resource;
+    data.resourceDesc = resource->GetDesc();
+
+    // 2. ヒープ内の住所(CPU/GPUハンドル)を計算
+    D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = srvHeap_->GetCPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = srvHeap_->GetGPUDescriptorHandleForHeapStart();
+    handleCPU.ptr += (descriptorSizeSRV_ * index);
+    handleGPU.ptr += (descriptorSizeSRV_ * index);
+
+    data.srvHandleCPU = handleCPU;
+    data.srvHandleGPU = handleGPU;
+
+    // 3. 「このリソースを読み取り用として使うよ」というカードを作成してヒープに登録
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    // 影用テクスチャは R32_TYPELESS なので、SRVでは R32_FLOAT として解釈させる
+    srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    dxCommon_->GetDevice()->CreateShaderResourceView(resource, &srvDesc, data.srvHandleCPU);
+
+    // 4. リストに追加してインデックス（ハンドル）を返す
+    textures_.push_back(data);
+    return index;
+}
+

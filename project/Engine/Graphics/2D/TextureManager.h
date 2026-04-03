@@ -16,6 +16,9 @@ public:
     // return: テクスチャハンドル（uint32_t）
     uint32_t LoadTexture(const std::string& filePath);
 
+    // ★追加：外部のリソースをSRVヒープに登録し、ハンドルを返す
+    uint32_t RegisterExternalTexture(ID3D12Resource* resource);
+
     // SRVヒープの取得（描画前にSetDescriptorHeapsで使う）
     ID3D12DescriptorHeap* GetSrvHeap() const { return srvHeap_.Get(); }
 

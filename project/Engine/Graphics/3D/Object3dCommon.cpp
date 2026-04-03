@@ -234,7 +234,7 @@ void Object3dCommon::CreateShadowPipeline() {
     psoDesc.DepthStencilState.DepthEnable = TRUE;
     psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
     // ★ 重要：レンダーターゲット（色）は 0 個にする
     psoDesc.NumRenderTargets = 0;
