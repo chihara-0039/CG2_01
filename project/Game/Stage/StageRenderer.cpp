@@ -79,6 +79,22 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		"door.obj",
 		object3dCommon_->GetTextureManager()
 	);
+
+	// Pスイッチモデル設定
+	pSwichModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/switch",
+		"switch.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
+	// Pブロックモデル設定
+	pBlockOnModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/block",
+		"block.obj",
+		object3dCommon_->GetTextureManager()
+	);
 }
 
 // ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス
@@ -194,6 +210,38 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.6f, 0.6f, 0.6f },
 						{ 0.0f, 0.0f, 0.0f }
 					);
+					break;
+					// ブロックの種類が PSwitch(Pスイッチ) の場合
+				case BlockType::PSwitch:
+					if (!stageMap.IsPSwitchActive())
+					{
+						CreateStageObject(
+							pSwichModel_,
+							position,
+							{ 0.6f, 0.6f, 0.6f },
+							{ 0.0f, 0.0f, 0.0f }
+						);
+					}
+					break;
+					// ブロックの種類が PBlock (Pブロック) の場合
+				case BlockType::PBlock:
+					if (stageMap.IsPSwitchActive()) {
+						CreateStageObject(
+							pBlockOnModel_,
+							position,
+							{ 0.6f, 0.6f, 0.6f },
+							{ 0.0f, 0.0f, 0.0f }
+						);
+					}
+					else
+					{
+						CreateStageObject(
+							wallModel_,
+							position,
+							blockScale_,
+							{ 0.0f, 0.0f, 0.0f }
+						);
+					}
 					break;
 
 				// ブロックの種類が不明な場合は何もしない

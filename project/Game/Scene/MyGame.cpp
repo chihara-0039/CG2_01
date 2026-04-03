@@ -20,6 +20,8 @@ static const char* BlockTypeToString(BlockType type) {
     case BlockType::Goal:         return "Goal";
     case BlockType::PlayerStart:  return "PlayerStart";
     case BlockType::Door:         return "Door";
+    case BlockType::PSwitch:      return "PSwitch";
+    case BlockType::PBlock:       return "PBlock";
     default:                      return "Unknown";
     }
 }
@@ -534,6 +536,12 @@ void MyGame::UpdateGamePlay() {
         player_->Update(input, stageMap_, cameraAngle_);
     }
 
+    // ★追加：スイッチの状態が変わって、再構築が必要なら実行する
+    if (stageMap_.NeedsRebuild()) {
+        stageRenderer_->BuildFromStageMap(stageMap_);
+        stageMap_.ClearRebuildFlag(); // フラグを下ろす
+    }
+
     /*==================================================
      ブロックを置けるようになる画面の切り替え
     ==================================================*/
@@ -977,7 +985,8 @@ void MyGame::DrawEditorToolbar()
         BlockType types[] = {
             BlockType::Ground, BlockType::Wall, BlockType::Ladder,
             BlockType::Star, BlockType::BubblePickup, BlockType::Goal,
-            BlockType::PlayerStart, BlockType::Door
+            BlockType::PlayerStart, BlockType::Door,BlockType::PSwitch,
+            BlockType::PBlock
         };
 
         for (auto type : types) {
@@ -986,7 +995,7 @@ void MyGame::DrawEditorToolbar()
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f)); // 選択中は緑っぽく
             }
 
-            if (ImGui::Button(BlockTypeToString(type), ImVec2(180, 30))) {
+            if (ImGui::Button(BlockTypeToString(type), ImVec2(-FLT_MIN, 30))) {
                 selectedBlockType_ = type;
             }
 
