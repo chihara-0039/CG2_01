@@ -3,7 +3,7 @@
 
 using namespace Microsoft::WRL;
 
-void ShadowMap::Initialize(DirectXCommon* dxCommon) {
+void ShadowMap::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager) {
     ID3D12Device* device = dxCommon->GetDevice();
 
     // 1. 影用テクスチャリソースの設定
@@ -30,7 +30,7 @@ void ShadowMap::Initialize(DirectXCommon* dxCommon) {
     // リソースの生成
     HRESULT hr = device->CreateCommittedResource(
         &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-        D3D12_RESOURCE_STATE_DEPTH_WRITE, // 最初は書き込みモード
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, // 初期状態はSRV（読み取り用）にしておくのがポイント
         &clearValue, IID_PPV_ARGS(&resource_));
     assert(SUCCEEDED(hr));
 
@@ -51,14 +51,10 @@ void ShadowMap::Initialize(DirectXCommon* dxCommon) {
 
 
     // --- 3. SRV用の棚(ヒープ)を作成 ---
-    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-    srvHeapDesc.NumDescriptors = 1;
-    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // シェーダーから見えるようにする
-    device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap_));
-
+    uint32_t handle = textureManager->RegisterExternalTexture(resource_.Get());
+    srvHandle_ = textureManager->GetSrvHandleGPU(handle);
     // 棚の先頭の住所(ハンドル)を保存
-    srvHandle_ = srvHeap_->GetGPUDescriptorHandleForHeapStart();
+    //srvHandle_ = srvHeap_->GetGPUDescriptorHandleForHeapStart();
 
     // 「このテクスチャを読み取り用として使うよ」というカードを作成
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -68,8 +64,8 @@ void ShadowMap::Initialize(DirectXCommon* dxCommon) {
     srvDesc.Texture2D.MipLevels = 1;
 
     // CPU側のハンドル（SRV用）を取得して作成
-    D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle = srvHeap_->GetCPUDescriptorHandleForHeapStart();
-    device->CreateShaderResourceView(resource_.Get(), &srvDesc, srvCpuHandle);
+    //D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle = srvHeap_->GetCPUDescriptorHandleForHeapStart();
+    //device->CreateShaderResourceView(resource_.Get(), &srvDesc, srvCpuHandle);
 }
 
 void ShadowMap::PreDraw(ID3D12GraphicsCommandList* commandList) {

@@ -151,7 +151,7 @@ void MyGame::Initialize() {
 
     // ★ 影の初期化
     shadowMap_ = std::make_unique<ShadowMap>();
-    shadowMap_->Initialize(dxCommon);
+    shadowMap_->Initialize(dxCommon, textureManager);
 
     lightCamera_ = std::make_unique<LightCamera>();
     lightCamera_->Initialize();
@@ -848,10 +848,9 @@ void MyGame::Draw() {
         // --- 1. ディスクリプタヒープのセット ---
         // 通常のテクスチャヒープと、影用テクスチャのヒープを両方GPUに教えます
         ID3D12DescriptorHeap* heaps[] = {
-            textureManager->GetSrvHeap(),
-            shadowMap_->GetSrvHeap()
+            textureManager->GetSrvHeap()
         };
-        commandList->SetDescriptorHeaps(2, heaps);
+        commandList->SetDescriptorHeaps(1, heaps);
 
         // --- 2. 共通設定の適用 ---
         // 通常の3D描画用パイプラインとルートシグネチャをセット

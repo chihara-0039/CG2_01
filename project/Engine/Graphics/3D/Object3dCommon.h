@@ -1,11 +1,12 @@
 #pragma once
 #include "DirectXCommon.h"
+#include "TextureManager.h"
 #include <d3d12.h>
 #include <wrl.h>
 #include "MyMath.h"
 
 // 前方宣言
-class TextureManager;
+//class TextureManager;
 
 // 共通のライト構造体
 struct DirectionalLight {
