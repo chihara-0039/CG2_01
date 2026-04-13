@@ -500,18 +500,13 @@ void MyGame::UpdateGamePlay() {
     if (input->PushKey(DIK_Q)) cameraAngle_ -= rotateSpeed;
     if (input->PushKey(DIK_E)) cameraAngle_ += rotateSpeed;
 
-    //4/3佐倉
-    //縦回転追加
-    //4/3　佐倉　カメラ回転制限用変数
-
+    // --- 縦回転 ---
     const float minPitch = 0.4f;
     const float maxPitch = 1.5f;
     const float upperLimit = 3.0f;
 
     if (input->PushKey(DIK_Z)) {
         cameraPitch_ += rotateSpeed;
-
-        // ★上方向専用の制限
         if (cameraPitch_ > upperLimit) {
             cameraPitch_ = upperLimit;
         }
@@ -519,92 +514,87 @@ void MyGame::UpdateGamePlay() {
 
     if (input->PushKey(DIK_C)) {
         cameraPitch_ -= rotateSpeed;
-
-        // 下限チェック（ここだけ制限）
         if (cameraPitch_ < minPitch) {
             cameraPitch_ = minPitch;
         }
     }
 
-    // 上限はまとめて制限
     if (cameraPitch_ > maxPitch) {
         cameraPitch_ = maxPitch;
     }
 
-    // --- ここが修正ポイント ---
-    // マップ全体のサイズ（16）ではなく、実際のブロックの範囲（0〜9）の中心を軸にする
-    Vector3 pivot = {
-        4.0f, // (最大9 + 最小0) / 2 
-        9.0f,
-        4.5f  // (最大9 + 最小0) / 2 
-    };
-
-    // カメラの距離と高さ
+    // --- カメラ位置計算 ---
+    Vector3 pivot = { 4.0f, 9.0f, 4.5f };
     float distance = 35.0f;
     float height = 20.0f;
 
-    // 座標計算
     Vector3 pos;
-
-    //4/3佐倉　縦回転計算追加
-    
     pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
     pos.y = pivot.y + std::sin(cameraPitch_) * height;
     pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
 
     camera->SetPosition(pos);
-    camera->SetRotation({cameraPitch_, cameraAngle_, 0.0f });
+    camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
 
+    // --- プレイヤー更新 ---
     if (player_) {
         player_->Update(input, stageMap_, cameraAngle_);
     }
 
-    // ★追加：スイッチの状態が変わって、再構築が必要なら実行する
+    // --- ステージ再構築 ---
     if (stageMap_.NeedsRebuild()) {
         stageRenderer_->BuildFromStageMap(stageMap_);
-        stageMap_.ClearRebuildFlag(); // フラグを下ろす
+        stageMap_.ClearRebuildFlag();
     }
 
     /*==================================================
-     ブロックを置けるようになる画面の切り替え
+        ▼ プレイヤー座標取得
     ==================================================*/
-
-    // --- ① アイテム取得処理 ---
-    // プレイヤーの足元や中心の座標を取得
-    Vector3 pPos;
-    if (player_)
-    {
-         pPos = player_->GetPosition();
+    Vector3 pPos{};
+    if (player_) {
+        pPos = player_->GetPosition();
     }
+
     int gx = static_cast<int>(std::floor(pPos.x + 0.5f));
-    int gy = static_cast<int>(std::floor(pPos.y + 0.5f)); // 腰の高さなどで判定
+    int gy = static_cast<int>(std::floor(pPos.y));      // ★安定版
     int gz = static_cast<int>(std::floor(pPos.z + 0.5f));
 
+    /*==================================================
+        ▼ アイテム取得
+    ==================================================*/
     MapCell* cell = stageMap_.GetCell(gx, gy, gz);
-    if (cell && cell->type == BlockType::BubblePickup) { // Starを置けるブロックアイテムとする
-        placeableBlockCount_++; // 所持数を増やす
-        stageMap_.RemoveBlock(gx, gy, gz); // マップからアイテムを消す
-        stageRenderer_->BuildFromStageMap(stageMap_); // 見た目を更新
+    if (cell && cell->type == BlockType::BubblePickup) {
+        placeableBlockCount_++;
+        stageMap_.RemoveBlock(gx, gy, gz);
+        stageRenderer_->BuildFromStageMap(stageMap_);
     }
 
-    // --- ② 配置モードへの切り替え処理 ---
-    // 例えば [Q]キー を押したら配置モードへ
-    if (input->TriggerKey(DIK_TAB) && placeableBlockCount_ > 0) 
-    {
-        currentMode_ = AppMode::GamePlay_BlockPlace; // モード切替
+    /*==================================================
+        ▼ ゴール判定（★追加部分）
+    ==================================================*/
+    Vector3 radius = { 0.4f, 0.9f, 0.4f }; // プレイヤーサイズに合わせる
 
-        // カーソルをプレイヤーの目の前や現在地にセットする
+    if (Goal::Check(pPos, radius, stageMap_)) {
+        isGoalReached_ = true;
+    }
+
+    /*==================================================
+        ▼ 配置モード切り替え
+    ==================================================*/
+    if (input->TriggerKey(DIK_TAB) && placeableBlockCount_ > 0) {
+        currentMode_ = AppMode::GamePlay_BlockPlace;
         mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
     }
 
-    //4/13佐倉
+    /*==================================================
+        ▼ クリア遷移
+    ==================================================*/
     if (isGoalReached_) {
         currentMode_ = AppMode::GameClear;
     }
-    /*==================================================
-    ブロックを置けるようになる画面の切り替え
-     ==================================================*/
 }
+
+
 #ifdef USE_IMGUI
 // ImGuiの更新と描画
 void MyGame::UpdateImGui() {
