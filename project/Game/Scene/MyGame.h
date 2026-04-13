@@ -19,6 +19,7 @@
 #include "MapCursor.h"
 #include "Player.h"
 #include"TitleScene.h"
+#include"GameClearScene.h"
 
 class MyGame {
 public:
@@ -39,7 +40,8 @@ private:
         DebugView,   // 今の確認用
         StageEditor, // これから作るエディター
         GamePlay,     // 後で本編
-        GamePlay_BlockPlace // ブロックを置ける用の画面を追加(エンドフィールの工業画面のやつ)04/01 秋元
+        GamePlay_BlockPlace, // ブロックを置ける用の画面を追加(エンドフィールの工業画面のやつ)04/01 秋元
+        GameClear //4/13追加　佐倉
     };
 
 	// デバッグ表示のフラグ
@@ -130,4 +132,6 @@ private:
     Model* skydomeModel_ = nullptr;
     Object3d* skydomeObject_ = nullptr;
    
+    //4/13佐倉
+    std::unique_ptr<GameClearScene> gameClearScene_;
 };

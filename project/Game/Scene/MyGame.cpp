@@ -55,6 +55,10 @@ void MyGame::Initialize() {
     //4/3追加
     titleScene_ = std::make_unique<TitleScene>();
     titleScene_->Initialize(object3dCommon, input);
+    
+    //4/13佐倉
+    gameClearScene_ = std::make_unique<GameClearScene>();
+    gameClearScene_->Initialize(object3dCommon);
 
     // --- モデル読み込み ---
     Model* modelPlane = Model::CreateFromOBJ(dxCommon, "Resources/Models/block", "block.obj", textureManager);
@@ -227,6 +231,12 @@ void MyGame::Update() {
         case AppMode::GamePlay_BlockPlace:
         UpdateGamePlayBlockPlace();
         break;
+
+        case AppMode::GameClear://4/13佐倉
+            if (gameClearScene_) {
+                gameClearScene_->Update();
+            }
+            break;
         }
     }
 
@@ -586,6 +596,11 @@ void MyGame::UpdateGamePlay() {
         // カーソルをプレイヤーの目の前や現在地にセットする
         mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
     }
+
+    //4/13佐倉
+    if (isGoalReached_) {
+        currentMode_ = AppMode::GameClear;
+    }
     /*==================================================
     ブロックを置けるようになる画面の切り替え
      ==================================================*/
@@ -822,6 +837,23 @@ void MyGame::Draw() {
             dxCommon->PostDraw();
             return; // ←ここ重要！他の描画しない
         }
+
+        if (currentMode_ == AppMode::GameClear) {//4/13佐倉
+
+            object3dCommon->PreDraw();
+
+            if (gameClearScene_) {
+                gameClearScene_->Draw();
+            }
+
+#ifdef USE_IMGUI
+            dxCommon->EndImGui();
+#endif
+
+            dxCommon->PostDraw();
+            return;
+        }
+
         // --- 天球の描画（背景として最初に描く） ---
         if (skydomeObject_) {
             skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
