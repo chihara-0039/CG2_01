@@ -52,8 +52,8 @@ void GameClearScene::Update() {
             }
 
             // 上昇
-            if (letters_[i].baseY < -4.5f) {
-                letters_[i].baseY += 0.2f;
+            if (letters_[i].baseY < -3.0f) {
+                letters_[i].baseY += 0.4f;
             }
 
             // バウンド
@@ -107,8 +107,11 @@ void GameClearScene::Update() {
     }
 
     // カメラズーム
-    if (cameraPos_.z < -10.0f) {
-        cameraPos_.z += 0.02f;
+    // カメラズーム（文字が揃うまで）
+    if (!isAllFinished_) {
+        if (cameraPos_.z < -10.0f) {
+            cameraPos_.z += 0.02f;
+        }
     }
 
     camera_.SetPosition(cameraPos_);
