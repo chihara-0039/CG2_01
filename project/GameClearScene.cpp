@@ -2,7 +2,7 @@
 void GameClearScene::Initialize(Object3dCommon* objCommon) {
     object3dCommon_ = objCommon;
 
-    cameraPos_ = { 0, 2, -15 };
+    cameraPos_ = { 0, 2, -25 };
     cameraRot_ = { 0.25f, 0, 0 };
 
     camera_.SetPosition(cameraPos_);
@@ -27,7 +27,9 @@ void GameClearScene::Initialize(Object3dCommon* objCommon) {
         letter.object->Initialize(object3dCommon_);
         letter.object->SetModel(letter.model);
 
-        letter.position = { -6.0f + i * 1.2f, -2.0f, 0.0f };
+        letter.object->SetRotation({ 0.0f,3.141592f,0.0f });
+
+        letter.position = { -6.0f + i * 1.2f, -10.0f, 0.0f };
         letter.baseY = letter.position.y;
 
         letters_.push_back(letter);
@@ -50,7 +52,7 @@ void GameClearScene::Update() {
             }
 
             // è„è∏
-            if (letters_[i].baseY < 0.0f) {
+            if (letters_[i].baseY < -4.5f) {
                 letters_[i].baseY += 0.2f;
             }
 
