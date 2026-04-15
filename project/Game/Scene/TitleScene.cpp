@@ -78,6 +78,7 @@ void TitleScene::Update() {
     camera_.SetRotation(cameraRot_);
     camera_.Update();
 
+
     // =========================
     // カメラ反映
     // =========================
