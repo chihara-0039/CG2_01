@@ -82,7 +82,7 @@ void GameClearScene::Update() {
         const Matrix4x4& proj = camera_.GetProjectionMatrix();
 
         letters_[i].object->SetCamera(view, proj);
-        letters_[i].object->Update();
+        letters_[i].object->Update(Math::MakeIdentity4x4());
     }
 
     // 全部終わった後のドン

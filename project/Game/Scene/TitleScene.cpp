@@ -85,7 +85,7 @@ void TitleScene::Update() {
     const Matrix4x4& proj = camera_.GetProjectionMatrix();
 
     titleObject_->SetCamera(view, proj);
-    titleObject_->Update();
+    titleObject_->Update(Math::MakeIdentity4x4());
 
     // =========================
     // シーン遷移
