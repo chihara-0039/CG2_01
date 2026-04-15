@@ -78,15 +78,9 @@ void Object3d::Draw() {
 
 // 影描画用の関数。引数にライトの ViewProjection 行列を受け取ります
 void Object3d::DrawShadow(const Matrix4x4& lightViewProjection) {
-    if (!model_) return;
-
-    // 1. ライト視点での WVP 行列を計算
-    // すでに Update() で計算済みの World 行列を活用します
-    Matrix4x4 worldViewProjection = Math::Multiply(transformationData_->World, lightViewProjection);
-
-    // 2. メイン描画(Camera視点)の行列を壊さないよう、一時的に保存して上書き
-    Matrix4x4 backupWVP = transformationData_->WVP;
-    transformationData_->WVP = worldViewProjection;
+    if (!model_) { 
+        return;
+    }
 
     // 3. コマンドを積む
     auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
@@ -96,7 +90,4 @@ void Object3d::DrawShadow(const Matrix4x4& lightViewProjection) {
 
     // モデル（頂点バッファ）の描画。引数に commandList が必要です
     model_->Draw(commandList);
-
-    // 4. メイン描画のために行列を元に戻す
-    transformationData_->WVP = backupWVP;
 }

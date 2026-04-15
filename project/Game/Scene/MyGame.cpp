@@ -284,6 +284,8 @@ void MyGame::Update() {
     // プレイヤーの位置に合わせて影の範囲を動かすことで、常に綺麗な影を出します
     Vector3 lightDir = { 0.5f, -1.0f, 0.5f }; // ライトの向き（Object3dCommonの設定に合わせる）
     lightCamera_->Update(lightDir, player_->GetPosition());
+
+    object3dCommon->SetLightDirection(lightDir);
 }
 
 //パーティクル発生のテスト（スペースキーを押すと発生）
