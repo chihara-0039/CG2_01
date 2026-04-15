@@ -19,6 +19,7 @@ void TitleScene::Initialize(Object3dCommon* objCommon, Input* input) {
         object3dCommon_->GetTextureManager()
     );
 
+
     // オブジェクト生成
     titleObject_ = new Object3d();
     titleObject_->Initialize(object3dCommon_);
