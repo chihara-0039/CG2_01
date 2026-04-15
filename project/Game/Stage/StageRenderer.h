@@ -17,7 +17,7 @@ public:
     const Vector3& GetBlockScale() const { return blockScale_; }
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection);
 
-    void Update();
+    void Update(const Matrix4x4& lightVP);
     void Draw();
 
     void Clear();

@@ -5,6 +5,7 @@ Player::~Player() {
 	delete object_;
 }
 
+// 初期化：描画用コンポーネントとモデルを設定
 void Player::Initialize(Object3dCommon* common, Model* model) {
 	object_ = new Object3d();
 	object_->Initialize(common);
@@ -13,7 +14,8 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 	object_->SetRotation({ 0.0f, 0.0f, 0.0f });
 }
 
-void Player::Update(const Input* input,StageMap& map, float cameraRotY)
+// 更新：移動・重力・当たり判定の処理
+void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Matrix4x4& lightVP)
 {
 	input_ = input;
 	// --- 1. ハシゴ判定 ---
@@ -134,9 +136,10 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY)
 	// --- 表示更新 ---
 	object_->SetPosition(position_);
 	object_->SetRotation(rotation_);
-	object_->Update();
+	object_->Update(lightVP);
 }
 
+// ドアに触れているか判定して、触れていてかつFキーがトリガーされたらワープする
 void Player::DoorWarp(const StageMap& map)
 {
 	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
@@ -192,6 +195,7 @@ bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
 	return false;
 }
 
+// リスポーン処理：座標をリスポーンポイントに戻し、速度と回転をリセット
 void Player::Respawn()
 {
 	position_ = respawnPosition;
@@ -199,6 +203,7 @@ void Player::Respawn()
 	rotation_ = { 0.0f,0.0f,0.0f };
 }
 
+// Pスイッチの更新：足元のセルをチェックして、Pスイッチがあればマップに状態変更を通知
 void Player::PSwitchUpdate(StageMap& map)
 {
 	// プレイヤーの中心座標から足元のインデックスを計算
@@ -218,8 +223,17 @@ void Player::PSwitchUpdate(StageMap& map)
 	}
 }
 
+// 描画：内部で持っている Object3d を描画
 void Player::Draw() {
 	if (object_) {
 		object_->Draw();
+	}
+}
+
+// 影の描画：ライトカメラの行列を渡して影を描く
+void Player::DrawShadow(const Matrix4x4& lightViewProjection) {
+	// 自身が持っている 3Dオブジェクトの影用描画を呼ぶ
+	if (object_) {
+		object_->DrawShadow(lightViewProjection);
 	}
 }

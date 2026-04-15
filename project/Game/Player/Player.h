@@ -12,10 +12,13 @@ public:
     void Initialize(Object3dCommon* common, Model* model);
 
     // 更新：移動・重力・当たり判定の処理
-    void Update(const Input* input,  StageMap& map, float cameraRotY);
+    void Update(const Input* input,  StageMap& map, float cameraRotY, const Matrix4x4& lightVP);
 
     // 描画：内部で持っている Object3d を描画
     void Draw();
+
+	// 影の描画：ライトカメラの行列を渡して影を描く
+    void DrawShadow(const Matrix4x4& lightViewProjection);
 
     // 座標の設定と取得
     void SetPosition(const Vector3& pos) { position_ = pos; }

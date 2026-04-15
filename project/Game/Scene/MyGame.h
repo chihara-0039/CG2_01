@@ -18,6 +18,8 @@
 #include "StageRenderer.h"
 #include "MapCursor.h"
 #include "Player.h"
+#include "ShadowMap.h"
+#include "LightCamera.h"
 #include"TitleScene.h"
 #include"GameClearScene.h"
 
@@ -127,10 +129,15 @@ private:
     // 置けるブロックの所持数 04/01 秋元
     int placeableBlockCount_ = 0;
 
+	// スカイドーム
     //4/3佐倉
     std::unique_ptr<TitleScene> titleScene_;
     Model* skydomeModel_ = nullptr;
     Object3d* skydomeObject_ = nullptr;
+
+    // 影用リソース
+    std::unique_ptr<ShadowMap> shadowMap_;
+    std::unique_ptr<LightCamera> lightCamera_;
    
     //4/13佐倉
     std::unique_ptr<GameClearScene> gameClearScene_;

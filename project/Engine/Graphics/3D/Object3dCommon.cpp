@@ -4,6 +4,8 @@
 
 using namespace Microsoft::WRL;
 
+// ルートシグネチャとパイプラインステートの作成に失敗している可能性があるため、
+// Initialize関数にログとアサーションを追加してみます。
 void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
     assert(dxCommon);
     dxCommon_ = dxCommon;
@@ -32,9 +34,13 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
     CreateLightBuffer();
     SetDefaultLight();
 
+	// 影用のルートシグネチャとパイプラインステートも作成
+    CreateShadowPipeline();
+
     OutputDebugStringA("Object3dCommon::Initialize Finish\n");
 }
 
+// 描画前の共通設定
 void Object3dCommon::PreDraw() {
     auto commandList = dxCommon_->GetCommandList();
 
@@ -49,6 +55,7 @@ void Object3dCommon::PreDraw() {
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
+// ライトの初期値を設定する関数
 void Object3dCommon::SetDefaultLight() {
     if (lightData_) {
         lightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -57,6 +64,7 @@ void Object3dCommon::SetDefaultLight() {
     }
 }
 
+// ルートシグネチャの作成関数
 void Object3dCommon::CreateRootSignature() {
     OutputDebugStringA("CreateRootSignature Start\n");
 
@@ -67,7 +75,8 @@ void Object3dCommon::CreateRootSignature() {
     // 1: TransformationMatrix (VS b0)
     // 2: DirectionalLight (PS b1)
     // 3: Texture (PS t0)
-    D3D12_ROOT_PARAMETER rootParameters[4] = {};
+	// 4: Static Sampler (PS s0)
+    D3D12_ROOT_PARAMETER rootParameters[5] = {};
 
     // 0. Material
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -95,6 +104,18 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[3].DescriptorTable.pDescriptorRanges = descriptorRange;
     rootParameters[3].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // ShadowMap
+    D3D12_DESCRIPTOR_RANGE shadowRange[1] = {};
+    shadowRange[0].BaseShaderRegister = 1; // t1 レジスタを使用
+    shadowRange[0].NumDescriptors = 1;
+    shadowRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    shadowRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[4].DescriptorTable.pDescriptorRanges = shadowRange;
+    rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(shadowRange);
+    rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで影判定するため
 
     // Sampler
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
@@ -131,6 +152,7 @@ void Object3dCommon::CreateRootSignature() {
     }
 }
 
+// パイプラインステートの作成関数
 void Object3dCommon::CreateGraphicsPipeline() {
     OutputDebugStringA("CreateGraphicsPipeline Start\n");
 
@@ -186,6 +208,46 @@ void Object3dCommon::CreateGraphicsPipeline() {
     }
 }
 
+// 影用のパイプラインステートの作成関数
+void Object3dCommon::CreateShadowPipeline() {
+    // 影専用シェーダーをコンパイル
+    auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/ShadowMap.VS.hlsl", L"vs_6_0");
+    // PSは nullptr （空）でOK！色が不要なため処理が高速になります
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = rootSignature_.Get();
+
+    // 入力レイアウト（座標 POSITION だけで十分です）
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+
+    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+    psoDesc.PS = { nullptr, 0 }; // ★ Pixel Shaderは使わない
+
+    // ラスタライザ：影を確実に出すためカリングは無し(NONE)が安定します
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+
+    // 深度設定：書き込みを有効にする
+    psoDesc.DepthStencilState.DepthEnable = TRUE;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+
+    // ★ 重要：レンダーターゲット（色）は 0 個にする
+    psoDesc.NumRenderTargets = 0;
+
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+    // 影用PSOの生成
+    dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&shadowPipelineState_));
+}
+
+// ライト用の定数バッファを作成する関数
 void Object3dCommon::CreateLightBuffer() {
     auto device = dxCommon_->GetDevice();
     D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
@@ -198,3 +260,4 @@ void Object3dCommon::CreateLightBuffer() {
     device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&lightResource_));
     lightResource_->Map(0, nullptr, (void**)&lightData_);
 }
+
