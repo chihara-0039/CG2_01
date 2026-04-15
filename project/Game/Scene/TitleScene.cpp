@@ -4,22 +4,22 @@ void TitleScene::Initialize(Object3dCommon* objCommon, Input* input) {
     object3dCommon_ = objCommon;
     input_ = input;
 
-    // ƒJƒƒ‰—p•Ï”
+    // ã‚«ãƒ¡ãƒ©ç”¨å¤‰æ•°
     cameraPos_ = { 0.0f, 2.0f, -20.0f };
     cameraRot_ = { 0.0f, 0.0f, 0.0f };
 
     camera_.SetPosition(cameraPos_);
     camera_.SetRotation(cameraRot_);
 
-    // ƒ‚ƒfƒ‹“Ç‚İ‚İiD‚«‚Èƒ‚ƒfƒ‹‚É•ÏXOKj
+    // ãƒ¢ãƒ‡ãƒ«èª­ã¿è¾¼ã¿ï¼ˆå¥½ããªãƒ¢ãƒ‡ãƒ«ã«å¤‰æ›´OKï¼‰
     titleModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
-        "Game/Scene/title",
+        "Resources/Models/title",
         "title.obj",
         object3dCommon_->GetTextureManager()
     );
 
-    // ƒIƒuƒWƒFƒNƒg¶¬
+    // ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆç”Ÿæˆ
     titleObject_ = new Object3d();
     titleObject_->Initialize(object3dCommon_);
     titleObject_->SetModel(titleModel_);
@@ -35,11 +35,11 @@ void TitleScene::Update() {
 
     timer_ += 0.02f;
 
-    // ‰QŠª‚«
+    // æ¸¦å·»ã
     if (spiralAngle_ < 6.28f) {
         spiralAngle_ += 0.05f;
 
-        // ‰º‚©‚çã‚ª‚é
+        // ä¸‹ã‹ã‚‰ä¸ŠãŒã‚‹
         if (position_.y < 0) {
             position_.y += 0.1f;
         }
@@ -53,24 +53,24 @@ void TitleScene::Update() {
         rotation_.y += 0.02f;
     }
 
-    // í‰ñ“]
+    // å¸¸æ™‚å›è»¢
     rotation_.y += 0.02f;
 
-    // š Object‚É”½‰f
+    // â˜… Objectã«åæ˜ 
     titleObject_->SetPosition(position_);
     titleObject_->SetRotation(rotation_);
 
 
     // =========================
-   // ƒJƒƒ‰‰‰o
+   // ã‚«ãƒ¡ãƒ©æ¼”å‡º
    // =========================
 
-   // ƒY[ƒ€ƒCƒ“
+   // ã‚ºãƒ¼ãƒ ã‚¤ãƒ³
     if (cameraPos_.z < -10.0f) {
         cameraPos_.z += 0.03f;
     }
 
-    // ­‚µŒ©‰º‚ë‚·
+    // å°‘ã—è¦‹ä¸‹ã‚ã™
     cameraRot_.x = 0.25f;
 
     camera_.SetPosition(cameraPos_);
@@ -78,7 +78,7 @@ void TitleScene::Update() {
     camera_.Update();
 
     // =========================
-    // ƒJƒƒ‰”½‰f
+    // ã‚«ãƒ¡ãƒ©åæ˜ 
     // =========================
     const Matrix4x4& view = camera_.GetViewMatrix();
     const Matrix4x4& proj = camera_.GetProjectionMatrix();
@@ -87,7 +87,7 @@ void TitleScene::Update() {
     titleObject_->Update();
 
     // =========================
-    // ƒV[ƒ“‘JˆÚ
+    // ã‚·ãƒ¼ãƒ³é·ç§»
     // =========================
     if (input_->TriggerKey(DIK_RETURN)) {
         isFinished_ = true;
