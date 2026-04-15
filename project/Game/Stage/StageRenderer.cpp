@@ -262,9 +262,11 @@ void StageRenderer::SetCamera(const Matrix4x4& view, const Matrix4x4& projection
 }
 
 // 全てのオブジェクトの更新処理を呼び出す
-void StageRenderer::Update() {
+void StageRenderer::Update(const Matrix4x4& lightVP) {
 	for (Object3d* obj : objects_) {
-		obj->Update();
+		if (obj) {
+			obj->Update(lightVP);
+		}
 	}
 }
 

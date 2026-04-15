@@ -25,7 +25,7 @@ void ModelManager::SetCamera(const Matrix4x4& view, const Matrix4x4& projection)
     projectionMatrix_ = projection;
 }
 
-void ModelManager::Draw(const std::string& modelName, const Vector3& pos, const Vector3& rot, const Vector3& scale, const Vector4& color) {
+void ModelManager::Draw(const std::string& modelName, const Vector3& pos, const Vector3& rot, const Vector3& scale, const Vector4& color, const Matrix4x4& lightVP) {
     // 1. モデルがなければ読み込む（キャッシュ機能）
     if (models_.find(modelName) == models_.end()) {
         models_[modelName] = Model::CreateFromOBJ(common_->GetDxCommon(), "Resources", modelName, common_->GetTextureManager());
@@ -40,7 +40,7 @@ void ModelManager::Draw(const std::string& modelName, const Vector3& pos, const 
     internalObject_->SetCamera(viewMatrix_, projectionMatrix_);
 
     // 3. 更新と描画
-    internalObject_->Update();
+    internalObject_->Update(lightVP);
     internalObject_->Draw();
 }
 

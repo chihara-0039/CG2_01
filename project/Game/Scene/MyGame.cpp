@@ -189,6 +189,9 @@ void MyGame::Update() {
 
 #endif
 
+    //  ここで「ライト視点の行列」を取得！これが全ての lightVP
+    const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
+
     // --- 3. カメラの更新 ---
     if (currentMode_ != AppMode::GamePlay) {
         camera->UpdateBlenderStyle(input, isGuiCaptured, winApp->GetHwnd());
@@ -197,7 +200,7 @@ void MyGame::Update() {
     if (skydomeObject_) {
         // 天球の座標を常にカメラと同じにする
         skydomeObject_->SetPosition(camera->GetPosition());
-        skydomeObject_->Update();
+        skydomeObject_->Update(Math::MakeIdentity4x4());
     }
 
     
@@ -228,6 +231,8 @@ void MyGame::Update() {
 
     const Matrix4x4& view = camera->GetViewMatrix();
     const Matrix4x4& proj = camera->GetProjectionMatrix();
+    // ライト視点の行列を取得しておきます
+    //const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
     // --- プレイヤーに最新のカメラ行列を教える ---
     if (player_) {
@@ -242,22 +247,27 @@ void MyGame::Update() {
 
 	// 3Dオブジェクトの更新
     if (debugFlags_.show3DObjects) {
+        // 修正：lightVP を引数として渡す
+        const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
         for (Object3d* obj : objectList) {
-            obj->SetCamera(view, proj);
-            obj->Update();
+            if (obj) {
+                obj->SetCamera(view, proj);
+                obj->Update(lightVP);
+            }
         }
     }
 
 	// ステージ描画オブジェクトの更新
     if (stageRenderer_) {
         stageRenderer_->SetCamera(view, proj);
-        stageRenderer_->Update();
+        // ※ StageRenderer内部でもObject3dのUpdate(lightVP)を呼ぶように修正が必要です
+        stageRenderer_->Update(lightVP);
     }
 
 	// マップカーソルの更新
     if (mapCursor_) {
         mapCursor_->SetCamera(view, proj);
-        mapCursor_->Update();
+        mapCursor_->Update(lightVP);
     }
 
 	// スプライトの更新
@@ -545,7 +555,7 @@ void MyGame::UpdateGamePlay() {
     camera->SetRotation({cameraPitch_, cameraAngle_, 0.0f });
 
     if (player_) {
-        player_->Update(input, stageMap_, cameraAngle_);
+        player_->Update(input, stageMap_, cameraAngle_, lightCamera_->GetViewProjectionMatrix());
     }
 
     // ★追加：スイッチの状態が変わって、再構築が必要なら実行する
@@ -997,7 +1007,9 @@ void MyGame::UpdateGamePlayBlockPlace()
     }
 
     // カーソルの座標を更新
-    mapCursor_->Update();
+    if (mapCursor_) {
+        mapCursor_->Update(lightCamera_->GetViewProjectionMatrix());
+    }
 
     // ② ブロックを置く決定処理 (Enterキー)
     if (input->TriggerKey(DIK_RETURN)) {

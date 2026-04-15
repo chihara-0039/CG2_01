@@ -15,7 +15,7 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 }
 
 // 更新：移動・重力・当たり判定の処理
-void Player::Update(const Input* input,StageMap& map, float cameraRotY)
+void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Matrix4x4& lightVP)
 {
 	input_ = input;
 	// --- 1. ハシゴ判定 ---
@@ -136,7 +136,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY)
 	// --- 表示更新 ---
 	object_->SetPosition(position_);
 	object_->SetRotation(rotation_);
-	object_->Update();
+	object_->Update(lightVP);
 }
 
 // ドアに触れているか判定して、触れていてかつFキーがトリガーされたらワープする

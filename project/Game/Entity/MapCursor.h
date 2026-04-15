@@ -10,7 +10,7 @@ public:
     ~MapCursor();
 
     void Initialize(Object3dCommon* object3dCommon);
-    void Update();
+    void Update(const Matrix4x4& lightVP);
     void Draw();
 
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection);

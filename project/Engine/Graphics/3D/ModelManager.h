@@ -19,7 +19,8 @@ public:
         const Vector3& pos,
         const Vector3& rot = { 0,0,0 },
         const Vector3& scale = { 1,1,1 },
-        const Vector4& color = { 1,1,1,1 }
+        const Vector4& color = { 1,1,1,1 },
+		const Matrix4x4& lightVP = Math::MakeIdentity4x4()
     );
 
     // カメラの設定（Updateの前に呼ぶ必要がある）

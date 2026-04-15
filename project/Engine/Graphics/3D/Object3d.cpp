@@ -32,12 +32,19 @@ void Object3d::Initialize(Object3dCommon* object3dCommon) {
 }
 
 // 毎フレーム呼び出す更新関数。ワールド行列とWVP行列を計算して定数バッファに転送します
-void Object3d::Update() {
+void Object3d::Update(const Matrix4x4& lightVP) {
+    // 1. ワールド行列の計算
     Matrix4x4 worldMatrix = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+
+    // 2. カメラ視点の WVP 行列の計算
     Matrix4x4 wvpMatrix = Math::Multiply(worldMatrix, Math::Multiply(viewMatrix_, projectionMatrix_));
 
+    // 3. 定数バッファ(GPUに送るデータ)への書き込み
     transformationData_->WVP = wvpMatrix;
     transformationData_->World = worldMatrix;
+
+    // ★ ここが重要：ピクセルシェーダーでの影判定に使うため、ライト行列を転送します
+    transformationData_->lightViewProjection = lightVP;
 }
 
 // UV変換のセッター。引数にスケール、回転、平行移動をまとめた Transform 構造体を受け取ります

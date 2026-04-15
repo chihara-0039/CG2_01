@@ -33,7 +33,7 @@ void MapCursor::Initialize(Object3dCommon* object3dCommon) {
     cursorObject_->SetPosition(IndexToWorldPosition());
 }
 
-void MapCursor::Update() {
+void MapCursor::Update(const Matrix4x4& lightVP) {
     if (!cursorObject_) {
         return;
     }
@@ -48,7 +48,7 @@ void MapCursor::Update() {
     // モデルに対してスケールをセットする
     cursorObject_->SetScale(scale_);
 
-    cursorObject_->Update();
+    cursorObject_->Update(lightVP);
 }
 
 void MapCursor::Draw() {
