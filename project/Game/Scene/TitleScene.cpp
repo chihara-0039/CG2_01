@@ -14,7 +14,7 @@ void TitleScene::Initialize(Object3dCommon* objCommon, Input* input) {
     // モデル読み込み（好きなモデルに変更OK）
     titleModel_ = Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
-        "Game/Scene/title",
+        "Resources/Models/title",
         "title.obj",
         object3dCommon_->GetTextureManager()
     );
