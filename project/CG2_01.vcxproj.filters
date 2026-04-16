@@ -1,278 +1,89 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="ソース ファイル">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
-    <Filter Include="ヘッダー ファイル">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
-    <Filter Include="リソース ファイル">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
-    <Filter Include="imgui">
-      <UniqueIdentifier>{ee4ab976-8f29-4c19-966a-869c69492197}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソース ファイル\app">
-      <UniqueIdentifier>{cff74d49-df64-4f52-a0bf-7e59d13fda6d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソース ファイル\render">
-      <UniqueIdentifier>{ff047a05-8fdb-4780-90cc-0a4faa8c254d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソース ファイル\assets">
-      <UniqueIdentifier>{cdcbeaaf-9cfc-43c2-9ad3-1874240f26ec}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソース ファイル\ext">
-      <UniqueIdentifier>{92f2297a-88e2-4503-ac90-8b2b849a3726}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソース ファイル\audio">
-      <UniqueIdentifier>{4d7f7cac-9af3-4f5d-ba56-ebc76b77c3bc}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソース ファイル\math">
-      <UniqueIdentifier>{d576b240-fbb9-41bc-9e31-c909a9c5590c}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソース ファイル\externals">
-      <UniqueIdentifier>{e8e422ea-f8f0-4705-ae29-09cc2a6a003c}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ソース ファイル\math\shader">
-      <UniqueIdentifier>{cb882ec1-1666-4623-9189-b495a824f071}</UniqueIdentifier>
-    </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="externals\imgui\imgui.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_demo.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_draw.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_impl_dx12.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_impl_win32.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_tables.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_widgets.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="src\app\main.cpp">
-      <Filter>ソース ファイル\app</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Base\Input.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Base\WinApp.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Base\DirectXCommon.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Base\StringUtility.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Base\Logger.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Utility\D3DResourceLeakChecker.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\2D\SpriteCommon.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\2D\Sprite.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Math\MyMath.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\2D\TextureManager.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\Object3dCommon.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\Model.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\Object3d.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\Particle\ParticleManager.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\Scene\MyGame.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Utility\Camera.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\Stage\StageMap.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\Stage\StageRenderer.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\Entity\MapCursor.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\Player\Player.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\Entity\Goal.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\Scene\TitleScene.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\ShadowMap.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Utility\LightCamera.cpp">
-    <ClCompile Include="GameClearScene.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Resources\shaders\hlsl\Object3d.PS.hlsl">
-      <Filter>ソース ファイル\math\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Resources\shaders\hlsl\Object3d.VS.hlsl">
-      <Filter>ソース ファイル\math\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Resources\shaders\hlsl\Sprite.PS.hlsl">
-      <Filter>ソース ファイル\math\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Resources\shaders\hlsl\Sprite.VS.hlsl">
-      <Filter>ソース ファイル\math\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Resources\shaders\hlsl\Particle.PS.hlsl">
-      <Filter>ソース ファイル\math\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Resources\shaders\hlsl\Particle.VS.hlsl">
-      <Filter>ソース ファイル\math\shader</Filter>
-    </FxCompile>
+    <FxCompile Include="Resources\shaders\hlsl\Particle.PS.hlsl" />
+    <FxCompile Include="Resources\shaders\hlsl\Particle.VS.hlsl" />
+    <FxCompile Include="Resources\shaders\hlsl\Object3d.PS.hlsl" />
+    <FxCompile Include="Resources\shaders\hlsl\Object3d.VS.hlsl" />
     <FxCompile Include="Resources\shaders\hlsl\ShadowMap.PS.hlsl" />
     <FxCompile Include="Resources\shaders\hlsl\ShadowMap.VS.hlsl" />
+    <FxCompile Include="Resources\shaders\hlsl\Sprite.PS.hlsl" />
+    <FxCompile Include="Resources\shaders\hlsl\Sprite.VS.hlsl" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="externals\imgui\imconfig.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imgui.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imgui_impl_dx12.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imgui_impl_win32.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imgui_internal.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imstb_rectpack.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imstb_textedit.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imstb_truetype.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Base\Input.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Base\WinApp.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Base\DirectXCommon.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Base\StringUtility.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Base\Logger.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Utility\D3DResourceLeakChecker.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\2D\SpriteCommon.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\2D\Sprite.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Math\MyMath.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\2D\TextureManager.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\Object3dCommon.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\Model.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\Object3d.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\Particle\ParticleManager.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\ModelManager.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\Scene\MyGame.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Utility\Camera.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\Stage\StageMap.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\Stage\StageRenderer.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\Entity\MapCursor.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\Player\Player.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\Entity\Goal.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\Scene\TitleScene.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\ShadowMap.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Utility\LightCamera.h">
-    <ClInclude Include="GameClearScene.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
+    <ClCompile Include="Engine\Utility\Camera.cpp" />
+    <ClCompile Include="Engine\Utility\D3DResourceLeakChecker.cpp" />
+    <ClCompile Include="Engine\Base\DirectXCommon.cpp" />
+    <ClCompile Include="externals\imgui\imgui.cpp" />
+    <ClCompile Include="externals\imgui\imgui_demo.cpp" />
+    <ClCompile Include="externals\imgui\imgui_draw.cpp" />
+    <ClCompile Include="externals\imgui\imgui_impl_dx12.cpp" />
+    <ClCompile Include="externals\imgui\imgui_impl_win32.cpp" />
+    <ClCompile Include="externals\imgui\imgui_tables.cpp" />
+    <ClCompile Include="externals\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Game\Entity\Goal.cpp" />
+    <ClCompile Include="Engine\Base\Input.cpp" />
+    <ClCompile Include="Engine\Base\Logger.cpp" />
+    <ClCompile Include="Game\Entity\MapCursor.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\Model.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
+    <ClCompile Include="Game\Scene\MyGame.cpp" />
+    <ClCompile Include="Engine\Math\MyMath.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\Object3d.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\Object3dCommon.cpp" />
+    <ClCompile Include="Engine\Graphics\Particle\ParticleManager.cpp" />
+    <ClCompile Include="Game\Player\Player.cpp" />
+    <ClCompile Include="Engine\Graphics\2D\Sprite.cpp" />
+    <ClCompile Include="Engine\Graphics\2D\SpriteCommon.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\ShadowMap.cpp" />
+    <ClCompile Include="Engine\Utility\LightCamera.cpp" />
+    <ClCompile Include="src\app\main.cpp" />
+    <ClCompile Include="Game\Stage\StageMap.cpp" />
+    <ClCompile Include="Game\Stage\StageRenderer.cpp" />
+    <ClCompile Include="Engine\Base\StringUtility.cpp" />
+    <ClCompile Include="Engine\Graphics\2D\TextureManager.cpp" />
+    <ClCompile Include="Engine\Base\WinApp.cpp" />
+    <ClCompile Include="Game\Scene\TitleScene.cpp" />
+    <ClCompile Include="Game\Scene\GameClearScene.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\shaders\hlsl\Object3d.hlsli">
-      <Filter>ソース ファイル\math\shader</Filter>
-    </None>
-    <None Include="Resources\shaders\hlsl\Particle.hlsli">
-      <Filter>ソース ファイル\math\shader</Filter>
-    </None>
+    <ClInclude Include="Engine\Utility\Camera.h" />
+    <ClInclude Include="Engine\Utility\D3DResourceLeakChecker.h" />
+    <ClInclude Include="Engine\Base\DirectXCommon.h" />
+    <ClInclude Include="externals\imgui\imconfig.h" />
+    <ClInclude Include="externals\imgui\imgui.h" />
+    <ClInclude Include="externals\imgui\imgui_impl_dx12.h" />
+    <ClInclude Include="externals\imgui\imgui_impl_win32.h" />
+    <ClInclude Include="externals\imgui\imgui_internal.h" />
+    <ClInclude Include="externals\imgui\imstb_rectpack.h" />
+    <ClInclude Include="externals\imgui\imstb_textedit.h" />
+    <ClInclude Include="externals\imgui\imstb_truetype.h" />
+    <ClInclude Include="Game\Entity\Goal.h" />
+    <ClInclude Include="Engine\Base\Input.h" />
+    <ClInclude Include="Engine\Base\Logger.h" />
+    <ClInclude Include="Game\Entity\MapCursor.h" />
+    <ClInclude Include="Engine\Graphics\3D\Model.h" />
+    <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
+    <ClInclude Include="Game\Scene\MyGame.h" />
+    <ClInclude Include="Engine\Math\MyMath.h" />
+    <ClInclude Include="Engine\Graphics\3D\Object3d.h" />
+    <ClInclude Include="Engine\Graphics\3D\Object3dCommon.h" />
+    <ClInclude Include="Engine\Graphics\Particle\ParticleManager.h" />
+    <ClInclude Include="Game\Player\Player.h" />
+    <ClInclude Include="Engine\Graphics\2D\Sprite.h" />
+    <ClInclude Include="Engine\Graphics\2D\SpriteCommon.h" />
+    <ClInclude Include="Game\Stage\StageMap.h" />
+    <ClInclude Include="Game\Stage\StageRenderer.h" />
+    <ClInclude Include="Engine\Base\StringUtility.h" />
+    <ClInclude Include="Engine\Graphics\2D\TextureManager.h" />
+    <ClInclude Include="Engine\Base\WinApp.h" />
+    <ClInclude Include="Engine\Graphics\3D\ShadowMap.h" />
+    <ClInclude Include="Game\Scene\TitleScene.h" />
+    <ClInclude Include="Engine\Utility\LightCamera.h" />
+    <ClInclude Include="Game\Scene\GameClearScene.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\shaders\hlsl\Particle.hlsli" />
+    <None Include="Resources\shaders\hlsl\Object3d.hlsli" />
   </ItemGroup>
 </Project>
