@@ -18,7 +18,7 @@ void GameClearScene::Initialize(Object3dCommon* objCommon) {
 
         letter.model = Model::CreateFromOBJ(
             object3dCommon_->GetDxCommon(),
-            "Resources/Models/ClearText/"+name,   // â† ãƒ•ã‚©ãƒ«ãƒ€æ§‹æˆã«åˆã‚ã›ã‚‹
+            "Resources/Models/ClearText/"+name,   // © ƒtƒHƒ‹ƒ_\¬‚É‡‚í‚¹‚é
             name + ".obj",
             object3dCommon_->GetTextureManager()
         );
@@ -51,12 +51,12 @@ void GameClearScene::Update() {
                 letters_[i].bounceTime = 0.0f;
             }
 
-            // ä¸Šæ˜‡
+            // ã¸
             if (letters_[i].baseY < -3.0f) {
                 letters_[i].baseY += 0.4f;
             }
 
-            // ãƒã‚¦ãƒ³ãƒ‰
+            // ƒoƒEƒ“ƒh
             if (letters_[i].bounceTime < 30.0f) {
 
                 letters_[i].bounceTime += 1.0f;
@@ -73,19 +73,19 @@ void GameClearScene::Update() {
             allFinished = false;
         }
 
-        // Objectã«åæ˜ 
+        // Object‚É”½‰f
         letters_[i].object->SetPosition(letters_[i].position);
         letters_[i].object->SetScale(letters_[i].scale);
 
-        // ã‚«ãƒ¡ãƒ©è¨­å®š
+        // ƒJƒƒ‰İ’è
         const Matrix4x4& view = camera_.GetViewMatrix();
         const Matrix4x4& proj = camera_.GetProjectionMatrix();
 
         letters_[i].object->SetCamera(view, proj);
-        letters_[i].object->Update(Math::MakeIdentity4x4());
+        letters_[i].object->Update();
     }
 
-    // å…¨éƒ¨çµ‚ã‚ã£ãŸå¾Œã®ãƒ‰ãƒ³
+    // ‘S•”I‚í‚Á‚½Œã‚Ìƒhƒ“
     if (allFinished) {
         isAllFinished_ = true;
     }
@@ -106,8 +106,8 @@ void GameClearScene::Update() {
         }
     }
 
-    // ã‚«ãƒ¡ãƒ©ã‚ºãƒ¼ãƒ 
-    // ã‚«ãƒ¡ãƒ©ã‚ºãƒ¼ãƒ ï¼ˆæ–‡å­—ãŒæƒã†ã¾ã§ï¼‰
+    // ƒJƒƒ‰ƒY[ƒ€
+    // ƒJƒƒ‰ƒY[ƒ€i•¶š‚ª‘µ‚¤‚Ü‚Åj
     if (!isAllFinished_) {
         if (cameraPos_.z < -10.0f) {
             cameraPos_.z += 0.02f;
