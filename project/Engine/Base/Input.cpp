@@ -95,6 +95,13 @@ void Input::Update() {
     for (int i = 0; i < 3; i++) {
         mouseState_.buttons[i] = (mouseData.rgbButtons[i] & 0x80) != 0;
     }
+
+    //4/20佐倉追加
+    POINT p;
+    GetCursorPos(&p);
+    ScreenToClient(winApp_->GetHwnd(), &p);
+    mouseState_.posX = p.x;
+    mouseState_.posY = p.y;
 }
 
 // キーが押されているか判定

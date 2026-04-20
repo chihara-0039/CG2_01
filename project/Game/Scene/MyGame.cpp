@@ -519,27 +519,78 @@ void MyGame::UpdateStageEditor() {
 }
 
 void MyGame::UpdateGamePlay() {
+
+    //4/20佐倉追加
+    const auto& mouse = input->GetMouseState();
+
+    //画面サイズ取得
+    float screenWidth = (float)WinApp::kClientWidth;
+    float screenHeight = (float)WinApp::kClientHeight;
+
+    //どこを端とするか
+    float edgeRatio = 0.1f;
+
+    float leftEdge = screenWidth * edgeRatio;
+    float rightEdge = screenWidth * (1.0f - edgeRatio);
+    float topEdge = screenHeight * edgeRatio;
+    float bottomEdge = screenHeight * (1.0f - edgeRatio);
+
+    //マウス位置
+    float mouseX = (float)mouse.posX;
+    float mouseY = (float)mouse.posY;
+
+   
+
     const float rotateSpeed = 0.025f;
 
-    if (input->PushKey(DIK_Q)) cameraAngle_ -= rotateSpeed;
-    if (input->PushKey(DIK_E)) cameraAngle_ += rotateSpeed;
+    //if (input->PushKey(DIK_Q)) cameraAngle_ -= rotateSpeed;
+    //if (input->PushKey(DIK_E)) cameraAngle_ += rotateSpeed;
 
     // --- 縦回転 ---
     const float minPitch = 0.4f;
     const float maxPitch = 1.5f;
     const float upperLimit = 3.0f;
 
-    if (input->PushKey(DIK_Z)) {
-        cameraPitch_ += rotateSpeed;
-        if (cameraPitch_ > upperLimit) {
-            cameraPitch_ = upperLimit;
-        }
-    }
+    //if (input->PushKey(DIK_Z)) {
+    //    cameraPitch_ += rotateSpeed;
+    //    if (cameraPitch_ > upperLimit) {
+    //        cameraPitch_ = upperLimit;
+    //    }
+    //}
 
-    if (input->PushKey(DIK_C)) {
-        cameraPitch_ -= rotateSpeed;
-        if (cameraPitch_ < minPitch) {
-            cameraPitch_ = minPitch;
+    //if (input->PushKey(DIK_C)) {
+    //    cameraPitch_ -= rotateSpeed;
+    //    if (cameraPitch_ < minPitch) {
+    //        cameraPitch_ = minPitch;
+    //    }
+    //}
+
+     //クリック中のみ反応(左クリック)
+    if (mouse.buttons[0]) {
+        //横回転
+        if (mouseX < leftEdge) {
+            //左端Q
+            cameraAngle_ -= rotateSpeed;
+        }
+        else if (mouseX < rightEdge) {
+            //右端E
+            cameraAngle_ += rotateSpeed;
+        }
+
+        //縦回転
+        if (mouseY < topEdge) {
+            //上端
+            cameraPitch_ += rotateSpeed;
+            if (cameraPitch_ > upperLimit) {
+                cameraPitch_ = upperLimit;
+            }
+        }
+        else if (mouseY > bottomEdge) {
+            //下向き
+            cameraPitch_ -= rotateSpeed;
+            if (cameraPitch_ < minPitch) {
+                cameraPitch_ = minPitch;
+            }
         }
     }
 
