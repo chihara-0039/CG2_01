@@ -12,18 +12,18 @@ void TitleScene::Initialize(Object3dCommon* objCommon, Input* input) {
     camera_.SetRotation(cameraRot_);
 
     // モデル読み込み（好きなモデルに変更OK）
-    titleModel_ = Model::CreateFromOBJ(
+    titleModel_ = std::unique_ptr<Model>(Model::CreateFromOBJ(
         object3dCommon_->GetDxCommon(),
         "Resources/Models/title",
         "title.obj",
         object3dCommon_->GetTextureManager()
-    );
+    ));
 
 
     // オブジェクト生成
-    titleObject_ = new Object3d();
+    titleObject_ = std::make_unique<Object3d>();
     titleObject_->Initialize(object3dCommon_);
-    titleObject_->SetModel(titleModel_);
+    titleObject_->SetModel(titleModel_.get());
 
     position_ = { 0, -10, 10 };
     rotation_ = { 0, 0, 0 };
