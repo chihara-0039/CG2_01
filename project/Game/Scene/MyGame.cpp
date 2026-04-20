@@ -572,7 +572,7 @@ void MyGame::UpdateGamePlay() {
             //左端Q
             cameraAngle_ -= rotateSpeed;
         }
-        else if (mouseX < rightEdge) {
+        else if (mouseX > rightEdge) {
             //右端E
             cameraAngle_ += rotateSpeed;
         }
