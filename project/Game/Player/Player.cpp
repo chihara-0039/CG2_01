@@ -48,15 +48,15 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 		// 「前」か「右」への入力があれば登る、逆なら下りる
 		float verticalDir = moveForward + moveSide;
 
-		if (verticalDir != 0.0f) {
+		if (verticalDir >= 0.0f) {
 			Vector3 nextPos = position_;
 			nextPos.y += (verticalDir > 0 ? 1.0f : -1.0f) * walkSpeed_;
 
 			if (!CheckCollision(nextPos, map)) {
 				position_.y = nextPos.y;
 				// ハシゴの芯に吸い寄せる
-				position_.x += (static_cast<float>(gx) - position_.x) * 0.2f;
-				position_.z += (static_cast<float>(gz) - position_.z) * 0.2f;
+				position_.x += (static_cast<float>(gx) - position_.x) * 0.6f;
+				position_.z += (static_cast<float>(gz) - position_.z) * 0.6f;
 			} else if (verticalDir > 0) {
 				// ★登りきり：ハシゴ自体の向き（cellWaistの回転）を使って押し出す
 				// cellWaist がハシゴのはずなので、その rotationY を取得
@@ -68,6 +68,30 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 
 				// 少し上に上げて床判定を確実に踏ませる
 				position_.y += 0.1f;
+			}
+		}
+		else {
+
+			// X軸衝突判定
+			Vector3 nextPosX = position_;
+			nextPosX.x += moveSide * 0.3f;
+			if (!CheckCollision(nextPosX, map)) position_.x = nextPosX.x;
+
+			// Z軸衝突判定
+			Vector3 nextPosZ = position_;
+			nextPosZ.z += moveForward * 0.3f;
+			if (!CheckCollision(nextPosZ, map)) position_.z = nextPosZ.z;
+
+			// Y軸衝突判定
+			Vector3 nextPosY = position_;
+			nextPosY.y += velocity_.y;
+			if (CheckCollision(nextPosY, map)) {
+				if (velocity_.y < 0) isGrounded_ = true;
+				velocity_.y = 0;
+			}
+			else {
+				position_.y = nextPosY.y;
+				isGrounded_ = false;
 			}
 		}
 		isGrounded_ = true;
