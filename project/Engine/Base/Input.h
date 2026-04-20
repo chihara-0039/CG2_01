@@ -12,6 +12,9 @@ struct MouseState {
     LONG x, y;       // 前フレームからの移動量
     int wheel;       // ホイール回転量
     bool buttons[3]; // 0:左, 1:右, 2:中
+
+    //4/20佐倉追加
+    LONG posX, posY;
 };
 
 class Input {
