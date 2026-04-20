@@ -992,14 +992,21 @@ void MyGame::Draw() {
 
 void MyGame::Finalize() {
     ModelManager::Finalize();
+
 #ifdef USE_IMGUI
     dxCommon->FinalizeImGui();
 #endif
 
-    // delete はすべて削除！ 
-    // 依存関係のあるリソースを、明示的に安全な順番で消去（reset）します 
+    // --- 1. unique_ptr のリストをクリアする ---
+    // これだけで中身の Object3d や Model は自動的に delete されます。
+    // 手動での delete ループはエラーの原因になるので削除します。
     objectList.clear();
     models.clear();
+
+    // --- 2. 各 unique_ptr を明示的にリセットする ---
+    // DirectX12の「親(Device)を最後に消す」ルールを守るため、
+    // 子リソースを先に .reset() で解放します。
+    // ここで delete 変数名; と書くとエラーになるので注意してください。
 
     player_.reset();
     skydomeObject_.reset();
@@ -1007,23 +1014,24 @@ void MyGame::Finalize() {
     sprite.reset();
     stageRenderer_.reset();
     mapCursor_.reset();
+
     shadowMap_.reset();
     lightCamera_.reset();
     camera.reset();
     titleScene_.reset();
     gameClearScene_.reset();
 
+    // --- 3. システムマネージャー類をリセット ---
     particleManager.reset();
     object3dCommon.reset();
     spriteCommon.reset();
     textureManager.reset();
     input.reset();
 
-    // 最後に基盤を消す 
+    // --- 4. 最後に基盤をリセット ---
     dxCommon.reset();
     winApp.reset();
 }
-
 /// <summary>
 /// ブロックを置けるようになる画面 04/01 秋元
 /// </summary>
