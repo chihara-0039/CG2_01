@@ -3,6 +3,7 @@
 #include "MyGame.h"
 #include "Goal.h"
 #include "ModelManager.h"
+#include <memory>
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
@@ -28,57 +29,57 @@ static const char* BlockTypeToString(BlockType type) {
 
 // --- MyGameクラスの実装 ---
 void MyGame::Initialize() {
-    // --- 基盤初期化 ---
-    winApp = new WinApp();
+    // 基盤系の生成（new ではなく std::make_unique を使用） 
+    winApp = std::make_unique<WinApp>();
     winApp->Initialize();
 
-    dxCommon = new DirectXCommon();
-    dxCommon->Initialize(winApp);
+    dxCommon = std::make_unique<DirectXCommon>();
+    dxCommon->Initialize(winApp.get()); // get() で中身の生ポインタを貸し出す 
 
-    input = new Input();
-    input->Initialize(winApp);
+    input = std::make_unique<Input>();
+    input->Initialize(winApp.get()); // get() を使用
 
-    textureManager = new TextureManager();
-    textureManager->Initialize(dxCommon);
+    textureManager = std::make_unique<TextureManager>();
+    textureManager->Initialize(dxCommon.get());
 
-    spriteCommon = new SpriteCommon();
-    spriteCommon->SetTextureManager(textureManager);
-    spriteCommon->Initialize(dxCommon);
+    spriteCommon = std::make_unique<SpriteCommon>();
+    spriteCommon->SetTextureManager(textureManager.get());
+    spriteCommon->Initialize(dxCommon.get());
 
-    object3dCommon = new Object3dCommon();
-    object3dCommon->SetTextureManager(textureManager);
-    object3dCommon->Initialize(dxCommon);
+    object3dCommon = std::make_unique<Object3dCommon>();
+    object3dCommon->SetTextureManager(textureManager.get());
+    object3dCommon->Initialize(dxCommon.get());
 
-    particleManager = new ParticleManager();
-    particleManager->Initialize(dxCommon, textureManager);
+    particleManager = std::make_unique<ParticleManager>();
+    particleManager->Initialize(dxCommon.get(), textureManager.get());
 
-    //4/3追加
+    // シーン管理 
     titleScene_ = std::make_unique<TitleScene>();
-    titleScene_->Initialize(object3dCommon, input);
-    
-    //4/13佐倉
-    gameClearScene_ = std::make_unique<GameClearScene>();
-    gameClearScene_->Initialize(object3dCommon);
+    titleScene_->Initialize(object3dCommon.get(), input.get());
 
-    // --- モデル読み込み ---
-    Model* modelPlane = Model::CreateFromOBJ(dxCommon, "Resources/Models/block", "block.obj", textureManager);
-    Model* modelAxis = Model::CreateFromOBJ(dxCommon, "Resources/Models/axis", "axis.obj", textureManager);
-    models.push_back(modelPlane);
-    models.push_back(modelAxis);
+    gameClearScene_ = std::make_unique<GameClearScene>();
+    gameClearScene_->Initialize(object3dCommon.get());
+
+    // モデル読み込み（vector<unique_ptr<Model>> に入れるため unique_ptr で包む） 
+    models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/block", "block.obj", textureManager.get())));
+    models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/axis", "axis.obj", textureManager.get())));
+    /*models.push_back(modelPlane);
+    models.push_back(modelAxis);*/
 
     // --- オブジェクト生成 ---
-    CreateObject(modelPlane, { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
-    CreateObject(modelAxis, { 2.0f, 0.0f, 0.0f });
-    CreateObject(modelAxis, { -2.0f, 0.0f, 0.0f });
+    // models[index].get() で生ポインタを取得して渡す
+    CreateObject(models[0].get(), { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
+    CreateObject(models[1].get(), { 2.0f, 0.0f, 0.0f });
+    CreateObject(models[1].get(), { -2.0f, 0.0f, 0.0f });
 
     // スプライト
     uint32_t texHandle = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
-    sprite = new Sprite();
-    sprite->Initialize(spriteCommon, texHandle);
+    sprite = std::make_unique<Sprite>();
+    sprite->Initialize(spriteCommon.get(), texHandle);
 
     // プレイヤーの生成
-    player_ = new Player();
-    player_->Initialize(object3dCommon, models[0]);
+    player_ = std::make_unique<Player>();
+    player_->Initialize(object3dCommon.get(), models[0].get());
     player_->SetPosition({ 0.0f, 1.5f, 0.0f });
 
     // エディタ用カメラ
@@ -133,12 +134,12 @@ void MyGame::Initialize() {
 #endif
 
     // 1. モデルのロード（フォルダとファイル名に注意）
-    skydomeModel_ = Model::CreateFromOBJ(dxCommon, "Resources/Models/skydome", "skydome.obj", textureManager);
+    skydomeModel_ = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/skydome", "skydome.obj", textureManager.get()));
 
     // 2. オブジェクトの生成と初期化
-    skydomeObject_ = new Object3d();
-    skydomeObject_->Initialize(object3dCommon);
-    skydomeObject_->SetModel(skydomeModel_);
+    skydomeObject_ = std::make_unique<Object3d>();
+    skydomeObject_->Initialize(object3dCommon.get());
+    skydomeObject_->SetModel(skydomeModel_.get());
 
     // 3. 設定：空は自ら光るのでライトをオフにする
     skydomeObject_->SetEnableLighting(false);
@@ -147,14 +148,14 @@ void MyGame::Initialize() {
     skydomeObject_->SetScale({ 500.0f, 500.0f, 500.0f });
 
     // ステージ描画オブジェクトの生成と構築
-    stageRenderer_ = new StageRenderer();
-    stageRenderer_->Initialize(object3dCommon);
+    stageRenderer_ = std::make_unique<StageRenderer>();
+    stageRenderer_->Initialize(object3dCommon.get());
     stageRenderer_->SetBlockScale(editorBlockScale_);
     stageRenderer_->BuildFromStageMap(stageMap_);
 
     // マップカーソルの初期化
-    mapCursor_ = new MapCursor();
-    mapCursor_->Initialize(object3dCommon);
+    mapCursor_ = std::make_unique<MapCursor>();
+    mapCursor_->Initialize(object3dCommon.get());
     mapCursor_->SetIndex({ 0, 0, 0 }, stageMap_);
     mapCursor_->SetScale({ 0.9f, 0.9f, 0.9f });
 
@@ -163,7 +164,7 @@ void MyGame::Initialize() {
 
     // ★ 影の初期化
     shadowMap_ = std::make_unique<ShadowMap>();
-    shadowMap_->Initialize(dxCommon, textureManager);
+    shadowMap_->Initialize(dxCommon.get(), textureManager.get());
 
     lightCamera_ = std::make_unique<LightCamera>();
     lightCamera_->Initialize();
@@ -171,14 +172,15 @@ void MyGame::Initialize() {
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
-    Object3d* obj = new Object3d();
-    obj->Initialize(object3dCommon);
+    auto obj = std::make_unique<Object3d>(); // 一時的な unique_ptr 
+    obj->Initialize(object3dCommon.get());
     obj->SetModel(model);
     obj->SetPosition(pos);
     obj->SetRotation({ 1.57f, 0.0f, 0.0f });
 
-    objectList.push_back(obj);
-    return obj;
+    Object3d* ptr = obj.get(); // 戻り値用に中身の住所を控える
+    objectList.push_back(std::move(obj)); // push_back で vector に「所有権」を移動させる 
+    return ptr;
 }
 
 // --- 更新処理 ---
@@ -206,7 +208,7 @@ void MyGame::Update() {
 
     // --- 3. カメラの更新 ---
     if (currentMode_ != AppMode::GamePlay) {
-        camera->UpdateBlenderStyle(input, isGuiCaptured, winApp->GetHwnd());
+        camera->UpdateBlenderStyle(input.get(), isGuiCaptured, winApp->GetHwnd());
     }
 
     if (skydomeObject_) {
@@ -270,9 +272,7 @@ void MyGame::Update() {
 
 	// 3Dオブジェクトの更新
     if (debugFlags_.show3DObjects) {
-        // 修正：lightVP を引数として渡す
-        const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
-        for (Object3d* obj : objectList) {
+        for (auto& obj : objectList) {
             if (obj) {
                 obj->SetCamera(view, proj);
                 obj->Update(lightVP);
@@ -613,7 +613,7 @@ void MyGame::UpdateGamePlay() {
 
     // --- プレイヤー更新 ---
     if (player_) {
-        player_->Update(input, stageMap_, cameraAngle_, lightCamera_->GetViewProjectionMatrix());
+        player_->Update(input.get(), stageMap_, cameraAngle_, lightCamera_->GetViewProjectionMatrix());
     }
 
     // --- ステージ再構築 ---
@@ -898,9 +898,12 @@ void MyGame::Draw() {
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
     // 影を描く対象（動くものすべて）
-    for (Object3d* obj : objectList) {
-        if (obj) obj->DrawShadow(lightVP);
+    for (auto& obj : objectList) {
+        if (obj) {
+            obj->DrawShadow(lightVP);
+        }
     }
+
     if (player_) {
         player_->DrawShadow(lightVP);
     }
@@ -957,10 +960,14 @@ void MyGame::Draw() {
 
             // デバッグビュー（リストの全表示）
             if (currentMode_ == AppMode::DebugView) {
-                for (Object3d* obj : objectList) {
-                    if (obj) obj->Draw();
+                for (auto& obj : objectList) {
+                    if (obj) {
+                        obj->Draw();
+                    }
                 }
-                if (player_) player_->Draw();
+                if (player_) {
+                    player_->Draw();
+                }
             }
         }
     }
@@ -985,43 +992,36 @@ void MyGame::Draw() {
 
 void MyGame::Finalize() {
     ModelManager::Finalize();
-
 #ifdef USE_IMGUI
     dxCommon->FinalizeImGui();
 #endif
 
-    for (Object3d* obj : objectList) {
-        delete obj;
-    }
+    // delete はすべて削除！ 
+    // 依存関係のあるリソースを、明示的に安全な順番で消去（reset）します 
+    objectList.clear();
+    models.clear();
 
-    for (Model* m : models) {
-        delete m;
-    }
+    player_.reset();
+    skydomeObject_.reset();
+    skydomeModel_.reset();
+    sprite.reset();
+    stageRenderer_.reset();
+    mapCursor_.reset();
+    shadowMap_.reset();
+    lightCamera_.reset();
+    camera.reset();
+    titleScene_.reset();
+    gameClearScene_.reset();
 
-    delete skydomeObject_;
-    delete skydomeModel_;
-    delete player_;
-    delete sprite;
-    delete particleManager;
-    delete object3dCommon;
-    delete spriteCommon;
-    delete textureManager;
-    delete input;
-    delete dxCommon; // 基盤は最後の方
-    delete winApp;
+    particleManager.reset();
+    object3dCommon.reset();
+    spriteCommon.reset();
+    textureManager.reset();
+    input.reset();
 
-    skydomeObject_ = nullptr;
-    skydomeModel_ = nullptr;
-
-    if (stageRenderer_) {
-        delete stageRenderer_;
-        stageRenderer_ = nullptr;
-    }
-
-    if (mapCursor_) {
-        delete mapCursor_;
-        mapCursor_ = nullptr;
-    }
+    // 最後に基盤を消す 
+    dxCommon.reset();
+    winApp.reset();
 }
 
 /// <summary>

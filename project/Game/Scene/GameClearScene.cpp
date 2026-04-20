@@ -1,4 +1,6 @@
 #include "GameClearScene.h"
+#include <memory>
+
 void GameClearScene::Initialize(Object3dCommon* objCommon) {
     object3dCommon_ = objCommon;
 
@@ -16,23 +18,23 @@ void GameClearScene::Initialize(Object3dCommon* objCommon) {
 
         std::string name(1, text_[i]);
 
-        letter.model = Model::CreateFromOBJ(
+        letter.model = std::unique_ptr<Model>(Model::CreateFromOBJ(
             object3dCommon_->GetDxCommon(),
-            "Resources/Models/ClearText/"+name,   // ← フォルダ構成に合わせる
+            "Resources/Models/ClearText/" + name,
             name + ".obj",
             object3dCommon_->GetTextureManager()
-        );
+        ));
 
-        letter.object = new Object3d();
+        letter.object = std::make_unique<Object3d>();
         letter.object->Initialize(object3dCommon_);
-        letter.object->SetModel(letter.model);
+        letter.object->SetModel(letter.model.get());
 
         letter.object->SetRotation({ 0.0f,3.141592f,0.0f });
 
         letter.position = { -6.0f + i * 1.2f, -10.0f, 0.0f };
         letter.baseY = letter.position.y;
 
-        letters_.push_back(letter);
+        letters_.push_back(std::move(letter));
     }
 }
 
