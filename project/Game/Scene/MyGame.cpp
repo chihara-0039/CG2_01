@@ -914,6 +914,7 @@ void MyGame::Draw() {
         }
     }
 
+
     if (player_) {
         player_->DrawShadow(lightVP);
     }
