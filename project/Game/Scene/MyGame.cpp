@@ -991,44 +991,49 @@ void MyGame::Draw() {
 }
 
 void MyGame::Finalize() {
-    ModelManager::Finalize();
+    // 1. GPUの完了を待機（リソースが「使用中」にならないようにする）
+    if (dxCommon) {
+        dxCommon->WaitForGpu();
+    }
 
 #ifdef USE_IMGUI
     dxCommon->FinalizeImGui();
 #endif
 
-    // --- 1. unique_ptr のリストをクリアする ---
-    // これだけで中身の Object3d や Model は自動的に delete されます。
-    // 手動での delete ループはエラーの原因になるので削除します。
+    // 2. シーン（描画物の所有者）を先に消す
+    // GameClearSceneの11文字（COURSECLEAR）はこのタイミングで unique_ptr により解放されます
+    gameClearScene_.reset();
+    titleScene_.reset();
+
+    // 3. 静的マネージャーの解放
+    // モデル本体を消去（Object3dCommonより先に消す必要がある）
+    ModelManager::Finalize();
+
+    // 4. 動的に生成したオブジェクトリストのクリア
+    // unique_ptr の vector なので、clear() で中身のデストラクタが呼ばれます
     objectList.clear();
     models.clear();
 
-    // --- 2. 各 unique_ptr を明示的にリセットする ---
-    // DirectX12の「親(Device)を最後に消す」ルールを守るため、
-    // 子リソースを先に .reset() で解放します。
-    // ここで delete 変数名; と書くとエラーになるので注意してください。
-
+    // 5. その他のゲームオブジェクトを reset
     player_.reset();
     skydomeObject_.reset();
     skydomeModel_.reset();
     sprite.reset();
     stageRenderer_.reset();
     mapCursor_.reset();
-
+    camera.reset();
     shadowMap_.reset();
     lightCamera_.reset();
-    camera.reset();
-    titleScene_.reset();
-    gameClearScene_.reset();
 
-    // --- 3. システムマネージャー類をリセット ---
+    // 6. システムマネージャー類を reset
     particleManager.reset();
     object3dCommon.reset();
     spriteCommon.reset();
     textureManager.reset();
     input.reset();
 
-    // --- 4. 最後に基盤をリセット ---
+    // 7. 最後：DirectX基盤とウィンドウを reset
+    // ここで Device の Refcount が正常に 0 へ向かいます
     dxCommon.reset();
     winApp.reset();
 }

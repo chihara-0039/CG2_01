@@ -24,6 +24,8 @@ public: // メンバ関数
     // 初期化
     void Initialize(WinApp* winApp);
 
+    void WaitForGpu();
+
     void BeginImGui();
     void EndImGui();
 

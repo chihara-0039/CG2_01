@@ -45,14 +45,13 @@ void ModelManager::Draw(const std::string& modelName, const Vector3& pos, const 
 }
 
 void ModelManager::Finalize() {
-    // 1. 各モデルをループで回して delete する
+    // マップ内のモデルを削除
     for (auto& pair : models_) {
-        delete pair.second; // Modelの実体を消す
+        delete pair.second;
     }
-    // 2. マップ自体を空にする
     models_.clear();
 
-	// 3. 使い回しオブジェクトも delete する
+    // 使い回し用オブジェクトも忘れずに削除
     if (internalObject_) {
         delete internalObject_;
         internalObject_ = nullptr;
