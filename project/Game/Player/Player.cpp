@@ -163,6 +163,14 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	object_->Update(lightVP);
 }
 
+// Object3d の行列を更新する（ライトカメラの行列も渡す）
+void Player::UpdateTransform(const Matrix4x4& lightVP) {
+	if (object_) {
+		// 内部で持っている Object3d の行列計算だけを行う
+		object_->Update(lightVP);
+	}
+}
+
 // ドアに触れているか判定して、触れていてかつFキーがトリガーされたらワープする
 void Player::DoorWarp(const StageMap& map)
 {

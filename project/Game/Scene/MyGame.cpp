@@ -261,7 +261,17 @@ void MyGame::Update() {
 
     // --- プレイヤーに最新のカメラ行列を教える ---
     if (player_) {
+        // カメラ行列は常にセット
         player_->SetCamera(view, proj);
+
+        // プレイモード中のみ移動などのロジックを更新
+        if (currentMode_ == AppMode::GamePlay) {
+            // ここは既存のコード（UpdateGamePlayの中から移動させてもOKです）
+            // player_->Update(...) 
+        } else {
+            // ★ エディタモード等では、見た目（行列）の更新だけを行う
+            player_->UpdateTransform(lightVP);
+        }
     }
 
     // ★ 修正1：ウィンドウが最前面にない場合は即リターンして何もしない
@@ -910,6 +920,11 @@ void MyGame::Draw() {
 
     shadowMap_->PostDraw(commandList);
 
+    // dxCommon->PreDraw() 内でこれを行っていない場合、ここで明示的に呼ぶ必要があります
+    D3D12_VIEWPORT viewport = { 0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
+    D3D12_RECT scissor = { 0, 0, 1280, 720 };
+    commandList->RSSetViewports(1, &viewport);
+    commandList->RSSetScissorRects(1, &scissor);
 
     // ==========================================================
     // 【パス2】 メイン描画（通常のレンダリング ＋ 影の適用）
