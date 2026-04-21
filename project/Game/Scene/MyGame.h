@@ -55,7 +55,7 @@ private:
     // これらは MyGame が消えるとき、または Finalize で reset するときに自動解放されます
     // ==========================================================
 
-    // 基盤系マネージャー
+    // 基盤システム（すべて unique_ptr に統一！）
     std::unique_ptr<WinApp> winApp;
     std::unique_ptr<DirectXCommon> dxCommon;
     std::unique_ptr<Input> input;
@@ -64,28 +64,27 @@ private:
     std::unique_ptr<Object3dCommon> object3dCommon;
     std::unique_ptr<ParticleManager> particleManager;
 
-    // ゲームオブジェクト
-    std::unique_ptr<Player> player_;
+    // オブジェクト管理（ここも unique_ptr の vector にします）
+    std::vector<std::unique_ptr<Object3d>> objectList;
+    std::vector<std::unique_ptr<Model>> models;
+
     std::unique_ptr<Sprite> sprite;
     std::unique_ptr<Camera> camera;
     std::unique_ptr<StageRenderer> stageRenderer_;
     std::unique_ptr<MapCursor> mapCursor_;
+    std::unique_ptr<Player> player_;
 
-    // スカイドーム用
+    // スカイドーム
     std::unique_ptr<Model> skydomeModel_;
     std::unique_ptr<Object3d> skydomeObject_;
 
-    // 影用リソース
+    // 影用
     std::unique_ptr<ShadowMap> shadowMap_;
     std::unique_ptr<LightCamera> lightCamera_;
 
     // シーン管理
     std::unique_ptr<TitleScene> titleScene_;
     std::unique_ptr<GameClearScene> gameClearScene_;
-
-    // リスト管理も unique_ptr にすることで、vector::clear() 時に中身が自動 delete されます
-    std::vector<std::unique_ptr<Object3d>> objectList;
-    std::vector<std::unique_ptr<Model>> models;
 
     // ==========================================================
     // メンバ変数（値や状態）

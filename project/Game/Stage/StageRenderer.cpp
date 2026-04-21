@@ -1,29 +1,29 @@
 #include "StageRenderer.h"
 #include <cassert>
 
-
-
 // 解放
 StageRenderer::~StageRenderer() {
 	Clear();
 
 	delete groundModel_;
-	groundModel_ = nullptr;
-
 	delete wallModel_;
-	wallModel_ = nullptr;
-
 	delete bubbleModel_;
-	bubbleModel_ = nullptr;
-
 	delete goalModel_;
-	goalModel_ = nullptr;
-
 	delete ladderModel_;
-	ladderModel_ = nullptr;
-
 	delete doorModel_;
+
+	// ★ ここが抜けていました（追加）
+	delete pSwichModel_;
+	delete pBlockOnModel_;
+
+	groundModel_ = nullptr;
+	wallModel_ = nullptr;
+	bubbleModel_ = nullptr;
+	goalModel_ = nullptr;
+	ladderModel_ = nullptr;
 	doorModel_ = nullptr;
+	pSwichModel_ = nullptr;
+	pBlockOnModel_ = nullptr;
 }
 
 // ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス

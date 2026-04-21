@@ -198,6 +198,21 @@ void DirectXCommon::InitializeDXC() {
     assert(SUCCEEDED(hr));
 }
 
+void DirectXCommon::WaitForGpu() {
+    // 1. フェンス値を更新
+    fenceValue_++;
+    // 2. GPUに「ここまで実行したらフェンス値をこの値にしてね」という信号を送る
+    commandQueue_->Signal(fence_.Get(), fenceValue_);
+
+    // 3. GPUがまだその値に達していなければ待機する
+    if (fence_->GetCompletedValue() < fenceValue_) {
+        // フェンスが指定値に達したらイベントを発行するように設定
+        fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
+        // イベントが発生する（GPUが完了する）までCPUを止める
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
+}
+
 ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, const wchar_t* profile) {
     // --- デバッグログ：何を読み込もうとしているか出力 ---
     OutputDebugStringW(L"----------------------------------------\n");
