@@ -14,6 +14,9 @@ public:
     // 更新：移動・重力・当たり判定の処理
     void Update(const Input* input,  StageMap& map, float cameraRotY, const Matrix4x4& lightVP);
 
+	// Object3d の行列を更新する（ライトカメラの行列も渡す）
+    void UpdateTransform(const Matrix4x4& lightVP);
+
     // 描画：内部で持っている Object3d を描画
     void Draw();
 
