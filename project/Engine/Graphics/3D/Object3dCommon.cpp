@@ -53,6 +53,25 @@ void Object3dCommon::PreDraw() {
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(pipelineState_.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // --- ディスクリプタヒープのセット ---
+    if (textureManager_) {
+        // TextureManager が持っている SRV 用のヒープを取得してセットする
+        ID3D12DescriptorHeap* heaps[] = { textureManager_->GetSrvHeap() };
+        commandList->SetDescriptorHeaps(_countof(heaps), heaps);
+    }
+}
+
+// 影描画用の共通設定（これも必要です）
+void Object3dCommon::PreDrawShadow() {
+    auto commandList = dxCommon_->GetCommandList();
+
+    // 影用のルートシグネチャとパイプラインをセット
+    commandList->SetGraphicsRootSignature(rootSignature_.Get()); // 共通でOK
+    commandList->SetPipelineState(shadowPipelineState_.Get());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // 影描画ではテクスチャを使わない（深度のみ）ので、ヒープセットは不要です
 }
 
 // ライトの初期値を設定する関数

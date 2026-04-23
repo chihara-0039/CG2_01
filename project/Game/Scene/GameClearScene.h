@@ -35,8 +35,8 @@ private:
     Object3dCommon* object3dCommon_ = nullptr;
 
     Camera camera_;
-    Vector3 cameraPos_;
-    Vector3 cameraRot_;
+    Vector3 cameraPos_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 cameraRot_ = { 0.0f, 0.0f, 0.0f };
 
     float timer_ = 0.0f;
     bool isAllFinished_ = false;

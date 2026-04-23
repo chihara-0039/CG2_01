@@ -17,8 +17,8 @@ public:
 
     Vector3 position_ = { 0,-10,10 };
     Vector3 rotation_ = { 0,0,0 };
-    Vector3 cameraPos_;
-    Vector3 cameraRot_;
+    Vector3 cameraPos_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 cameraRot_ = { 0.0f, 0.0f, 0.0f };
 
 private:
     // 所有権を持たない（MyGameから借りているだけの）ポインタ
