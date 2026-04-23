@@ -64,6 +64,7 @@ void GamePlayScene::Initialize() {
     skydomeObject_->Initialize(objCommon_);
     skydomeObject_->SetModel(skydomeModel_.get());
 
+    skydomeObject_->SetScale({ 500.0f, 500.0f, 500.0f });
 
     // --- 5. カメラの初期設定 ---
     camera_.SetPosition({ 0.0f, 5.0f, -10.0f });
