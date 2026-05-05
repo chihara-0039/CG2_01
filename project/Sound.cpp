@@ -43,22 +43,31 @@ void Sound::Initialize() {
 }
 
 void Sound::Finalize() {
-    // masterVoiceを破棄
+    // SourceVoiceを先に停止・破棄
+    for (IXAudio2SourceVoice* sourceVoice : sourceVoices) {
+        if (sourceVoice) {
+            sourceVoice->Stop();
+            sourceVoice->FlushSourceBuffers();
+            sourceVoice->DestroyVoice();
+        }
+    }
+    sourceVoices.clear();
+
+    // MasterVoiceを破棄
     if (masterVoice) {
         masterVoice->DestroyVoice();
         masterVoice = nullptr;
     }
 
-    // xAudio2を解放
+    // XAudio2を解放
     xAudio2.Reset();
 
-    // 読み込んだ音声データの解放
+    // 音声データ解放
     for (SoundData& soundData : soundDatas) {
         SoundUnload(&soundData);
     }
     soundDatas.clear();
 
-    // Windows Media Foundationの終了
     HRESULT result = MFShutdown();
     assert(SUCCEEDED(result));
 }
@@ -217,4 +226,7 @@ void Sound::SoundPlay(const SoundData& soundData, float volume) {
 
     result = pSourceVoice->Start();
     assert(SUCCEEDED(result));
+
+    // ★終了時に破棄できるように保持
+    sourceVoices.push_back(pSourceVoice);
 }
