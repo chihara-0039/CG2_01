@@ -72,5 +72,8 @@ private:
     // “Ç‚İ‚ñ‚¾‰¹ºƒf[ƒ^‚ğ•Û‚µ‚Ä‚¨‚­
     std::vector<SoundData> soundDatas;
 
+    // Ä¶’†‚ÌSourceVoice‚ğ•Û
+    std::vector<IXAudio2SourceVoice*> sourceVoices;
+
 };
 

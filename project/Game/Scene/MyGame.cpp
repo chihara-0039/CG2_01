@@ -77,6 +77,15 @@ void MyGame::Initialize() {
     sprite = std::make_unique<Sprite>();
     sprite->Initialize(spriteCommon.get(), texHandle);
 
+    //サウンド初期化
+    sound.Initialize();
+    //読み込み
+    wavSoundData = sound.SoundLoadFile("Resources/Sound/Alarm01.wav");
+
+    mp4SoundData = sound.SoundLoadFile("Resources/Sound/AlarmMovie.mp4");
+
+    mp3SoundData = sound.SoundLoadFile("Resources/Sound/maou_bgm_neorock83.mp3");
+
     // プレイヤーの生成
     player_ = std::make_unique<Player>();
     player_->Initialize(object3dCommon.get(), models[0].get());
@@ -217,7 +226,38 @@ void MyGame::Update() {
         skydomeObject_->Update(Math::MakeIdentity4x4());
     }
 
-    
+    //試しにサウンド更新 //佐倉
+    // SPACEでwav再生
+    if (input->TriggerKey(DIK_SPACE)) {
+        sound.SoundPlay(wavSoundData, wavVolume);
+    }
+
+    // Mキーでmp4音声再生
+    if (input->TriggerKey(DIK_M)) {
+        sound.SoundPlay(mp4SoundData, mp4Volume);
+
+    }
+
+    if (input->TriggerKey(DIK_N)) {
+        sound.SoundPlay(mp3SoundData, mp3Volume);
+    }
+
+    //mp3版音量変更キー
+    if (input->TriggerKey(DIK_UP)) {
+        mp3Volume += 0.1f;
+        if (mp3Volume > 1.0f) {
+            mp3Volume = 1.0f;
+        }
+        OutputDebugStringA("[MyGame] mp3 音量アップ\n");
+    }
+
+    if (input->TriggerKey(DIK_DOWN)) {
+        mp3Volume -= 0.1f;
+        if (mp3Volume < 0.0f) {
+            mp3Volume = 0.0f;
+        }
+        OutputDebugStringA("[MyGame] mp3 音量ダウン\n");
+    }
    
     // --- ImGuiに入力中（WantCaptureKeyboardがtrue）ならゲーム側の入力を無視する ---
     if (!isGuiCaptured) {
@@ -995,6 +1035,9 @@ void MyGame::Finalize() {
     if (dxCommon) {
         dxCommon->WaitForGpu();
     }
+
+
+    sound.Finalize();
 
 #ifdef USE_IMGUI
     dxCommon->FinalizeImGui();
