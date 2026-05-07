@@ -1071,6 +1071,63 @@ void MyGame::UpdateDoorPrompt3D()
         lightCamera_->GetViewProjectionMatrix()
     );
 }
+
+bool MyGame::IsPlayerHiddenByWall() const {
+    if (!player_ || !camera) {
+        return false;
+    }
+
+    Vector3 camPos = camera->GetPosition();
+    Vector3 playerPos = player_->GetPosition();
+
+    // プレイヤーの中心より少し上を狙う
+    playerPos.y += 0.8f;
+
+    Vector3 diff = {
+        playerPos.x - camPos.x,
+        playerPos.y - camPos.y,
+        playerPos.z - camPos.z
+    };
+
+    float length = std::sqrt(
+        diff.x * diff.x +
+        diff.y * diff.y +
+        diff.z * diff.z
+    );
+
+    if (length <= 0.001f) {
+        return false;
+    }
+
+    Vector3 dir = {
+        diff.x / length,
+        diff.y / length,
+        diff.z / length
+    };
+
+    const float step = 0.25f;
+
+    for (float t = step; t < length - 1.0f; t += step) {
+        Vector3 checkPos = {
+            camPos.x + dir.x * t,
+            camPos.y + dir.y * t,
+            camPos.z + dir.z * t
+        };
+
+        int gx = static_cast<int>(std::floor(checkPos.x + 0.5f));
+        int gy = static_cast<int>(std::floor(checkPos.y));
+        int gz = static_cast<int>(std::floor(checkPos.z + 0.5f));
+
+        const MapCell* cell = stageMap_.GetCell(gx, gy, gz);
+
+        if (cell && cell->isSolid) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
 
@@ -1150,6 +1207,17 @@ void MyGame::Draw() {
                 if (currentMode_ == AppMode::GamePlay)
                 {
                     if (player_) player_->Draw();
+
+                    // 壁で隠れている時だけ白強調
+                    if (IsPlayerHiddenByWall()) {
+                        object3dCommon->PreDrawPlayerHighlight();
+                        player_->DrawHighlight();
+
+                        // 通常描画設定に戻す
+                        object3dCommon->PreDraw();
+                        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                    }
+
                 }               
                 // 追加：ドア上の3D F UI描画
                 if (doorPromptObject_ &&

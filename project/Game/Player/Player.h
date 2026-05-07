@@ -23,6 +23,9 @@ public:
 	// 影の描画：ライトカメラの行列を渡して影を描く
     void DrawShadow(const Matrix4x4& lightViewProjection);
 
+    //自機の影強調表示関数
+    void DrawHighlight();
+
     // 座標の設定と取得
     void SetPosition(const Vector3& pos) { position_ = pos; }
     const Vector3& GetPosition() const { return position_; }

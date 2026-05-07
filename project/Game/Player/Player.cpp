@@ -283,3 +283,19 @@ void Player::DrawShadow(const Matrix4x4& lightViewProjection) {
 		object_->DrawShadow(lightViewProjection);
 	}
 }
+
+void Player::DrawHighlight() {
+	if (!object_) {
+		return;
+	}
+
+	// 白く強調
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 0.75f });
+	object_->SetEnableLighting(false);
+
+	object_->Draw();
+
+	// 通常描画用に戻す
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(true);
+}
