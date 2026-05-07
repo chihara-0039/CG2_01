@@ -195,6 +195,21 @@ void MyGame::Initialize() {
     cameraGuideDownSprite_ = std::make_unique<Sprite>();
     cameraGuideDownSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
 
+    // 追加：ドア用3D F UI
+    doorPromptModel_ = std::unique_ptr<Model>(
+        Model::CreateFromOBJ(
+            dxCommon.get(),
+            "Resources/Models/UI/F",
+            "F.obj",
+            textureManager.get()
+        )
+    );
+
+    doorPromptObject_ = std::make_unique<Object3d>();
+    doorPromptObject_->Initialize(object3dCommon.get());
+    doorPromptObject_->SetModel(doorPromptModel_.get());
+    doorPromptObject_->SetEnableLighting(false);
+    doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -380,6 +395,9 @@ void MyGame::Update() {
     lightCamera_->Update(lightDir, player_->GetPosition());
 
     object3dCommon->SetLightDirection(lightDir);
+
+    //ドアUI更新
+    UpdateDoorPrompt3D();
 }
 
 //パーティクル発生のテスト（スペースキーを押すと発生）
@@ -1018,6 +1036,41 @@ void MyGame::DrawCameraGuideSprites() {
     cameraGuideDownSprite_->Draw();
 }
 
+//5/7佐倉追加
+void MyGame::UpdateDoorPrompt3D()
+{
+    if (!doorPromptObject_ || !player_) {
+        return;
+    }
+
+    if (currentMode_ != AppMode::GamePlay || !player_->IsNearDoor()) {
+        return;
+    }
+
+    Vector3 pos = player_->GetNearDoorWorldPos();
+
+    doorPromptObject_->SetPosition(pos);
+    doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    // カメラの方向を向かせる
+    Vector3 camPos = camera->GetPosition();
+
+    float angleY = std::atan2f(
+        camPos.x - pos.x,
+        camPos.z - pos.z
+    );
+
+    doorPromptObject_->SetRotation({ 0.0f, angleY, 0.0f });
+
+    doorPromptObject_->SetCamera(
+        camera->GetViewMatrix(),
+        camera->GetProjectionMatrix()
+    );
+
+    doorPromptObject_->Update(
+        lightCamera_->GetViewProjectionMatrix()
+    );
+}
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
 
@@ -1096,7 +1149,14 @@ void MyGame::Draw() {
                 if (stageRenderer_) stageRenderer_->Draw();
                 if (player_) player_->Draw();
 
+                // 追加：ドア上の3D F UI描画
+                if (doorPromptObject_ &&
+                    currentMode_ == AppMode::GamePlay &&
+                    player_ &&
+                    player_->IsNearDoor()) {
 
+                    doorPromptObject_->Draw();
+                }
 
                 if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
                     mapCursor_->Draw();

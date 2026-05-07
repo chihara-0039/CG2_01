@@ -48,6 +48,13 @@ public:
     //リスポーン用の座標
     Vector3 respawnPosition = { 0.0f,1.5f,0.0f };
 
+    // ドアUI表示フラグ
+    bool IsNearDoor() const { return isNearDoor_; }
+
+    const Vector3& GetNearDoorWorldPos() const {
+        return nearDoorWorldPos_;
+    }
+
 private:
     // マップのブロックと衝突しているかチェックするヘルパー
     bool CheckCollision(const Vector3& pos, const StageMap& map);
@@ -68,6 +75,9 @@ private:
     float jumpSpeed_ = 0.3f;    // ジャンプの初速度（高さ）
     bool isGrounded_ = false;   // 接地フラグ
 
-    const Input* input_ = nullptr;
+    //ドアUIの座標変換用変数
+    Vector3 nearDoorWorldPos_ = { 0.0f,0.0f,0.0f };
 
+    const Input* input_ = nullptr;
+    bool isNearDoor_ = false;
 };

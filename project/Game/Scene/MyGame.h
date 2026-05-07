@@ -95,6 +95,10 @@ private:
 
     uint32_t cameraGuideTextureHandle_ = 0;
 
+    // 追加：ドア用3D F UI
+    std::unique_ptr<Model> doorPromptModel_;
+    std::unique_ptr<Object3d> doorPromptObject_;
+
     // ==========================================================
     // メンバ変数（値や状態）
     // ==========================================================
@@ -134,6 +138,9 @@ private:
     void UpdateCameraGuideSprites();
     void DrawCameraGuideSprites();
 
+    // 追加：ドア用3D F UI更新
+    void UpdateDoorPrompt3D();
+
     // ヘルパー関数の戻り値は「生ポインタ」のままでOK（所有権を渡さない「参照」のため）
     Object3d* CreateObject(Model* model, Vector3 pos);
 
@@ -149,4 +156,6 @@ private:
     float wavVolume = 0.5f;
     float mp4Volume = 0.5f;
     float mp3Volume = 0.5f;
+
+    //5/7佐倉
 };
