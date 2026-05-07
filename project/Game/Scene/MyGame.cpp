@@ -86,7 +86,7 @@ void MyGame::Initialize() {
     camera = std::make_unique<Camera>();
 
     // 1. ステージマップのサイズ初期化
-    stageMap_.Initialize(16, 8, 16);
+    stageMap_.Initialize(16, 10, 16);
 
     // ステージファイル一覧を更新しておく
     RefreshStageList();
@@ -951,8 +951,11 @@ void MyGame::Draw() {
                 currentMode_ == AppMode::GamePlay_BlockPlace) {
 
                 if (stageRenderer_) stageRenderer_->Draw();
-                if (player_) player_->Draw();
 
+                if (currentMode_ == AppMode::GamePlay)
+                {
+                    if (player_) player_->Draw();
+                }               
                 if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
                     mapCursor_->Draw();
                 }
