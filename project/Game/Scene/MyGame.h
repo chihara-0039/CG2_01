@@ -141,6 +141,9 @@ private:
     // 追加：ドア用3D F UI更新
     void UpdateDoorPrompt3D();
 
+    // 追加：プレイヤーが壁に隠れているか判定
+    bool IsPlayerHiddenByWall() const;
+
     // ヘルパー関数の戻り値は「生ポインタ」のままでOK（所有権を渡さない「参照」のため）
     Object3d* CreateObject(Model* model, Vector3 pos);
 
