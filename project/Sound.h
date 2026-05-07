@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <xaudio2.h>
 #include <wrl.h>
 #include <fstream>
@@ -18,61 +18,61 @@
 class Sound
 {
 public:
-    // ‰Šú‰»
+    // åˆæœŸåŒ–
     void Initialize();
 
-    // I—¹ˆ—
+    // çµ‚äº†å‡¦ç†
     void Finalize();
 
-    // ‰¹ºƒf[ƒ^‚Ì\‘¢‘Ì
+    // éŸ³å£°ãƒ‡ãƒ¼ã‚¿ã®æ§‹é€ ä½“
     struct SoundData {
-        // ”gŒ`ƒtƒH[ƒ}ƒbƒg
+        // æ³¢å½¢ãƒ•ã‚©ãƒ¼ãƒãƒƒãƒˆ
         WAVEFORMATEX wfex;
-        // ƒoƒbƒtƒ@
+        // ãƒãƒƒãƒ•ã‚¡
         std::vector<BYTE> buffer;
     };
 
 
-    // wav / mp4 ‚È‚Ç‚ğ‚Ü‚Æ‚ß‚Ä“Ç‚İ‚Ş
+    // wav / mp4 ãªã©ã‚’ã¾ã¨ã‚ã¦èª­ã¿è¾¼ã‚€
     SoundData SoundLoadFile(const std::string& filename);
 
-    // ‰¹ºƒf[ƒ^‰ğ•ú
+    // éŸ³å£°ãƒ‡ãƒ¼ã‚¿è§£æ”¾
     void SoundUnload(SoundData* soundData);
 
-    // ‰¹ºÄ¶
+    // éŸ³å£°å†ç”Ÿ
     void SoundPlay(const SoundData& soundData, float volume = 1.0f);
 
 private:
-    // ƒ`ƒƒƒ“ƒNƒwƒbƒ_
+    // ãƒãƒ£ãƒ³ã‚¯ãƒ˜ãƒƒãƒ€
     struct ChunkHeader {
         char id[4];
         int32_t size;
     };
 
-    // RIFFƒwƒbƒ_ƒ`ƒƒƒ“ƒN
+    // RIFFãƒ˜ãƒƒãƒ€ãƒãƒ£ãƒ³ã‚¯
     struct RiffHeader {
         ChunkHeader chunk;
         char type[4];
     };
 
-    // FMTƒ`ƒƒƒ“ƒN
+    // FMTãƒãƒ£ãƒ³ã‚¯
     struct FormatChunk {
         ChunkHeader chunk;
         WAVEFORMATEX fmt;
     };
 
 private:
-    // •¶š—ñ•ÏŠ·
+    // æ–‡å­—åˆ—å¤‰æ›
     std::wstring ConvertString(const std::string& str);
 
 private:
     Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
     IXAudio2MasteringVoice* masterVoice = nullptr;
 
-    // “Ç‚İ‚ñ‚¾‰¹ºƒf[ƒ^‚ğ•Û‚µ‚Ä‚¨‚­
+    // èª­ã¿è¾¼ã‚“ã éŸ³å£°ãƒ‡ãƒ¼ã‚¿ã‚’ä¿æŒã—ã¦ãŠã
     std::vector<SoundData> soundDatas;
 
-    // Ä¶’†‚ÌSourceVoice‚ğ•Û
+    // å†ç”Ÿä¸­ã®SourceVoiceã‚’ä¿æŒ
     std::vector<IXAudio2SourceVoice*> sourceVoices;
 
 };

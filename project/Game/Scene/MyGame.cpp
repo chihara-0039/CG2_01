@@ -199,7 +199,7 @@ void MyGame::Initialize() {
     doorPromptModel_ = std::unique_ptr<Model>(
         Model::CreateFromOBJ(
             dxCommon.get(),
-            "Resources/Models/UI/F",
+            "Resources/UI/F",
             "F.obj",
             textureManager.get()
         )

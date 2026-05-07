@@ -1,4 +1,4 @@
-#include "Sound.h"
+ï»¿#include "Sound.h"
 #include <cassert>
 #include <cstring>
 #include <Windows.h>
@@ -29,21 +29,21 @@ std::wstring Sound::ConvertString(const std::string& str) {
 void Sound::Initialize() {
     HRESULT result;
 
-    // Windows Media Foundation‚Ì‰Šú‰»iƒ[ƒJƒ‹ƒtƒ@ƒCƒ‹—p“rj
+    // Windows Media Foundationã®åˆæœŸåŒ–ï¼ˆãƒ­ãƒ¼ã‚«ãƒ«ãƒ•ã‚¡ã‚¤ãƒ«ç”¨é€”ï¼‰
     result = MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET);
     assert(SUCCEEDED(result));
 
-    // XAudio2ƒGƒ“ƒWƒ“‚ÌƒCƒ“ƒXƒ^ƒ“ƒX‚ğ¶¬
+    // XAudio2ã‚¨ãƒ³ã‚¸ãƒ³ã®ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’ç”Ÿæˆ
     result = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
     assert(SUCCEEDED(result));
 
-    // ƒ}ƒXƒ^[ƒ{ƒCƒX‚ğ¶¬
+    // ãƒã‚¹ã‚¿ãƒ¼ãƒœã‚¤ã‚¹ã‚’ç”Ÿæˆ
     result = xAudio2->CreateMasteringVoice(&masterVoice);
     assert(SUCCEEDED(result));
 }
 
 void Sound::Finalize() {
-    // SourceVoice‚ğæ‚É’â~E”jŠü
+    // SourceVoiceã‚’å…ˆã«åœæ­¢ãƒ»ç ´æ£„
     for (IXAudio2SourceVoice* sourceVoice : sourceVoices) {
         if (sourceVoice) {
             sourceVoice->Stop();
@@ -53,16 +53,16 @@ void Sound::Finalize() {
     }
     sourceVoices.clear();
 
-    // MasterVoice‚ğ”jŠü
+    // MasterVoiceã‚’ç ´æ£„
     if (masterVoice) {
         masterVoice->DestroyVoice();
         masterVoice = nullptr;
     }
 
-    // XAudio2‚ğ‰ğ•ú
+    // XAudio2ã‚’è§£æ”¾
     xAudio2.Reset();
 
-    // ‰¹ºƒf[ƒ^‰ğ•ú
+    // éŸ³å£°ãƒ‡ãƒ¼ã‚¿è§£æ”¾
     for (SoundData& soundData : soundDatas) {
         SoundUnload(&soundData);
     }
@@ -76,18 +76,18 @@ void Sound::Finalize() {
 Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
     HRESULT result;
 
-    // return‚·‚éˆ×‚Ì‰¹ºƒf[ƒ^
+    // returnã™ã‚‹ç‚ºã®éŸ³å£°ãƒ‡ãƒ¼ã‚¿
     SoundData soundData = {};
 
-    // ƒtƒ‹ƒpƒX‚ğƒƒCƒh•¶š—ñ‚É•ÏŠ·
+    // ãƒ•ãƒ«ãƒ‘ã‚¹ã‚’ãƒ¯ã‚¤ãƒ‰æ–‡å­—åˆ—ã«å¤‰æ›
     std::wstring filePathW = ConvertString(filename);
 
-    // SourceReaderì¬
+    // SourceReaderä½œæˆ
     ComPtr<IMFSourceReader> pReader;
     result = MFCreateSourceReaderFromURL(filePathW.c_str(), nullptr, &pReader);
     assert(SUCCEEDED(result));
 
-    // PCMŒ`®‚ÉƒtƒH[ƒ}ƒbƒgw’è‚·‚é
+    // PCMå½¢å¼ã«ãƒ•ã‚©ãƒ¼ãƒãƒƒãƒˆæŒ‡å®šã™ã‚‹
     ComPtr<IMFMediaType> pPCMType;
     result = MFCreateMediaType(&pPCMType);
     assert(SUCCEEDED(result));
@@ -105,7 +105,7 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
     );
     assert(SUCCEEDED(result));
 
-    // ÀÛ‚ÉƒZƒbƒg‚³‚ê‚½ƒƒfƒBƒAƒ^ƒCƒv‚ğæ“¾
+    // å®Ÿéš›ã«ã‚»ãƒƒãƒˆã•ã‚ŒãŸãƒ¡ãƒ‡ã‚£ã‚¢ã‚¿ã‚¤ãƒ—ã‚’å–å¾—
     ComPtr<IMFMediaType> pOutType;
     result = pReader->GetCurrentMediaType(
         (DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,
@@ -113,7 +113,7 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
     );
     assert(SUCCEEDED(result));
 
-    // WaveƒtƒH[ƒ}ƒbƒg‚ğæ“¾
+    // Waveãƒ•ã‚©ãƒ¼ãƒãƒƒãƒˆã‚’å–å¾—
     WAVEFORMATEX* waveFormat = nullptr;
     UINT32 waveFormatSize = 0;
     result = MFCreateWaveFormatExFromMFMediaType(
@@ -123,20 +123,20 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
     );
     assert(SUCCEEDED(result));
 
-    // SoundData‚ÉŠi”[
+    // SoundDataã«æ ¼ç´
     soundData.wfex = *waveFormat;
 
-    // ¶¬‚µ‚½WaveƒtƒH[ƒ}ƒbƒg‚ğ‰ğ•ú
+    // ç”Ÿæˆã—ãŸWaveãƒ•ã‚©ãƒ¼ãƒãƒƒãƒˆã‚’è§£æ”¾
     CoTaskMemFree(waveFormat);
 
-    // PCMƒf[ƒ^‚Ìƒoƒbƒtƒ@‚ğ\’z
+    // PCMãƒ‡ãƒ¼ã‚¿ã®ãƒãƒƒãƒ•ã‚¡ã‚’æ§‹ç¯‰
     while (true) {
         ComPtr<IMFSample> pSample;
         DWORD streamIndex = 0;
         DWORD flags = 0;
         LONGLONG llTimeStamp = 0;
 
-        // ƒTƒ“ƒvƒ‹‚ğ“Ç‚İ‚Ş
+        // ã‚µãƒ³ãƒ—ãƒ«ã‚’èª­ã¿è¾¼ã‚€
         result = pReader->ReadSample(
             MF_SOURCE_READER_FIRST_AUDIO_STREAM,
             0,
@@ -147,19 +147,19 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
         );
         assert(SUCCEEDED(result));
 
-        // ƒXƒgƒŠ[ƒ€‚Ì––”ö‚É’B‚µ‚½‚ç”²‚¯‚é
+        // ã‚¹ãƒˆãƒªãƒ¼ãƒ ã®æœ«å°¾ã«é”ã—ãŸã‚‰æŠœã‘ã‚‹
         if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
             break;
         }
 
-        // ƒTƒ“ƒvƒ‹‚ª‚È‚¢ê‡‚ÍŸ‚Ö
+        // ã‚µãƒ³ãƒ—ãƒ«ãŒãªã„å ´åˆã¯æ¬¡ã¸
         if (!pSample) {
             continue;
         }
 
         ComPtr<IMFMediaBuffer> pBuffer;
 
-        // ƒTƒ“ƒvƒ‹‚ÉŠÜ‚Ü‚ê‚éƒTƒEƒ“ƒhƒf[ƒ^‚Ìƒoƒbƒtƒ@‚ğæ“¾
+        // ã‚µãƒ³ãƒ—ãƒ«ã«å«ã¾ã‚Œã‚‹ã‚µã‚¦ãƒ³ãƒ‰ãƒ‡ãƒ¼ã‚¿ã®ãƒãƒƒãƒ•ã‚¡ã‚’å–å¾—
         result = pSample->ConvertToContiguousBuffer(&pBuffer);
         assert(SUCCEEDED(result));
 
@@ -167,23 +167,23 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
         DWORD maxLength = 0;
         DWORD currentLength = 0;
 
-        // ƒoƒbƒtƒ@‚ğƒƒbƒN
+        // ãƒãƒƒãƒ•ã‚¡ã‚’ãƒ­ãƒƒã‚¯
         result = pBuffer->Lock(&pData, &maxLength, &currentLength);
         assert(SUCCEEDED(result));
 
-        // “Ç‚İ‚ñ‚¾PCMƒf[ƒ^‚ğ––”ö‚É’Ç‰Á
+        // èª­ã¿è¾¼ã‚“ã PCMãƒ‡ãƒ¼ã‚¿ã‚’æœ«å°¾ã«è¿½åŠ 
         soundData.buffer.insert(
             soundData.buffer.end(),
             pData,
             pData + currentLength
         );
 
-        // ƒoƒbƒtƒ@‚ğƒAƒ“ƒƒbƒN
+        // ãƒãƒƒãƒ•ã‚¡ã‚’ã‚¢ãƒ³ãƒ­ãƒƒã‚¯
         result = pBuffer->Unlock();
         assert(SUCCEEDED(result));
     }
 
-    // “Ç‚İ‚ñ‚¾‰¹ºƒf[ƒ^‚ğ•Û
+    // èª­ã¿è¾¼ã‚“ã éŸ³å£°ãƒ‡ãƒ¼ã‚¿ã‚’ä¿æŒ
     soundDatas.push_back(soundData);
 
     return soundData;
@@ -205,28 +205,28 @@ void Sound::SoundPlay(const SoundData& soundData, float volume) {
         volume = 1.0f;
     }
 
-    // ”gŒ`ƒtƒH[ƒ}ƒbƒg‚ğŒ³‚ÉSourceVoice‚Ì¶¬
+    // æ³¢å½¢ãƒ•ã‚©ãƒ¼ãƒãƒƒãƒˆã‚’å…ƒã«SourceVoiceã®ç”Ÿæˆ
     IXAudio2SourceVoice* pSourceVoice = nullptr;
     result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
     assert(SUCCEEDED(result));
 
-    //‰¹—Êİ’è
+    //éŸ³é‡è¨­å®š
     result = pSourceVoice->SetVolume(volume);
     assert(SUCCEEDED(result));
 
-    // Ä¶‚·‚é”gŒ`ƒf[ƒ^‚Ìİ’è
+    // å†ç”Ÿã™ã‚‹æ³¢å½¢ãƒ‡ãƒ¼ã‚¿ã®è¨­å®š
     XAUDIO2_BUFFER buf{};
     buf.pAudioData = soundData.buffer.data();
     buf.AudioBytes = static_cast<UINT32>(soundData.buffer.size());
     buf.Flags = XAUDIO2_END_OF_STREAM;
 
-    // ”gŒ`ƒf[ƒ^‚ÌÄ¶
+    // æ³¢å½¢ãƒ‡ãƒ¼ã‚¿ã®å†ç”Ÿ
     result = pSourceVoice->SubmitSourceBuffer(&buf);
     assert(SUCCEEDED(result));
 
     result = pSourceVoice->Start();
     assert(SUCCEEDED(result));
 
-    // šI—¹‚É”jŠü‚Å‚«‚é‚æ‚¤‚É•Û
+    // â˜…çµ‚äº†æ™‚ã«ç ´æ£„ã§ãã‚‹ã‚ˆã†ã«ä¿æŒ
     sourceVoices.push_back(pSourceVoice);
 }
