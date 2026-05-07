@@ -1,6 +1,11 @@
 #pragma once
 #include "MyMath.h"
+#include "Object3d.h"
+#include <Object3dCommon.h>
+#include <Model.h>
+
 #include <Windows.h>
+#include <memory>
 
 class Input;
 
@@ -29,6 +34,8 @@ public:
     Transform& GetTransform() { return transform_; }
     float* GetFovPtr() { return &fov_; }
 
+   
+
 private:
     Transform transform_;
     float fov_;
@@ -41,4 +48,5 @@ private:
 
     Vector3 target_ = { 8.0f, 0.0f, 8.0f }; // 注視点 (ステージの中心付近をデフォルトに)
     float distance_ = 20.0f;              // 注視点からの距離
+
 };
