@@ -63,6 +63,7 @@ void MyGame::Initialize() {
     // モデル読み込み（vector<unique_ptr<Model>> に入れるため unique_ptr で包む） 
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/block", "block.obj", textureManager.get())));
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/axis", "axis.obj", textureManager.get())));
+
     /*models.push_back(modelPlane);
     models.push_back(modelAxis);*/
 
@@ -84,6 +85,7 @@ void MyGame::Initialize() {
 
     // エディタ用カメラ
     camera = std::make_unique<Camera>();
+   
 
     // 1. ステージマップのサイズ初期化
     stageMap_.Initialize(16, 8, 16);
@@ -168,6 +170,22 @@ void MyGame::Initialize() {
 
     lightCamera_ = std::make_unique<LightCamera>();
     lightCamera_->Initialize();
+
+    // カメラ回転用UIスプライト
+    cameraGuideTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow.png");
+
+    cameraGuideLeftSprite_ = std::make_unique<Sprite>();
+    cameraGuideLeftSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    cameraGuideRightSprite_ = std::make_unique<Sprite>();
+    cameraGuideRightSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    cameraGuideUpSprite_ = std::make_unique<Sprite>();
+    cameraGuideUpSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    cameraGuideDownSprite_ = std::make_unique<Sprite>();
+    cameraGuideDownSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -253,9 +271,12 @@ void MyGame::Update() {
     }
 
     camera->Update();
+    UpdateCameraGuideSprites();
+
 
     const Matrix4x4& view = camera->GetViewMatrix();
     const Matrix4x4& proj = camera->GetProjectionMatrix();
+
     // ライト視点の行列を取得しておきます
     //const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
@@ -669,6 +690,54 @@ void MyGame::UpdateGamePlay() {
     }
 }
 
+void MyGame::UpdateCameraGuideSprites() {
+    if (currentMode_ != AppMode::GamePlay) {
+        return;
+    }
+
+    if (!cameraGuideLeftSprite_ ||
+        !cameraGuideRightSprite_ ||
+        !cameraGuideUpSprite_ ||
+        !cameraGuideDownSprite_) {
+        return;
+    }
+
+    float screenWidth = static_cast<float>(WinApp::kClientWidth);
+    float screenHeight = static_cast<float>(WinApp::kClientHeight);
+
+    float edgeRatio = 0.1f;
+
+    float leftX = screenWidth * edgeRatio * 0.5f;
+    float rightX = screenWidth * (1.0f - edgeRatio * 0.5f);
+    float topY = screenHeight * edgeRatio * 0.5f;
+    float bottomY = screenHeight * (1.0f - edgeRatio * 0.5f);
+
+    float centerX = screenWidth * 0.5f;
+    float centerY = screenHeight * 0.5f;
+
+    // 画面端に配置
+    cameraGuideLeftSprite_->SetPosition({ leftX, centerY });
+    cameraGuideRightSprite_->SetPosition({ rightX, centerY });
+    cameraGuideUpSprite_->SetPosition({ centerX, topY });
+    cameraGuideDownSprite_->SetPosition({ centerX, bottomY });
+
+    // サイズ
+    cameraGuideLeftSprite_->SetSize({ 64.0f, 64.0f });
+    cameraGuideRightSprite_->SetSize({ 64.0f, 64.0f });
+    cameraGuideUpSprite_->SetSize({ 64.0f, 64.0f });
+    cameraGuideDownSprite_->SetSize({ 64.0f, 64.0f });
+
+    // arrow.png が上向き矢印想定
+    cameraGuideUpSprite_->SetRotation(0.0f);
+    cameraGuideRightSprite_->SetRotation(1.5708f);
+    cameraGuideDownSprite_->SetRotation(3.1415f);
+    cameraGuideLeftSprite_->SetRotation(-1.5708f);
+
+    cameraGuideLeftSprite_->Update();
+    cameraGuideRightSprite_->Update();
+    cameraGuideUpSprite_->Update();
+    cameraGuideDownSprite_->Update();
+}
 
 #ifdef USE_IMGUI
 // ImGuiの更新と描画
@@ -879,7 +948,25 @@ void MyGame::UpdateImGui() {
 #endif
 }
 
+void MyGame::DrawCameraGuideSprites() {
+    if (currentMode_ != AppMode::GamePlay) {
+        return;
+    }
 
+    if (!cameraGuideLeftSprite_ ||
+        !cameraGuideRightSprite_ ||
+        !cameraGuideUpSprite_ ||
+        !cameraGuideDownSprite_) {
+        return;
+    }
+
+    spriteCommon->PreDraw();
+
+    cameraGuideLeftSprite_->Draw();
+    cameraGuideRightSprite_->Draw();
+    cameraGuideUpSprite_->Draw();
+    cameraGuideDownSprite_->Draw();
+}
 
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
@@ -953,6 +1040,8 @@ void MyGame::Draw() {
                 if (stageRenderer_) stageRenderer_->Draw();
                 if (player_) player_->Draw();
 
+
+
                 if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
                     mapCursor_->Draw();
                 }
@@ -981,6 +1070,9 @@ void MyGame::Draw() {
         spriteCommon->PreDraw();
         if (sprite) sprite->Draw();
     }
+
+    //5/7佐倉
+    DrawCameraGuideSprites();
 
     // --- 4. ImGui と 最終出力 ---
 #ifdef USE_IMGUI
@@ -1014,6 +1106,7 @@ void MyGame::Finalize() {
     objectList.clear();
     models.clear();
 
+   
     // 5. その他のゲームオブジェクトを reset
     player_.reset();
     skydomeObject_.reset();
