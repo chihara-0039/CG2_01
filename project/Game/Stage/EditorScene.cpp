@@ -92,6 +92,9 @@ void EditorScene::ApplyPlacement() {
 }
 
 void EditorScene::Draw() {
+
+    objCommon_->PreDraw();
+
     const Matrix4x4& view = editorCamera_.GetViewMatrix();
     const Matrix4x4& proj = editorCamera_.GetProjectionMatrix();
 
@@ -105,19 +108,43 @@ void EditorScene::Draw() {
 }
 
 void EditorScene::DrawUI() {
-    ImGui::Begin("Editor");
+    // ツールバーの構築
+    ImGui::Begin("Stage Editor Tools");
 
+    // ブロック選択
+    ImGui::Text("Block Selection");
     if (ImGui::Button("Ground")) { selectedBlockType_ = BlockType::Ground; }
     ImGui::SameLine();
     if (ImGui::Button("Wall")) { selectedBlockType_ = BlockType::Wall; }
     ImGui::SameLine();
+    if (ImGui::Button("Ladder")) { selectedBlockType_ = BlockType::Ladder; }
+
     if (ImGui::Button("Door")) { selectedBlockType_ = BlockType::Door; }
+    ImGui::SameLine();
+    if (ImGui::Button("P-Switch")) { selectedBlockType_ = BlockType::PSwitch; }
+    ImGui::SameLine();
+    if (ImGui::Button("P-Block")) { selectedBlockType_ = BlockType::PBlock; }
 
     ImGui::Separator();
 
-    if (ImGui::Button("Save prototype")) {
+    // ステージ管理
+    ImGui::Text("Stage Management");
+    if (ImGui::Button("SAVE STAGE")) {
         stageMap_.SaveToFile("Resources/Stages/prototype.txt");
     }
+
+    if (ImGui::Button("RELOAD")) {
+        stageMap_.LoadFromFile("Resources/Stages/prototype.txt");
+        stageRenderer_.BuildFromStageMap(stageMap_);
+    }
+
+    ImGui::Separator();
+
+    // ヒント表示
+    ImGui::Text("Controls:");
+    ImGui::BulletText("ENTER: Place Block");
+    ImGui::BulletText("SPACE: Remove Block");
+    ImGui::BulletText("R: Rotate Block");
 
     ImGui::End();
 }

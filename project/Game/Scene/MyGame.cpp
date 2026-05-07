@@ -56,10 +56,20 @@ void MyGame::Update() {
         return;
     }
 
-    // --- モード切り替えロジック ---
+    // --- 【移植】F1キーによるシーン即時切り替え ---
     if (input->TriggerKey(DIK_F1)) {
-        // 現在が GamePlay なら Editor へ、Editor なら GamePlay へ
-        // ※ ここでシーンを入れ替える処理を書く
+        // 現在のシーンが Editor なら Play へ、そうでなければ Editor へ
+        if (dynamic_cast<EditorScene*>(scene_.get())) {
+            auto nextScene = std::make_unique<GamePlayScene>();
+            nextScene->SetEnginePointers(object3dCommon.get(), input.get(), textureManager.get(), shadowMap.get(), lightCamera.get());
+            nextScene->Initialize();
+            scene_ = std::move(nextScene);
+        } else {
+            auto nextScene = std::make_unique<EditorScene>();
+            nextScene->SetEnginePointers(object3dCommon.get(), input.get(), textureManager.get());
+            nextScene->Initialize();
+            scene_ = std::move(nextScene);
+        }
     }
 
     // 3. 現在のシーンの更新を実行
@@ -118,14 +128,17 @@ void MyGame::Draw() {
         // --- ImGuiの描画をここで復活させる ---
         // 以前の MyGame.cpp で書いていた ImGui::Begin... などの処理を
         // シーン側の DrawUI() に任せる
+        // 【ImGui サイクル: 構築】
         scene_->DrawUI();
 
         // これを呼ばないと「Render() を呼び忘れてない？」というエラーになる
+        // 【ImGui サイクル: 確定】
         ImGui::Render();
 
+
+        // 【ImGui サイクル: 転送】
         ID3D12DescriptorHeap* ppHeaps[] = { dxCommon->GetImguiSrvHeap() };
         dxCommon->GetCommandList()->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
         // 確定したUIの描画データを、現在のコマンドリストに焼き付ける
         // 第2引数には dxCommon から取得したコマンドリストを渡します
         ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), dxCommon->GetCommandList());
