@@ -190,7 +190,7 @@ void Player::DoorWarp(const StageMap& map)
 		// ドアの上にFを出す座標
 		nearDoorWorldPos_ = {
 			static_cast<float>(gx),
-			static_cast<float>(gyBottom) + 2.0f,
+			static_cast<float>(gyBottom) + 1.0f,
 			static_cast<float>(gz)
 		};
 
