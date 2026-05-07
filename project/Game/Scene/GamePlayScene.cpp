@@ -71,20 +71,51 @@ void GamePlayScene::Initialize() {
 }
 
 void GamePlayScene::Update() {
-    // --- 1. カメラ操作の復活 ---
-    // マウスやキーボードで視点を回せるようにします
-    if (input_->PushKey(DIK_LEFT)) { gameCameraAngle_ -= 0.05f; }
-    if (input_->PushKey(DIK_RIGHT)) { gameCameraAngle_ += 0.05f; }
+    // --- 1. マウスによる旋回操作の復元 ---
+    const auto& mouse = input_->GetMouseState();
+    float screenWidth = 1280.0f; // ウィンドウ幅
+    float screenHeight = 720.0f;
 
-    // カメラの座標をプレイヤーの後ろに回り込ませる等の計算
-    // ここでは簡易的に回転角のみ更新
+    // 左クリック中の旋回
+    if (mouse.buttons[0]) {
+        // 左右の回転
+        if (mouse.posX < screenWidth * 0.1f) {
+            gameCameraAngle_ -= 0.025f;
+        } else if (mouse.posX > screenWidth * 0.9f) {
+            gameCameraAngle_ += 0.025f;
+        }
+
+		// 上下の回転（俯瞰角度の調整）
+        if (mouse.posY < screenHeight * 0.1f) {
+            cameraPitch_ -= 0.015f; 
+        } else if (mouse.posY > screenHeight * 0.9f) {
+            cameraPitch_ += 0.015f;
+        }
+    }
+
+    // 角度制限（真上や真下で反転しないようにする）
+    if (cameraPitch_ > 1.5f) { cameraPitch_ = 1.5f; }
+    if (cameraPitch_ < 0.1f) { cameraPitch_ = 0.1f; }
+
+    // --- 2. ピボットカメラの計算 ---
+    Vector3 pivot = { 4.0f, 9.0f, 4.5f };
+    float distance = 35.0f;
+
+    Vector3 pos;
+    // 左右角(gameCameraAngle_)と上下角(cameraPitch_)を組み合わせて座標を計算
+    pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(gameCameraAngle_) * distance;
+    pos.y = pivot.y + std::sin(cameraPitch_) * 20.0f;
+    pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(gameCameraAngle_) * distance;
+
+    camera_.SetPosition(pos);
+    camera_.SetRotation({ cameraPitch_, gameCameraAngle_, 0.0f });
     camera_.Update();
 
-    // --- 2. 行列の反映 ---
+    // --- 3. 行列の反映 ---
     Matrix4x4 view = camera_.GetViewMatrix();
     Matrix4x4 proj = camera_.GetProjectionMatrix();
 
-    // プレイヤーとステージにカメラを教える
+	// プレイヤーとステージレンダラーにカメラ行列をセットして更新する
     if (player_) {
         player_->SetCamera(view, proj);
         player_->Update(input_, stageMap_, gameCameraAngle_, lightCamera_->GetViewProjectionMatrix());
@@ -92,18 +123,22 @@ void GamePlayScene::Update() {
     stageRenderer_.SetCamera(view, proj);
     stageRenderer_.Update(lightCamera_->GetViewProjectionMatrix());
 
-    // --- 3. 天球（空）の修正 ---
+    // Pスイッチ等のギミック更新 (省略せず現状維持)
+    stageMap_.UpdatePSwitch();
+    if (stageMap_.WasPSwitchJustFinished()) {
+        stageRenderer_.BuildFromStageMap(stageMap_);
+    }
+
+    // 天球（空）の追従
     if (skydomeObject_) {
         skydomeObject_->SetCamera(view, proj);
         if (player_) {
-            // 空は常にプレイヤーを中心に置く
             skydomeObject_->SetPosition(player_->GetPosition());
         }
-        // 【修正】天球の更新には影用行列ではなく、空用の単位行列を渡す
         skydomeObject_->Update(Math::MakeIdentity4x4());
     }
 
-    // 影用カメラの追従
+	// --- 4. ライトカメラの更新 ---
     if (player_) {
         lightCamera_->Update({ 0.2f, -1.0f, 0.5f }, player_->GetPosition());
     }
@@ -140,7 +175,7 @@ void GamePlayScene::DrawUI() {
     // 以前 MyGame::Draw 内で書いていた ImGui のコードをここに移します
     ImGui::Begin("Game Debug");
 
-    if (ImGui::Button("脱出ボタン (座標リセット)")) {
+    if (ImGui::Button("Reset Player Position")) {
         player_->SetPosition({ 2.0f, 10.0f, 2.0f }); // 空中にテレポート
     }
 

@@ -69,5 +69,6 @@ private:
     // --- シーンの状態管理 ---
     bool isFinished_ = false;                   // 次のシーンへ移るフラグ
     bool isGoalReached_ = false;                // ゴールしたか
-    float gameCameraAngle_ = 0.0f;              // カメラの回転角
+	float gameCameraAngle_ = 0.0f;              // カメラの回転角（X軸） 
+	float cameraPitch_ = 0.75;                  // カメラの高さ（プレイヤーからの相対位置）
 };

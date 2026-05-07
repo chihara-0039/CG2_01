@@ -2,6 +2,7 @@
 #include "TitleScene.h"
 #include "GamePlayScene.h" // 新しく作成するシーン
 #include "GameClearScene.h"
+#include "EditorScene.h"
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
@@ -65,11 +66,38 @@ void MyGame::Update() {
     if (scene_) {
         scene_->Update();
 
-        // シーンが終了フラグを立てていたら、次のシーンへ
+        // --- シーン遷移のハンドル ---[cite: 17, 21]
         if (scene_->IsFinished()) {
-            // ここで Title -> GamePlay などの遷移ロジックを書く
-            // 現在の MyGame.cpp にある switch 文の役割をここに集約
+            // 現在が TitleScene なら GamePlayScene へ
+            if (dynamic_cast<TitleScene*>(scene_.get())) {
+                auto nextScene = std::make_unique<GamePlayScene>();
+                nextScene->SetEnginePointers(object3dCommon.get(), input.get(), textureManager.get(), shadowMap.get(), lightCamera.get());
+                nextScene->Initialize();
+                scene_ = std::move(nextScene);
+            }
+            // 現在が GamePlayScene なら GameClearScene へ
+            else if (dynamic_cast<GamePlayScene*>(scene_.get())) {
+                if (scene_->IsFinished()) {
+                    auto nextScene = std::make_unique<TitleScene>();
+
+                    // 【修正】まず道具を渡す
+                    nextScene->SetEnginePointers(object3dCommon.get(), input.get());
+
+                    // 【修正】そのあと、引数なしで初期化を呼ぶ
+                    nextScene->Initialize();
+
+                    scene_ = std::move(nextScene);
+                }
+            }
         }
+    }
+
+    // F1キーなどで強制的にエディタへ切り替える隠しコマンドもここにあると便利です
+    if (input->TriggerKey(DIK_F1)) {
+        auto editor = std::make_unique<EditorScene>();
+        editor->SetEnginePointers(object3dCommon.get(), input.get(), textureManager.get());
+        editor->Initialize();
+        scene_ = std::move(editor);
     }
 }
 
@@ -89,10 +117,10 @@ void MyGame::Draw() {
 
         // --- ImGuiの描画をここで復活させる ---
         // 以前の MyGame.cpp で書いていた ImGui::Begin... などの処理を
-        // シーン側の DrawUI() に任せます
+        // シーン側の DrawUI() に任せる
         scene_->DrawUI();
 
-        // これを呼ばないと「Render() を呼び忘れてない？」というエラーになります
+        // これを呼ばないと「Render() を呼び忘れてない？」というエラーになる
         ImGui::Render();
 
         ID3D12DescriptorHeap* ppHeaps[] = { dxCommon->GetImguiSrvHeap() };

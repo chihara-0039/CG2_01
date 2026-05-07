@@ -1,46 +1,136 @@
 #include "EditorScene.h"
 #include "externals/imgui/imgui.h"
+#include "MyMath.h" // Math::用
+#include <filesystem>
 
-// 道具のポインタを受け取る
-void EditorScene::SetEnginePointers(Object3dCommon* objCommon, Input* input, TextureManager* texManager) {
-    objCommon_ = objCommon;
-    input_ = input;
-    texManager_ = texManager;
+void EditorScene::SetEnginePointers(Object3dCommon* obj, Input* in, TextureManager* tex) {
+    objCommon_ = obj;
+    input_ = in;
+    texManager_ = tex;
 }
 
 void EditorScene::Initialize() {
-    // ステージレンダラーの初期化
     if (objCommon_) {
         stageRenderer_.Initialize(objCommon_);
     }
 
-    // エディタ用カメラの初期位置
+    // マップカーソルの生成
+    mapCursor_ = std::make_unique<MapCursor>();
+    if (mapCursor_) {
+        mapCursor_->Initialize(objCommon_);
+    }
+
+    // カメラ初期位置
     editorCamera_.SetPosition({ 0.0f, 15.0f, -30.0f });
-    editorCamera_.Update();
+
+    RefreshStageList();
 }
 
 void EditorScene::Update() {
-    // カメラの更新
+    // 1. カメラ更新（Blender風操作）
+    bool isGuiCaptured = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
+    
+    // Blender風操作を呼び出し（マウス中ボタン:回転、Ctrl+中:ズームなど）
+    editorCamera_.UpdateBlenderStyle(input_, isGuiCaptured, nullptr);
     editorCamera_.Update();
 
-    // ここに以前 MyGame.cpp に書いていた「マウスでブロックを置く」などの
-    // エディタ用ロジックを引っ越してきます
+    if (isGuiCaptured) {
+        return;
+    }
+
+    // 2. カーソル移動（WASD/QE）
+    if (input_->TriggerKey(DIK_A)) { mapCursor_->Move(-1, 0, 0, stageMap_); }
+    if (input_->TriggerKey(DIK_D)) { mapCursor_->Move(1, 0, 0, stageMap_); }
+    if (input_->TriggerKey(DIK_W)) { mapCursor_->Move(0, 0, 1, stageMap_); }
+    if (input_->TriggerKey(DIK_S)) { mapCursor_->Move(0, 0, -1, stageMap_); }
+    if (input_->TriggerKey(DIK_Q)) { mapCursor_->Move(0, 1, 0, stageMap_); }
+    if (input_->TriggerKey(DIK_E)) { mapCursor_->Move(0, -1, 0, stageMap_); }
+
+    // 3. 【移植】ブロックの配置 (Enter)
+    if (input_->TriggerKey(DIK_RETURN)) {
+        ApplyPlacement(); // 旧MyGameのロジックを呼ぶ
+    }
+
+    // 4. 【移植】ブロックの削除 (Space)
+    if (input_->TriggerKey(DIK_SPACE)) {
+        stageMap_.RemoveBlock(mapCursor_->GetIndex());
+        stageRenderer_.BuildFromStageMap(stageMap_);
+    }
+
+    // 5. 【移植】ブロックの回転 (R)
+    if (input_->TriggerKey(DIK_R)) {
+        const Int3& idx = mapCursor_->GetIndex();
+        MapCell* cell = stageMap_.GetCell(idx.x, idx.y, idx.z);
+        if (cell && cell->type != BlockType::None) {
+            cell->rotationY += 1.5708f; // 90度回転
+            stageRenderer_.BuildFromStageMap(stageMap_);
+        }
+    }
+
+    mapCursor_->Update(Math::MakeIdentity4x4());
+}
+
+void EditorScene::ApplyPlacement() {
+    const Int3& cursor = mapCursor_->GetIndex();
+
+    if (selectedBlockType_ == BlockType::Door) {
+        stageMap_.SetBlock(cursor, BlockType::Door);
+        if (!isWaitingForSecondDoor_) {
+            firstDoorIndex_ = cursor;
+            isWaitingForSecondDoor_ = true;
+        } else {
+            MapCell* c1 = stageMap_.GetCell(firstDoorIndex_.x, firstDoorIndex_.y, firstDoorIndex_.z);
+            MapCell* c2 = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+            if (c1) { c1->doorTargetIndex = cursor; }
+            if (c2) { c2->doorTargetIndex = firstDoorIndex_; }
+            isWaitingForSecondDoor_ = false;
+        }
+    } else {
+        stageMap_.SetBlock(cursor, selectedBlockType_);
+    }
+    stageRenderer_.BuildFromStageMap(stageMap_);
 }
 
 void EditorScene::Draw() {
-    // 3D描画共通設定
-    if (objCommon_) {
-        objCommon_->PreDraw();
-    }
+    const Matrix4x4& view = editorCamera_.GetViewMatrix();
+    const Matrix4x4& proj = editorCamera_.GetProjectionMatrix();
 
-    // ステージの描画
+    stageRenderer_.SetCamera(view, proj);
     stageRenderer_.Draw();
+
+    if (mapCursor_) {
+        mapCursor_->SetCamera(view, proj);
+        mapCursor_->Draw();
+    }
 }
 
 void EditorScene::DrawUI() {
-    // エディタ専用のUIを表示
-    ImGui::Begin("Stage Editor");
-    ImGui::Text("Editor Mode");
-    // ここにブロック選択や保存ボタンを配置します
+    ImGui::Begin("Editor");
+
+    if (ImGui::Button("Ground")) { selectedBlockType_ = BlockType::Ground; }
+    ImGui::SameLine();
+    if (ImGui::Button("Wall")) { selectedBlockType_ = BlockType::Wall; }
+    ImGui::SameLine();
+    if (ImGui::Button("Door")) { selectedBlockType_ = BlockType::Door; }
+
+    ImGui::Separator();
+
+    if (ImGui::Button("Save prototype")) {
+        stageMap_.SaveToFile("Resources/Stages/prototype.txt");
+    }
+
     ImGui::End();
+}
+
+void EditorScene::RefreshStageList() {
+    stageFiles_.clear();
+    std::string path = "Resources/Stages/";
+    if (!std::filesystem::exists(path)) {
+        return;
+    }
+    for (const auto& entry : std::filesystem::directory_iterator(path)) {
+        if (entry.path().extension() == ".txt") {
+            stageFiles_.push_back(entry.path().stem().string());
+        }
+    }
 }

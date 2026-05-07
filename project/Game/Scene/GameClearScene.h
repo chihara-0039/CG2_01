@@ -1,17 +1,22 @@
 #pragma once
 #include <vector>
 #include <string>
-#include <memory> // 追加
+#include <memory> 
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Model.h"
 #include "Camera.h"
+#include "IScene.h"
 
-class GameClearScene {
+class GameClearScene : public IScene {
 public:
-    void Initialize(Object3dCommon* objCommon);
+    void Initialize();
     void Update();
     void Draw();
+    void DrawUI() override {}
+    bool IsFinished() const override { return isFinished_; }
+
+    void SetEnginePointers(Object3dCommon* objCommon);
 
 private:
     // 各文字データを管理する構造体
@@ -40,6 +45,7 @@ private:
 
     float timer_ = 0.0f;
     bool isAllFinished_ = false;
+    bool isFinished_ = false;
     float finishTimer_ = 0.0f;
 
     std::string text_ = "COURSECLEAR";

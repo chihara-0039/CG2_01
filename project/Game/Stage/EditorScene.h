@@ -6,8 +6,10 @@
 #include "Camera.h"
 #include "Object3dCommon.h"
 #include "TextureManager.h"
+#include "MapCursor.h" // 追加
 #include <memory>
-// ... 必要なインクルード ...
+#include <vector>
+#include <string>
 
 class EditorScene : public IScene {
 public:
@@ -17,14 +19,19 @@ public:
     void DrawUI() override;
     bool IsFinished() const override { return isFinished_; }
 
-    // ポインタ受け取り用
     void SetEnginePointers(Object3dCommon* obj, Input* in, TextureManager* tex);
 
 private:
-    // エディタ専用の変数群（以前 MyGame にあったもの）
+    // ヘルパー関数
+    void ApplyPlacement(); // 設置ロジック
+    void RefreshStageList(); // ファイルリスト更新
+
+    // エディタ専用の変数群（あなたのヘッダをベースに不足分を追加）
     BlockType selectedBlockType_ = BlockType::Ground;
     Int3 cursorIndex_ = { 0, 0, 0 };
     bool isFinished_ = false;
+    bool isWaitingForSecondDoor_ = false;
+    Int3 firstDoorIndex_ = { -1, -1, -1 };
 
     // エンジンから借りる道具
     Object3dCommon* objCommon_ = nullptr;
@@ -35,4 +42,10 @@ private:
     StageMap stageMap_;
     StageRenderer stageRenderer_;
     Camera editorCamera_;
+    std::unique_ptr<MapCursor> mapCursor_; // これがないとエラーになります
+
+    // 保存・読み込み用
+    std::vector<std::string> stageFiles_;
+    int selectedStageIndex_ = -1;
+    char newStageName_[64] = "new_stage";
 };
