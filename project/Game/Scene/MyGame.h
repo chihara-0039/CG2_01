@@ -9,6 +9,13 @@
  */
 class MyGame : public Framework {
 public:
+
+    enum class AppMode { 
+        DebugView,
+        StageEditor,
+        GamePlay 
+    }; // モード定義
+
     // --- メンバ関数 ---
 
     // 初期化
@@ -26,9 +33,23 @@ public:
 private:
     // --- シーン管理 ---
 
+    AppMode currentMode_ = AppMode::DebugView;
     // 現在実行中のシーン
     std::unique_ptr<IScene> scene_;
 
-    // 次のシーンへの予約（遷移用）
-    // ※今回は簡単のため、直接 scene_ を差し替える方式をとります
+    void DrawCommonUI(); // 左側のDebug Window
+    void ChangeMode(AppMode newMode);
+
+    // 描画フラグ (スクショ用)
+    bool show3DObjects_ = true;
+    bool showSprite_ = true;
+    bool showParticles_ = true;
+
+    struct DebugDrawFlags {
+        bool show3DObjects = true;
+        bool showSprite = true;
+        bool showParticles = true;
+    };
+
+    DebugDrawFlags debugFlags_;
 };

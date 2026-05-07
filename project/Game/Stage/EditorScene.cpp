@@ -108,45 +108,51 @@ void EditorScene::Draw() {
 }
 
 void EditorScene::DrawUI() {
-    // ツールバーの構築
-    ImGui::Begin("Stage Editor Tools");
+#ifndef NDEBUG // 【重要】リリース時には一切映さないようにガード
 
-    // ブロック選択
-    ImGui::Text("Block Selection");
-    if (ImGui::Button("Ground")) { selectedBlockType_ = BlockType::Ground; }
-    ImGui::SameLine();
-    if (ImGui::Button("Wall")) { selectedBlockType_ = BlockType::Wall; }
-    ImGui::SameLine();
-    if (ImGui::Button("Ladder")) { selectedBlockType_ = BlockType::Ladder; }
+    // 画面右側にツールバーを表示
+    ImGui::SetNextWindowPos(ImVec2(1280 - 260, 20), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Editor Toolbar", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-    if (ImGui::Button("Door")) { selectedBlockType_ = BlockType::Door; }
-    ImGui::SameLine();
-    if (ImGui::Button("P-Switch")) { selectedBlockType_ = BlockType::PSwitch; }
-    ImGui::SameLine();
-    if (ImGui::Button("P-Block")) { selectedBlockType_ = BlockType::PBlock; }
+    // --- 1. Select Gimmick (削らずに全種類網羅すべき) ---
+    ImGui::Text("1. Select Gimmick");
+
+    // 全種類ボタン化。選択中のものは色を変えると使いやすいです
+    if (ImGui::Button("Ground", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::Ground; }
+    if (ImGui::Button("Wall", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::Wall; }
+    if (ImGui::Button("Ladder", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::Ladder; }
+    if (ImGui::Button("Star", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::Star; }
+    if (ImGui::Button("BubblePickup", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::BubblePickup; }
+    if (ImGui::Button("Goal", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::Goal; }
+    if (ImGui::Button("PlayerStart", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::PlayerStart; }
+    if (ImGui::Button("Door", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::Door; }
+    if (ImGui::Button("PSwitch", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::PSwitch; }
+    if (ImGui::Button("PBlock", ImVec2(-1, 0))) { selectedBlockType_ = BlockType::PBlock; }
 
     ImGui::Separator();
 
-    // ステージ管理
-    ImGui::Text("Stage Management");
-    if (ImGui::Button("SAVE STAGE")) {
-        stageMap_.SaveToFile("Resources/Stages/prototype.txt");
+    // --- 2. Action (マウス操作がメインでも、ボタンがある方が便利) ---
+    ImGui::Text("2. Action");
+
+    if (ImGui::Button("Rotate (R)", ImVec2(-1, 0))) {
+        // 回転処理（Rキーと同じロジック）
     }
 
-    if (ImGui::Button("RELOAD")) {
-        stageMap_.LoadFromFile("Resources/Stages/prototype.txt");
+    // 【重要】PLACEボタンは赤くして目立たせる（スクショ再現）
+    ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
+    if (ImGui::Button("PLACE (Enter)", ImVec2(-1, 40))) {
+        ApplyPlacement();
+    }
+    ImGui::PopStyleColor();
+
+    if (ImGui::Button("REMOVE (Space)", ImVec2(-1, 0))) {
+        stageMap_.RemoveBlock(mapCursor_->GetIndex());
         stageRenderer_.BuildFromStageMap(stageMap_);
     }
 
-    ImGui::Separator();
-
-    // ヒント表示
-    ImGui::Text("Controls:");
-    ImGui::BulletText("ENTER: Place Block");
-    ImGui::BulletText("SPACE: Remove Block");
-    ImGui::BulletText("R: Rotate Block");
-
     ImGui::End();
+
+#endif
 }
 
 void EditorScene::RefreshStageList() {
