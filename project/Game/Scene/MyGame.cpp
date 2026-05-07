@@ -63,6 +63,7 @@ void MyGame::Initialize() {
     // モデル読み込み（vector<unique_ptr<Model>> に入れるため unique_ptr で包む） 
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/block", "block.obj", textureManager.get())));
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/axis", "axis.obj", textureManager.get())));
+
     /*models.push_back(modelPlane);
     models.push_back(modelAxis);*/
 
@@ -77,6 +78,15 @@ void MyGame::Initialize() {
     sprite = std::make_unique<Sprite>();
     sprite->Initialize(spriteCommon.get(), texHandle);
 
+    //サウンド初期化
+    sound.Initialize();
+    //読み込み
+    wavSoundData = sound.SoundLoadFile("Resources/Sound/Alarm01.wav");
+
+    mp4SoundData = sound.SoundLoadFile("Resources/Sound/AlarmMovie.mp4");
+
+    mp3SoundData = sound.SoundLoadFile("Resources/Sound/maou_bgm_neorock83.mp3");
+
     // プレイヤーの生成
     player_ = std::make_unique<Player>();
     player_->Initialize(object3dCommon.get(), models[0].get());
@@ -84,6 +94,7 @@ void MyGame::Initialize() {
 
     // エディタ用カメラ
     camera = std::make_unique<Camera>();
+   
 
     // 1. ステージマップのサイズ初期化
     stageMap_.Initialize(16, 10, 16);
@@ -168,6 +179,37 @@ void MyGame::Initialize() {
 
     lightCamera_ = std::make_unique<LightCamera>();
     lightCamera_->Initialize();
+
+    // カメラ回転用UIスプライト
+    cameraGuideTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow.png");
+
+    cameraGuideLeftSprite_ = std::make_unique<Sprite>();
+    cameraGuideLeftSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    cameraGuideRightSprite_ = std::make_unique<Sprite>();
+    cameraGuideRightSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    cameraGuideUpSprite_ = std::make_unique<Sprite>();
+    cameraGuideUpSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    cameraGuideDownSprite_ = std::make_unique<Sprite>();
+    cameraGuideDownSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    // 追加：ドア用3D F UI
+    doorPromptModel_ = std::unique_ptr<Model>(
+        Model::CreateFromOBJ(
+            dxCommon.get(),
+            "Resources/Models/UI/F",
+            "F.obj",
+            textureManager.get()
+        )
+    );
+
+    doorPromptObject_ = std::make_unique<Object3d>();
+    doorPromptObject_->Initialize(object3dCommon.get());
+    doorPromptObject_->SetModel(doorPromptModel_.get());
+    doorPromptObject_->SetEnableLighting(false);
+    doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -217,7 +259,38 @@ void MyGame::Update() {
         skydomeObject_->Update(Math::MakeIdentity4x4());
     }
 
-    
+    //試しにサウンド更新 //佐倉
+    // SPACEでwav再生
+    if (input->TriggerKey(DIK_SPACE)) {
+        sound.SoundPlay(wavSoundData, wavVolume);
+    }
+
+    // Mキーでmp4音声再生
+    if (input->TriggerKey(DIK_M)) {
+        sound.SoundPlay(mp4SoundData, mp4Volume);
+
+    }
+
+    if (input->TriggerKey(DIK_N)) {
+        sound.SoundPlay(mp3SoundData, mp3Volume);
+    }
+
+    //mp3版音量変更キー
+    if (input->TriggerKey(DIK_UP)) {
+        mp3Volume += 0.1f;
+        if (mp3Volume > 1.0f) {
+            mp3Volume = 1.0f;
+        }
+        OutputDebugStringA("[MyGame] mp3 音量アップ\n");
+    }
+
+    if (input->TriggerKey(DIK_DOWN)) {
+        mp3Volume -= 0.1f;
+        if (mp3Volume < 0.0f) {
+            mp3Volume = 0.0f;
+        }
+        OutputDebugStringA("[MyGame] mp3 音量ダウン\n");
+    }
    
     // --- ImGuiに入力中（WantCaptureKeyboardがtrue）ならゲーム側の入力を無視する ---
     if (!isGuiCaptured) {
@@ -253,15 +326,28 @@ void MyGame::Update() {
     }
 
     camera->Update();
+    UpdateCameraGuideSprites();
+
 
     const Matrix4x4& view = camera->GetViewMatrix();
     const Matrix4x4& proj = camera->GetProjectionMatrix();
+
     // ライト視点の行列を取得しておきます
     //const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
     // --- プレイヤーに最新のカメラ行列を教える ---
     if (player_) {
+        // カメラ行列は常にセット
         player_->SetCamera(view, proj);
+
+        // プレイモード中のみ移動などのロジックを更新
+        if (currentMode_ == AppMode::GamePlay) {
+            // ここは既存のコード（UpdateGamePlayの中から移動させてもOKです）
+            // player_->Update(...) 
+        } else {
+            // ★ エディタモード等では、見た目（行列）の更新だけを行う
+            player_->UpdateTransform(lightVP);
+        }
     }
 
     // ★ 修正1：ウィンドウが最前面にない場合は即リターンして何もしない
@@ -309,6 +395,9 @@ void MyGame::Update() {
     lightCamera_->Update(lightDir, player_->GetPosition());
 
     object3dCommon->SetLightDirection(lightDir);
+
+    //ドアUI更新
+    UpdateDoorPrompt3D();
 }
 
 //パーティクル発生のテスト（スペースキーを押すと発生）
@@ -669,6 +758,54 @@ void MyGame::UpdateGamePlay() {
     }
 }
 
+void MyGame::UpdateCameraGuideSprites() {
+    if (currentMode_ != AppMode::GamePlay) {
+        return;
+    }
+
+    if (!cameraGuideLeftSprite_ ||
+        !cameraGuideRightSprite_ ||
+        !cameraGuideUpSprite_ ||
+        !cameraGuideDownSprite_) {
+        return;
+    }
+
+    float screenWidth = static_cast<float>(WinApp::kClientWidth);
+    float screenHeight = static_cast<float>(WinApp::kClientHeight);
+
+    float edgeRatio = 0.1f;
+
+    float leftX = screenWidth * edgeRatio * 0.5f;
+    float rightX = screenWidth * (1.0f - edgeRatio * 0.5f);
+    float topY = screenHeight * edgeRatio * 0.5f;
+    float bottomY = screenHeight * (1.0f - edgeRatio * 0.5f);
+
+    float centerX = screenWidth * 0.5f;
+    float centerY = screenHeight * 0.5f;
+
+    // 画面端に配置
+    cameraGuideLeftSprite_->SetPosition({ leftX, centerY });
+    cameraGuideRightSprite_->SetPosition({ rightX, centerY });
+    cameraGuideUpSprite_->SetPosition({ centerX, topY });
+    cameraGuideDownSprite_->SetPosition({ centerX, bottomY });
+
+    // サイズ
+    cameraGuideLeftSprite_->SetSize({ 64.0f, 64.0f });
+    cameraGuideRightSprite_->SetSize({ 64.0f, 64.0f });
+    cameraGuideUpSprite_->SetSize({ 64.0f, 64.0f });
+    cameraGuideDownSprite_->SetSize({ 64.0f, 64.0f });
+
+    // arrow.png が上向き矢印想定
+    cameraGuideUpSprite_->SetRotation(0.0f);
+    cameraGuideRightSprite_->SetRotation(1.5708f);
+    cameraGuideDownSprite_->SetRotation(3.1415f);
+    cameraGuideLeftSprite_->SetRotation(-1.5708f);
+
+    cameraGuideLeftSprite_->Update();
+    cameraGuideRightSprite_->Update();
+    cameraGuideUpSprite_->Update();
+    cameraGuideDownSprite_->Update();
+}
 
 #ifdef USE_IMGUI
 // ImGuiの更新と描画
@@ -879,8 +1016,61 @@ void MyGame::UpdateImGui() {
 #endif
 }
 
+void MyGame::DrawCameraGuideSprites() {
+    if (currentMode_ != AppMode::GamePlay) {
+        return;
+    }
 
+    if (!cameraGuideLeftSprite_ ||
+        !cameraGuideRightSprite_ ||
+        !cameraGuideUpSprite_ ||
+        !cameraGuideDownSprite_) {
+        return;
+    }
 
+    spriteCommon->PreDraw();
+
+    cameraGuideLeftSprite_->Draw();
+    cameraGuideRightSprite_->Draw();
+    cameraGuideUpSprite_->Draw();
+    cameraGuideDownSprite_->Draw();
+}
+
+//5/7佐倉追加
+void MyGame::UpdateDoorPrompt3D()
+{
+    if (!doorPromptObject_ || !player_) {
+        return;
+    }
+
+    if (currentMode_ != AppMode::GamePlay || !player_->IsNearDoor()) {
+        return;
+    }
+
+    Vector3 pos = player_->GetNearDoorWorldPos();
+
+    doorPromptObject_->SetPosition(pos);
+    doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    // カメラの方向を向かせる
+    Vector3 camPos = camera->GetPosition();
+
+    float angleY = std::atan2f(
+        camPos.x - pos.x,
+        camPos.z - pos.z
+    );
+
+    doorPromptObject_->SetRotation({ 0.0f, angleY, 0.0f });
+
+    doorPromptObject_->SetCamera(
+        camera->GetViewMatrix(),
+        camera->GetProjectionMatrix()
+    );
+
+    doorPromptObject_->Update(
+        lightCamera_->GetViewProjectionMatrix()
+    );
+}
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
 
@@ -904,12 +1094,18 @@ void MyGame::Draw() {
         }
     }
 
+
     if (player_) {
         player_->DrawShadow(lightVP);
     }
 
     shadowMap_->PostDraw(commandList);
 
+    // dxCommon->PreDraw() 内でこれを行っていない場合、ここで明示的に呼ぶ必要があります
+    D3D12_VIEWPORT viewport = { 0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
+    D3D12_RECT scissor = { 0, 0, 1280, 720 };
+    commandList->RSSetViewports(1, &viewport);
+    commandList->RSSetScissorRects(1, &scissor);
 
     // ==========================================================
     // 【パス2】 メイン描画（通常のレンダリング ＋ 影の適用）
@@ -951,11 +1147,18 @@ void MyGame::Draw() {
                 currentMode_ == AppMode::GamePlay_BlockPlace) {
 
                 if (stageRenderer_) stageRenderer_->Draw();
-
                 if (currentMode_ == AppMode::GamePlay)
                 {
                     if (player_) player_->Draw();
                 }               
+                // 追加：ドア上の3D F UI描画
+                if (doorPromptObject_ &&
+                    currentMode_ == AppMode::GamePlay &&
+                    player_ &&
+                    player_->IsNearDoor()) {
+
+                    doorPromptObject_->Draw();
+                }
                 if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
                     mapCursor_->Draw();
                 }
@@ -985,6 +1188,9 @@ void MyGame::Draw() {
         if (sprite) sprite->Draw();
     }
 
+    //5/7佐倉
+    DrawCameraGuideSprites();
+
     // --- 4. ImGui と 最終出力 ---
 #ifdef USE_IMGUI
     dxCommon->EndImGui();
@@ -998,6 +1204,9 @@ void MyGame::Finalize() {
     if (dxCommon) {
         dxCommon->WaitForGpu();
     }
+
+
+    sound.Finalize();
 
 #ifdef USE_IMGUI
     dxCommon->FinalizeImGui();
@@ -1017,6 +1226,7 @@ void MyGame::Finalize() {
     objectList.clear();
     models.clear();
 
+   
     // 5. その他のゲームオブジェクトを reset
     player_.reset();
     skydomeObject_.reset();

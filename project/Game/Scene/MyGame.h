@@ -22,6 +22,7 @@
 #include "LightCamera.h"
 #include "TitleScene.h"
 #include "GameClearScene.h"
+#include"Sound.h"
 
 class MyGame {
 public:
@@ -86,6 +87,18 @@ private:
     std::unique_ptr<TitleScene> titleScene_;
     std::unique_ptr<GameClearScene> gameClearScene_;
 
+    // カメラ回転用UIスプライト
+    std::unique_ptr<Sprite> cameraGuideLeftSprite_;
+    std::unique_ptr<Sprite> cameraGuideRightSprite_;
+    std::unique_ptr<Sprite> cameraGuideUpSprite_;
+    std::unique_ptr<Sprite> cameraGuideDownSprite_;
+
+    uint32_t cameraGuideTextureHandle_ = 0;
+
+    // 追加：ドア用3D F UI
+    std::unique_ptr<Model> doorPromptModel_;
+    std::unique_ptr<Object3d> doorPromptObject_;
+
     // ==========================================================
     // メンバ変数（値や状態）
     // ==========================================================
@@ -121,7 +134,28 @@ private:
     void UpdateTitle();
     void DrawEditorToolbar();
     void ApplyPlacement();
+    //カメラ回転用
+    void UpdateCameraGuideSprites();
+    void DrawCameraGuideSprites();
+
+    // 追加：ドア用3D F UI更新
+    void UpdateDoorPrompt3D();
 
     // ヘルパー関数の戻り値は「生ポインタ」のままでOK（所有権を渡さない「参照」のため）
     Object3d* CreateObject(Model* model, Vector3 pos);
+
+    //5/5佐倉追加
+    //サウンド管理
+    Sound sound;
+    //音声データ
+    Sound::SoundData wavSoundData;
+    Sound::SoundData mp4SoundData;
+    Sound::SoundData mp3SoundData;
+
+    //音量メンバ変数
+    float wavVolume = 0.5f;
+    float mp4Volume = 0.5f;
+    float mp3Volume = 0.5f;
+
+    //5/7佐倉
 };

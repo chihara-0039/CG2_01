@@ -163,6 +163,14 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	object_->Update(lightVP);
 }
 
+// Object3d の行列を更新する（ライトカメラの行列も渡す）
+void Player::UpdateTransform(const Matrix4x4& lightVP) {
+	if (object_) {
+		// 内部で持っている Object3d の行列計算だけを行う
+		object_->Update(lightVP);
+	}
+}
+
 // ドアに触れているか判定して、触れていてかつFキーがトリガーされたらワープする
 void Player::DoorWarp(const StageMap& map)
 {
@@ -172,17 +180,31 @@ void Player::DoorWarp(const StageMap& map)
 
 	const MapCell* cell = map.GetCell(gx, gyBottom, gz);
 
-	if (cell && cell->type == BlockType::Door && input_->TriggerKey(DIK_F))
+	// 毎フレーム一度falseに戻す
+	isNearDoor_ = false;
+
+	if (cell && cell->type == BlockType::Door)
 	{
-		Int3 doorWarpTarget = cell->doorTargetIndex;
+		isNearDoor_ = true;
 
-		position_.x = static_cast<float>(doorWarpTarget.x);
-		position_.y = static_cast<float>(doorWarpTarget.y);
-		position_.z = static_cast<float>(doorWarpTarget.z);
+		// ドアの上にFを出す座標
+		nearDoorWorldPos_ = {
+			static_cast<float>(gx),
+			static_cast<float>(gyBottom) + 2.0f,
+			static_cast<float>(gz)
+		};
 
-		velocity_ = { 0.0f,0.0f,0.0f };
+		if (input_->TriggerKey(DIK_F))
+		{
+			Int3 doorWarpTarget = cell->doorTargetIndex;
+
+			position_.x = static_cast<float>(doorWarpTarget.x);
+			position_.y = static_cast<float>(doorWarpTarget.y);
+			position_.z = static_cast<float>(doorWarpTarget.z);
+
+			velocity_ = { 0.0f, 0.0f, 0.0f };
+		}
 	}
-
 }
 
 // 衝突判定ロジック
