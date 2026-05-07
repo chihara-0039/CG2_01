@@ -317,7 +317,7 @@ void Object3dCommon::CreatePlayerHighlightPipeline() {
     auto& target = psoDesc.BlendState.RenderTarget[0];
     target.BlendEnable = TRUE;
     target.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    target.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    target.DestBlend = D3D12_BLEND_ONE;
     target.BlendOp = D3D12_BLEND_OP_ADD;
     target.SrcBlendAlpha = D3D12_BLEND_ONE;
     target.DestBlendAlpha = D3D12_BLEND_ZERO;

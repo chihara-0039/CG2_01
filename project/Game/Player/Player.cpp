@@ -289,13 +289,20 @@ void Player::DrawHighlight() {
 		return;
 	}
 
-	// 白く強調
-	object_->SetColor({ 1.0f, 1.0f, 1.0f, 0.75f });
+	// 1回目：大きめに描いて外側の光にする
+	object_->SetScale({ 1.45f, 1.45f, 1.45f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 0.35f });
 	object_->SetEnableLighting(false);
-
 	object_->Draw();
 
-	// 通常描画用に戻す
+	// 2回目：少し小さく描いて芯の白い輪郭にする
+	object_->SetScale({ 1.25f, 1.25f, 1.25f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 0.9f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 元に戻す
+	object_->SetScale({ 1.0f, 1.0f, 1.0f });
 	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 	object_->SetEnableLighting(true);
 }
