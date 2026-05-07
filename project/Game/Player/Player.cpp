@@ -120,7 +120,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 
 		// ジャンプ
 		if (isGrounded_ && input->TriggerKey(DIK_SPACE)) {
-			velocity_.y = 0.3f;
+			velocity_.y = 0.2f;
 			isGrounded_ = false;
 		}
 
