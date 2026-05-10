@@ -240,6 +240,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="Engine\Graphics\2D\TextureManager.cpp" />
     <ClCompile Include="Engine\Base\WinApp.cpp" />
     <ClCompile Include="Game\Scene\TitleScene.cpp" />
+    <ClCompile Include="StageSelect.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Resources\shaders\hlsl\Particle.PS.hlsl">
@@ -360,6 +361,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\Graphics\3D\ShadowMap.h" />
     <ClInclude Include="Game\Scene\TitleScene.h" />
     <ClInclude Include="Engine\Utility\LightCamera.h" />
+    <ClInclude Include="StageSelect.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\Particle.hlsli">
