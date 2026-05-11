@@ -22,7 +22,11 @@
 #include "LightCamera.h"
 #include "TitleScene.h"
 #include "GameClearScene.h"
+
+#include "StageSelect.h"
+
 #include"Sound.h"
+
 
 class MyGame {
 public:
@@ -38,6 +42,7 @@ private:
     // アプリのモード定義
     enum class AppMode {
         Title,
+        StageSelect, //5/10追加　小林
         DebugView,
         StageEditor,
         GamePlay,
@@ -85,6 +90,7 @@ private:
 
     // シーン管理
     std::unique_ptr<TitleScene> titleScene_;
+    std::unique_ptr<StageSelect> stageSelect_; //5/10 小林
     std::unique_ptr<GameClearScene> gameClearScene_;
 
     // カメラ回転用UIスプライト
@@ -134,6 +140,9 @@ private:
     void UpdateTitle();
     void DrawEditorToolbar();
     void ApplyPlacement();
+
+    void UpdateStageSelect(); //5/10追加　小林
+
     //カメラ回転用
     void UpdateCameraGuideSprites();
     void DrawCameraGuideSprites();

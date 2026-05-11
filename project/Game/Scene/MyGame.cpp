@@ -57,6 +57,10 @@ void MyGame::Initialize() {
     titleScene_ = std::make_unique<TitleScene>();
     titleScene_->Initialize(object3dCommon.get(), input.get());
 
+    //4/20 5/10 小林
+    stageSelect_ = std::make_unique<StageSelect>();
+    stageSelect_->Initialize(object3dCommon.get(), input.get());
+
     gameClearScene_ = std::make_unique<GameClearScene>();
     gameClearScene_->Initialize(object3dCommon.get());
 
@@ -300,6 +304,10 @@ void MyGame::Update() {
         UpdateTitle();//4/3佐倉　追加
         break;
 
+        case AppMode::StageSelect:
+        UpdateStageSelect();//5/10追加　小林
+        break;
+
         case AppMode::DebugView:
         UpdateDebugView();
         break;
@@ -320,6 +328,18 @@ void MyGame::Update() {
         case AppMode::GameClear://4/13佐倉
             if (gameClearScene_) {
                 gameClearScene_->Update();
+
+                if (gameClearScene_->IsFinished()&&input->TriggerKey(DIK_SPACE))
+                {
+                    stageSelect_->Initialize(object3dCommon.get(), input.get());
+					gameClearScene_->Initialize(object3dCommon.get());
+                  
+                    isGoalReached_ = false;
+                    stageMap_.Clear();
+                    player_->Respawn();
+                    
+                    currentMode_ = AppMode::StageSelect;
+                }
             }
             break;
         }
@@ -1186,6 +1206,11 @@ void MyGame::Draw() {
         if (currentMode_ == AppMode::Title) {
             if (titleScene_) titleScene_->Draw();
         }
+        // ステージセレクト追加　05/10小林
+        else if (currentMode_ == AppMode::StageSelect)
+        {
+            if (stageSelect_) stageSelect_->Draw();
+        }
         // B. クリアシーン
         else if (currentMode_ == AppMode::GameClear) {
             if (gameClearScene_) gameClearScene_->Draw();
@@ -1414,8 +1439,34 @@ void MyGame::UpdateTitle() {
         titleScene_->Update();
     //シーン変化用のキー入力
         if (titleScene_->IsFinished()) {
-            currentMode_ = AppMode::GamePlay;
+            currentMode_ = AppMode::StageSelect;
         }
+    }
+}
+
+void MyGame::UpdateStageSelect()
+{
+    stageSelect_->Update();
+
+    if (stageSelect_->IsFnished())
+    {
+        // ① ステージセレクトから、選ばれたファイル名をもらってくる
+        std::string fileName = stageSelect_->GetSelectedFileName();
+
+        // ② 正しいパスを作る (Resources/Stages/ フォルダの中の fileName)
+        std::string filePath = "Resources/Stages/" + fileName;
+
+        // ③ そのファイルを読み込む！
+        if (std::filesystem::exists(filePath))
+        {
+            stageMap_.LoadFromFile(filePath);
+            stageRenderer_->BuildFromStageMap(stageMap_); // 見た目の更新
+
+            // プレイヤーの位置をスタート地点に戻すなどの処理
+            // ResetPlayer(); 
+        }
+        // ゲームプレイモードへ切り替え
+        currentMode_ = AppMode::GamePlay;
     }
 }
 
