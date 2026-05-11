@@ -255,6 +255,18 @@ void MyGame::Update() {
         case AppMode::GameClear://4/13佐倉
             if (gameClearScene_) {
                 gameClearScene_->Update();
+
+                if (gameClearScene_->IsFinished()&&input->TriggerKey(DIK_SPACE))
+                {
+                    stageSelect_->Initialize(object3dCommon.get(), input.get());
+					gameClearScene_->Initialize(object3dCommon.get());
+                  
+                    isGoalReached_ = false;
+                    stageMap_.Clear();
+                    player_->Respawn();
+                    
+                    currentMode_ = AppMode::StageSelect;
+                }
             }
             break;
         }
