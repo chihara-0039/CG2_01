@@ -72,17 +72,27 @@ void EditorScene::Update() {
 
 void EditorScene::ApplyPlacement() {
     const Int3& cursor = mapCursor_->GetIndex();
+    MapCell* oldCell = stageMap_.GetCell(cursor);
 
     if (selectedBlockType_ == BlockType::Door) {
+        // --- ドアのペアリングロジック (masterから完コピ) ---
+        if (oldCell && oldCell->type == BlockType::Door) {
+            Int3 target = oldCell->doorTargetIndex;
+            if (target.x != cursor.x || target.y != cursor.y || target.z != cursor.z) {
+                MapCell* paired = stageMap_.GetCell(target);
+                if (paired && paired->type == BlockType::Door) paired->doorTargetIndex = target;
+            }
+            if (isWaitingForSecondDoor_ && firstDoorIndex_.x == cursor.x) isWaitingForSecondDoor_ = false;
+        }
+
         stageMap_.SetBlock(cursor, BlockType::Door);
         if (!isWaitingForSecondDoor_) {
             firstDoorIndex_ = cursor;
             isWaitingForSecondDoor_ = true;
+            stageMap_.GetCell(cursor)->doorTargetIndex = cursor;
         } else {
-            MapCell* c1 = stageMap_.GetCell(firstDoorIndex_.x, firstDoorIndex_.y, firstDoorIndex_.z);
-            MapCell* c2 = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
-            if (c1) { c1->doorTargetIndex = cursor; }
-            if (c2) { c2->doorTargetIndex = firstDoorIndex_; }
+            stageMap_.GetCell(cursor)->doorTargetIndex = firstDoorIndex_;
+            stageMap_.GetCell(firstDoorIndex_)->doorTargetIndex = cursor;
             isWaitingForSecondDoor_ = false;
         }
     } else {
@@ -90,7 +100,6 @@ void EditorScene::ApplyPlacement() {
     }
     stageRenderer_.BuildFromStageMap(stageMap_);
 }
-
 void EditorScene::Draw() {
 
     objCommon_->PreDraw();

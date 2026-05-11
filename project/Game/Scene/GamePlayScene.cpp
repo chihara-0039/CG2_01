@@ -2,6 +2,7 @@
 #include "Goal.h"
 #include "ModelManager.h"
 #include <cassert>
+#include <algorithm>
 
 #include "externals/imgui/imgui.h"
 
@@ -71,38 +72,25 @@ void GamePlayScene::Initialize() {
 }
 
 void GamePlayScene::Update() {
-    // --- 1. マウスによる旋回操作の復元 ---
+    // --- 1. マウス画面端によるカメラ旋回 (masterから移植) ---
     const auto& mouse = input_->GetMouseState();
-    float screenWidth = 1280.0f; // ウィンドウ幅
-    float screenHeight = 720.0f;
+    float screenW = (float)WinApp::kClientWidth;
+    float screenH = (float)WinApp::kClientHeight;
+    float edge = 0.1f;
+    const float rotateSpeed = 0.025f;
 
-    // 左クリック中の旋回
-    if (mouse.buttons[0]) {
-        // 左右の回転
-        if (mouse.posX < screenWidth * 0.1f) {
-            gameCameraAngle_ -= 0.025f;
-        } else if (mouse.posX > screenWidth * 0.9f) {
-            gameCameraAngle_ += 0.025f;
-        }
+    if (mouse.buttons[0]) { // 左クリック中
+        if (mouse.posX < screenW * edge) { gameCameraAngle_ -= rotateSpeed; } else if (mouse.posX > screenW * (1.0f - edge)) { gameCameraAngle_ += rotateSpeed; }
 
-		// 上下の回転（俯瞰角度の調整）
-        if (mouse.posY < screenHeight * 0.1f) {
-            cameraPitch_ -= 0.015f; 
-        } else if (mouse.posY > screenHeight * 0.9f) {
-            cameraPitch_ += 0.015f;
-        }
+        if (mouse.posY < screenH * edge) { cameraPitch_ += rotateSpeed; } else if (mouse.posY > screenH * (1.0f - edge)) { cameraPitch_ -= rotateSpeed; }
     }
+    // 角度制限
+    cameraPitch_ = std::clamp(cameraPitch_, 0.4f, 1.5f);
 
-    // 角度制限（真上や真下で反転しないようにする）
-    if (cameraPitch_ > 1.5f) { cameraPitch_ = 1.5f; }
-    if (cameraPitch_ < 0.1f) { cameraPitch_ = 0.1f; }
-
-    // --- 2. ピボットカメラの計算 ---
+    // --- 2. カメラ座標計算 (masterの数式) ---
     Vector3 pivot = { 4.0f, 9.0f, 4.5f };
     float distance = 35.0f;
-
     Vector3 pos;
-    // 左右角(gameCameraAngle_)と上下角(cameraPitch_)を組み合わせて座標を計算
     pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(gameCameraAngle_) * distance;
     pos.y = pivot.y + std::sin(cameraPitch_) * 20.0f;
     pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(gameCameraAngle_) * distance;
@@ -111,36 +99,25 @@ void GamePlayScene::Update() {
     camera_.SetRotation({ cameraPitch_, gameCameraAngle_, 0.0f });
     camera_.Update();
 
-    // --- 3. 行列の反映 ---
-    Matrix4x4 view = camera_.GetViewMatrix();
-    Matrix4x4 proj = camera_.GetProjectionMatrix();
+    // --- 3. プレイヤーとアイテム・ゴール判定 ---
+    player_->Update(input_, stageMap_, gameCameraAngle_, lightCamera_->GetViewProjectionMatrix());
 
-	// プレイヤーとステージレンダラーにカメラ行列をセットして更新する
-    if (player_) {
-        player_->SetCamera(view, proj);
-        player_->Update(input_, stageMap_, gameCameraAngle_, lightCamera_->GetViewProjectionMatrix());
-    }
-    stageRenderer_.SetCamera(view, proj);
-    stageRenderer_.Update(lightCamera_->GetViewProjectionMatrix());
+    Vector3 pPos = player_->GetPosition();
+    int gx = static_cast<int>(std::floor(pPos.x + 0.5f));
+    int gy = static_cast<int>(std::floor(pPos.y));
+    int gz = static_cast<int>(std::floor(pPos.z + 0.5f));
 
-    // Pスイッチ等のギミック更新 (省略せず現状維持)
-    stageMap_.UpdatePSwitch();
-    if (stageMap_.WasPSwitchJustFinished()) {
+    // バブル取得
+    MapCell* cell = stageMap_.GetCell(gx, gy, gz);
+    if (cell && cell->type == BlockType::BubblePickup) {
+        // blockCountの管理が必要な場合はここにフラグ処理を追加
+        stageMap_.RemoveBlock(gx, gy, gz);
         stageRenderer_.BuildFromStageMap(stageMap_);
     }
 
-    // 天球（空）の追従
-    if (skydomeObject_) {
-        skydomeObject_->SetCamera(view, proj);
-        if (player_) {
-            skydomeObject_->SetPosition(player_->GetPosition());
-        }
-        skydomeObject_->Update(Math::MakeIdentity4x4());
-    }
-
-	// --- 4. ライトカメラの更新 ---
-    if (player_) {
-        lightCamera_->Update({ 0.2f, -1.0f, 0.5f }, player_->GetPosition());
+    // ゴール判定 (Goalクラス使用)
+    if (Goal::Check(pPos, { 0.4f, 0.9f, 0.4f }, stageMap_)) {
+        isFinished_ = true; // MyGame側でClearSceneへ飛ばす
     }
 }
 

@@ -11,6 +11,8 @@ class MyGame : public Framework {
 public:
 
     enum class AppMode { 
+        Title,
+		GameClear,
         DebugView,
         StageEditor,
         GamePlay 
@@ -52,4 +54,8 @@ private:
     };
 
     DebugDrawFlags debugFlags_;
+
+	// --- シーンに渡すためのエンジン道具のポインタ ---
+    std::unique_ptr<ShadowMap> shadowMap_;
+    std::unique_ptr<LightCamera> lightCamera_;
 };
