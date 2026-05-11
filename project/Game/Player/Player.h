@@ -17,6 +17,8 @@ public:
 	// Object3d の行列を更新する（ライトカメラの行列も渡す）
     void UpdateTransform(const Matrix4x4& lightVP);
 
+    void CrumbleUpdate(StageMap& map);
+
     // 描画：内部で持っている Object3d を描画
     void Draw();
 

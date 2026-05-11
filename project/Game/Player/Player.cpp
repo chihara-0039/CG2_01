@@ -231,9 +231,9 @@ bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
 				if (cell && cell->type == BlockType::PBlock) {
 					// PスイッチがONの時だけ「壁」として扱う
 					if (map.IsPSwitchActive()) {
-						return true;
+						return false;
 					}
-					return false; // OFFの時は通り抜けられる
+					return true; // OFFの時は通り抜けられる
 				}
 			}
 		}
@@ -311,4 +311,16 @@ void Player::DrawHighlight() {
 	object_->SetScale({ 1.0f, 1.0f, 1.0f });
 	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 	object_->SetEnableLighting(true);
+}
+
+void Player::CrumbleUpdate(StageMap& map) {
+	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
+	int gyBottom = static_cast<int>(std::floor(position_.y - 0.05f));
+	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+	MapCell* cellBelow = map.GetCell(gx, gyBottom, gz);
+
+	if (cellBelow && cellBelow->type == BlockType::CrumblingFloor) {
+		cellBelow->isCrumbling = true;
+	}
 }

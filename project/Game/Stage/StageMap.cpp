@@ -16,6 +16,24 @@ void StageMap::Initialize(int width, int height, int depth) {
     Clear();
 }
 
+void StageMap::Update(float deltaTime) {
+    bool changed = false;
+    for (auto& cell : cells_) {
+        if (cell.type == BlockType::CrumblingFloor && cell.isCrumbling) {
+            cell.crumbleTimer += deltaTime;
+
+            // 例えば1.0秒乗ったら崩れる
+            if (cell.crumbleTimer >= 1.0f) {
+                cell.type = BlockType::None; // ブロックを消す
+                cell.crumbleTimer = 0.0f;
+                cell.isCrumbling = false;
+                changed = true; // 再構築フラグ
+            }
+        }
+    }
+    if (changed) needsRebuild_ = true;
+}
+
 void StageMap::SaveToFile(const std::string& filename) {
     std::ofstream ofs(filename);
     if (!ofs.is_open()) return;

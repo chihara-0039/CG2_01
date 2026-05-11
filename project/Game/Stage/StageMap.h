@@ -22,7 +22,8 @@ enum class BlockType : uint32_t {
     PlayerStart,
     Door,
     PSwitch,
-    PBlock
+    PBlock,
+    CrumblingFloor
 };
 
 // 1マス分のデータ
@@ -33,6 +34,9 @@ struct MapCell {
 	float rotationX = 0.0f; // X軸回転（オブジェクトの向きを変えたい）
 	float rotationY = 0.0f; // Y軸回転（オブジェクトの向きを変えたい）
     Int3 doorTargetIndex = { 0,0,0 };
+    // 崩れる足場用のタイマー管理
+    float crumbleTimer = 0.0f;
+    bool isCrumbling = false; // プレイヤーが乗っているフラグ
 };
 
 class StageMap {
@@ -42,6 +46,9 @@ public:
 
     // サイズ指定で初期化
     void Initialize(int width, int height, int depth);
+
+    // 追加
+    void Update(float deltaTime);
 
     // ステージデータをファイルに保存する
     void SaveToFile(const std::string& filename);
@@ -99,4 +106,6 @@ private:
 
     bool isPSwitchActive_ = false; // Pスイッチの状態
     bool needsRebuild_ = false; // ★追加
+
+    
 };

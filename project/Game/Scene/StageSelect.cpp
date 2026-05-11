@@ -1,4 +1,4 @@
-#include "StageSelect.h"
+﻿#include "StageSelect.h"
 #include <filesystem>
 
 void StageSelect::Initialize(Object3dCommon* objCommon, Input* input)
@@ -29,7 +29,7 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input)
 	camera_.SetPosition({ 8.0f, 5.0f, -11.0f });
 	camera_.SetRotation({ 0.0f, 0.0f, 0.0f });
 
-	// ���f���ǂݍ��݁i�D���ȃ��f���ɕύXOK�j
+	// モデル読み込み（好きなモデルに変更OK）
 	stageModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
 		"Resources/Models/stageSelect",
@@ -37,86 +37,86 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input)
 		object3dCommon_->GetTextureManager()
 	);
 
-	// ���́i�I�u�W�F�N�g�j������ď�����
+	// 実体（オブジェクト）を作って初期化
 	stageObject_ = new Object3d();
 	stageObject_->Initialize(object3dCommon_);
 
-	// �ǂݍ��񂾃��f�����Z�b�g����
+	// 読み込んだモデルをセットする
 	stageObject_->SetModel(stageModel_);
 
-	// �ʒu��T�C�Y��ݒ�i�Ƃ肠�������_�ɒu���܂��j
+	// 位置やサイズを設定（とりあえず原点に置きます）
 	stageObject_->SetPosition({ 0.0f, 0.0f, 5.0f });
 	stageObject_->SetScale({ 3.0f, 3.0f, 3.0f });
 }
 
 void StageSelect::Update()
 {
-	// �X�e�[�W�t�@�C��������Ȃ��ꍇ�͉������Ȃ�
+	// ステージファイルが一つもない場合は何もしない
 	if (stageFiles_.empty()) return;
 
-	// �t�@�C�����Ɋւ�炸�A�T�C�R����6�ʕ��i0�`5�j���񂹂�悤�ɐݒ�
+	// ファイル数に関わらず、サイコロの6面分（0～5）を回せるように設定
 	int maxStage = 6;
 
-	// --- A�L�[�F�O�̖ʂ� ---
+	// --- Aキー：前の面へ ---
 	if (input_->TriggerKey(DIK_A))
 	{
 		selectedStageIndex_ = (selectedStageIndex_ - 1 + maxStage) % maxStage;
 	}
 
-	// --- D�L�[�F���̖ʂ� ---
+	// --- Dキー：次の面へ ---
 	if (input_->TriggerKey(DIK_D))
 	{
 		selectedStageIndex_ = (selectedStageIndex_ + 1) % maxStage;
 	}
 
 	// =========================================================
-	// �ڕW�p�x�̐ݒ�i�x���@�Őݒ肷��ƕ�����₷���j
+	// 目標角度の設定（度数法で設定すると分かりやすい）
 	// =========================================================
 	float targetDegX = 0.0f;
 	float targetDegY = 0.0f;
 
-	if (selectedStageIndex_ == 0) { targetDegX = 0.0f;   targetDegY = 0.0f; } // 1�ʁF����
-	else if (selectedStageIndex_ == 1) { targetDegX = 0.0f;   targetDegY = 90.0f; } // 2�ʁF�E
-	else if (selectedStageIndex_ == 2) { targetDegX = 0.0f;   targetDegY = 180.0f; } // 3�ʁF��
-	else if (selectedStageIndex_ == 3) { targetDegX = 0.0f;   targetDegY = 270.0f; } // 4�ʁF��
-	else if (selectedStageIndex_ == 4) { targetDegX = -90.0f; targetDegY = 0.0f; } // 5�ʁF��
-	else if (selectedStageIndex_ == 5) { targetDegX = 90.0f;  targetDegY = 0.0f; } // 6�ʁF��
+	if (selectedStageIndex_ == 0) { targetDegX = 0.0f;   targetDegY = 0.0f; } // 1面：正面
+	else if (selectedStageIndex_ == 1) { targetDegX = 0.0f;   targetDegY = 90.0f; } // 2面：右
+	else if (selectedStageIndex_ == 2) { targetDegX = 0.0f;   targetDegY = 180.0f; } // 3面：裏
+	else if (selectedStageIndex_ == 3) { targetDegX = 0.0f;   targetDegY = 270.0f; } // 4面：左
+	else if (selectedStageIndex_ == 4) { targetDegX = -90.0f; targetDegY = 0.0f; } // 5面：上
+	else if (selectedStageIndex_ == 5) { targetDegX = 90.0f;  targetDegY = 0.0f; } // 6面：下
 
-	// �x���烉�W�A���ɕϊ����ĖڕW�l�ɑ��
+	// 度からラジアンに変換して目標値に代入
 	targetRotationX_ = targetDegX * (3.141592f / 180.0f);
 	targetRotationY_ = targetDegY * (3.141592f / 180.0f);
 
-	// --- ���炩�ɉ�]������v�Z�i�C�[�W���O�j ---
+	// --- 滑らかに回転させる計算（イージング） ---
 	currentRotationX_ += (targetRotationX_ - currentRotationX_) * 0.15f;
 	currentRotationY_ += (targetRotationY_ - currentRotationY_) * 0.15f;
 
-	// ��]���I�u�W�F�N�g�ɔ��f
+	// 回転をオブジェクトに反映
 	stageObject_->SetRotation({ currentRotationX_, currentRotationY_, 0.0f });
 
-	// --- �X�y�[�X�L�[�Ō��� ---
+	// --- スペースキーで決定 ---
 	if (input_->TriggerKey(DIK_SPACE))
 	{
-		// ���ۂɂ��̔ԍ��ɑΉ�����t�@�C�������݂���ꍇ�̂݌���
+		// 実際にその番号に対応するファイルが存在する場合のみ決定
 		if (selectedStageIndex_ < (int)stageFiles_.size())
 		{
 			isFinished_ = true;
 		}
 	}
 
-	// --- �s��̍X�V ---
-	// �J�����̍s����擾���ăZ�b�g
+	// --- 行列の更新 ---
+	// カメラの行列を取得してセット
 	const Matrix4x4& view = camera_.GetViewMatrix();
 	const Matrix4x4& proj = camera_.GetProjectionMatrix();
 
 	stageObject_->SetCamera(view, proj);
 
-	// �Ō�Ƀ��[���h�s����X�V
+	// 最後にワールド行列を更新
 	stageObject_->Update(Math::MakeIdentity4x4());
 }
 void StageSelect::Draw()
 {
 	if (stageObject_ != nullptr)
 	{
-		stageObject_->Draw(); // 3D���f����`��I
+		stageObject_->Draw(); // 3Dモデルを描画！
 	}
 }

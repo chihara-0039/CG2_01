@@ -95,6 +95,13 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		"block.obj",
 		object3dCommon_->GetTextureManager()
 	);
+
+	// 崩れる足場
+	crumbleModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/block",
+		"block.obj",
+		object3dCommon_->GetTextureManager());
 }
 
 // ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス
@@ -244,6 +251,14 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					}
 					break;
 
+				case BlockType::CrumblingFloor:
+					CreateStageObject(
+						crumbleModel_, 
+						position,
+						blockScale_, 
+						{ 0.0f, 0.0f, 0.0f }
+					);
+					break;
 				// ブロックの種類が不明な場合は何もしない
 				default:
 				break;

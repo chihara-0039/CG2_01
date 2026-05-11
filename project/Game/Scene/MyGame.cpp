@@ -1492,7 +1492,7 @@ void MyGame::DrawEditorToolbar()
             BlockType::Ground, BlockType::Wall, BlockType::Ladder,
             BlockType::Star, BlockType::BubblePickup, BlockType::Goal,
             BlockType::PlayerStart, BlockType::Door,BlockType::PSwitch,
-            BlockType::PBlock
+            BlockType::PBlock,BlockType::CrumblingFloor
         };
 
         for (auto type : types) {
