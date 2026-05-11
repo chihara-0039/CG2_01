@@ -1219,17 +1219,9 @@ void MyGame::Draw() {
                     }
 
                 }               
-                // 追加：ドア上の3D F UI描画
-                if (doorPromptObject_ &&
-                    currentMode_ == AppMode::GamePlay &&
-                    player_ &&
-                    player_->IsNearDoor()) {
+               
 
-                    doorPromptObject_->Draw();
-                }
-                if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
-                    mapCursor_->Draw();
-                }
+
             }
 
             // デバッグビュー（リストの全表示）
@@ -1255,6 +1247,28 @@ void MyGame::Draw() {
         spriteCommon->PreDraw();
         if (sprite) sprite->Draw();
     }
+
+    //5/11佐倉
+
+    // ==========================================================
+// ドア用 3D F UI
+// 壁の裏でも見えるように、通常3D描画の最後に強調描画で描く
+// ==========================================================
+    if (doorPromptObject_ &&
+        currentMode_ == AppMode::GamePlay &&
+        player_ &&
+        player_->IsNearDoor()) {
+
+        // プレイヤー壁裏強調と同じ描画設定を使う
+        object3dCommon->PreDrawPlayerHighlight();
+
+        doorPromptObject_->Draw();
+
+        // 通常描画設定に戻す
+        object3dCommon->PreDraw();
+        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+    }
+
 
     //5/7佐倉
     DrawCameraGuideSprites();
