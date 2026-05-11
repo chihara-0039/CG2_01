@@ -230,7 +230,11 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Engine/Graphics/3D;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="Engine\Utility\LightCamera.cpp" />
+
     <ClCompile Include="Game\Scene\StageSelect.cpp" />
+
+    <ClCompile Include="Sound.cpp" />
+
     <ClCompile Include="src\app\main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Depelopment|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Depelopment|x64'">true</WholeProgramOptimization>
@@ -362,6 +366,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\Graphics\3D\ShadowMap.h" />
     <ClInclude Include="Game\Scene\TitleScene.h" />
     <ClInclude Include="Engine\Utility\LightCamera.h" />
+    <ClInclude Include="Sound.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\Particle.hlsli">

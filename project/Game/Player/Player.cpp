@@ -120,7 +120,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 
 		// ジャンプ
 		if (isGrounded_ && input->TriggerKey(DIK_SPACE)) {
-			velocity_.y = 0.3f;
+			velocity_.y = 0.2f;
 			isGrounded_ = false;
 		}
 
@@ -163,6 +163,14 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	object_->Update(lightVP);
 }
 
+// Object3d の行列を更新する（ライトカメラの行列も渡す）
+void Player::UpdateTransform(const Matrix4x4& lightVP) {
+	if (object_) {
+		// 内部で持っている Object3d の行列計算だけを行う
+		object_->Update(lightVP);
+	}
+}
+
 // ドアに触れているか判定して、触れていてかつFキーがトリガーされたらワープする
 void Player::DoorWarp(const StageMap& map)
 {
@@ -172,17 +180,31 @@ void Player::DoorWarp(const StageMap& map)
 
 	const MapCell* cell = map.GetCell(gx, gyBottom, gz);
 
-	if (cell && cell->type == BlockType::Door && input_->TriggerKey(DIK_F))
+	// 毎フレーム一度falseに戻す
+	isNearDoor_ = false;
+
+	if (cell && cell->type == BlockType::Door)
 	{
-		Int3 doorWarpTarget = cell->doorTargetIndex;
+		isNearDoor_ = true;
 
-		position_.x = static_cast<float>(doorWarpTarget.x);
-		position_.y = static_cast<float>(doorWarpTarget.y);
-		position_.z = static_cast<float>(doorWarpTarget.z);
+		// ドアの上にFを出す座標
+		nearDoorWorldPos_ = {
+			static_cast<float>(gx),
+			static_cast<float>(gyBottom) + 1.0f,
+			static_cast<float>(gz)
+		};
 
-		velocity_ = { 0.0f,0.0f,0.0f };
+		if (input_->TriggerKey(DIK_F))
+		{
+			Int3 doorWarpTarget = cell->doorTargetIndex;
+
+			position_.x = static_cast<float>(doorWarpTarget.x);
+			position_.y = static_cast<float>(doorWarpTarget.y);
+			position_.z = static_cast<float>(doorWarpTarget.z);
+
+			velocity_ = { 0.0f, 0.0f, 0.0f };
+		}
 	}
-
 }
 
 // 衝突判定ロジック
@@ -260,4 +282,33 @@ void Player::DrawShadow(const Matrix4x4& lightViewProjection) {
 	if (object_) {
 		object_->DrawShadow(lightViewProjection);
 	}
+}
+
+void Player::DrawHighlight() {
+	if (!object_) {
+		return;
+	}
+
+	// 1回目：一番外側の大きい白
+	object_->SetScale({ 1.55f, 1.55f, 1.55f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 2回目：中間の白
+	object_->SetScale({ 1.35f, 1.35f, 1.35f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 3回目：本体に近い白
+	object_->SetScale({ 1.18f, 1.18f, 1.18f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 元に戻す
+	object_->SetScale({ 1.0f, 1.0f, 1.0f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(true);
 }
