@@ -31,6 +31,19 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	bool isOnLadder = (cellBottom && cellBottom->type == BlockType::Ladder) ||
 		(cellWaist && cellWaist->type == BlockType::Ladder);
 
+	// はしごUI用フラグを毎フレーム更新
+	isOnLadder_ = isOnLadder;
+
+	if (isOnLadder_) {
+		int ladderY = gyWaist;
+
+		ladderWorldPos_ = {
+			static_cast<float>(gx),
+			static_cast<float>(ladderY) + 1.2f,
+			static_cast<float>(gz)
+		};
+	}
+
 	Vector3 move = { 0, 0, 0 };
 
 	if (isOnLadder) {
