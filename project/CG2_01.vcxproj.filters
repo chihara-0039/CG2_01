@@ -45,10 +45,11 @@
     <ClCompile Include="Engine\Base\WinApp.cpp" />
     <ClCompile Include="Game\Scene\TitleScene.cpp" />
     <ClCompile Include="Game\Scene\GameClearScene.cpp" />
-    <ClCompile Include="Game\Scene\GamePlayScene.cpp" />
-    <ClCompile Include="Engine\Framework\Framework.cpp" />
-    <ClCompile Include="Game\Scene\IScene.cpp" />
-    <ClCompile Include="Game\Stage\EditorScene.cpp" />
+
+    <ClCompile Include="Game\Scene\StageSelect.cpp" />
+
+    <ClCompile Include="Sound.cpp" />
+
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Utility\Camera.h" />
@@ -85,10 +86,11 @@
     <ClInclude Include="Game\Scene\TitleScene.h" />
     <ClInclude Include="Engine\Utility\LightCamera.h" />
     <ClInclude Include="Game\Scene\GameClearScene.h" />
-    <ClInclude Include="Game\Scene\GamePlayScene.h" />
-    <ClInclude Include="Engine\Framework\Framework.h" />
-    <ClInclude Include="Game\Scene\IScene.h" />
-    <ClInclude Include="Game\Stage\EditorScene.h" />
+
+    <ClInclude Include="Game\Scene\StageSelect.h" />
+
+    <ClInclude Include="Sound.h" />
+
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\Particle.hlsli" />

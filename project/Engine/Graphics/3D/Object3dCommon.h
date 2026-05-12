@@ -48,6 +48,10 @@ public:
     void SetTextureManager(TextureManager* textureManager) { textureManager_ = textureManager; }
     TextureManager* GetTextureManager() const { return textureManager_; }
 
+    //5/7佐倉追加 自機強調表示用関数
+    
+    void PreDrawPlayerHighlight();
+
 private:
 	// ルートシグネチャの作成関数を追加
     void CreateRootSignature();
@@ -57,6 +61,9 @@ private:
     void CreateLightBuffer();
 	// 影用のパイプラインステートも作成する関数を追加
     void CreateShadowPipeline();
+
+    //自機影用パイプラインステート作成関数
+    void CreatePlayerHighlightPipeline();
 
 private:
     // 
@@ -75,4 +82,7 @@ private:
 
 	// 影用のルートシグネチャとパイプラインステートも追加
     Microsoft::WRL::ComPtr<ID3D12PipelineState> shadowPipelineState_;
+
+    //自機影用パイプラインステート作成
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> playerHighlightPipelineState_;
 };

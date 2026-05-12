@@ -10,8 +10,82 @@
 
 /// --- 初期化 ---
 void MyGame::Initialize() {
-    // 1. 基底クラス(Framework)の初期化
-    Framework::Initialize();
+    // 基盤系の生成（new ではなく std::make_unique を使用） 
+    winApp = std::make_unique<WinApp>();
+    winApp->Initialize();
+
+    dxCommon = std::make_unique<DirectXCommon>();
+    dxCommon->Initialize(winApp.get()); // get() で中身の生ポインタを貸し出す 
+
+    input = std::make_unique<Input>();
+    input->Initialize(winApp.get()); // get() を使用
+
+    textureManager = std::make_unique<TextureManager>();
+    textureManager->Initialize(dxCommon.get());
+
+    spriteCommon = std::make_unique<SpriteCommon>();
+    spriteCommon->SetTextureManager(textureManager.get());
+    spriteCommon->Initialize(dxCommon.get());
+
+    object3dCommon = std::make_unique<Object3dCommon>();
+    object3dCommon->SetTextureManager(textureManager.get());
+    object3dCommon->Initialize(dxCommon.get());
+
+    particleManager = std::make_unique<ParticleManager>();
+    particleManager->Initialize(dxCommon.get(), textureManager.get());
+
+    // シーン管理 
+    titleScene_ = std::make_unique<TitleScene>();
+    titleScene_->Initialize(object3dCommon.get(), input.get());
+
+    //4/20 5/10 小林
+    stageSelect_ = std::make_unique<StageSelect>();
+    stageSelect_->Initialize(object3dCommon.get(), input.get());
+
+    gameClearScene_ = std::make_unique<GameClearScene>();
+    gameClearScene_->Initialize(object3dCommon.get());
+
+    // モデル読み込み（vector<unique_ptr<Model>> に入れるため unique_ptr で包む） 
+    models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/block", "block.obj", textureManager.get())));
+    models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/axis", "axis.obj", textureManager.get())));
+
+    /*models.push_back(modelPlane);
+    models.push_back(modelAxis);*/
+
+    // --- オブジェクト生成 ---
+    // models[index].get() で生ポインタを取得して渡す
+    CreateObject(models[0].get(), { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
+    CreateObject(models[1].get(), { 2.0f, 0.0f, 0.0f });
+    CreateObject(models[1].get(), { -2.0f, 0.0f, 0.0f });
+
+    // スプライト
+    uint32_t texHandle = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
+    sprite = std::make_unique<Sprite>();
+    sprite->Initialize(spriteCommon.get(), texHandle);
+
+    //サウンド初期化
+    sound.Initialize();
+    //読み込み
+    wavSoundData = sound.SoundLoadFile("Resources/Sound/Alarm01.wav");
+
+    mp4SoundData = sound.SoundLoadFile("Resources/Sound/AlarmMovie.mp4");
+
+    mp3SoundData = sound.SoundLoadFile("Resources/Sound/maou_bgm_neorock83.mp3");
+
+    // プレイヤーの生成
+    player_ = std::make_unique<Player>();
+    player_->Initialize(object3dCommon.get(), models[0].get());
+    player_->SetPosition({ 0.0f, 1.5f, 0.0f });
+
+    // エディタ用カメラ
+    camera = std::make_unique<Camera>();
+   
+
+    // 1. ステージマップのサイズ初期化
+    stageMap_.Initialize(16, 10, 16);
+
+    // ステージファイル一覧を更新しておく
+    RefreshStageList();
 
     // 2. 本編シーンを生成
     std::unique_ptr<GamePlayScene> newScene = std::make_unique<GamePlayScene>();
@@ -38,6 +112,54 @@ void MyGame::Initialize() {
 	// ライトカメラの初期化
     lightCamera_ = std::make_unique<LightCamera>();
     lightCamera_->Initialize();
+
+    // カメラ回転用UIスプライト
+    cameraGuideTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow.png");
+
+    cameraGuideLeftSprite_ = std::make_unique<Sprite>();
+    cameraGuideLeftSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    cameraGuideRightSprite_ = std::make_unique<Sprite>();
+    cameraGuideRightSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    cameraGuideUpSprite_ = std::make_unique<Sprite>();
+    cameraGuideUpSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    cameraGuideDownSprite_ = std::make_unique<Sprite>();
+    cameraGuideDownSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+
+    // 追加：ドア用3D F UI
+    doorPromptModel_ = std::unique_ptr<Model>(
+        Model::CreateFromOBJ(
+            dxCommon.get(),
+            "Resources/UI/F",
+            "F.obj",
+            textureManager.get()
+        )
+    );
+
+    doorPromptObject_ = std::make_unique<Object3d>();
+    doorPromptObject_->Initialize(object3dCommon.get());
+    doorPromptObject_->SetModel(doorPromptModel_.get());
+    doorPromptObject_->SetEnableLighting(false);
+    doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    ladderPromptModel_ = std::unique_ptr<Model>(
+        Model::CreateFromOBJ(
+            dxCommon.get(),
+            "Resources/UI/radderUI",
+            "radderUI.obj",
+            textureManager.get()
+        )
+    );
+
+    // はしご用3D UI
+    ladderPromptObject_ = std::make_unique<Object3d>();
+    ladderPromptObject_->Initialize(object3dCommon.get());
+    ladderPromptObject_->SetModel(ladderPromptModel_.get());
+    ladderPromptObject_->SetEnableLighting(false);
+    ladderPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
 }
 
 // --- 終了処理 ---
@@ -58,8 +180,272 @@ void MyGame::Update() {
     ImGui_ImplDX12_NewFrame(); ImGui_ImplWin32_NewFrame(); ImGui::NewFrame();
 #endif
 
-    if (input->TriggerKey(DIK_F1)) {
-        ChangeMode(currentMode_ == AppMode::StageEditor ? AppMode::GamePlay : AppMode::StageEditor);
+    input->Update();
+    bool isGuiCaptured = false;
+    // 2. カメラの更新（Blender風操作を適用）
+#ifdef USE_IMGUI
+    // ★修正ポイント：Release時は ImGui::GetIO() を呼ばないようにガードする
+    // または、DebugView か StageEditor の時だけ判定するようにする
+    
+    // マウスとキーボードの両方をガード
+    isGuiCaptured = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
+
+#endif
+
+    //  ここで「ライト視点の行列」を取得！これが全ての lightVP
+    const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
+
+    // --- 3. カメラの更新 ---
+    if (currentMode_ != AppMode::GamePlay) {
+        camera->UpdateBlenderStyle(input.get(), isGuiCaptured, winApp->GetHwnd());
+    }
+
+    if (skydomeObject_) {
+        // 天球の座標を常にカメラと同じにする
+        skydomeObject_->SetPosition(camera->GetPosition());
+        skydomeObject_->Update(Math::MakeIdentity4x4());
+    }
+
+    //試しにサウンド更新 //佐倉
+    // SPACEでwav再生
+    if (input->TriggerKey(DIK_SPACE)) {
+        sound.SoundPlay(wavSoundData, wavVolume);
+    }
+
+    // Mキーでmp4音声再生
+    if (input->TriggerKey(DIK_M)) {
+        sound.SoundPlay(mp4SoundData, mp4Volume);
+
+    }
+
+    if (input->TriggerKey(DIK_N)) {
+        sound.SoundPlay(mp3SoundData, mp3Volume);
+    }
+
+    //mp3版音量変更キー
+    if (input->TriggerKey(DIK_UP)) {
+        mp3Volume += 0.1f;
+        if (mp3Volume > 1.0f) {
+            mp3Volume = 1.0f;
+        }
+        OutputDebugStringA("[MyGame] mp3 音量アップ\n");
+    }
+
+    if (input->TriggerKey(DIK_DOWN)) {
+        mp3Volume -= 0.1f;
+        if (mp3Volume < 0.0f) {
+            mp3Volume = 0.0f;
+        }
+        OutputDebugStringA("[MyGame] mp3 音量ダウン\n");
+    }
+   
+    // --- ImGuiに入力中（WantCaptureKeyboardがtrue）ならゲーム側の入力を無視する ---
+    if (!isGuiCaptured) {
+        switch (currentMode_) {
+
+        case AppMode::Title:
+        UpdateTitle();//4/3佐倉　追加
+        break;
+
+        case AppMode::StageSelect:
+        UpdateStageSelect();//5/10追加　小林
+        break;
+
+        case AppMode::DebugView:
+        UpdateDebugView();
+        break;
+
+        case AppMode::StageEditor:
+        UpdateStageEditor(); // 名前入力中はここが呼ばれなくなる
+        break;
+
+        case AppMode::GamePlay:
+        UpdateGamePlay();
+        break;
+
+        // ブロックを置けるようになる画面 04/01 秋元
+        case AppMode::GamePlay_BlockPlace:
+        UpdateGamePlayBlockPlace();
+        break;
+
+        case AppMode::GameClear://4/13佐倉
+            if (gameClearScene_) {
+                gameClearScene_->Update();
+
+                if (gameClearScene_->IsFinished()&&input->TriggerKey(DIK_SPACE))
+                {
+                    stageSelect_->Initialize(object3dCommon.get(), input.get());
+					gameClearScene_->Initialize(object3dCommon.get());
+                  
+                    isGoalReached_ = false;
+                    stageMap_.Clear();
+                    player_->Respawn();
+                    
+                    currentMode_ = AppMode::StageSelect;
+                }
+            }
+            break;
+        }
+    }
+
+    camera->Update();
+    UpdateCameraGuideSprites();
+
+
+    const Matrix4x4& view = camera->GetViewMatrix();
+    const Matrix4x4& proj = camera->GetProjectionMatrix();
+
+    // ライト視点の行列を取得しておきます
+    //const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
+
+    // --- プレイヤーに最新のカメラ行列を教える ---
+    if (player_) {
+        // カメラ行列は常にセット
+        player_->SetCamera(view, proj);
+
+        // プレイモード中のみ移動などのロジックを更新
+        if (currentMode_ == AppMode::GamePlay) {
+            // ここは既存のコード（UpdateGamePlayの中から移動させてもOKです）
+            // player_->Update(...) 
+        } else {
+            // ★ エディタモード等では、見た目（行列）の更新だけを行う
+            player_->UpdateTransform(lightVP);
+        }
+    }
+
+    // ★ 修正1：ウィンドウが最前面にない場合は即リターンして何もしない
+    // これにより、ウィンドウ外をクリックした瞬間の挙動を無視できます
+    if (GetActiveWindow() != winApp->GetHwnd()) {
+        return;
+    }
+
+	// 3Dオブジェクトの更新
+    if (debugFlags_.show3DObjects) {
+        for (auto& obj : objectList) {
+            if (obj) {
+                obj->SetCamera(view, proj);
+                obj->Update(lightVP);
+            }
+        }
+    }
+
+	// ステージ描画オブジェクトの更新
+    if (stageRenderer_) {
+        stageRenderer_->SetCamera(view, proj);
+        // ※ StageRenderer内部でもObject3dのUpdate(lightVP)を呼ぶように修正が必要です
+        stageRenderer_->Update(lightVP);
+    }
+
+	// マップカーソルの更新
+    if (mapCursor_) {
+        mapCursor_->SetCamera(view, proj);
+        mapCursor_->Update(lightVP);
+    }
+
+	// スプライトの更新
+    if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
+        sprite->Update();
+    }
+
+	// パーティクルの更新
+    if (debugFlags_.showParticles) {
+        particleManager->Update(view, proj);
+    }
+
+    // ★ ライトカメラの更新
+    // プレイヤーの位置に合わせて影の範囲を動かすことで、常に綺麗な影を出します
+    Vector3 lightDir = { 0.5f, -1.0f, 0.5f }; // ライトの向き（Object3dCommonの設定に合わせる）
+    lightCamera_->Update(lightDir, player_->GetPosition());
+
+    object3dCommon->SetLightDirection(lightDir);
+
+    //ドアUI更新
+    UpdateDoorPrompt3D();
+
+    // はしごUI更新
+    UpdateLadderPrompt3D();
+}
+
+//パーティクル発生のテスト（スペースキーを押すと発生）
+void MyGame::UpdateDebugView() {
+    if (input->TriggerKey(DIK_SPACE)) {
+        particleManager->Emit({ 0, 0, 0 }, 10);
+    }
+}
+
+void MyGame::RefreshStageList() {
+    stageFiles_.clear();
+    std::string path = "Resources/Stages/";
+
+    // フォルダがなければ作成する
+    if (!std::filesystem::exists(path)) {
+        std::filesystem::create_directories(path);
+    }
+
+    // フォルダ内の .txt ファイルをリストに詰める
+    for (const auto& entry : std::filesystem::directory_iterator(path)) {
+        if (entry.path().extension() == ".txt") {
+            stageFiles_.push_back(entry.path().stem().string()); // ファイル名（拡張子なし）を取得
+        }
+    }
+}
+
+void MyGame::UpdateStageEditor() {
+
+    // 現在カーソル位置
+    const Int3& cursor = mapCursor_->GetIndex();
+
+    // ブロック配置や削除を行った後、ステージ描画オブジェクトを再構築する必要があるか
+    bool needRebuild = false;
+
+    // カーソル移動
+    if (input->TriggerKey(DIK_A)) {
+        mapCursor_->Move(-1, 0, 0, stageMap_);
+    }
+    if (input->TriggerKey(DIK_D)) {
+        mapCursor_->Move(1, 0, 0, stageMap_);
+    }
+    if (input->TriggerKey(DIK_W)) {
+        mapCursor_->Move(0, 0, 1, stageMap_);
+    }
+    if (input->TriggerKey(DIK_S)) {
+        mapCursor_->Move(0, 0, -1, stageMap_);
+    }
+    if (input->TriggerKey(DIK_Q)) {
+        mapCursor_->Move(0, 1, 0, stageMap_);
+    }
+    if (input->TriggerKey(DIK_E)) {
+        mapCursor_->Move(0, -1, 0, stageMap_);
+    }
+
+    if (input->TriggerKey(DIK_R)) {
+        MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+        if (cell && cell->type != BlockType::None) {
+            // 90度 (π/2) ずつ回転させる
+            cell->rotationY += 1.5708f;
+            needRebuild = true;
+        }
+    }
+
+    
+
+    // ブロック配置
+	// 今は数字キー1～4で4種類のブロックを配置できるようにしています
+	// 例えば、1がGround、2がWall、3がBubblePickup、4がGoalなど
+	// ここはお好みでキーやブロックの種類を変更してください
+    
+	// 地面
+    if (input->TriggerKey(DIK_1)) {
+        selectedBlockType_ = BlockType::Ground;
+        stageMap_.SetBlock(cursor, selectedBlockType_);
+        needRebuild = true;
+    }
+	
+	// 壁
+    if (input->TriggerKey(DIK_2)) {
+        selectedBlockType_ = BlockType::Wall;
+        stageMap_.SetBlock(cursor, selectedBlockType_);
+        needRebuild = true;
     }
 
     if (scene_) {
@@ -76,6 +462,144 @@ void MyGame::ChangeMode(AppMode newMode) {
     currentMode_ = newMode;
     std::unique_ptr<IScene> nextScene;
 
+    if (cameraPitch_ > maxPitch) {
+        cameraPitch_ = maxPitch;
+    }
+
+    // --- カメラ位置計算 ---
+    Vector3 pivot = { 4.0f, 9.0f, 4.5f };
+    float distance = 35.0f;
+    float height = 20.0f;
+
+    Vector3 pos;
+    pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
+    pos.y = pivot.y + std::sin(cameraPitch_) * height;
+    pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
+
+    camera->SetPosition(pos);
+    camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
+
+    // --- プレイヤー更新 ---
+    if (player_) {
+        player_->Update(input.get(), stageMap_, cameraAngle_, lightCamera_->GetViewProjectionMatrix());
+    }
+
+    // --- ステージ再構築 ---
+    if (stageMap_.NeedsRebuild()) {
+        stageRenderer_->BuildFromStageMap(stageMap_);
+        stageMap_.ClearRebuildFlag();
+    }
+
+    /*==================================================
+        ▼ プレイヤー座標取得
+    ==================================================*/
+    Vector3 pPos{};
+    if (player_) {
+        pPos = player_->GetPosition();
+    }
+
+    int gx = static_cast<int>(std::floor(pPos.x + 0.5f));
+    int gy = static_cast<int>(std::floor(pPos.y));      // ★安定版
+    int gz = static_cast<int>(std::floor(pPos.z + 0.5f));
+
+    /*==================================================
+        ▼ アイテム取得
+    ==================================================*/
+    MapCell* cell = stageMap_.GetCell(gx, gy, gz);
+    if (cell && cell->type == BlockType::BubblePickup) {
+        placeableBlockCount_++;
+        stageMap_.RemoveBlock(gx, gy, gz);
+        stageRenderer_->BuildFromStageMap(stageMap_);
+    }
+
+    /*==================================================
+        ▼ ゴール判定（★追加部分）
+    ==================================================*/
+    Vector3 radius = { 0.4f, 0.9f, 0.4f }; // プレイヤーサイズに合わせる
+
+    if (Goal::Check(pPos, radius, stageMap_)) {
+        isGoalReached_ = true;
+    }
+
+    /*==================================================
+        ▼ 配置モード切り替え
+    ==================================================*/
+    if (input->TriggerKey(DIK_TAB) && placeableBlockCount_ > 0) {
+        currentMode_ = AppMode::GamePlay_BlockPlace;
+        mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
+    }
+
+    /*==================================================
+        ▼ クリア遷移
+    ==================================================*/
+    if (isGoalReached_) {
+        currentMode_ = AppMode::GameClear;
+    }
+}
+
+void MyGame::UpdateCameraGuideSprites() {
+    if (currentMode_ != AppMode::GamePlay) {
+        return;
+    }
+
+    if (!cameraGuideLeftSprite_ ||
+        !cameraGuideRightSprite_ ||
+        !cameraGuideUpSprite_ ||
+        !cameraGuideDownSprite_) {
+        return;
+    }
+
+    float screenWidth = static_cast<float>(WinApp::kClientWidth);
+    float screenHeight = static_cast<float>(WinApp::kClientHeight);
+
+    float edgeRatio = 0.1f;
+
+    float leftX = screenWidth * edgeRatio * 0.5f;
+    float rightX = screenWidth * (1.0f - edgeRatio * 0.5f);
+    float topY = screenHeight * edgeRatio * 0.5f;
+    float bottomY = screenHeight * (1.0f - edgeRatio * 0.5f);
+
+    float centerX = screenWidth * 0.5f;
+    float centerY = screenHeight * 0.5f;
+
+    // 画面端に配置
+    cameraGuideLeftSprite_->SetPosition({ leftX, centerY });
+    cameraGuideRightSprite_->SetPosition({ rightX, centerY });
+    cameraGuideUpSprite_->SetPosition({ centerX, topY });
+    cameraGuideDownSprite_->SetPosition({ centerX, bottomY });
+
+    // サイズ
+    cameraGuideLeftSprite_->SetSize({ 64.0f, 64.0f });
+    cameraGuideRightSprite_->SetSize({ 64.0f, 64.0f });
+    cameraGuideUpSprite_->SetSize({ 64.0f, 64.0f });
+    cameraGuideDownSprite_->SetSize({ 64.0f, 64.0f });
+
+    // arrow.png が上向き矢印想定
+    cameraGuideUpSprite_->SetRotation(0.0f);
+    cameraGuideRightSprite_->SetRotation(1.5708f);
+    cameraGuideDownSprite_->SetRotation(3.1415f);
+    cameraGuideLeftSprite_->SetRotation(-1.5708f);
+
+    cameraGuideLeftSprite_->Update();
+    cameraGuideRightSprite_->Update();
+    cameraGuideUpSprite_->Update();
+    cameraGuideDownSprite_->Update();
+}
+
+#ifdef USE_IMGUI
+// ImGuiの更新と描画
+void MyGame::UpdateImGui() {
+    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(340, 520), ImGuiCond_Always);
+
+    ImGui::Begin("Debug Window");
+
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+        1000.0f / ImGui::GetIO().Framerate,
+        ImGui::GetIO().Framerate);
+
+    // モード切替
+    int modeIndex = 0;
     switch (currentMode_) {
     case AppMode::DebugView:
     // 必要に応じてデバッグ専用シーンなど
@@ -100,7 +624,152 @@ void MyGame::ChangeMode(AppMode newMode) {
     }
 }
 
-// --- 描画処理 ---
+void MyGame::DrawCameraGuideSprites() {
+    if (currentMode_ != AppMode::GamePlay) {
+        return;
+    }
+
+    if (!cameraGuideLeftSprite_ ||
+        !cameraGuideRightSprite_ ||
+        !cameraGuideUpSprite_ ||
+        !cameraGuideDownSprite_) {
+        return;
+    }
+
+    spriteCommon->PreDraw();
+
+    cameraGuideLeftSprite_->Draw();
+    cameraGuideRightSprite_->Draw();
+    cameraGuideUpSprite_->Draw();
+    cameraGuideDownSprite_->Draw();
+}
+
+//5/7佐倉追加
+void MyGame::UpdateDoorPrompt3D()
+{
+    if (!doorPromptObject_ || !player_) {
+        return;
+    }
+
+    if (currentMode_ != AppMode::GamePlay || !player_->IsNearDoor()) {
+        return;
+    }
+
+    Vector3 pos = player_->GetNearDoorWorldPos();
+
+    doorPromptObject_->SetPosition(pos);
+    doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    // カメラの方向を向かせる
+    Vector3 camPos = camera->GetPosition();
+
+    float angleY = std::atan2f(
+        camPos.x - pos.x,
+        camPos.z - pos.z
+    );
+
+    doorPromptObject_->SetRotation({ 0.0f, angleY, 0.0f });
+
+    doorPromptObject_->SetCamera(
+        camera->GetViewMatrix(),
+        camera->GetProjectionMatrix()
+    );
+
+    doorPromptObject_->Update(
+        lightCamera_->GetViewProjectionMatrix()
+    );
+}
+
+void MyGame::UpdateLadderPrompt3D()
+{
+    if (!ladderPromptObject_ || !player_) {
+        return;
+    }
+
+    if (currentMode_ != AppMode::GamePlay || !player_->IsOnLadder()) {
+        return;
+    }
+
+    Vector3 pos = player_->GetLadderWorldPos();
+
+    ladderPromptObject_->SetPosition(pos);
+    ladderPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    Vector3 camPos = camera->GetPosition();
+
+    float angleY = std::atan2f(
+        camPos.x - pos.x,
+        camPos.z - pos.z
+    );
+
+    ladderPromptObject_->SetRotation({ 0.0f, angleY, 0.0f });
+
+    ladderPromptObject_->SetCamera(
+        camera->GetViewMatrix(),
+        camera->GetProjectionMatrix()
+    );
+
+    ladderPromptObject_->Update(
+        lightCamera_->GetViewProjectionMatrix()
+    );
+}
+
+bool MyGame::IsPlayerHiddenByWall() const {
+    if (!player_ || !camera) {
+        return false;
+    }
+
+    Vector3 camPos = camera->GetPosition();
+    Vector3 playerPos = player_->GetPosition();
+
+    // プレイヤーの中心より少し上を狙う
+    playerPos.y += 0.8f;
+
+    Vector3 diff = {
+        playerPos.x - camPos.x,
+        playerPos.y - camPos.y,
+        playerPos.z - camPos.z
+    };
+
+    float length = std::sqrt(
+        diff.x * diff.x +
+        diff.y * diff.y +
+        diff.z * diff.z
+    );
+
+    if (length <= 0.001f) {
+        return false;
+    }
+
+    Vector3 dir = {
+        diff.x / length,
+        diff.y / length,
+        diff.z / length
+    };
+
+    const float step = 0.25f;
+
+    for (float t = step; t < length - 1.0f; t += step) {
+        Vector3 checkPos = {
+            camPos.x + dir.x * t,
+            camPos.y + dir.y * t,
+            camPos.z + dir.z * t
+        };
+
+        int gx = static_cast<int>(std::floor(checkPos.x + 0.5f));
+        int gy = static_cast<int>(std::floor(checkPos.y));
+        int gz = static_cast<int>(std::floor(checkPos.z + 0.5f));
+
+        const MapCell* cell = stageMap_.GetCell(gx, gy, gz);
+
+        if (cell && cell->isSolid) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
     // 1. 影パス
@@ -115,22 +784,223 @@ void MyGame::Draw() {
         commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
         scene_->Draw();
 
-    #ifndef NDEBUG
-        DrawCommonUI(); // 左側のDebug Window
-        scene_->DrawUI(); // 右側のScene専用UI
-        ImGui::Render();
-        ID3D12DescriptorHeap* ppHeaps[] = { dxCommon->GetImguiSrvHeap() };
-        commandList->SetDescriptorHeaps(1, ppHeaps);
-        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
-    #endif
+        // --- 2. シーンごとの分岐描画 ---
+
+        // A. タイトルシーン
+        if (currentMode_ == AppMode::Title) {
+            if (titleScene_) titleScene_->Draw();
+        }
+        // ステージセレクト追加　05/10小林
+        else if (currentMode_ == AppMode::StageSelect)
+        {
+            if (stageSelect_) stageSelect_->Draw();
+        }
+        // B. クリアシーン
+        else if (currentMode_ == AppMode::GameClear) {
+            if (gameClearScene_) gameClearScene_->Draw();
+        }
+        // C. 通常ゲーム画面（エディタ・プレイ中・デバッグ）
+        else {
+            // 背景（天球）
+            if (skydomeObject_) {
+                skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                skydomeObject_->Draw();
+            }
+
+            // ステージとプレイヤー
+            if (currentMode_ == AppMode::StageEditor ||
+                currentMode_ == AppMode::GamePlay ||
+                currentMode_ == AppMode::GamePlay_BlockPlace) {
+
+                if (stageRenderer_) stageRenderer_->Draw();
+                if (currentMode_ == AppMode::GamePlay)
+                {
+                    if (player_) player_->Draw();
+
+                    // 壁で隠れている時だけ白強調
+                    if (IsPlayerHiddenByWall()) {
+                        object3dCommon->PreDrawPlayerHighlight();
+                        player_->DrawHighlight();
+
+                        // 通常描画設定に戻す
+                        object3dCommon->PreDraw();
+                        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                    }
+
+                }               
+               
+
+
+            }
+
+            // デバッグビュー（リストの全表示）
+            if (currentMode_ == AppMode::DebugView) {
+                for (auto& obj : objectList) {
+                    if (obj) {
+                        obj->Draw();
+                    }
+                }
+                if (player_) {
+                    player_->Draw();
+                }
+            }
+        }
     }
+
+    // --- 3. パーティクル・スプライト（共通） ---
+    if (debugFlags_.showParticles) {
+        particleManager->Draw();
+    }
+
+    if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
+        spriteCommon->PreDraw();
+        if (sprite) sprite->Draw();
+    }
+
+    //5/12佐倉置き換え
+
+ // ==========================================================
+// 3D UI
+// 壁の裏でも見えるように、通常3D描画の最後に強調描画で描く
+// ==========================================================
+    bool drawDoorPrompt =
+        doorPromptObject_ &&
+        currentMode_ == AppMode::GamePlay &&
+        player_ &&
+        player_->IsNearDoor();
+
+    bool drawLadderPrompt =
+        ladderPromptObject_ &&
+        currentMode_ == AppMode::GamePlay &&
+        player_ &&
+        player_->IsOnLadder();
+
+    if (drawDoorPrompt || drawLadderPrompt) {
+
+        object3dCommon->PreDrawPlayerHighlight();
+
+        if (drawDoorPrompt) {
+            doorPromptObject_->Draw();
+        }
+
+        if (drawLadderPrompt) {
+            ladderPromptObject_->Draw();
+        }
+
+        object3dCommon->PreDraw();
+        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+    }
+
+
+    //5/7佐倉
+    DrawCameraGuideSprites();
+
+    // --- 4. ImGui と 最終出力 ---
+#ifdef USE_IMGUI
+    dxCommon->EndImGui();
+#endif
+
     dxCommon->PostDraw();
 }
 
-// --- 共通UIの描画関数 ---
-void MyGame::DrawCommonUI() {
-#ifndef NDEBUG
-    ImGui::Begin("Debug Window");
+void MyGame::Finalize() {
+    // 1. GPUの完了を待機（リソースが「使用中」にならないようにする）
+    if (dxCommon) {
+        dxCommon->WaitForGpu();
+    }
+
+
+    sound.Finalize();
+
+#ifdef USE_IMGUI
+    dxCommon->FinalizeImGui();
+#endif
+
+    // 2. シーン（描画物の所有者）を先に消す
+    // GameClearSceneの11文字（COURSECLEAR）はこのタイミングで unique_ptr により解放されます
+    gameClearScene_.reset();
+    titleScene_.reset();
+
+    // 3. 静的マネージャーの解放
+    // モデル本体を消去（Object3dCommonより先に消す必要がある）
+    ModelManager::Finalize();
+
+    // 4. 動的に生成したオブジェクトリストのクリア
+    // unique_ptr の vector なので、clear() で中身のデストラクタが呼ばれます
+    objectList.clear();
+    models.clear();
+
+   
+    // 5. その他のゲームオブジェクトを reset
+    player_.reset();
+    skydomeObject_.reset();
+    skydomeModel_.reset();
+    sprite.reset();
+    stageRenderer_.reset();
+    mapCursor_.reset();
+    camera.reset();
+    shadowMap_.reset();
+    lightCamera_.reset();
+
+    // 6. システムマネージャー類を reset
+    particleManager.reset();
+    object3dCommon.reset();
+    spriteCommon.reset();
+    textureManager.reset();
+    input.reset();
+
+    // 7. 最後：DirectX基盤とウィンドウを reset
+    // ここで Device の Refcount が正常に 0 へ向かいます
+    dxCommon.reset();
+    winApp.reset();
+}
+/// <summary>
+/// ブロックを置けるようになる画面 04/01 秋元
+/// </summary>
+void MyGame::UpdateGamePlayBlockPlace()
+{
+    // 現在カーソル位置
+    const Int3& cursor = mapCursor_->GetIndex();
+
+    if (input->TriggerKey(DIK_A)) {
+        mapCursor_->Move(-1, 0, 0, stageMap_);
+    }
+    if (input->TriggerKey(DIK_D)) {
+        mapCursor_->Move(1, 0, 0, stageMap_);
+    }
+    if (input->TriggerKey(DIK_W)) {
+        mapCursor_->Move(0, 0, 1, stageMap_);
+    }
+    if (input->TriggerKey(DIK_S)) {
+        mapCursor_->Move(0, 0, -1, stageMap_);
+    }
+    if (input->TriggerKey(DIK_Q)) {
+        mapCursor_->Move(0, 1, 0, stageMap_);
+    }
+    if (input->TriggerKey(DIK_E)) {
+        mapCursor_->Move(0, -1, 0, stageMap_);
+    }
+
+    // カーソルの座標を更新
+    if (mapCursor_) {
+        mapCursor_->Update(lightCamera_->GetViewProjectionMatrix());
+    }
+
+    // ② ブロックを置く決定処理 (Enterキー)
+    if (input->TriggerKey(DIK_RETURN)) {
+        Int3 cursorPos = mapCursor_->GetIndex();
+
+        // カーソルの位置に何もない（None）場合のみ置けるようにする
+        if (stageMap_.GetCell(cursorPos)->type == BlockType::None) {
+
+            // ブロックを配置！
+            stageMap_.SetBlock(cursorPos, BlockType::Ground); // 足場を置く
+            stageRenderer_->BuildFromStageMap(stageMap_);     // 描画モデルを再構築（超重要）
+
+            placeableBlockCount_--; // 所持数を減らす
+            currentMode_ = AppMode::GamePlay; // 通常のプレイ画面に戻る
+        }
+    }
 
     // --- モード切り替え ---
     const char* modes[] = { "DebugView", "StageEditor", "GamePlay" };
@@ -148,6 +1018,120 @@ void MyGame::DrawCommonUI() {
         ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
     }
 
+void MyGame::UpdateTitle() {
+    if (titleScene_) {
+        titleScene_->Update();
+    //シーン変化用のキー入力
+        if (titleScene_->IsFinished()) {
+            currentMode_ = AppMode::StageSelect;
+        }
+    }
+}
+
+void MyGame::UpdateStageSelect()
+{
+    stageSelect_->Update();
+
+    if (stageSelect_->IsFnished())
+    {
+        // ① ステージセレクトから、選ばれたファイル名をもらってくる
+        std::string fileName = stageSelect_->GetSelectedFileName();
+
+        // ② 正しいパスを作る (Resources/Stages/ フォルダの中の fileName)
+        std::string filePath = "Resources/Stages/" + fileName;
+
+        // ③ そのファイルを読み込む！
+        if (std::filesystem::exists(filePath))
+        {
+            stageMap_.LoadFromFile(filePath);
+            stageRenderer_->BuildFromStageMap(stageMap_); // 見た目の更新
+
+            // プレイヤーの位置をスタート地点に戻すなどの処理
+            // ResetPlayer(); 
+        }
+        // ゲームプレイモードへ切り替え
+        currentMode_ = AppMode::GamePlay;
+    }
+}
+
+/// <summary>
+///  ギミック用のImGui 04/03 秋元
+/// </summary>
+void MyGame::DrawEditorToolbar()
+{
+    // ステージエディタモードの時だけ表示する
+    if (currentMode_ != AppMode::StageEditor) return;
+
+    // ウィンドウの設定（位置やサイズを固定したい場合はここを調整）
+    ImGui::SetNextWindowPos(ImVec2(360, 10), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(200, 400), ImGuiCond_FirstUseEver);
+
+    if (ImGui::Begin("Editor Toolbar", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("1. Select Gimmick");
+        ImGui::Separator();
+
+        // ギミックごとのボタン
+        // 選択中のものは色を変えるとかっこいいです
+        BlockType types[] = {
+            BlockType::Ground, BlockType::Wall, BlockType::Ladder,
+            BlockType::Star, BlockType::BubblePickup, BlockType::Goal,
+            BlockType::PlayerStart, BlockType::Door,BlockType::PSwitch,
+            BlockType::PBlock
+        };
+
+        for (auto type : types) {
+            bool isSelected = (selectedBlockType_ == type);
+            if (isSelected) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f)); // 選択中は緑っぽく
+            }
+
+            if (ImGui::Button(BlockTypeToString(type), ImVec2(-FLT_MIN, 30))) {
+                selectedBlockType_ = type;
+            }
+
+            if (isSelected) ImGui::PopStyleColor();
+        }
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::Text("2. Action");
+        // --- 回転ボタン (Rキーの機能) ---
+        if (ImGui::Button("Rotate (R)", ImVec2(-FLT_MIN, 30))) {
+            const Int3& cursor = mapCursor_->GetIndex();
+            MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+            if (cell && cell->type != BlockType::None) {
+                cell->rotationY += 1.5708f; // 90度回転
+                if (stageRenderer_) stageRenderer_->BuildFromStageMap(stageMap_);
+            }
+        }
+
+        ImGui::Spacing();
+
+        // 配置実行ボタン
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
+        if (ImGui::Button("PLACE (Enter)", ImVec2(180, 40))) {
+            ApplyPlacement();
+        }
+        ImGui::PopStyleColor();
+
+        if (input->TriggerKey(DIK_RETURN))
+        {
+            ApplyPlacement();
+        }
+
+        if (ImGui::Button("REMOVE (Space)", ImVec2(180, 40))) {
+            stageMap_.RemoveBlock(mapCursor_->GetIndex());
+            stageRenderer_->BuildFromStageMap(stageMap_);
+        }
+
+        if (input->TriggerKey(DIK_BACKSPACE))
+        {
+            stageMap_.RemoveBlock(mapCursor_->GetIndex());
+            stageRenderer_->BuildFromStageMap(stageMap_);
+        }
+        
+    }
     ImGui::End();
 #endif
 }

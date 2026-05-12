@@ -8,6 +8,11 @@ void GameClearScene::SetEnginePointers(Object3dCommon* objCommon) {
 
 void GameClearScene::Initialize() {
 
+    //初期化　5/11 小林
+    timer_ = 0.0f;
+    isAllFinished_ = false;
+    finishTimer_ = 0.0f;
+
     cameraPos_ = { 0, 2, -25 };
     cameraRot_ = { 0.25f, 0, 0 };
 
