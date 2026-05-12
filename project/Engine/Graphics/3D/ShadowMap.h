@@ -24,10 +24,10 @@ public:
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource> resource_;
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle_; // 描き込み用 (DSV)
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle_; // 読み込み用 (SRV)
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle_{}; // 描き込み用 (DSV)
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle_{}; // 読み込み用 (SRV)
 
     // 影専用のディスクリプタヒープ（棚）を追加
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap_; // DSV用（書き込み）
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap_{}; // DSV用（書き込み）
     //Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_; // SRV用（読み取り）
 };
