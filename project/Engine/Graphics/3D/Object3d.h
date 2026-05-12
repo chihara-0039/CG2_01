@@ -3,6 +3,7 @@
 #include "Model.h"
 #include "MyMath.h"
 
+
 // 描画に必要な定数バッファ用の構造体
 struct TransformationMatrix {
     Matrix4x4 WVP;
