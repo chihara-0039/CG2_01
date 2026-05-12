@@ -33,11 +33,8 @@ public:
 
     enum class AppMode { 
         Title,
-<<<<<<< CG5
 		GameClear,
-=======
         StageSelect, //5/10追加　小林
->>>>>>> master
         DebugView,
         StageEditor,
         GamePlay 
