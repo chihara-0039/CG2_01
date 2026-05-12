@@ -235,8 +235,6 @@ void MyGame::Update() {
         skydomeObject_->Update(Math::MakeIdentity4x4());
     }
 
-    
-   
     // --- ImGuiに入力中（WantCaptureKeyboardがtrue）ならゲーム側の入力を無視する ---
     if (!isGuiCaptured) {
         switch (currentMode_) {
