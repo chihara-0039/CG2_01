@@ -105,6 +105,10 @@ private:
     std::unique_ptr<Model> doorPromptModel_;
     std::unique_ptr<Object3d> doorPromptObject_;
 
+    // はしご用3D UI
+    std::unique_ptr<Model> ladderPromptModel_;
+    std::unique_ptr<Object3d> ladderPromptObject_;
+
     // ==========================================================
     // メンバ変数（値や状態）
     // ==========================================================
@@ -149,6 +153,8 @@ private:
 
     // 追加：ドア用3D F UI更新
     void UpdateDoorPrompt3D();
+
+    void UpdateLadderPrompt3D();
 
     // 追加：プレイヤーが壁に隠れているか判定
     bool IsPlayerHiddenByWall() const;
