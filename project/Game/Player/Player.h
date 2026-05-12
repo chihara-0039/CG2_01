@@ -23,6 +23,9 @@ public:
 	// 影の描画：ライトカメラの行列を渡して影を描く
     void DrawShadow(const Matrix4x4& lightViewProjection);
 
+    //自機の影強調表示関数
+    void DrawHighlight();
+
     // 座標の設定と取得
     void SetPosition(const Vector3& pos) { position_ = pos; }
     const Vector3& GetPosition() const { return position_; }
@@ -45,8 +48,25 @@ public:
     // Pスイッチの追加 04/03 秋元
     void PSwitchUpdate(StageMap& map);
     
+    bool IsOnPSwitch(const StageMap& map);
+
     //リスポーン用の座標
     Vector3 respawnPosition = { 0.0f,1.5f,0.0f };
+
+    // ドアUI表示フラグ
+    bool IsNearDoor() const { return isNearDoor_; }
+
+    const Vector3& GetNearDoorWorldPos() const {
+        return nearDoorWorldPos_;
+    }
+
+    //5/12佐倉追加
+    // はしごUI表示フラグ
+    bool IsOnLadder() const { return isOnLadder_; }
+
+    const Vector3& GetLadderWorldPos() const {
+        return ladderWorldPos_;
+    }
 
 private:
     // マップのブロックと衝突しているかチェックするヘルパー
@@ -68,6 +88,13 @@ private:
     float jumpSpeed_ = 0.3f;    // ジャンプの初速度（高さ）
     bool isGrounded_ = false;   // 接地フラグ
 
-    const Input* input_ = nullptr;
+    //ドアUIの座標変換用変数
+    Vector3 nearDoorWorldPos_ = { 0.0f,0.0f,0.0f };
 
+    const Input* input_ = nullptr;
+    bool isNearDoor_ = false;
+
+    // はしごUI用
+    bool isOnLadder_ = false;
+    Vector3 ladderWorldPos_ = { 0.0f, 0.0f, 0.0f };
 };

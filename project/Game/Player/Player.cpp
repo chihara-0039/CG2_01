@@ -31,6 +31,19 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	bool isOnLadder = (cellBottom && cellBottom->type == BlockType::Ladder) ||
 		(cellWaist && cellWaist->type == BlockType::Ladder);
 
+	// はしごUI用フラグを毎フレーム更新
+	isOnLadder_ = isOnLadder;
+
+	if (isOnLadder_) {
+		int ladderY = gyWaist;
+
+		ladderWorldPos_ = {
+			static_cast<float>(gx),
+			static_cast<float>(ladderY) + 1.2f,
+			static_cast<float>(gz)
+		};
+	}
+
 	Vector3 move = { 0, 0, 0 };
 
 	if (isOnLadder) {
@@ -120,7 +133,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 
 		// ジャンプ
 		if (isGrounded_ && input->TriggerKey(DIK_SPACE)) {
-			velocity_.y = 0.3f;
+			velocity_.y = 0.2f;
 			isGrounded_ = false;
 		}
 
@@ -180,17 +193,31 @@ void Player::DoorWarp(const StageMap& map)
 
 	const MapCell* cell = map.GetCell(gx, gyBottom, gz);
 
-	if (cell && cell->type == BlockType::Door && input_->TriggerKey(DIK_F))
+	// 毎フレーム一度falseに戻す
+	isNearDoor_ = false;
+
+	if (cell && cell->type == BlockType::Door)
 	{
-		Int3 doorWarpTarget = cell->doorTargetIndex;
+		isNearDoor_ = true;
 
-		position_.x = static_cast<float>(doorWarpTarget.x);
-		position_.y = static_cast<float>(doorWarpTarget.y);
-		position_.z = static_cast<float>(doorWarpTarget.z);
+		// ドアの上にFを出す座標
+		nearDoorWorldPos_ = {
+			static_cast<float>(gx),
+			static_cast<float>(gyBottom) + 1.0f,
+			static_cast<float>(gz)
+		};
 
-		velocity_ = { 0.0f,0.0f,0.0f };
+		if (input_->TriggerKey(DIK_F))
+		{
+			Int3 doorWarpTarget = cell->doorTargetIndex;
+
+			position_.x = static_cast<float>(doorWarpTarget.x);
+			position_.y = static_cast<float>(doorWarpTarget.y);
+			position_.z = static_cast<float>(doorWarpTarget.z);
+
+			velocity_ = { 0.0f, 0.0f, 0.0f };
+		}
 	}
-
 }
 
 // 衝突判定ロジック
@@ -255,6 +282,20 @@ void Player::PSwitchUpdate(StageMap& map)
 	}
 }
 
+bool Player::IsOnPSwitch(const StageMap& map) {
+	// プレイヤーの足元の座標を取得して、そこが PSwitch か判定する
+	// ※ 座標計算はあなたのプロジェクトの仕様に合わせて調整してください
+	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
+	int gy = static_cast<int>(std::floor(position_.y));
+	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+	const MapCell* cell = map.GetCell(gx, gy, gz);
+	if (cell && cell->type == BlockType::PSwitch) {
+		return true;
+	}
+	return false;
+}
+
 // 描画：内部で持っている Object3d を描画
 void Player::Draw() {
 	if (object_) {
@@ -268,4 +309,33 @@ void Player::DrawShadow(const Matrix4x4& lightViewProjection) {
 	if (object_) {
 		object_->DrawShadow(lightViewProjection);
 	}
+}
+
+void Player::DrawHighlight() {
+	if (!object_) {
+		return;
+	}
+
+	// 1回目：一番外側の大きい白
+	object_->SetScale({ 1.55f, 1.55f, 1.55f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 2回目：中間の白
+	object_->SetScale({ 1.35f, 1.35f, 1.35f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 3回目：本体に近い白
+	object_->SetScale({ 1.18f, 1.18f, 1.18f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 元に戻す
+	object_->SetScale({ 1.0f, 1.0f, 1.0f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(true);
 }

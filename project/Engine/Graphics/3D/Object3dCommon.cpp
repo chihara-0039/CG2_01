@@ -31,6 +31,8 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
         // ここで落ちる可能性が高い
     }
 
+    CreatePlayerHighlightPipeline(); // 追加5/7佐倉
+
     CreateLightBuffer();
     SetDefaultLight();
 
@@ -52,6 +54,38 @@ void Object3dCommon::PreDraw() {
 
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(pipelineState_.Get());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // --- ディスクリプタヒープのセット ---
+    if (textureManager_) {
+        // TextureManager が持っている SRV 用のヒープを取得してセットする
+        ID3D12DescriptorHeap* heaps[] = { textureManager_->GetSrvHeap() };
+        commandList->SetDescriptorHeaps(_countof(heaps), heaps);
+    }
+}
+
+// 影描画用の共通設定（これも必要です）
+void Object3dCommon::PreDrawShadow() {
+    auto commandList = dxCommon_->GetCommandList();
+
+    // 影用のルートシグネチャとパイプラインをセット
+    commandList->SetGraphicsRootSignature(rootSignature_.Get()); // 共通でOK
+    commandList->SetPipelineState(shadowPipelineState_.Get());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // 影描画ではテクスチャを使わない（深度のみ）ので、ヒープセットは不要です
+}
+
+void Object3dCommon::PreDrawPlayerHighlight() {
+    auto commandList = dxCommon_->GetCommandList();
+
+    if (!rootSignature_ || !playerHighlightPipelineState_) {
+        assert(false && "RootSignature or PlayerHighlightPipelineState is NULL!");
+        return;
+    }
+
+    commandList->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList->SetPipelineState(playerHighlightPipelineState_.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
@@ -259,5 +293,72 @@ void Object3dCommon::CreateLightBuffer() {
 
     device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&lightResource_));
     lightResource_->Map(0, nullptr, (void**)&lightData_);
+}
+
+void Object3dCommon::CreatePlayerHighlightPipeline() {
+    OutputDebugStringA("CreatePlayerHighlightPipeline Start\n");
+
+    auto vsBlob = dxCommon_->CompileShader(
+        L"Resources/shaders/hlsl/Object3d.VS.hlsl",
+        L"vs_6_0"
+    );
+    assert(vsBlob);
+
+    auto psBlob = dxCommon_->CompileShader(
+        L"Resources/shaders/hlsl/Object3d.PS.hlsl",
+        L"ps_6_0"
+    );
+    assert(psBlob);
+
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = rootSignature_.Get();
+    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    psoDesc.RasterizerState.FrontCounterClockwise = TRUE;
+
+    // ★重要：壁越しに見せるため、深度テストをOFF
+    psoDesc.DepthStencilState.DepthEnable = FALSE;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+    // 半透明も使えるようにブレンドON
+    auto& target = psoDesc.BlendState.RenderTarget[0];
+    target.BlendEnable = TRUE;
+    target.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    target.DestBlend = D3D12_BLEND_ONE;
+    target.BlendOp = D3D12_BLEND_OP_ADD;
+    target.SrcBlendAlpha = D3D12_BLEND_ONE;
+    target.DestBlendAlpha = D3D12_BLEND_ZERO;
+    target.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    target.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+    HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+        &psoDesc,
+        IID_PPV_ARGS(&playerHighlightPipelineState_)
+    );
+
+    if (FAILED(hr)) {
+        OutputDebugStringA("CreatePlayerHighlightPipeline Failed!!\n");
+        assert(false);
+    } else {
+        OutputDebugStringA("CreatePlayerHighlightPipeline Success!\n");
+    }
 }
 

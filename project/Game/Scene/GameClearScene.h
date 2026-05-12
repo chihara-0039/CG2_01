@@ -1,18 +1,25 @@
 #pragma once
 #include <vector>
 #include <string>
-#include <memory> // 追加
+#include <memory> 
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Model.h"
 #include "Camera.h"
+#include "IScene.h"
 
-class GameClearScene {
+class GameClearScene : public IScene {
 public:
-    void Initialize(Object3dCommon* objCommon);
+    void Initialize();
     void Update();
     void Draw();
+    void DrawUI() override {}
+    bool IsFinished() const override { return isFinished_; }
 
+    void SetEnginePointers(Object3dCommon* objCommon);
+
+    // 5/11 小林　ループするよう
+    bool IsFinished() const { return isAllFinished_; }
 private:
     // 各文字データを管理する構造体
     struct Letter {
@@ -33,13 +40,14 @@ private:
 
     // 借りているポインタ
     Object3dCommon* object3dCommon_ = nullptr;
-
+    
     Camera camera_;
-    Vector3 cameraPos_;
-    Vector3 cameraRot_;
+    Vector3 cameraPos_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 cameraRot_ = { 0.0f, 0.0f, 0.0f };
 
     float timer_ = 0.0f;
     bool isAllFinished_ = false;
+    bool isFinished_ = false;
     float finishTimer_ = 0.0f;
 
     std::string text_ = "COURSECLEAR";
