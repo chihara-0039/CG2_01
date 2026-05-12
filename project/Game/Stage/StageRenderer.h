@@ -20,6 +20,9 @@ public:
     void Update(const Matrix4x4& lightVP);
     void Draw();
 
+    // --- 影専用の描画 ---
+    void DrawShadow(const Matrix4x4& lightVP);
+
     void Clear();
 
 private:

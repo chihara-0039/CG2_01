@@ -84,7 +84,11 @@ public:
     }
     bool NeedsRebuild() const { return needsRebuild_; }
     void ClearRebuildFlag() { needsRebuild_ = false; }
+    
+    void ActivatePSwitch(float duration);
+    void UpdatePSwitch();
     bool IsPSwitchActive() const { return isPSwitchActive_; }
+    bool WasPSwitchJustFinished(); // 終了した瞬間を検知
 
 private:
     int width_ = 0;
@@ -99,4 +103,6 @@ private:
 
     bool isPSwitchActive_ = false; // Pスイッチの状態
     bool needsRebuild_ = false; // ★追加
+    float pSwitchTimer_ = 0.0f;
+    bool wasPSwitchJustFinished_ = false;
 };

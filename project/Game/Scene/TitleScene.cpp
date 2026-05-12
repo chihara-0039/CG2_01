@@ -1,8 +1,12 @@
 #include "TitleScene.h"
 
-void TitleScene::Initialize(Object3dCommon* objCommon, Input* input) {
+// 1. まず道具を受け取る
+void TitleScene::SetEnginePointers(Object3dCommon* objCommon, Input* input) {
     object3dCommon_ = objCommon;
     input_ = input;
+}
+
+void TitleScene::Initialize() {
 
     // カメラ用変数
     cameraPos_ = { 0.0f, 2.0f, -20.0f };
@@ -97,5 +101,8 @@ void TitleScene::Update() {
 }
 
 void TitleScene::Draw() {
+
+    object3dCommon_->PreDraw();
+
     titleObject_->Draw();
 }
