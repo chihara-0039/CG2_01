@@ -214,6 +214,23 @@ void MyGame::Initialize() {
     doorPromptObject_->SetModel(doorPromptModel_.get());
     doorPromptObject_->SetEnableLighting(false);
     doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    ladderPromptModel_ = std::unique_ptr<Model>(
+        Model::CreateFromOBJ(
+            dxCommon.get(),
+            "Resources/UI/radderUI",
+            "radderUI.obj",
+            textureManager.get()
+        )
+    );
+
+    // はしご用3D UI
+    ladderPromptObject_ = std::make_unique<Object3d>();
+    ladderPromptObject_->Initialize(object3dCommon.get());
+    ladderPromptObject_->SetModel(ladderPromptModel_.get());
+    ladderPromptObject_->SetEnableLighting(false);
+    ladderPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -418,6 +435,9 @@ void MyGame::Update() {
 
     //ドアUI更新
     UpdateDoorPrompt3D();
+
+    // はしごUI更新
+    UpdateLadderPrompt3D();
 }
 
 //パーティクル発生のテスト（スペースキーを押すと発生）
@@ -1092,6 +1112,40 @@ void MyGame::UpdateDoorPrompt3D()
     );
 }
 
+void MyGame::UpdateLadderPrompt3D()
+{
+    if (!ladderPromptObject_ || !player_) {
+        return;
+    }
+
+    if (currentMode_ != AppMode::GamePlay || !player_->IsOnLadder()) {
+        return;
+    }
+
+    Vector3 pos = player_->GetLadderWorldPos();
+
+    ladderPromptObject_->SetPosition(pos);
+    ladderPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    Vector3 camPos = camera->GetPosition();
+
+    float angleY = std::atan2f(
+        camPos.x - pos.x,
+        camPos.z - pos.z
+    );
+
+    ladderPromptObject_->SetRotation({ 0.0f, angleY, 0.0f });
+
+    ladderPromptObject_->SetCamera(
+        camera->GetViewMatrix(),
+        camera->GetProjectionMatrix()
+    );
+
+    ladderPromptObject_->Update(
+        lightCamera_->GetViewProjectionMatrix()
+    );
+}
+
 bool MyGame::IsPlayerHiddenByWall() const {
     if (!player_ || !camera) {
         return false;
@@ -1273,23 +1327,36 @@ void MyGame::Draw() {
         if (sprite) sprite->Draw();
     }
 
-    //5/11佐倉
+    //5/12佐倉置き換え
 
-    // ==========================================================
-// ドア用 3D F UI
+ // ==========================================================
+// 3D UI
 // 壁の裏でも見えるように、通常3D描画の最後に強調描画で描く
 // ==========================================================
-    if (doorPromptObject_ &&
+    bool drawDoorPrompt =
+        doorPromptObject_ &&
         currentMode_ == AppMode::GamePlay &&
         player_ &&
-        player_->IsNearDoor()) {
+        player_->IsNearDoor();
 
-        // プレイヤー壁裏強調と同じ描画設定を使う
+    bool drawLadderPrompt =
+        ladderPromptObject_ &&
+        currentMode_ == AppMode::GamePlay &&
+        player_ &&
+        player_->IsOnLadder();
+
+    if (drawDoorPrompt || drawLadderPrompt) {
+
         object3dCommon->PreDrawPlayerHighlight();
 
-        doorPromptObject_->Draw();
+        if (drawDoorPrompt) {
+            doorPromptObject_->Draw();
+        }
 
-        // 通常描画設定に戻す
+        if (drawLadderPrompt) {
+            ladderPromptObject_->Draw();
+        }
+
         object3dCommon->PreDraw();
         commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
     }
