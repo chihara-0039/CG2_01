@@ -1,6 +1,7 @@
 #include "GameClearScene.h"
 #include <memory>
 
+
 void GameClearScene::Initialize(Object3dCommon* objCommon) {
     object3dCommon_ = objCommon;
 
