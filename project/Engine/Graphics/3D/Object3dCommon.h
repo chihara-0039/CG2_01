@@ -19,6 +19,11 @@ class Object3dCommon {
 public:
     void Initialize(DirectXCommon* dxCommon);
     void PreDraw(); // 描画前設定
+	void PreDrawShadow(); // 影描画前設定
+    // --- シャドウマップのハンドル管理 ---
+    void SetShadowMapHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { shadowMapHandle_ = handle; }
+    
+
 
 	// ゲッター
     DirectXCommon* GetDxCommon() const { return dxCommon_; }
@@ -28,6 +33,8 @@ public:
     ID3D12PipelineState* GetPipelineState() const { return pipelineState_.Get(); }
 	// 影用のパイプラインステートも必要になるのでゲッターを追加
     ID3D12PipelineState* GetShadowPipelineState() const { return shadowPipelineState_.Get(); }
+	// シャドウマップのGPUハンドルを取得するゲッターも追加
+    D3D12_GPU_DESCRIPTOR_HANDLE GetShadowMapHandle() const { return shadowMapHandle_; }
 
     // ライト制御
     void SetDefaultLight();
@@ -62,6 +69,9 @@ private:
     // 
     DirectXCommon* dxCommon_ = nullptr;
     TextureManager* textureManager_ = nullptr; // テクスチャ管理クラスへのポインタ
+
+    // シャドウマップの場所（ハンドル）を一時的に覚えておく変数
+    D3D12_GPU_DESCRIPTOR_HANDLE shadowMapHandle_ = {};
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;

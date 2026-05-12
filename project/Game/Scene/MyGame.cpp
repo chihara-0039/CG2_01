@@ -1,55 +1,42 @@
-#include <filesystem>
-
 #include "MyGame.h"
-#include "Goal.h"
-#include "ModelManager.h"
-#include <memory>
+#include "TitleScene.h"
+#include "GamePlayScene.h" // 新しく作成するシーン
+#include "GameClearScene.h"
+#include "EditorScene.h"
 
 #include "externals/imgui/imgui.h"
-#include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
+#include "externals/imgui/imgui_impl_win32.h"
 
-// デバッグ用：BlockTypeを文字列に変換
-static const char* BlockTypeToString(BlockType type) {
-    switch (type) {
-    case BlockType::None:         return "None";
-    case BlockType::Ground:       return "Ground";
-    case BlockType::Wall:         return "Wall";
-	case BlockType::Ladder:       return "Ladder";
-    case BlockType::Star:         return "Star";
-    case BlockType::BubblePickup: return "BubblePickup";
-    case BlockType::Goal:         return "Goal";
-    case BlockType::PlayerStart:  return "PlayerStart";
-    case BlockType::Door:         return "Door";
-    case BlockType::PSwitch:      return "PSwitch";
-    case BlockType::PBlock:       return "PBlock";
-    default:                      return "Unknown";
-    }
-}
-
-// --- MyGameクラスの実装 ---
+/// --- 初期化 ---
 void MyGame::Initialize() {
     // 基盤系の生成（new ではなく std::make_unique を使用） 
     winApp = std::make_unique<WinApp>();
     winApp->Initialize();
 
+	// DirectXCommon の生成と初期化。Initialize には winApp の生ポインタを渡す
     dxCommon = std::make_unique<DirectXCommon>();
     dxCommon->Initialize(winApp.get()); // get() で中身の生ポインタを貸し出す 
 
+	// Input クラスも同様に std::make_unique で生成し、Initialize には winApp の生ポインタを渡す
     input = std::make_unique<Input>();
     input->Initialize(winApp.get()); // get() を使用
 
+	// TextureManager は SpriteCommon と Object3dCommon の両方で必要になるので、先に生成しておく
     textureManager = std::make_unique<TextureManager>();
     textureManager->Initialize(dxCommon.get());
 
+	// SpriteCommon と Object3dCommon はテクスチャ管理も必要になるので、TextureManagerのセットを忘れずに
     spriteCommon = std::make_unique<SpriteCommon>();
     spriteCommon->SetTextureManager(textureManager.get());
     spriteCommon->Initialize(dxCommon.get());
 
+	// Object3dCommon はテクスチャ管理も必要になるので、TextureManagerのセットを忘れずに
     object3dCommon = std::make_unique<Object3dCommon>();
     object3dCommon->SetTextureManager(textureManager.get());
     object3dCommon->Initialize(dxCommon.get());
 
+	// ParticleManager も同様に TextureManager をセットして初期化
     particleManager = std::make_unique<ParticleManager>();
     particleManager->Initialize(dxCommon.get(), textureManager.get());
 
@@ -106,84 +93,43 @@ void MyGame::Initialize() {
     // ステージファイル一覧を更新しておく
     RefreshStageList();
 
-    // --- 3. ビルド設定による初期化分岐 ---
-#ifdef NDEBUG
-    // 【Releaseビルド時】直接ゲームを開始する
-    currentMode_ = AppMode::GamePlay;
+    // 2. 本編シーンを生成
+    std::unique_ptr<GamePlayScene> newScene = std::make_unique<GamePlayScene>();
 
-    // "Stage1.txt" があれば自動ロード
-    std::string startStage = "Resources/Stages/Stage1.txt";
-    if (std::filesystem::exists(startStage)) {
-        stageMap_.LoadFromFile(startStage);
+    // 3. エンジンの道具（Frameworkが管理しているもの）をシーンに渡す
+    newScene->SetEnginePointers(
+         this->object3dCommon.get(),
+         this->input.get(),
+         this->textureManager.get(),
+         this->shadowMap.get(),
+         this->lightCamera.get()
+    );
 
-        // PlayerStartブロックを探してプレイヤーを配置
-        bool foundStart = false;
-        for (int y = 0; y < stageMap_.GetHeight(); ++y) {
-            for (int z = 0; z < stageMap_.GetDepth(); ++z) {
-                for (int x = 0; x < stageMap_.GetWidth(); ++x) {
-                    const MapCell* cell = stageMap_.GetCell(x, y, z);
-                    if (cell && cell->type == BlockType::PlayerStart) {
-                        player_->SetPosition({ (float)x, (float)y + 1.1f, (float)z });
-                        foundStart = true;
-                        break;
-                    }
-                }
-                if (foundStart) break;
-            }
-            if (foundStart) break;
-        }
-    }
-#else
+    // 4. シーン自身の初期化処理を実行
+    newScene->Initialize();
 
-    //4/3佐倉タイトルから開始に変更
+    // 5. 管理下に置く
+    scene_ = std::move(newScene);
 
-    // 【Debugビルド時】
-    currentMode_ = AppMode::Title;
-
-
-    // 2. ★手動配置を消して、保存した「プロトタイプ」をロードする
-    std::string prototypePath = "Resources/Stages/prototype.txt"; // 保存したファイル名に合わせてください
-    if (std::filesystem::exists(prototypePath)) {
-        stageMap_.LoadFromFile(prototypePath);
-    }
-#endif
-
-    // 1. モデルのロード（フォルダとファイル名に注意）
-    skydomeModel_ = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/skydome", "skydome.obj", textureManager.get()));
-
-    // 2. オブジェクトの生成と初期化
-    skydomeObject_ = std::make_unique<Object3d>();
-    skydomeObject_->Initialize(object3dCommon.get());
-    skydomeObject_->SetModel(skydomeModel_.get());
-
-    // 3. 設定：空は自ら光るのでライトをオフにする
-    skydomeObject_->SetEnableLighting(false);
-
-    // 4. 設定：ステージを包むサイズにする（500〜1000程度）
-    skydomeObject_->SetScale({ 500.0f, 500.0f, 500.0f });
-
-    // ステージ描画オブジェクトの生成と構築
-    stageRenderer_ = std::make_unique<StageRenderer>();
-    stageRenderer_->Initialize(object3dCommon.get());
-    stageRenderer_->SetBlockScale(editorBlockScale_);
-    stageRenderer_->BuildFromStageMap(stageMap_);
-
-    // マップカーソルの初期化
-    mapCursor_ = std::make_unique<MapCursor>();
-    mapCursor_->Initialize(object3dCommon.get());
-    mapCursor_->SetIndex({ 0, 0, 0 }, stageMap_);
-    mapCursor_->SetScale({ 0.9f, 0.9f, 0.9f });
-
-    cameraAngle_ = 1.5708f; // ★ここで開始時の向きを調整！
-    cameraPitch_ = 0.75f;
-
-    // ★ 影の初期化
+	// 6. 影マップとライトカメラの初期化
     shadowMap_ = std::make_unique<ShadowMap>();
     shadowMap_->Initialize(dxCommon.get(), textureManager.get());
 
+	// ライトカメラの初期化
     lightCamera_ = std::make_unique<LightCamera>();
     lightCamera_->Initialize();
 
+    bubblePickupController_.Initialize(
+    &stageMap_,
+    stageRenderer_.get(),
+    &blockInventory_
+    );
+
+    blockPlacementController_.Initialize(
+        &stageMap_,
+        stageRenderer_.get(),
+        &blockInventory_
+    );
     // カメラ回転用UIスプライト
     cameraGuideTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow.png");
 
@@ -233,25 +179,22 @@ void MyGame::Initialize() {
 
 }
 
-// ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
-Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
-    auto obj = std::make_unique<Object3d>(); // 一時的な unique_ptr 
-    obj->Initialize(object3dCommon.get());
-    obj->SetModel(model);
-    obj->SetPosition(pos);
-    obj->SetRotation({ 1.57f, 0.0f, 0.0f });
+// --- 終了処理 ---
+void MyGame::Finalize() {
+    // シーンの解放（念のため明示的に）
+    if (scene_) {
+        scene_.reset();
+    }
 
-    Object3d* ptr = obj.get(); // 戻り値用に中身の住所を控える
-    objectList.push_back(std::move(obj)); // push_back で vector に「所有権」を移動させる 
-    return ptr;
+    // エンジン基盤の終了処理（GPU待機など）
+    Framework::Finalize();
 }
 
-// --- 更新処理 ---
+// --- 毎フレーム更新 ---
 void MyGame::Update() {
-#ifdef USE_IMGUI
-    dxCommon->BeginImGui();
-    UpdateImGui();
-    DrawEditorToolbar(); // ★追加：新しいエディタ窓 04/03 秋元
+    Framework::Update();
+#ifndef NDEBUG
+    ImGui_ImplDX12_NewFrame(); ImGui_ImplWin32_NewFrame(); ImGui::NewFrame();
 #endif
 
     input->Update();
@@ -521,129 +464,13 @@ void MyGame::UpdateStageEditor() {
         stageMap_.SetBlock(cursor, selectedBlockType_);
         needRebuild = true;
     }
-    
-	// バブルピックアップ
-    if (input->TriggerKey(DIK_3)) {
-        selectedBlockType_ = BlockType::BubblePickup;
-        stageMap_.SetBlock(cursor, selectedBlockType_);
-        needRebuild = true;
-    }
 
-	// ゴール
-    if (input->TriggerKey(DIK_4)) {
-        selectedBlockType_ = BlockType::Goal;
-        stageMap_.SetBlock(cursor, selectedBlockType_);
-        needRebuild = true;
-    }
-
-    // はしご
-    if(input->TriggerKey(DIK_5)) {
-        selectedBlockType_ = BlockType::Ladder;
-        stageMap_.SetBlock(cursor, selectedBlockType_);
-        needRebuild = true;
-	}
-
-    // ドア
-    if (input->TriggerKey(DIK_6))
-    {
-        selectedBlockType_ = BlockType::Door;
-        MapCell* oldCell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
-
-        if (oldCell && oldCell->type == BlockType::Door) {
-            Int3 target = oldCell->doorTargetIndex;
-
-            // 1. すでに別のドアとペアリング済みの場合、相手のリンクを切る
-            // （ワープ先が自分自身ではない場合＝ペアがいる）
-            if (target.x != cursor.x || target.y != cursor.y || target.z != cursor.z) {
-                MapCell* pairedCell = stageMap_.GetCell(target.x, target.y, target.z);
-                if (pairedCell && pairedCell->type == BlockType::Door) {
-                    // 相手のワープ先を相手自身の座標に戻す（リンク解除）
-                    pairedCell->doorTargetIndex = target;
-                }
-            }
-
-            // 2. ペアリング待機中（1つ目のドア）を消してしまった場合のキャンセル処理
-            if (isWaitingForSecondDoor_ &&
-                firstDoorIndex_.x == cursor.x &&
-                firstDoorIndex_.y == cursor.y &&
-                firstDoorIndex_.z == cursor.z) {
-
-                isWaitingForSecondDoor_ = false; // 2つ目待ちをキャンセル
-            }
+    if (scene_) {
+        scene_->Update();
+        // シーン終了時の自動遷移 (Play -> Clear など)
+        if (scene_->IsFinished()) {
+            if (dynamic_cast<GamePlayScene*>(scene_.get())) ChangeMode(AppMode::GameClear);
         }
-        stageMap_.SetBlock(cursor, selectedBlockType_);
-        if (!isWaitingForSecondDoor_)
-        {
-            // ▼ 1つ目のドアを置いた時
-            firstDoorIndex_ = cursor;
-            isWaitingForSecondDoor_ = true;// 2つ目待ち状態へ
-
-            // (オプション) この段階ではまだワープ先がないので自分自身をセットしておく
-            MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
-            if (cell)
-            {
-                cell->doorTargetIndex = cursor;
-            }
-        }
-        else
-        {
-            // ▼ 2つ目のドアを置いた時
-
-                // 1. 2つ目のドアのワープ先を「1つ目のドア」に設定
-            MapCell* cell2 = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
-            if (cell2) cell2->doorTargetIndex = firstDoorIndex_;
-
-            // 2. 1つ目のドアのワープ先を「今置いた2つ目のドア」に設定
-            MapCell* cell1 = stageMap_.GetCell(firstDoorIndex_.x, firstDoorIndex_.y, firstDoorIndex_.z);
-            if (cell1) cell1->doorTargetIndex = cursor;
-
-            // 3. ペアリング完了！状態をリセットして次のペア作りに備える
-            isWaitingForSecondDoor_ = false;
-        }
-        needRebuild = true;
-        
-    }
-
-    // プレイヤーのスタート位置
-    if (input->TriggerKey(DIK_7))
-    {
-        selectedBlockType_ = BlockType::PlayerStart;
-        stageMap_.SetBlock(cursor, selectedBlockType_);
-        player_->SetPosition({ float(cursor.x),float(cursor.y),float(cursor.z) });
-        needRebuild = true;
-    }
-
-    // 削除
-    if (input->TriggerKey(DIK_SPACE)) {
-        stageMap_.RemoveBlock(cursor);
-        needRebuild = true;
-    }
-
-    // 再構築
-    if (needRebuild && stageRenderer_) {
-        stageRenderer_->BuildFromStageMap(stageMap_);
-    }
-
-	// カメラ操作（Blender風の操作もできるようにしているので、そちらとキーが被らないように注意してください）
-    Transform& camTf = camera->GetTransform();
-
-    if (input->PushKey(DIK_J)) {
-        camTf.rotate.y -= 0.02f;
-    }
-    if (input->PushKey(DIK_L)) {
-        camTf.rotate.y += 0.02f;
-    }
-    if (input->PushKey(DIK_I)) {
-        camTf.translate.z += 0.2f;
-    }
-    if (input->PushKey(DIK_K)) {
-        camTf.translate.z -= 0.2f;
-    }
-    if (input->PushKey(DIK_U)) {
-        camTf.translate.y += 0.2f;
-    }
-    if (input->PushKey(DIK_O)) {
-        camTf.translate.y -= 0.2f;
     }
 }
 
@@ -659,6 +486,7 @@ void MyGame::UpdateGamePlay() {
     //どこを端とするか
     float edgeRatio = 0.1f;
 
+	//端の範囲
     float leftEdge = screenWidth * edgeRatio;
     float rightEdge = screenWidth * (1.0f - edgeRatio);
     float topEdge = screenHeight * edgeRatio;
@@ -667,32 +495,14 @@ void MyGame::UpdateGamePlay() {
     //マウス位置
     float mouseX = (float)mouse.posX;
     float mouseY = (float)mouse.posY;
-
    
-
+	// --- 横回転 ---
     const float rotateSpeed = 0.025f;
-
-    //if (input->PushKey(DIK_Q)) cameraAngle_ -= rotateSpeed;
-    //if (input->PushKey(DIK_E)) cameraAngle_ += rotateSpeed;
 
     // --- 縦回転 ---
     const float minPitch = 0.4f;
     const float maxPitch = 1.5f;
     const float upperLimit = 3.0f;
-
-    //if (input->PushKey(DIK_Z)) {
-    //    cameraPitch_ += rotateSpeed;
-    //    if (cameraPitch_ > upperLimit) {
-    //        cameraPitch_ = upperLimit;
-    //    }
-    //}
-
-    //if (input->PushKey(DIK_C)) {
-    //    cameraPitch_ -= rotateSpeed;
-    //    if (cameraPitch_ < minPitch) {
-    //        cameraPitch_ = minPitch;
-    //    }
-    //}
 
      //クリック中のみ反応(左クリック)
     if (mouse.buttons[0]) {
@@ -723,6 +533,7 @@ void MyGame::UpdateGamePlay() {
         }
     }
 
+	// カメラの縦回転の制限
     if (cameraPitch_ > maxPitch) {
         cameraPitch_ = maxPitch;
     }
@@ -732,11 +543,13 @@ void MyGame::UpdateGamePlay() {
     float distance = 35.0f;
     float height = 20.0f;
 
+	// カメラの位置を極座標から計算
     Vector3 pos;
     pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
     pos.y = pivot.y + std::sin(cameraPitch_) * height;
     pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
 
+	// カメラに位置と回転をセット
     camera->SetPosition(pos);
     camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
 
@@ -752,26 +565,23 @@ void MyGame::UpdateGamePlay() {
     }
 
     /*==================================================
-        ▼ プレイヤー座標取得
+    ▼ プレイヤー座標取得
     ==================================================*/
     Vector3 pPos{};
     if (player_) {
         pPos = player_->GetPosition();
     }
 
-    int gx = static_cast<int>(std::floor(pPos.x + 0.5f));
-    int gy = static_cast<int>(std::floor(pPos.y));      // ★安定版
-    int gz = static_cast<int>(std::floor(pPos.z + 0.5f));
-
     /*==================================================
-        ▼ アイテム取得
+    ▼ シャボン玉取得
     ==================================================*/
-    MapCell* cell = stageMap_.GetCell(gx, gy, gz);
-    if (cell && cell->type == BlockType::BubblePickup) {
-        placeableBlockCount_++;
-        stageMap_.RemoveBlock(gx, gy, gz);
-        stageRenderer_->BuildFromStageMap(stageMap_);
+    if (player_) {
+        bubblePickupController_.Update(pPos);
     }
+
+    int gx = static_cast<int>(std::floor(pPos.x + 0.5f));
+    int gy = static_cast<int>(std::floor(pPos.y));
+    int gz = static_cast<int>(std::floor(pPos.z + 0.5f));
 
     /*==================================================
         ▼ ゴール判定（★追加部分）
@@ -784,8 +594,9 @@ void MyGame::UpdateGamePlay() {
 
     /*==================================================
         ▼ 配置モード切り替え
+        Bキーで、所持ブロックがある時だけ配置モードへ入る
     ==================================================*/
-    if (input->TriggerKey(DIK_TAB) && placeableBlockCount_ > 0) {
+    if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
         currentMode_ = AppMode::GamePlay_BlockPlace;
         mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
     }
@@ -1151,8 +962,10 @@ bool MyGame::IsPlayerHiddenByWall() const {
         return false;
     }
 
-    Vector3 camPos = camera->GetPosition();
-    Vector3 playerPos = player_->GetPosition();
+    ImGui::Separator();
+    ImGui::Text("Placeable Blocks: %d", blockInventory_.GetBlockCount());
+	// デバッグ用：現在選択中のブロックタイプを表示
+    ImGui::Text("Selected Block: %s", BlockTypeToString(selectedBlockType_));
 
     // プレイヤーの中心より少し上を狙う
     playerPos.y += 0.8f;
@@ -1204,55 +1017,17 @@ bool MyGame::IsPlayerHiddenByWall() const {
 
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
-
-    // ==========================================================
-    // 【パス1】 シャドウマップへの描き込み（影の生成）
-    // ==========================================================
-    // ※ タイトルやクリア画面で影が不要なら if で囲っても良いですが、
-    //    まずは「常に生成する」方がバグが起きにくく安全です。
+    // 1. 影パス
     shadowMap_->PreDraw(commandList);
-
-    commandList->SetGraphicsRootSignature(object3dCommon->GetRootSignature());
-    commandList->SetPipelineState(object3dCommon->GetShadowPipelineState());
-    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
-
-    // 影を描く対象（動くものすべて）
-    for (auto& obj : objectList) {
-        if (obj) {
-            obj->DrawShadow(lightVP);
-        }
-    }
-
-
-    if (player_) {
-        player_->DrawShadow(lightVP);
-    }
-
+    if (scene_) scene_->DrawShadow();
     shadowMap_->PostDraw(commandList);
 
-    // dxCommon->PreDraw() 内でこれを行っていない場合、ここで明示的に呼ぶ必要があります
-    D3D12_VIEWPORT viewport = { 0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
-    D3D12_RECT scissor = { 0, 0, 1280, 720 };
-    commandList->RSSetViewports(1, &viewport);
-    commandList->RSSetScissorRects(1, &scissor);
-
-    // ==========================================================
-    // 【パス2】 メイン描画（通常のレンダリング ＋ 影の適用）
-    // ==========================================================
+    // 2. 本編パス
     dxCommon->PreDraw();
-
-    if (debugFlags_.show3DObjects) {
-        // --- 1. ヒープと共通設定（影を出すための最重要準備） ---
-        ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
-        commandList->SetDescriptorHeaps(1, heaps);
-
+    if (scene_) {
         object3dCommon->PreDraw();
-
-        // ★重要：スロット4(t1)に影テクスチャを渡す
-        // これを各シーンの描画（Draw）より「前」に呼ぶのが影を出す秘訣です
         commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+        scene_->Draw();
 
         // --- 2. シーンごとの分岐描画 ---
 
@@ -1473,33 +1248,17 @@ void MyGame::UpdateGamePlayBlockPlace()
     }
 
     // ③ キャンセルして戻る処理 (Qキーでもう一度戻るなど)
-    if (input->TriggerKey(DIK_TAB))
+    if (input->TriggerKey(DIK_ESCAPE))
     {
         currentMode_ = AppMode::GamePlay;
     }
 
-    // カメラ操作（Blender風の操作もできるようにしているので、そちらとキーが被らないように注意してください）
-    Transform& camTf = camera->GetTransform();
-
-    if (input->PushKey(DIK_J)) {
-        camTf.rotate.y -= 0.02f;
+    // --- 描画フラグ ---
+    if (ImGui::CollapsingHeader("Draw Flags", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
+        ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
+        ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
     }
-    if (input->PushKey(DIK_L)) {
-        camTf.rotate.y += 0.02f;
-    }
-    if (input->PushKey(DIK_I)) {
-        camTf.translate.z += 0.2f;
-    }
-    if (input->PushKey(DIK_K)) {
-        camTf.translate.z -= 0.2f;
-    }
-    if (input->PushKey(DIK_U)) {
-        camTf.translate.y += 0.2f;
-    }
-    if (input->PushKey(DIK_O)) {
-        camTf.translate.y -= 0.2f;
-    }
-}
 
 void MyGame::UpdateTitle() {
     if (titleScene_) {
@@ -1616,81 +1375,5 @@ void MyGame::DrawEditorToolbar()
         
     }
     ImGui::End();
-}
-
-/// <summary>
-///  ギミックで複雑な処理持ちのやつをここに入れる 04/03 秋元
-/// </summary>
-void MyGame::ApplyPlacement()
-{
-    const Int3& cursor = mapCursor_->GetIndex();
-    MapCell* oldCell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
-    // ドアの場合の特殊処理（既存のコードから移植）
-    if (selectedBlockType_ == BlockType::Door) 
-    {
-        if (oldCell && oldCell->type == BlockType::Door) {
-            Int3 target = oldCell->doorTargetIndex;
-
-            // 1. すでに別のドアとペアリング済みの場合、相手のリンクを切る
-            // （ワープ先が自分自身ではない場合＝ペアがいる）
-            if (target.x != cursor.x || target.y != cursor.y || target.z != cursor.z) {
-                MapCell* pairedCell = stageMap_.GetCell(target.x, target.y, target.z);
-                if (pairedCell && pairedCell->type == BlockType::Door) {
-                    // 相手のワープ先を相手自身の座標に戻す（リンク解除）
-                    pairedCell->doorTargetIndex = target;
-                }
-            }
-
-            // 2. ペアリング待機中（1つ目のドア）を消してしまった場合のキャンセル処理
-            if (isWaitingForSecondDoor_ &&
-                firstDoorIndex_.x == cursor.x &&
-                firstDoorIndex_.y == cursor.y &&
-                firstDoorIndex_.z == cursor.z) {
-
-                isWaitingForSecondDoor_ = false; // 2つ目待ちをキャンセル
-            }
-        }
-        // ※ longContentからコピーしたドアのペアリング処理
-        stageMap_.SetBlock(cursor, BlockType::Door);
-        if (!isWaitingForSecondDoor_)
-        {
-            // ▼ 1つ目のドアを置いた時
-            firstDoorIndex_ = cursor;
-            isWaitingForSecondDoor_ = true;// 2つ目待ち状態へ
-
-            // (オプション) この段階ではまだワープ先がないので自分自身をセットしておく
-            MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
-            if (cell)
-            {
-                cell->doorTargetIndex = cursor;
-            }
-        }
-        else
-        {
-            // ▼ 2つ目のドアを置いた時
-
-                // 1. 2つ目のドアのワープ先を「1つ目のドア」に設定
-            MapCell* cell2 = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
-            if (cell2) cell2->doorTargetIndex = firstDoorIndex_;
-
-            // 2. 1つ目のドアのワープ先を「今置いた2つ目のドア」に設定
-            MapCell* cell1 = stageMap_.GetCell(firstDoorIndex_.x, firstDoorIndex_.y, firstDoorIndex_.z);
-            if (cell1) cell1->doorTargetIndex = cursor;
-
-            // 3. ペアリング完了！状態をリセットして次のペア作りに備える
-            isWaitingForSecondDoor_ = false;
-        }
-    }
-    else {
-        // 通常のブロック
-        stageMap_.SetBlock(cursor, selectedBlockType_);
-        if (selectedBlockType_ == BlockType::PlayerStart) {
-            player_->SetPosition({ (float)cursor.x, (float)cursor.y + 1.1f, (float)cursor.z });
-        }
-    }
-
-    // 再構築
-    if (stageRenderer_) {
-        stageRenderer_->BuildFromStageMap(stageMap_);
-    }
+#endif
 }

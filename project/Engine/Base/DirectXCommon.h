@@ -44,6 +44,9 @@ public: // メンバ関数
     // ゲッター
     ID3D12Device* GetDevice() const { return device_.Get(); }
     ID3D12GraphicsCommandList* GetCommandList() const { return commandList_.Get(); }
+	// ImGui用SRVヒープのゲッターも追加
+    ID3D12DescriptorHeap* GetImguiSrvHeap() const { return imguiSrvHeap_.Get(); }
+    
     size_t GetBackBufferCount() const { return 2; }
 
 private: // メンバ関数(内部処理)

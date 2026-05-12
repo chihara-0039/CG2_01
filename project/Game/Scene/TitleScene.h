@@ -1,36 +1,43 @@
 #pragma once
-#include <memory> // 追加
+#include "IScene.h" // 継承するために追加[cite: 16]
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Model.h"
 #include "Camera.h"
 #include "Input.h"
+#include <memory>
 
-class TitleScene {
+// IScene を継承するように変更[cite: 18]
+class TitleScene : public IScene {
 public:
-    // 引数の objCommon や input は MyGame が所有しているものを「借りる」だけなので、生ポインタのままでOKです
-    void Initialize(Object3dCommon* objCommon, Input* input);
-    void Update();
-    void Draw();
+    virtual ~TitleScene() = default;
 
-    bool IsFinished() const { return isFinished_; }
+    // Initializeの引数を IScene のルールに合わせるか、
+    // 生成直後に呼ぶ専用の初期化関数にする（今回は後者で実装）
+    void SetEnginePointers(Object3dCommon* objCommon, Input* input);
 
-    Vector3 position_ = { 0,-10,10 };
-    Vector3 rotation_ = { 0,0,0 };
-    Vector3 cameraPos_;
-    Vector3 cameraRot_;
+    void Initialize() override; // ISceneの仮想関数[cite: 16]
+    void Update() override;
+    void Draw() override;
+    void DrawUI() override {} // タイトルでUIが不要なら空でOK
+
+    bool IsFinished() const override { return isFinished_; }
 
 private:
-    // 所有権を持たない（MyGameから借りているだけの）ポインタ
     Object3dCommon* object3dCommon_ = nullptr;
     Input* input_ = nullptr;
 
-    // このシーンが「自分専用」として所有するリソース
     Camera camera_;
-    std::unique_ptr<Model> titleModel_; // unique_ptr に変更
-    std::unique_ptr<Object3d> titleObject_; // unique_ptr に変更
+    std::unique_ptr<Model> titleModel_;
+    std::unique_ptr<Object3d> titleObject_;
 
     bool isFinished_ = false;
     float timer_ = 0.0f;
     float spiralAngle_ = 0.0f;
+    Vector3 position_ = { 0, -10, 10 };
+    Vector3 rotation_ = { 0, 0, 0 };
+
+    // 初期値セット
+    Vector3 cameraPos_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 cameraRot_ = { 0.0f, 0.0f, 0.0f };
 };

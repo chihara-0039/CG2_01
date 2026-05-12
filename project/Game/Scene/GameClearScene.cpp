@@ -1,8 +1,12 @@
 #include "GameClearScene.h"
 #include <memory>
 
-void GameClearScene::Initialize(Object3dCommon* objCommon) {
-    object3dCommon_ = objCommon;
+// 道具を受け取る関数
+void GameClearScene::SetEnginePointers(Object3dCommon* objCommon) {
+	object3dCommon_ = objCommon;
+}
+
+void GameClearScene::Initialize() {
 
     //初期化　5/11 小林
     timer_ = 0.0f;
@@ -127,6 +131,9 @@ void GameClearScene::Update() {
 }
 
 void GameClearScene::Draw() {
+
+    object3dCommon_->PreDraw();
+
     for (auto& letter : letters_) {
         if (letter.isVisible) {
             letter.object->Draw();

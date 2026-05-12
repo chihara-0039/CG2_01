@@ -48,6 +48,8 @@ public:
     // Pスイッチの追加 04/03 秋元
     void PSwitchUpdate(StageMap& map);
     
+    bool IsOnPSwitch(const StageMap& map);
+
     //リスポーン用の座標
     Vector3 respawnPosition = { 0.0f,1.5f,0.0f };
 

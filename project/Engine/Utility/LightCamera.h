@@ -17,9 +17,9 @@ public:
     const Matrix4x4& GetViewProjectionMatrix() const { return viewProjectionMatrix_; }
 
 private:
-    Matrix4x4 viewMatrix_;           // ライト視点のビュー行列
-    Matrix4x4 projectionMatrix_;     // ライト視点の正投影行列
-    Matrix4x4 viewProjectionMatrix_; // 合成済み行列
+    Matrix4x4 viewMatrix_ = {};           // ライト視点のビュー行列
+    Matrix4x4 projectionMatrix_ = {};     // ライト視点の正投影行列
+    Matrix4x4 viewProjectionMatrix_ = {}; // 合成済み行列
 
     // 影を記録する空間の広さ（ステージの規模に合わせて調整）
     float shadowRange_ = 64.0f;
