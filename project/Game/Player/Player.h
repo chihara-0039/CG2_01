@@ -58,6 +58,14 @@ public:
         return nearDoorWorldPos_;
     }
 
+    //5/12佐倉追加
+    // はしごUI表示フラグ
+    bool IsOnLadder() const { return isOnLadder_; }
+
+    const Vector3& GetLadderWorldPos() const {
+        return ladderWorldPos_;
+    }
+
 private:
     // マップのブロックと衝突しているかチェックするヘルパー
     bool CheckCollision(const Vector3& pos, const StageMap& map);
@@ -83,4 +91,8 @@ private:
 
     const Input* input_ = nullptr;
     bool isNearDoor_ = false;
+
+    // はしごUI用
+    bool isOnLadder_ = false;
+    Vector3 ladderWorldPos_ = { 0.0f, 0.0f, 0.0f };
 };
