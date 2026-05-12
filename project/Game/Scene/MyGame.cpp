@@ -867,7 +867,7 @@ void MyGame::UpdateImGui() {
     case AppMode::GamePlay:    modeIndex = 2; break;
     }
 
-	// ImGuiのコンボボックスでモード切替
+    // ImGuiのコンボボックスでモード切替
     const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay" };
     if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
         switch (modeIndex) {
@@ -877,14 +877,14 @@ void MyGame::UpdateImGui() {
         }
     }
 
-	// 描画オプション
+    // 描画オプション
     ImGui::Separator();
     ImGui::Text("Draw Flags");
     ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
     ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
     ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
 
-	// ステージエディタ関連のUI
+    // ステージエディタ関連のUI
     ImGui::Separator();
     ImGui::Text("--- Stage MySet Manager ---");
 
@@ -924,28 +924,28 @@ void MyGame::UpdateImGui() {
             // --- 追加：PlayerStartブロックを探してプレイヤーを移動させる ---
             bool foundStart = false;
 
-			// ステージマップは3次元なので、Y軸を固定してX-Z平面を探索する形になります
+            // ステージマップは3次元なので、Y軸を固定してX-Z平面を探索する形になります
             for (int y = 0; y < stageMap_.GetHeight(); ++y) {
-				// ステージマップは3次元なので、Y軸を固定してX-Z平面を探索する形になります
+                // ステージマップは3次元なので、Y軸を固定してX-Z平面を探索する形になります
                 for (int z = 0; z < stageMap_.GetDepth(); ++z) {
-					// ステージマップを全探索してPlayerStartブロックを探す
+                    // ステージマップを全探索してPlayerStartブロックを探す
                     for (int x = 0; x < stageMap_.GetWidth(); ++x) {
                         // セルを取得して、タイプが PlayerStart かチェック
                         const MapCell* cell = stageMap_.GetCell(x, y, z);
-						// PlayerStartブロックが見つかったら
+                        // PlayerStartブロックが見つかったら
                         if (cell && cell->type == BlockType::PlayerStart) {
                             // そのブロックの少し上にプレイヤーを配置
                             player_->SetPosition({ (float)x, (float)y + 1.1f, (float)z });
-							
+
                             // 見つけたらフラグを立ててループを抜ける
                             foundStart = true;
                             break;
                         }
                     }
-					// PlayerStartブロックが見つかったら、残りのループは回さない
+                    // PlayerStartブロックが見つかったら、残りのループは回さない
                     if (foundStart) break;
                 }
-				// PlayerStartブロックが見つかったら、残りのループは回さない
+                // PlayerStartブロックが見つかったら、残りのループは回さない
                 if (foundStart) break;
             }
         }
@@ -977,7 +977,7 @@ void MyGame::UpdateImGui() {
 
     if (ImGui::Button("Refresh List")) { RefreshStageList(); }
 
-	// カメラの情報表示と操作
+    // カメラの情報表示と操作
     ImGui::Separator();
     if (ImGui::TreeNode("Camera")) {
         Transform& camTf = camera->GetTransform();
@@ -986,7 +986,7 @@ void MyGame::UpdateImGui() {
         ImGui::DragFloat3("Rotation", &camTf.rotate.x, 0.01f);
         ImGui::SliderFloat("FOV", camera->GetFovPtr(), 0.01f, 3.14f);
 
-		// カメラリセットボタン
+        // カメラリセットボタン
         if (ImGui::Button("Reset Camera")) {
             camera->SetPosition({ 6.0f, 8.0f, -12.0f });
             camera->SetRotation({ 0.6f, 0.0f, 0.0f });
@@ -996,7 +996,7 @@ void MyGame::UpdateImGui() {
         ImGui::TreePop();
     }
 
-	// ステージマップの情報表示
+    // ステージマップの情報表示
     if (ImGui::TreeNode("StageMap Info")) {
         ImGui::Text("Size: %d x %d x %d",
             stageMap_.GetWidth(),
@@ -1012,7 +1012,7 @@ void MyGame::UpdateImGui() {
         ImGui::TreePop();
     }
 
-	// マップカーソルの情報表示
+    // マップカーソルの情報表示
     ImGui::Separator();
     if (ImGui::TreeNode("Cursor Info")) {
         const Int3& cursor = mapCursor_->GetIndex();
@@ -1020,7 +1020,7 @@ void MyGame::UpdateImGui() {
         ImGui::TreePop();
     }
 
-	// ステージエディタ用の設定項目
+    // ステージエディタ用の設定項目
     ImGui::Separator();
     if (currentMode_ == AppMode::StageEditor && ImGui::TreeNode("StageEditor Settings")) {
 
@@ -1048,13 +1048,13 @@ void MyGame::UpdateImGui() {
         ImGui::TreePop();
     }
 
-	// デバッグ用：現在選択中のブロックタイプを表示
+    // デバッグ用：現在選択中のブロックタイプを表示
     ImGui::Text("Selected Block: %s", BlockTypeToString(selectedBlockType_));
 
 
     ImGui::End();
-#endif
 }
+#endif
 
 void MyGame::DrawCameraGuideSprites() {
     if (currentMode_ != AppMode::GamePlay) {
