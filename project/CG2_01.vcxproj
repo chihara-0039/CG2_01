@@ -198,6 +198,11 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Game\Block\BlockPlacementController.cpp" />
+    <ClCompile Include="Game\Block\BubblePickupController.cpp" />
+    <ClCompile Include="Game\Block\BlockInventory.cpp">
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Development|x64'">$(ProjectDir)Game/Block;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="Game\Stage\EditorScene.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</ExcludedFromBuild>
     </ClCompile>
@@ -337,6 +342,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Game\Block\BlockPlacementController.h" />
+    <ClInclude Include="Game\Block\BubblePickupController.h" />
+    <ClInclude Include="Game\Block\BlockInventory.h" />
     <ClInclude Include="Game\Stage\EditorScene.h" />
     <ClInclude Include="Engine\Framework\Framework.h" />
     <ClInclude Include="Engine\Utility\Camera.h" />

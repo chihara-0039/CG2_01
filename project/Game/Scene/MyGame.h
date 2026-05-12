@@ -22,6 +22,9 @@
 #include "LightCamera.h"
 #include "TitleScene.h"
 #include "GameClearScene.h"
+#include "../Block/BlockInventory.h"
+#include "../Block/BubblePickupController.h"
+#include "../Block/BlockPlacementController.h"
 
 #include "StageSelect.h"
 
@@ -115,6 +118,11 @@ public:
 
     // 追加：プレイヤーが壁に隠れているか判定
     bool IsPlayerHiddenByWall() const;
+
+    // シャボン玉取得・ブロック配置関連
+    BlockInventory blockInventory_;
+    BubblePickupController bubblePickupController_;
+    BlockPlacementController blockPlacementController_;
 
     // ヘルパー関数の戻り値は「生ポインタ」のままでOK（所有権を渡さない「参照」のため）
     Object3d* CreateObject(Model* model, Vector3 pos);
