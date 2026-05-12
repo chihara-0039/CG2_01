@@ -16,22 +16,51 @@ void StageMap::Initialize(int width, int height, int depth) {
     Clear();
 }
 
-void StageMap::Update(float deltaTime) {
-    bool changed = false;
+void StageMap::Update(float deltaTime, float totalTime) {
     for (auto& cell : cells_) {
-        if (cell.type == BlockType::CrumblingFloor && cell.isCrumbling) {
-            cell.crumbleTimer += deltaTime;
+        if (cell.type == BlockType::CrumblingFloor) {
+            // --- 崩れる処理 ---
+            if (!cell.isHidden) {
+                if (cell.isCrumbling) {
+                    // プレイヤーが乗っているならタイマーを進める
+                    cell.crumbleTimer += deltaTime;
 
-            // 例えば1.0秒乗ったら崩れる
-            if (cell.crumbleTimer >= 1.0f) {
-                cell.type = BlockType::None; // ブロックを消す
-                cell.crumbleTimer = 0.0f;
-                cell.isCrumbling = false;
-                changed = true; // 再構築フラグ
+                    if (cell.crumbleTimer >= 1.0f) {
+                        cell.isHidden = true;
+                        cell.isSolid = false;
+                        cell.isCrumbling = false;
+                    }
+                }
+                else {
+                    // ★ここが重要：プレイヤーが降りたらタイマーを 0 に戻す
+                    // これで「一瞬かすめただけ」なら赤くならずに済みます
+                    cell.crumbleTimer -= deltaTime * 2.0f; // 徐々に回復させる（または 0.0f で即リセット）
+                    if (cell.crumbleTimer < 0.0f) cell.crumbleTimer = 0.0f;
+                }
             }
+
+            // --- 復活処理 ---
+            if (cell.isHidden) {
+                cell.respawnTimer += deltaTime;
+                if (cell.respawnTimer >= 3.0f) { // 3秒で復活
+                    cell.isHidden = false;
+                    cell.isSolid = true; // 判定復活
+                    cell.respawnTimer = 0.0f;
+                    // ★ changed = true; もここでは呼ばない！
+                }
+            }
+
+            // --- 演出用の色・透明度計算 ---
+            // 乗っている間は赤くする
+            if (!cell.isHidden) {
+                // crumbleTimerが0なら白、1.0に近づくほど赤くなる
+                float r = cell.crumbleTimer / 1.0f;
+                cell.colorG = 1.0f - r;
+                cell.colorB = 1.0f - r;
+            }
+            cell.isCrumbling = false;
         }
     }
-    if (changed) needsRebuild_ = true;
 }
 
 void StageMap::SaveToFile(const std::string& filename) {
@@ -178,6 +207,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::Ground:
     case BlockType::Wall:
     case BlockType::Star:
+    case BlockType::CrumblingFloor:
     cell.isSolid = true;
     break;
 

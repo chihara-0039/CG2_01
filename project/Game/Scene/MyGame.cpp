@@ -719,6 +719,19 @@ void MyGame::UpdateGamePlay() {
 
     camera->SetPosition(pos);
     camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
+    // --- ステージマップの更新（崩れる足場のタイマー処理） ---
+
+    float deltaTime = 1.0f / 60.0f;
+    totalTime_ += deltaTime;
+    stageMap_.Update(deltaTime, totalTime_);
+
+    // もし足場が消えて「再構築」が必要になったら Renderer を更新する
+    if (stageMap_.NeedsRebuild()) {
+        stageRenderer_->BuildFromStageMap(stageMap_);
+        stageMap_.ResetRebuildFlag(); // ★これを忘れると、1回きりしか更新されません！
+    }
+
+    stageRenderer_->UpdateEffect(stageMap_);
 
     // --- プレイヤー更新 ---
     if (player_) {
@@ -1245,6 +1258,9 @@ void MyGame::Draw() {
 
                 }               
                
+                if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
+                    mapCursor_->Draw();
+                }
 
 
             }

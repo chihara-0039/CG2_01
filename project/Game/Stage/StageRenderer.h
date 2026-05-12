@@ -20,6 +20,8 @@ public:
     void Update(const Matrix4x4& lightVP);
     void Draw();
 
+    void UpdateEffect(const StageMap& stageMap);
+
     void Clear();
 
 private:

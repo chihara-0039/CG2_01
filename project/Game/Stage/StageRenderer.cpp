@@ -91,17 +91,38 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// Pブロックモデル設定
 	pBlockOnModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources/Models/block",
-		"block.obj",
+		"Resources/Models/wall",
+		"wall.obj",
 		object3dCommon_->GetTextureManager()
 	);
 
 	// 崩れる足場
 	crumbleModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources/Models/block",
-		"block.obj",
+		"Resources/Models/CollapsedBlocks",
+		"CollapsedBlocks.obj",
 		object3dCommon_->GetTextureManager());
+}
+
+void StageRenderer::UpdateEffect(const StageMap& stageMap) {
+	size_t objIndex = 0;
+	for (int y = 0; y < stageMap.GetHeight(); ++y) {
+		for (int z = 0; z < stageMap.GetDepth(); ++z) {
+			for (int x = 0; x < stageMap.GetWidth(); ++x) {
+				const MapCell* cell = stageMap.GetCell(x, y, z);
+				if (cell->type == BlockType::None) continue;
+
+				if (objIndex < objects_.size()) {
+					Object3d* obj = objects_[objIndex];
+					if (cell->type == BlockType::CrumblingFloor) {
+						// マップデータの色と透明度をモデルに反映
+						obj->SetColor({ 1.0f, cell->colorG, cell->colorB, cell->opacity });
+					}
+					objIndex++;
+				}
+			}
+		}
+	}
 }
 
 // ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス
@@ -124,7 +145,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				}
 
 				// セルのタイプが None（空）ならスキップ
-				if (cell->type == BlockType::None) {
+				if (cell->type == BlockType::None || cell->isHidden) {
 					// 空のセルは描画しない
 					continue;
 				}
@@ -136,6 +157,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					static_cast<float>(y),
 					static_cast<float>(z)
 				};
+				
 
 				// ブロックの種類に応じて、対応するモデルを使ってオブジェクトを生成
 				switch (cell->type) {
@@ -201,12 +223,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
 				// ブロックの種類が PlayerStart（プレイヤーの開始位置）の場合
 				case BlockType::PlayerStart:
-				CreateStageObject(
-					goalModel_,
-					position,
-					{ 0.6f, 0.6f, 0.6f },
-					{ 0.0f, 0.0f, 0.0f }
-				);
+				
 				break;
 				
 				// ブロックの種類が Door (ドア) の場合
@@ -232,18 +249,9 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					break;
 					// ブロックの種類が PBlock (Pブロック) の場合
 				case BlockType::PBlock:
-					if (stageMap.IsPSwitchActive()) {
+					if (!stageMap.IsPSwitchActive()) {
 						CreateStageObject(
 							pBlockOnModel_,
-							position,
-							{ 0.6f, 0.6f, 0.6f },
-							{ 0.0f, 0.0f, 0.0f }
-						);
-					}
-					else
-					{
-						CreateStageObject(
-							wallModel_,
 							position,
 							blockScale_,
 							{ 0.0f, 0.0f, 0.0f }

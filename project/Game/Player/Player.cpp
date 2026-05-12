@@ -153,6 +153,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	{
 		Respawn();
 	}
+	CrumbleUpdate(map);
 	PSwitchUpdate(map);
 	DoorWarp(map);
 	
@@ -256,12 +257,13 @@ void Player::PSwitchUpdate(StageMap& map)
 	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
 	// 0.1fだと浮いている判定になりやすいので、少し余裕を持たせるか
 	// 現在の座標(position_.y)の真下を正確に狙います
-	int gyBottom = static_cast<int>(std::floor(position_.y - 0.05f));
+	int gyBottom = static_cast<int>(std::floor(position_.y + 0.1f));
 	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
 
 	const MapCell* cellBelow = map.GetCell(gx, gyBottom, gz);
 
-	if (cellBelow) {
+	if (input_->TriggerKey(DIK_F))
+	{
 		// Pスイッチの判定
 		if (cellBelow && cellBelow->type == BlockType::PSwitch) {
 			map.SetPSwitchActive(true); // これで needsRebuild_ が true になる
@@ -314,13 +316,13 @@ void Player::DrawHighlight() {
 }
 
 void Player::CrumbleUpdate(StageMap& map) {
-	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
+	int gx = static_cast<int>(std::floor(position_.x ));
 	int gyBottom = static_cast<int>(std::floor(position_.y - 0.05f));
-	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
+	int gz = static_cast<int>(std::floor(position_.z));
 
 	MapCell* cellBelow = map.GetCell(gx, gyBottom, gz);
 
-	if (cellBelow && cellBelow->type == BlockType::CrumblingFloor) {
+	if (cellBelow && cellBelow->type == BlockType::CrumblingFloor && !cellBelow->isHidden) {
 		cellBelow->isCrumbling = true;
 	}
 }

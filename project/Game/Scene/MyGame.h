@@ -170,4 +170,7 @@ private:
     float mp3Volume = 0.5f;
 
     //5/7佐倉
+
+
+    float totalTime_ = 0.0f; // 累積時間を保存する変数
 };
