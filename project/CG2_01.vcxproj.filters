@@ -45,6 +45,9 @@
     <ClCompile Include="Engine\Base\WinApp.cpp" />
     <ClCompile Include="Game\Scene\TitleScene.cpp" />
     <ClCompile Include="Game\Scene\GameClearScene.cpp" />
+    <ClCompile Include="Game\Block\BlockPlacementController.cpp" />
+    <ClCompile Include="Game\Block\BubblePickupController.cpp" />
+    <ClCompile Include="Game\Block\BlockInventory.cpp" />
 
     <ClCompile Include="Game\Scene\StageSelect.cpp" />
 
@@ -86,6 +89,9 @@
     <ClInclude Include="Game\Scene\TitleScene.h" />
     <ClInclude Include="Engine\Utility\LightCamera.h" />
     <ClInclude Include="Game\Scene\GameClearScene.h" />
+    <ClInclude Include="Game\Block\BlockPlacementController.h" />
+    <ClInclude Include="Game\Block\BubblePickupController.h" />
+    <ClInclude Include="Game\Block\BlockInventory.h" />
 
     <ClInclude Include="Game\Scene\StageSelect.h" />
 

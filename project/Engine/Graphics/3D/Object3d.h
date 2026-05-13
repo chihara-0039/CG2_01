@@ -3,6 +3,7 @@
 #include "Model.h"
 #include "MyMath.h"
 
+
 // 描画に必要な定数バッファ用の構造体
 struct TransformationMatrix {
     Matrix4x4 WVP;
@@ -56,9 +57,9 @@ private:
 	// 位置、回転、拡大縮小をまとめた構造体を用意
     Transform transform_ = { {1,1,1}, {0,0,0}, {0,0,0} };
 	// ビュー行列とプロジェクション行列も保持しておく（描画時に必要）
-    Matrix4x4 viewMatrix_;
+    Matrix4x4 viewMatrix_{};
 	// プロジェクション行列も保持しておく（描画時に必要）
-    Matrix4x4 projectionMatrix_;
+    Matrix4x4 projectionMatrix_{};
 
 	// 変換行列用の定数バッファとマテリアル用の定数バッファを用意
     Microsoft::WRL::ComPtr<ID3D12Resource> transformationResource_;
