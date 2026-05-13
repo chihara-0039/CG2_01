@@ -300,6 +300,17 @@ void StageRenderer::Draw() {
 	}
 }
 
+// 全てのオブジェクトの影描画処理を呼び出す
+void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
+	for (Object3d* obj : objects_) {
+		if (obj) {
+			// ★ 通常の Draw() ではなく、影用の DrawShadow を呼ぶ
+			// これでテクスチャを使わなくなるため、エラーが消えます
+			obj->DrawShadow(lightVP);
+		}
+	}
+}
+
 // 既存のオブジェクトを全て削除してリストをクリアする
 void StageRenderer::Clear() {
 	for (Object3d* obj : objects_) {

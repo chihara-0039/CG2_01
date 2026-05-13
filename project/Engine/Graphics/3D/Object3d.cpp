@@ -4,7 +4,7 @@
 
 // 初期化関数。Object3dCommonへのポインタを受け取ります
 void Object3d::Initialize(Object3dCommon* object3dCommon) {
-    assert(object3dCommon);
+    assert(object3dCommon != nullptr);
     object3dCommon_ = object3dCommon;
     auto device = object3dCommon_->GetDxCommon()->GetDevice();
 
@@ -57,7 +57,9 @@ void Object3d::SetUVTransform(const Transform& t) {
 
 // 描画関数。モデルがセットされていない場合は何もしない
 void Object3d::Draw() {
-    if (!model_) return;
+    if (!model_) {
+        return;
+    }
     auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
 
     // 0. Material
@@ -72,6 +74,8 @@ void Object3d::Draw() {
         auto gpuHandle = object3dCommon_->GetTextureManager()->GetSrvHandleGPU(model_->GetTextureHandle());
         commandList->SetGraphicsRootDescriptorTable(3, gpuHandle);
     }
+    // 4. Object3dCommon が保持しているシャドウマップのハンドルをセットする
+    commandList->SetGraphicsRootDescriptorTable(4, object3dCommon_->GetShadowMapHandle());
 
     model_->Draw(commandList);
 }

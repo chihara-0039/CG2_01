@@ -106,7 +106,11 @@ public:
     }
 
     void ClearRebuildFlag() { needsRebuild_ = false; }
+    
+    void ActivatePSwitch(float duration);
+    void UpdatePSwitch();
     bool IsPSwitchActive() const { return isPSwitchActive_; }
+    bool WasPSwitchJustFinished(); // 終了した瞬間を検知
 
 private:
     int width_ = 0;

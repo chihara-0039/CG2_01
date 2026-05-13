@@ -128,6 +128,9 @@ void GameClearScene::Update() {
 }
 
 void GameClearScene::Draw() {
+
+    object3dCommon_->PreDraw();
+
     for (auto& letter : letters_) {
         if (letter.isVisible) {
             letter.object->Draw();

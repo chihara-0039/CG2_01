@@ -106,18 +106,20 @@ void StageMap::LoadFromFile(const std::string& filename) {
     while (ifs >> x >> y >> z >> type >> rotX >> rotY) {
         SetBlock(x, y, z, static_cast<BlockType>(type));
         MapCell* cell = GetCell(x, y, z);
+
+        // 【修正】cell が nullptr でないことを確認してから中身を触る
         if (cell) {
             cell->rotationX = rotX;
             cell->rotationY = rotY;
-        }
-        if (cell->type == BlockType::Door) {
-            ifs >> cell->doorTargetIndex.x
-                >> cell->doorTargetIndex.y
-                >> cell->doorTargetIndex.z;
-        }
-        else {
-            // ドア以外のブロックならワープ先は初期値にしておく
-            cell->doorTargetIndex = { 0, 0, 0 };
+
+            // ドアの判定も cell が有効な時だけ行うように if の中に入れる
+            if (cell->type == BlockType::Door) {
+                ifs >> cell->doorTargetIndex.x
+                    >> cell->doorTargetIndex.y
+                    >> cell->doorTargetIndex.z;
+            } else {
+                cell->doorTargetIndex = { 0, 0, 0 };
+            }
         }
     }
     ifs.close();
@@ -226,4 +228,31 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     }
 
     return cell;
+}
+
+void StageMap::UpdatePSwitch() {
+    if (isPSwitchActive_) {
+        pSwitchTimer_ -= 1.0f / 60.0f; // 60FPS想定でカウントダウン
+
+        if (pSwitchTimer_ <= 0.0f) {
+            isPSwitchActive_ = false;
+            pSwitchTimer_ = 0.0f;
+            wasPSwitchJustFinished_ = true; // 終了した瞬間のフラグを立てる
+        }
+    }
+}
+
+bool StageMap::WasPSwitchJustFinished() {
+    if (wasPSwitchJustFinished_) {
+        wasPSwitchJustFinished_ = false; // 一度確認したらフラグを下ろす
+        return true;
+    }
+    return false;
+}
+
+// プレイヤーがスイッチを踏んだ時に呼ぶ関数（以前のコードから移植）
+void StageMap::ActivatePSwitch(float duration) {
+    isPSwitchActive_ = true;
+    pSwitchTimer_ = duration;
+    wasPSwitchJustFinished_ = false;
 }

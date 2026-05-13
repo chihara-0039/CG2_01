@@ -284,6 +284,20 @@ void Player::PSwitchUpdate(StageMap& map)
 	}
 }
 
+bool Player::IsOnPSwitch(const StageMap& map) {
+	// プレイヤーの足元の座標を取得して、そこが PSwitch か判定する
+	// ※ 座標計算はあなたのプロジェクトの仕様に合わせて調整してください
+	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
+	int gy = static_cast<int>(std::floor(position_.y));
+	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+	const MapCell* cell = map.GetCell(gx, gy, gz);
+	if (cell && cell->type == BlockType::PSwitch) {
+		return true;
+	}
+	return false;
+}
+
 // 描画：内部で持っている Object3d を描画
 void Player::Draw() {
 	if (object_) {

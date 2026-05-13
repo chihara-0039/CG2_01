@@ -50,6 +50,8 @@ public:
     // Pスイッチの追加 04/03 秋元
     void PSwitchUpdate(StageMap& map);
     
+    bool IsOnPSwitch(const StageMap& map);
+
     //リスポーン用の座標
     Vector3 respawnPosition = { 0.0f,1.5f,0.0f };
 
@@ -60,6 +62,7 @@ public:
         return nearDoorWorldPos_;
     }
 
+    //5/12佐倉追加
     // はしごUI表示フラグ
     bool IsOnLadder() const { return isOnLadder_; }
 
@@ -96,5 +99,4 @@ private:
     // はしごUI用
     bool isOnLadder_ = false;
     Vector3 ladderWorldPos_ = { 0.0f, 0.0f, 0.0f };
-
 };
