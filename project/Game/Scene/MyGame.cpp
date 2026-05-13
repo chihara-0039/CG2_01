@@ -1071,7 +1071,6 @@ void MyGame::DrawCameraGuideSprites() {
     cameraGuideUpSprite_->Draw();
     cameraGuideDownSprite_->Draw();
 }
-#endif
 
 //5/7佐倉追加
 void MyGame::UpdateDoorPrompt3D()
