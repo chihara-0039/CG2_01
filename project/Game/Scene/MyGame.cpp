@@ -33,23 +33,29 @@ void MyGame::Initialize() {
     winApp = std::make_unique<WinApp>();
     winApp->Initialize();
 
+	// DirectXCommon の生成と初期化。Initialize には winApp の生ポインタを渡す
     dxCommon = std::make_unique<DirectXCommon>();
     dxCommon->Initialize(winApp.get()); // get() で中身の生ポインタを貸し出す 
 
+	// Input クラスも同様に std::make_unique で生成し、Initialize には winApp の生ポインタを渡す
     input = std::make_unique<Input>();
     input->Initialize(winApp.get()); // get() を使用
 
+	// TextureManager は SpriteCommon と Object3dCommon の両方で必要になるので、先に生成しておく
     textureManager = std::make_unique<TextureManager>();
     textureManager->Initialize(dxCommon.get());
 
+	// SpriteCommon と Object3dCommon はテクスチャ管理も必要になるので、TextureManagerのセットを忘れずに
     spriteCommon = std::make_unique<SpriteCommon>();
     spriteCommon->SetTextureManager(textureManager.get());
     spriteCommon->Initialize(dxCommon.get());
 
+	// Object3dCommon はテクスチャ管理も必要になるので、TextureManagerのセットを忘れずに
     object3dCommon = std::make_unique<Object3dCommon>();
     object3dCommon->SetTextureManager(textureManager.get());
     object3dCommon->Initialize(dxCommon.get());
 
+	// ParticleManager も同様に TextureManager をセットして初期化
     particleManager = std::make_unique<ParticleManager>();
     particleManager->Initialize(dxCommon.get(), textureManager.get());
 
@@ -184,6 +190,17 @@ void MyGame::Initialize() {
     lightCamera_ = std::make_unique<LightCamera>();
     lightCamera_->Initialize();
 
+    bubblePickupController_.Initialize(
+    &stageMap_,
+    stageRenderer_.get(),
+    &blockInventory_
+    );
+
+    blockPlacementController_.Initialize(
+        &stageMap_,
+        stageRenderer_.get(),
+        &blockInventory_
+    );
     // カメラ回転用UIスプライト
     cameraGuideTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow.png");
 
@@ -639,6 +656,7 @@ void MyGame::UpdateGamePlay() {
     //どこを端とするか
     float edgeRatio = 0.1f;
 
+	//端の範囲
     float leftEdge = screenWidth * edgeRatio;
     float rightEdge = screenWidth * (1.0f - edgeRatio);
     float topEdge = screenHeight * edgeRatio;
@@ -647,32 +665,14 @@ void MyGame::UpdateGamePlay() {
     //マウス位置
     float mouseX = (float)mouse.posX;
     float mouseY = (float)mouse.posY;
-
    
-
+	// --- 横回転 ---
     const float rotateSpeed = 0.025f;
-
-    //if (input->PushKey(DIK_Q)) cameraAngle_ -= rotateSpeed;
-    //if (input->PushKey(DIK_E)) cameraAngle_ += rotateSpeed;
 
     // --- 縦回転 ---
     const float minPitch = 0.4f;
     const float maxPitch = 1.5f;
     const float upperLimit = 3.0f;
-
-    //if (input->PushKey(DIK_Z)) {
-    //    cameraPitch_ += rotateSpeed;
-    //    if (cameraPitch_ > upperLimit) {
-    //        cameraPitch_ = upperLimit;
-    //    }
-    //}
-
-    //if (input->PushKey(DIK_C)) {
-    //    cameraPitch_ -= rotateSpeed;
-    //    if (cameraPitch_ < minPitch) {
-    //        cameraPitch_ = minPitch;
-    //    }
-    //}
 
      //クリック中のみ反応(左クリック)
     if (mouse.buttons[0]) {
@@ -703,6 +703,7 @@ void MyGame::UpdateGamePlay() {
         }
     }
 
+	// カメラの縦回転の制限
     if (cameraPitch_ > maxPitch) {
         cameraPitch_ = maxPitch;
     }
@@ -712,11 +713,13 @@ void MyGame::UpdateGamePlay() {
     float distance = 35.0f;
     float height = 20.0f;
 
+	// カメラの位置を極座標から計算
     Vector3 pos;
     pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
     pos.y = pivot.y + std::sin(cameraPitch_) * height;
     pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
 
+	// カメラに位置と回転をセット
     camera->SetPosition(pos);
     camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
     // --- ステージマップの更新（崩れる足場のタイマー処理） ---
@@ -745,26 +748,23 @@ void MyGame::UpdateGamePlay() {
     }
 
     /*==================================================
-        ▼ プレイヤー座標取得
+    ▼ プレイヤー座標取得
     ==================================================*/
     Vector3 pPos{};
     if (player_) {
         pPos = player_->GetPosition();
     }
 
-    int gx = static_cast<int>(std::floor(pPos.x + 0.5f));
-    int gy = static_cast<int>(std::floor(pPos.y));      // ★安定版
-    int gz = static_cast<int>(std::floor(pPos.z + 0.5f));
-
     /*==================================================
-        ▼ アイテム取得
+    ▼ シャボン玉取得
     ==================================================*/
-    MapCell* cell = stageMap_.GetCell(gx, gy, gz);
-    if (cell && cell->type == BlockType::BubblePickup) {
-        placeableBlockCount_++;
-        stageMap_.RemoveBlock(gx, gy, gz);
-        stageRenderer_->BuildFromStageMap(stageMap_);
+    if (player_) {
+        bubblePickupController_.Update(pPos);
     }
+
+    int gx = static_cast<int>(std::floor(pPos.x + 0.5f));
+    int gy = static_cast<int>(std::floor(pPos.y));
+    int gz = static_cast<int>(std::floor(pPos.z + 0.5f));
 
     /*==================================================
         ▼ ゴール判定（★追加部分）
@@ -777,8 +777,9 @@ void MyGame::UpdateGamePlay() {
 
     /*==================================================
         ▼ 配置モード切り替え
+        Bキーで、所持ブロックがある時だけ配置モードへ入る
     ==================================================*/
-    if (input->TriggerKey(DIK_TAB) && placeableBlockCount_ > 0) {
+    if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
         currentMode_ = AppMode::GamePlay_BlockPlace;
         mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
     }
@@ -1041,6 +1042,8 @@ void MyGame::UpdateImGui() {
         ImGui::TreePop();
     }
 
+    ImGui::Separator();
+    ImGui::Text("Placeable Blocks: %d", blockInventory_.GetBlockCount());
     // デバッグ用：現在選択中のブロックタイプを表示
     ImGui::Text("Selected Block: %s", BlockTypeToString(selectedBlockType_));
 
@@ -1068,6 +1071,7 @@ void MyGame::DrawCameraGuideSprites() {
     cameraGuideUpSprite_->Draw();
     cameraGuideDownSprite_->Draw();
 }
+#endif
 
 //5/7佐倉追加
 void MyGame::UpdateDoorPrompt3D()
@@ -1422,7 +1426,7 @@ void MyGame::UpdateGamePlayBlockPlace()
     }
 
     // ③ キャンセルして戻る処理 (Qキーでもう一度戻るなど)
-    if (input->TriggerKey(DIK_TAB))
+    if (input->TriggerKey(DIK_ESCAPE))
     {
         currentMode_ = AppMode::GamePlay;
     }

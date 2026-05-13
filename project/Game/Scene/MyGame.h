@@ -22,6 +22,10 @@
 #include "LightCamera.h"
 #include "TitleScene.h"
 #include "GameClearScene.h"
+#include "../Block/BlockInventory.h"
+#include "../Block/BubblePickupController.h"
+#include "../Block/BlockPlacementController.h"
+
 
 #include "StageSelect.h"
 
@@ -141,6 +145,10 @@ private:
     void DrawEditorToolbar();
     void ApplyPlacement();
 
+    // シャボン玉取得・ブロック配置関連
+    BlockInventory blockInventory_;
+    BubblePickupController bubblePickupController_;
+    BlockPlacementController blockPlacementController_;
     void UpdateStageSelect(); //5/10追加　小林
 
     //カメラ回転用
