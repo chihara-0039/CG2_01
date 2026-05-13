@@ -13,6 +13,8 @@ public:
     void Update();
     void Draw();
 
+    // 5/11 小林　ループするよう
+    bool IsFinished() const { return isAllFinished_; }
 private:
     // 各文字データを管理する構造体
     struct Letter {
@@ -33,7 +35,7 @@ private:
 
     // 借りているポインタ
     Object3dCommon* object3dCommon_ = nullptr;
-
+    
     Camera camera_;
     Vector3 cameraPos_;
     Vector3 cameraRot_;

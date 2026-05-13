@@ -22,7 +22,8 @@ enum class BlockType : uint32_t {
     PlayerStart,
     Door,
     PSwitch,
-    PBlock
+    PBlock,
+    CrumblingFloor
 };
 
 // 1マス分のデータ
@@ -33,6 +34,18 @@ struct MapCell {
 	float rotationX = 0.0f; // X軸回転（オブジェクトの向きを変えたい）
 	float rotationY = 0.0f; // Y軸回転（オブジェクトの向きを変えたい）
     Int3 doorTargetIndex = { 0,0,0 };
+
+    // 崩れる足場用のタイマー管理
+    float crumbleTimer = 0.0f;
+    bool isCrumbling = false; // プレイヤーが乗っているフラグ
+    // --- 復活ギミック用に追加 ---
+    bool isHidden = false;      // 現在消えているかどうか
+    float respawnTimer = 0.0f;  // 復活までのカウント
+    // --- カラー演出用 ---
+    float colorG = 1.0f; // 緑 (1.0で通常、0.0に近づくと赤くなる)
+    float colorB = 1.0f; // 青
+    float opacity = 1.0f; // 透明度 (1.0で表示、0.0で非表示)
+
 };
 
 class StageMap {
@@ -42,6 +55,9 @@ public:
 
     // サイズ指定で初期化
     void Initialize(int width, int height, int depth);
+
+    // 追加
+    void Update(float deltaTime, float totalTime);
 
     // ステージデータをファイルに保存する
     void SaveToFile(const std::string& filename);
@@ -83,6 +99,12 @@ public:
         }
     }
     bool NeedsRebuild() const { return needsRebuild_; }
+
+    // ★ これを追加：フラグを「再構築の必要なし（false）」に戻す
+    void ResetRebuildFlag() {
+        needsRebuild_ = false;
+    }
+
     void ClearRebuildFlag() { needsRebuild_ = false; }
     bool IsPSwitchActive() const { return isPSwitchActive_; }
 
@@ -99,4 +121,6 @@ private:
 
     bool isPSwitchActive_ = false; // Pスイッチの状態
     bool needsRebuild_ = false; // ★追加
+
+    
 };

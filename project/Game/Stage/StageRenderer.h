@@ -20,6 +20,8 @@ public:
     void Update(const Matrix4x4& lightVP);
     void Draw();
 
+    void UpdateEffect(const StageMap& stageMap);
+
     void Clear();
 
 private:
@@ -34,6 +36,7 @@ private:
     Model* pSwichModel_ = nullptr;
     Model* pBlockOnModel_ = nullptr;
     //Model* PBlockOff_ = nullptr;
+    Model* crumbleModel_ = nullptr;
 
     std::vector<Object3d*> objects_;
     Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };

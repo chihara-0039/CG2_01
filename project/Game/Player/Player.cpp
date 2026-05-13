@@ -120,7 +120,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 
 		// ジャンプ
 		if (isGrounded_ && input->TriggerKey(DIK_SPACE)) {
-			velocity_.y = 0.3f;
+			velocity_.y = 0.2f;
 			isGrounded_ = false;
 		}
 
@@ -153,6 +153,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	{
 		Respawn();
 	}
+	CrumbleUpdate(map);
 	PSwitchUpdate(map);
 	DoorWarp(map);
 	
@@ -180,17 +181,31 @@ void Player::DoorWarp(const StageMap& map)
 
 	const MapCell* cell = map.GetCell(gx, gyBottom, gz);
 
-	if (cell && cell->type == BlockType::Door && input_->TriggerKey(DIK_F))
+	// 毎フレーム一度falseに戻す
+	isNearDoor_ = false;
+
+	if (cell && cell->type == BlockType::Door)
 	{
-		Int3 doorWarpTarget = cell->doorTargetIndex;
+		isNearDoor_ = true;
 
-		position_.x = static_cast<float>(doorWarpTarget.x);
-		position_.y = static_cast<float>(doorWarpTarget.y);
-		position_.z = static_cast<float>(doorWarpTarget.z);
+		// ドアの上にFを出す座標
+		nearDoorWorldPos_ = {
+			static_cast<float>(gx),
+			static_cast<float>(gyBottom) + 1.0f,
+			static_cast<float>(gz)
+		};
 
-		velocity_ = { 0.0f,0.0f,0.0f };
+		if (input_->TriggerKey(DIK_F))
+		{
+			Int3 doorWarpTarget = cell->doorTargetIndex;
+
+			position_.x = static_cast<float>(doorWarpTarget.x);
+			position_.y = static_cast<float>(doorWarpTarget.y);
+			position_.z = static_cast<float>(doorWarpTarget.z);
+
+			velocity_ = { 0.0f, 0.0f, 0.0f };
+		}
 	}
-
 }
 
 // 衝突判定ロジック
@@ -217,9 +232,9 @@ bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
 				if (cell && cell->type == BlockType::PBlock) {
 					// PスイッチがONの時だけ「壁」として扱う
 					if (map.IsPSwitchActive()) {
-						return true;
+						return false;
 					}
-					return false; // OFFの時は通り抜けられる
+					return true; // OFFの時は通り抜けられる
 				}
 			}
 		}
@@ -242,12 +257,13 @@ void Player::PSwitchUpdate(StageMap& map)
 	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
 	// 0.1fだと浮いている判定になりやすいので、少し余裕を持たせるか
 	// 現在の座標(position_.y)の真下を正確に狙います
-	int gyBottom = static_cast<int>(std::floor(position_.y - 0.05f));
+	int gyBottom = static_cast<int>(std::floor(position_.y + 0.1f));
 	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
 
 	const MapCell* cellBelow = map.GetCell(gx, gyBottom, gz);
 
-	if (cellBelow) {
+	if (input_->TriggerKey(DIK_F))
+	{
 		// Pスイッチの判定
 		if (cellBelow && cellBelow->type == BlockType::PSwitch) {
 			map.SetPSwitchActive(true); // これで needsRebuild_ が true になる
@@ -267,5 +283,46 @@ void Player::DrawShadow(const Matrix4x4& lightViewProjection) {
 	// 自身が持っている 3Dオブジェクトの影用描画を呼ぶ
 	if (object_) {
 		object_->DrawShadow(lightViewProjection);
+	}
+}
+
+void Player::DrawHighlight() {
+	if (!object_) {
+		return;
+	}
+
+	// 1回目：一番外側の大きい白
+	object_->SetScale({ 1.55f, 1.55f, 1.55f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 2回目：中間の白
+	object_->SetScale({ 1.35f, 1.35f, 1.35f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 3回目：本体に近い白
+	object_->SetScale({ 1.18f, 1.18f, 1.18f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(false);
+	object_->Draw();
+
+	// 元に戻す
+	object_->SetScale({ 1.0f, 1.0f, 1.0f });
+	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	object_->SetEnableLighting(true);
+}
+
+void Player::CrumbleUpdate(StageMap& map) {
+	int gx = static_cast<int>(std::floor(position_.x ));
+	int gyBottom = static_cast<int>(std::floor(position_.y - 0.05f));
+	int gz = static_cast<int>(std::floor(position_.z));
+
+	MapCell* cellBelow = map.GetCell(gx, gyBottom, gz);
+
+	if (cellBelow && cellBelow->type == BlockType::CrumblingFloor && !cellBelow->isHidden) {
+		cellBelow->isCrumbling = true;
 	}
 }
