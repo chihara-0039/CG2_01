@@ -148,7 +148,7 @@ void MyGame::Initialize() {
 
 
     // 2. ★手動配置を消して、保存した「プロトタイプ」をロードする
-    std::string prototypePath = "Resources/Stages/prototype.txt"; // 保存したファイル名に合わせてください
+    std::string prototypePath = "Resources/Stages/stage1.txt"; // 保存したファイル名に合わせてください
     if (std::filesystem::exists(prototypePath)) {
         stageMap_.LoadFromFile(prototypePath);
     }
@@ -231,6 +231,24 @@ void MyGame::Initialize() {
     doorPromptObject_->SetModel(doorPromptModel_.get());
     doorPromptObject_->SetEnableLighting(false);
     doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    // ドア用3D F UI
+    ladderPromptModel_ = std::unique_ptr<Model>(
+        Model::CreateFromOBJ(
+            dxCommon.get(),
+            "Resources/UI/radderUI",
+            "radderUI.obj",
+            textureManager.get()
+        )
+    );
+
+    // はしご用3D UI
+    ladderPromptObject_ = std::make_unique<Object3d>();
+    ladderPromptObject_->Initialize(object3dCommon.get());
+    ladderPromptObject_->SetModel(ladderPromptModel_.get());
+    ladderPromptObject_->SetEnableLighting(false);
+    ladderPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -435,6 +453,10 @@ void MyGame::Update() {
 
     //ドアUI更新
     UpdateDoorPrompt3D();
+
+    // はしごUI更新
+    UpdateLadderPrompt3D();
+
 }
 
 //パーティクル発生のテスト（スペースキーを押すと発生）
@@ -679,11 +701,11 @@ void MyGame::UpdateGamePlay() {
         //横回転
         if (mouseX < leftEdge) {
             //左端Q
-            cameraAngle_ -= rotateSpeed;
+            cameraAngle_ += rotateSpeed;
         }
         else if (mouseX > rightEdge) {
             //右端E
-            cameraAngle_ += rotateSpeed;
+            cameraAngle_ -= rotateSpeed;
         }
 
         //縦回転
@@ -1164,6 +1186,40 @@ bool MyGame::IsPlayerHiddenByWall() const {
     return false;
 }
 
+void MyGame::UpdateLadderPrompt3D()
+{
+    if (!ladderPromptObject_ || !player_) {
+        return;
+    }
+
+    if (currentMode_ != AppMode::GamePlay || !player_->IsOnLadder()) {
+        return;
+    }
+
+    Vector3 pos = player_->GetLadderWorldPos();
+
+    ladderPromptObject_->SetPosition(pos);
+    ladderPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    Vector3 camPos = camera->GetPosition();
+
+    float angleY = std::atan2f(
+        camPos.x - pos.x,
+        camPos.z - pos.z
+    );
+
+    ladderPromptObject_->SetRotation({ 0.0f, angleY, 0.0f });
+
+    ladderPromptObject_->SetCamera(
+        camera->GetViewMatrix(),
+        camera->GetProjectionMatrix()
+    );
+
+    ladderPromptObject_->Update(
+        lightCamera_->GetViewProjectionMatrix()
+    );
+}
+
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
 
@@ -1255,6 +1311,34 @@ void MyGame::Draw() {
                         player_->DrawHighlight();
 
                         // 通常描画設定に戻す
+                        object3dCommon->PreDraw();
+                        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                    }
+
+                    bool drawDoorPrompt =
+                        doorPromptObject_ &&
+                        currentMode_ == AppMode::GamePlay &&
+                        player_ &&
+                        player_->IsNearDoor();
+
+                    bool drawLadderPrompt =
+                        ladderPromptObject_ &&
+                        currentMode_ == AppMode::GamePlay &&
+                        player_ &&
+                        player_->IsOnLadder();
+
+                    if (drawDoorPrompt || drawLadderPrompt) {
+
+                        object3dCommon->PreDrawPlayerHighlight();
+
+                        if (drawDoorPrompt) {
+                            doorPromptObject_->Draw();
+                        }
+
+                        if (drawLadderPrompt) {
+                            ladderPromptObject_->Draw();
+                        }
+
                         object3dCommon->PreDraw();
                         commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
                     }
