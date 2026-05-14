@@ -244,31 +244,80 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
 #ifdef USE_IMGUI
     if (!mapCursor) return;
 
-    ImGui::Text("1. Select Gimmick");
+    ImGui::Text("1. Select Type");
     ImGui::Separator();
 
-    // エディタで選択可能なギミック・ブロック一覧
-    BlockType types[] = {
-        BlockType::Ground, BlockType::Wall, BlockType::Ladder,
-        BlockType::Star, BlockType::BubblePickup, BlockType::Goal,
-        BlockType::PlayerStart, BlockType::Door, BlockType::PSwitch,
-        BlockType::PBlock, BlockType::CrumblingFloor
+    // カテゴリー定義
+    struct Category 
+    {
+        const char* name;
+        std::vector<BlockType> types;
     };
 
-    // 各ブロックタイプのボタンを生成。選択中のものはハイライト表示
-    for (auto type : types) {
-        bool isSelected = (selectedBlockType_ == type);
-        if (isSelected) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+    std::vector<Category> categories = 
+    {
+        {
+            "Basic Blocks", // ブロック類
+            {
+                BlockType::Ground,
+                BlockType::Wall,
+                BlockType::PBlock,
+                BlockType::CrumblingFloor
+            }
+        },
+        {
+            "Gimmicks & Interactables", // ギミック類
+            {
+                BlockType::Ladder,
+                BlockType::Star,
+                BlockType::BubblePickup,
+                BlockType::Goal,
+                BlockType::Door,
+                BlockType::PSwitch
+            }
+        },
+        {
+            "System", //  その他
+            {
+                BlockType::PlayerStart
+            }
         }
+    };
 
-        if (ImGui::Button(BlockTypeToString(type), ImVec2(-FLT_MIN, 30))) {
-            selectedBlockType_ = type;
-        }
+    // タブバーを使ってカテゴリを分ける（省スペースで探しやすい）
+    if (ImGui::BeginTabBar("BlockCategoryTabs")) {
+        for (const auto& cat : categories) {
+            if (ImGui::BeginTabItem(cat.name)) {
 
-        if (isSelected) {
-            ImGui::PopStyleColor();
+                // ボタンの配置（2列のグリッドにするとさらに見やすくなります）
+                float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+                for (int n = 0; n < cat.types.size(); n++) {
+                    BlockType type = cat.types[n];
+                    bool isSelected = (selectedBlockType_ == type);
+
+                    if (isSelected) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                    }
+
+                    // ボタン幅を調整して横に並べる例（100px幅）
+                    if (ImGui::Button(BlockTypeToString(type), ImVec2(140, 30))) {
+                        selectedBlockType_ = type;
+                    }
+
+                    if (isSelected) {
+                        ImGui::PopStyleColor();
+                    }
+
+                    // 次のボタンがウィンドウ幅を超えるなら改行
+                    float last_button_x2 = ImGui::GetItemRectMax().x;
+                    float next_button_x2 = last_button_x2 + ImGui::GetStyle().ItemSpacing.x + 140;
+                    if (n + 1 < cat.types.size() && next_button_x2 < window_visible_x2)
+                        ImGui::SameLine();
+                }
+                ImGui::EndTabItem();
+            }
         }
+        ImGui::EndTabBar();
     }
 
     ImGui::Separator();
