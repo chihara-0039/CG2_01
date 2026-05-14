@@ -57,65 +57,11 @@ void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* text
 }
 
 void GameplayUIManager::Update(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera) {
-    UpdateCameraGuideSprites(isGamePlayMode);
+    /*UpdateCameraGuideSprites(isGamePlayMode);*/
     UpdateDoorPrompt3D(isGamePlayMode, player, camera, lightCamera);
     UpdateLadderPrompt3D(isGamePlayMode, player, camera, lightCamera);
 }
 
-void GameplayUIManager::UpdateCameraGuideSprites(bool isGamePlayMode) {
-    if (!isGamePlayMode) {
-        return;
-    }
-
-    if (!cameraGuideLeftSprite_ ||
-        !cameraGuideRightSprite_ ||
-        !cameraGuideUpSprite_ ||
-        !cameraGuideDownSprite_) {
-        return;
-    }
-
-    float screenWidth = static_cast<float>(WinApp::kClientWidth);
-    float screenHeight = static_cast<float>(WinApp::kClientHeight);
-
-    float edgeRatio = 0.1f;
-
-    float leftX = screenWidth * edgeRatio * 0.5f;
-    float rightX = screenWidth * (1.0f - edgeRatio * 0.5f);
-    float topY = screenHeight * edgeRatio * 0.5f;
-    float bottomY = screenHeight * (1.0f - edgeRatio * 0.5f);
-
-    float centerX = screenWidth * 0.5f;
-    float centerY = screenHeight * 0.5f;
-
-    // ==============================
-    // 位置オフセットの微調整
-    // ==============================
-    Vector2 leftOffset = { 0.0f, 0.0f };
-    Vector2 upOffset = { 10.0f, 0.0f };
-    Vector2 rightOffset = { -20.0f, 0.0f };
-    Vector2 downOffset = { 0.0f, -30.0f };
-
-    cameraGuideLeftSprite_->SetPosition({ leftX + leftOffset.x, centerY + leftOffset.y });
-    cameraGuideRightSprite_->SetPosition({ rightX + rightOffset.x, centerY + rightOffset.y });
-    cameraGuideUpSprite_->SetPosition({ centerX + upOffset.x, topY + upOffset.y });
-    cameraGuideDownSprite_->SetPosition({ centerX + downOffset.x, bottomY + downOffset.y });
-
-    cameraGuideLeftSprite_->SetSize({ 64.0f, 64.0f });
-    cameraGuideRightSprite_->SetSize({ 64.0f, 64.0f });
-    cameraGuideUpSprite_->SetSize({ 64.0f, 64.0f });
-    cameraGuideDownSprite_->SetSize({ 64.0f, 64.0f });
-
-    // 各個別テクスチャですでに正しい向きになっているため回転は不要
-    cameraGuideUpSprite_->SetRotation(0.0f);
-    cameraGuideRightSprite_->SetRotation(0.0f);
-    cameraGuideDownSprite_->SetRotation(0.0f);
-    cameraGuideLeftSprite_->SetRotation(0.0f);
-
-    cameraGuideLeftSprite_->Update();
-    cameraGuideRightSprite_->Update();
-    cameraGuideUpSprite_->Update();
-    cameraGuideDownSprite_->Update();
-}
 
 void GameplayUIManager::UpdateDoorPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera) {
     if (!doorPromptObject_ || !player) {
@@ -178,6 +124,135 @@ void GameplayUIManager::UpdateLadderPrompt3D(bool isGamePlayMode, Player* player
         lightCamera->GetViewProjectionMatrix()
     );
 }
+
+void GameplayUIManager::UpdateCameraGuide(bool isGamePlay, Input* input, WinApp* winApp)
+{
+    if (!isGamePlay) {
+        return;
+    }
+
+    if (!input || !winApp) {
+        return;
+    }
+
+    if (!cameraGuideLeftSprite_ ||
+        !cameraGuideRightSprite_ ||
+        !cameraGuideUpSprite_ ||
+        !cameraGuideDownSprite_) {
+        return;
+    }
+
+    const auto& mouse = input->GetMouseState();
+
+    float screenWidth = static_cast<float>(WinApp::kClientWidth);
+    float screenHeight = static_cast<float>(WinApp::kClientHeight);
+
+    float edgeRatio = 0.1f;
+
+    float leftEdge = screenWidth * edgeRatio;
+    float rightEdge = screenWidth * (1.0f - edgeRatio);
+    float topEdge = screenHeight * edgeRatio;
+    float bottomEdge = screenHeight * (1.0f - edgeRatio);
+
+    float leftX = screenWidth * edgeRatio * 0.5f;
+    float rightX = screenWidth * (1.0f - edgeRatio * 0.5f);
+    float topY = screenHeight * edgeRatio * 0.5f;
+    float bottomY = screenHeight * (1.0f - edgeRatio * 0.5f);
+
+    float centerX = screenWidth * 0.5f;
+    float centerY = screenHeight * 0.5f;
+
+    // 位置補正
+    Vector2 leftOffset = { 0.0f, 0.0f };
+    Vector2 rightOffset = { -20.0f, 0.0f };
+    Vector2 upOffset = { 0.0f, 0.0f };
+    Vector2 downOffset = { 0.0f, -20.0f };
+
+    // ふわふわ用時間
+    cameraGuideTime_ += 1.0f / 60.0f;
+
+    float floatPower = 6.0f;
+    float floatSpeed = 3.0f;
+    float floating = std::sin(cameraGuideTime_ * floatSpeed) * floatPower;
+
+    RECT rect;
+    GetClientRect(winApp->GetHwnd(), &rect);
+
+    float currentClientW = static_cast<float>(rect.right - rect.left);
+    float currentClientH = static_cast<float>(rect.bottom - rect.top);
+
+    float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
+    float scaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientH;
+
+    float swapMouseX = static_cast<float>(mouse.posX) * scaleX;
+    float swapMouseY = static_cast<float>(mouse.posY) * scaleY;
+
+    // 左パネル320pxぶんを引いて、ゲーム画面内座標にする
+    float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
+    float offsetY = 0.0f;
+
+    float mouseX = swapMouseX - offsetX;
+    float mouseY = swapMouseY - offsetY;
+
+    bool hoverLeft = mouseX < leftEdge;
+    bool hoverRight = mouseX > rightEdge;
+    bool hoverUp = mouseY < topEdge;
+    bool hoverDown = mouseY > bottomEdge;
+
+    float normalSize = 64.0f;
+    float glowSize = 78.0f;
+
+    cameraGuideLeftSprite_->SetPosition({
+        leftX + leftOffset.x,
+        centerY + leftOffset.y + floating
+        });
+
+    cameraGuideRightSprite_->SetPosition({
+        rightX + rightOffset.x,
+        centerY + rightOffset.y + floating
+        });
+
+    cameraGuideUpSprite_->SetPosition({
+        centerX + upOffset.x,
+        topY + upOffset.y + floating
+        });
+
+    cameraGuideDownSprite_->SetPosition({
+        centerX + downOffset.x,
+        bottomY + downOffset.y + floating
+        });
+
+    cameraGuideLeftSprite_->SetSize({
+        hoverLeft ? glowSize : normalSize,
+        hoverLeft ? glowSize : normalSize
+        });
+
+    cameraGuideRightSprite_->SetSize({
+        hoverRight ? glowSize : normalSize,
+        hoverRight ? glowSize : normalSize
+        });
+
+    cameraGuideUpSprite_->SetSize({
+        hoverUp ? glowSize : normalSize,
+        hoverUp ? glowSize : normalSize
+        });
+
+    cameraGuideDownSprite_->SetSize({
+        hoverDown ? glowSize : normalSize,
+        hoverDown ? glowSize : normalSize
+        });
+
+    cameraGuideLeftSprite_->SetRotation(0.0f);
+    cameraGuideRightSprite_->SetRotation(0.0f);
+    cameraGuideUpSprite_->SetRotation(0.0f);
+    cameraGuideDownSprite_->SetRotation(0.0f);
+
+    cameraGuideLeftSprite_->Update();
+    cameraGuideRightSprite_->Update();
+    cameraGuideUpSprite_->Update();
+    cameraGuideDownSprite_->Update();
+}
+
 
 void GameplayUIManager::DrawSprites(bool isGamePlayMode) {
     if (!isGamePlayMode) {

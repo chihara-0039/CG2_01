@@ -15,14 +15,16 @@ class GameplayUIManager {
 public:
     void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager, SpriteCommon* spriteCommon, Object3dCommon* object3dCommon);
     void Update(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
+    void UpdateCameraGuide(bool isGamePlay, Input* input, WinApp* winApp);
     void DrawSprites(bool isGamePlayMode);
     void Draw3DPrompts(bool isGamePlayMode, Player* player, Object3dCommon* object3dCommon, ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle);
     void Finalize();
 
 private:
-    void UpdateCameraGuideSprites(bool isGamePlayMode);
+   
     void UpdateDoorPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
     void UpdateLadderPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
+    
 
     SpriteCommon* spriteCommon_ = nullptr;
 
@@ -43,4 +45,7 @@ private:
     // はしご用3D UI
     std::unique_ptr<Model> ladderPromptModel_;
     std::unique_ptr<Object3d> ladderPromptObject_;
+
+    //文字ふわふわ演出用
+    float cameraGuideTime_ = 0.0f;
 };

@@ -389,6 +389,15 @@ void MyGame::UpdateGamePlay() {
     gameplayCameraController_.Update(input.get(), camera.get(), winApp.get());
     // --- ステージマップの更新（崩れる足場のタイマー処理） ---
 
+    //5/14佐倉追加
+    if (gameplayUIManager_) {
+        gameplayUIManager_->UpdateCameraGuide(
+            currentMode_ == AppMode::GamePlay,
+            input.get(),
+            winApp.get()
+        );
+    }
+
     float deltaTime = 1.0f / 60.0f;
     totalTime_ += deltaTime;
     stageMap_.Update(deltaTime, totalTime_);
