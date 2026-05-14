@@ -208,6 +208,12 @@ void MyGame::Update() {
 #endif
 
 
+    // ライトカメラの更新（プレイヤーやカメラの位置に追従させる）
+    if (lightCamera_) {
+        Vector3 targetPos = player_ ? player_->GetPosition() : camera->GetPosition();
+        lightCamera_->Update({ 0.2f, -1.0f, 0.5f }, targetPos);
+    }
+
     //  ここで「ライト視点の行列」を取得！これが全ての lightVP
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
@@ -651,6 +657,10 @@ void MyGame::Draw() {
 
     if (player_) {
         player_->DrawShadow(lightVP);
+    }
+
+    if (stageRenderer_) {
+        stageRenderer_->DrawShadow(lightVP);
     }
 
     shadowMap_->PostDraw(commandList);

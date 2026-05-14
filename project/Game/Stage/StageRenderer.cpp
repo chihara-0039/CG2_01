@@ -301,6 +301,15 @@ void StageRenderer::Update(const Matrix4x4& lightVP) {
 	}
 }
 
+// 全てのオブジェクトの影描画処理を呼び出す
+void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
+	for (Object3d* obj : objects_) {
+		if (obj) {
+			obj->DrawShadow(lightVP);
+		}
+	}
+}
+
 // 全てのオブジェクトの描画処理を呼び出す
 void StageRenderer::Draw() {
 	for (Object3d* obj : objects_) {
