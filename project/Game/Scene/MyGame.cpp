@@ -394,7 +394,7 @@ void MyGame::UpdateDebugView() {
 
 void MyGame::UpdateGamePlay() {
 
-    gameplayCameraController_.Update(input.get(), camera.get(), winApp.get());
+    gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(),player_.get());
     // --- ステージマップの更新（崩れる足場のタイマー処理） ---
 
     //5/14佐倉追加
@@ -908,7 +908,7 @@ void MyGame::UpdateStageSelect()
 
             //5/14佐倉追加
             //カメラリセット処理
-            gameplayCameraController_.ResetCamera(camera.get());
+            gameplayCameraController_.ResetCamera(camera.get(),player_.get());
 
             // プレイヤーの位置をスタート地点に戻すなどの処理
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
