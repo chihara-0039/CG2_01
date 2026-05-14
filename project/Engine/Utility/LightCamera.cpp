@@ -9,7 +9,7 @@ void LightCamera::Update(const Vector3& lightDirection, const Vector3& targetPos
     // 1. ライトの位置を決定
     // 平行光源に「位置」はありませんが、行列を作るためにターゲット（プレイヤー）から
     // 逆方向に十分離れた場所を便宜上の「ライトの位置」とします。
-    float distance = 50.0f;
+    float distance = 100.0f;
     Vector3 lightPos = {
         targetPos.x - lightDirection.x * distance,
         targetPos.y - lightDirection.y * distance,
@@ -26,7 +26,7 @@ void LightCamera::Update(const Vector3& lightDirection, const Vector3& targetPos
     projectionMatrix_ = Math::MakeOrthographicMatrix(
         -shadowRange_, shadowRange_,  // 左右の幅
         shadowRange_, -shadowRange_,  // 上下の幅
-        0.1f, 200.0f                  // 前後のクリップ距離
+        0.1f, 300.0f                  // 前後のクリップ距離
     );
 
     // 4. 行列の合成 (View * Projection)

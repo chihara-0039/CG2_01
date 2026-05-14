@@ -22,7 +22,7 @@ void WinApp::Initialize() {
     wc_.hCursor = LoadCursor(nullptr, IDC_ARROW);
     RegisterClass(&wc_);
 
-    RECT wrc = { 0, 0, kClientWidth, kClientHeight };
+    RECT wrc = { 0, 0, kWindowWidth, kWindowHeight };
     AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
 
     // --- メンバ変数名 hwnd_ に統一 ---

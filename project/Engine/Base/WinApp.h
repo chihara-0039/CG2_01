@@ -9,9 +9,13 @@ public:
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 public:
-    // 定数（クライアント領域のサイズ）
+    // 定数（クライアント領域のサイズ - ゲームの解像度）
     static constexpr int32_t kClientWidth = 1280;
     static constexpr int32_t kClientHeight = 720;
+
+    // ウィンドウ全体のサイズ（エディタレイアウト用）
+    static constexpr int32_t kWindowWidth = 1920;
+    static constexpr int32_t kWindowHeight = 1080;
 
     // 初期化
     void Initialize();

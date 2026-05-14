@@ -332,53 +332,51 @@ void MyGame::Update() {
         OutputDebugStringA("[MyGame] mp3 音量ダウン\n");
     }
    
-    // --- ImGuiに入力中（WantCaptureKeyboardがtrue）ならゲーム側の入力を無視する ---
-    if (!isGuiCaptured) {
-        switch (currentMode_) {
+    // --- ゲームループの更新 ---
+    switch (currentMode_) {
 
-        case AppMode::Title:
+    case AppMode::Title:
         UpdateTitle();//4/3佐倉　追加
         break;
 
-        case AppMode::StageSelect:
+    case AppMode::StageSelect:
         UpdateStageSelect();//5/10追加　小林
         break;
 
-        case AppMode::DebugView:
+    case AppMode::DebugView:
         UpdateDebugView();
         break;
 
-        case AppMode::StageEditor:
-        UpdateStageEditor(); // 名前入力中はここが呼ばれなくなる
+    case AppMode::StageEditor:
+        UpdateStageEditor(); 
         break;
 
-        case AppMode::GamePlay:
+    case AppMode::GamePlay:
         UpdateGamePlay();
         break;
 
-        // ブロックを置けるようになる画面 04/01 秋元
-        case AppMode::GamePlay_BlockPlace:
+    // ブロックを置けるようになる画面 04/01 秋元
+    case AppMode::GamePlay_BlockPlace:
         UpdateGamePlayBlockPlace();
         break;
 
-        case AppMode::GameClear://4/13佐倉
-            if (gameClearScene_) {
-                gameClearScene_->Update();
+    case AppMode::GameClear://4/13佐倉
+        if (gameClearScene_) {
+            gameClearScene_->Update();
 
-                if (gameClearScene_->IsFinished()&&input->TriggerKey(DIK_SPACE))
-                {
-                    stageSelect_->Initialize(object3dCommon.get(), input.get());
-					gameClearScene_->Initialize(object3dCommon.get());
-                  
-                    isGoalReached_ = false;
-                    stageMap_.Clear();
-                    player_->Respawn();
-                    
-                    currentMode_ = AppMode::StageSelect;
-                }
+            if (gameClearScene_->IsFinished() && input->TriggerKey(DIK_SPACE))
+            {
+                stageSelect_->Initialize(object3dCommon.get(), input.get());
+                gameClearScene_->Initialize(object3dCommon.get());
+              
+                isGoalReached_ = false;
+                stageMap_.Clear();
+                player_->Respawn();
+                
+                currentMode_ = AppMode::StageSelect;
             }
-            break;
         }
+        break;
     }
 
     camera->Update();
@@ -492,7 +490,17 @@ void MyGame::UpdateStageEditor() {
     // ブロック配置や削除を行った後、ステージ描画オブジェクトを再構築する必要があるか
     bool needRebuild = false;
 
-    // カーソル移動
+    // ImGuiにマウスがホバーされているかチェック
+    bool isGuiCaptured = false;
+#ifndef NDEBUG
+    if (ImGui::GetCurrentContext()) {
+        isGuiCaptured = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
+    }
+#endif
+
+    // ImGui操作中でなければキー入力を受け付ける
+    if (!isGuiCaptured) {
+        // カーソル移動
     if (input->TriggerKey(DIK_A)) {
         mapCursor_->Move(-1, 0, 0, stageMap_);
     }
@@ -638,6 +646,7 @@ void MyGame::UpdateStageEditor() {
         stageMap_.RemoveBlock(cursor);
         needRebuild = true;
     }
+    } // end of !isGuiCaptured
 
     // 再構築
     if (needRebuild && stageRenderer_) {
@@ -672,25 +681,44 @@ void MyGame::UpdateGamePlay() {
     //4/20佐倉追加
     const auto& mouse = input->GetMouseState();
 
-    // 画面サイズ取得（ウィンドウサイズ変更に対応するため動的に取得）
+    // ImGuiにマウスがホバーされているかチェック
+    bool isGuiCaptured = false;
+#ifndef NDEBUG
+    if (ImGui::GetCurrentContext()) {
+        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
+    }
+#endif
+
+    // 画面サイズ取得（実際のウィンドウサイズ）
     RECT rect;
     GetClientRect(winApp->GetHwnd(), &rect);
-    float screenWidth = static_cast<float>(rect.right - rect.left);
-    float screenHeight = static_cast<float>(rect.bottom - rect.top);
+    float currentClientW = static_cast<float>(rect.right - rect.left);
+    float currentClientH = static_cast<float>(rect.bottom - rect.top);
 
+    // 1. マウス座標を 1920x1080 (SwapChainサイズ) 空間にスケールする
+    float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
+    float scaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientH;
+    float swapMouseX = static_cast<float>(mouse.posX) * scaleX;
+    float swapMouseY = static_cast<float>(mouse.posY) * scaleY;
+
+    // 2. 1280x720 のゲーム画面の開始位置（オフセット）を引いて、ゲーム内座標に変換する
+    float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
+    float offsetY = 0.0f; // 上詰めに変更
+    float mouseX = swapMouseX - offsetX;
+    float mouseY = swapMouseY - offsetY;
+
+    // ゲーム内の画面サイズ基準は常に 1280x720 とする
+    float screenWidth = static_cast<float>(WinApp::kClientWidth);
+    float screenHeight = static_cast<float>(WinApp::kClientHeight);
 
     //どこを端とするか
     float edgeRatio = 0.1f;
 
-	//端の範囲
+    //端の範囲
     float leftEdge = screenWidth * edgeRatio;
     float rightEdge = screenWidth * (1.0f - edgeRatio);
     float topEdge = screenHeight * edgeRatio;
     float bottomEdge = screenHeight * (1.0f - edgeRatio);
-
-    //マウス位置
-    float mouseX = (float)mouse.posX;
-    float mouseY = (float)mouse.posY;
    
 	// --- 横回転 ---
     const float rotateSpeed = 0.025f;
@@ -700,8 +728,8 @@ void MyGame::UpdateGamePlay() {
     const float maxPitch = 1.5f;
     const float upperLimit = 3.0f;
 
-     //クリック中のみ反応(左クリック)
-    if (mouse.buttons[0]) {
+     //クリック中かつImGui操作中でない場合のみ反応(左クリック)
+    if (mouse.buttons[0] && !isGuiCaptured) {
         //横回転
         if (mouseX < leftEdge) {
             //左端Q
@@ -830,11 +858,10 @@ void MyGame::UpdateCameraGuideSprites() {
         return;
     }
 
-    // 画面サイズ取得（ウィンドウサイズ変更に対応するため動的に取得）
-    RECT rect;
-    GetClientRect(winApp->GetHwnd(), &rect);
-    float screenWidth = static_cast<float>(rect.right - rect.left);
-    float screenHeight = static_cast<float>(rect.bottom - rect.top);
+    // ゲーム内の画面サイズ基準は常に 1280x720 とする
+    // （D3D12のレンダーターゲット解像度が固定のため、GetClientRectで取得すると最大化時に画面外へ消えてしまう）
+    float screenWidth = static_cast<float>(WinApp::kClientWidth);
+    float screenHeight = static_cast<float>(WinApp::kClientHeight);
 
 
     float edgeRatio = 0.1f;
@@ -875,25 +902,24 @@ void MyGame::UpdateCameraGuideSprites() {
 // ImGuiの更新と描画
 void MyGame::UpdateImGui() {
     ImGuiIO& io = ImGui::GetIO();
+    float panelWidth = 320.0f;
+    float bottomHeight = 360.0f; // 下パネルのサイズを大きくしてピッタリはめる
 
-    // 画面右側にインスペクター（設定・情報パネル）を配置
-    float panelWidth = 350.0f;
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panelWidth, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(panelWidth, io.DisplaySize.y), ImGuiCond_Always);
-    
-    // ウィンドウ作成
-    ImGui::Begin("Inspector", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+    // ==========================================
+    // 1. 左パネル (Information)
+    // ==========================================
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(panelWidth, io.DisplaySize.y - bottomHeight), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowBgAlpha(1.0f); // 透過なし
+    ImGui::Begin("Information", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-    // FPSと終了ボタンを同じ行に配置
     ImGui::Text("FPS: %.1f (%.3f ms/f)", io.Framerate, 1000.0f / io.Framerate);
     ImGui::SameLine(panelWidth - 60.0f);
     if (ImGui::Button("Exit", ImVec2(50, 20))) {
         PostQuitMessage(0); // アプリケーション終了
     }
-
     ImGui::Separator();
 
-    // モード切替（Hierarchy的な役割）
     if (ImGui::CollapsingHeader("Hierarchy / Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
         int modeIndex = 0;
         switch (currentMode_) {
@@ -910,13 +936,30 @@ void MyGame::UpdateImGui() {
             case 2: currentMode_ = AppMode::GamePlay; break;
             }
         }
-
         ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
         ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
         ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
     }
 
-    // ステージマネージャー
+    if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        camera->DrawImGui();
+    }
+    if (ImGui::CollapsingHeader("StageMap Info")) {
+        stageMap_.DrawImGui();
+    }
+    if (ImGui::CollapsingHeader("Cursor Info")) {
+        mapCursor_->DrawImGui();
+    }
+    ImGui::End();
+
+    // ==========================================
+    // 2. 右パネル (Stage Editor)
+    // ==========================================
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panelWidth, 0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(panelWidth, io.DisplaySize.y - bottomHeight), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowBgAlpha(1.0f); // 透過なし
+    ImGui::Begin("Stage Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
     if (ImGui::CollapsingHeader("Stage Manager", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::InputText("Save Name", newStageName_, IM_ARRAYSIZE(newStageName_));
         if (ImGui::Button("Save As New")) {
@@ -938,14 +981,11 @@ void MyGame::UpdateImGui() {
 
         if (selectedStageIndex_ != -1 && selectedStageIndex_ < (int)stageFiles_.size()) {
             std::string fullPath = "Resources/Stages/" + stageFiles_[selectedStageIndex_] + ".txt";
-            
             if (ImGui::Button("Load Selected")) {
                 stageMap_.LoadFromFile(fullPath);
                 if (stageRenderer_) {
                     stageRenderer_->BuildFromStageMap(stageMap_);
                 }
-
-                // PlayerStartブロックを探してプレイヤーを移動
                 bool foundStart = false;
                 for (int y = 0; y < stageMap_.GetHeight(); ++y) {
                     for (int z = 0; z < stageMap_.GetDepth(); ++z) {
@@ -967,39 +1007,17 @@ void MyGame::UpdateImGui() {
                 stageMap_.SaveToFile(fullPath);
             }
             ImGui::SameLine();
-            
             ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(0.0f, 0.7f, 0.7f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
             if (ImGui::Button("Delete")) {
                 std::filesystem::remove(fullPath);
                 RefreshStageList();
                 selectedStageIndex_ = -1;
             }
-            ImGui::PopStyleColor(3);
+            ImGui::PopStyleColor();
         }
-
         if (ImGui::Button("Refresh List")) { RefreshStageList(); }
     }
 
-    // カメラ情報（委譲）
-    if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-        camera->DrawImGui();
-    }
-
-    // ステージマップ情報（委譲）
-    if (ImGui::CollapsingHeader("StageMap Info")) {
-        stageMap_.DrawImGui();
-    }
-
-    // カーソル情報（委譲）
-    if (ImGui::CollapsingHeader("Cursor Info")) {
-        mapCursor_->DrawImGui();
-        ImGui::Text("Placeable Blocks: %d", blockInventory_.GetBlockCount());
-        ImGui::Text("Selected Block: %s", BlockTypeToString(selectedBlockType_));
-    }
-
-    // エディタ設定
     if (currentMode_ == AppMode::StageEditor) {
         if (ImGui::CollapsingHeader("Stage Editor Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
             if (ImGui::SliderFloat("Uniform Block Scale", &editorUniformBlockScale_, 0.1f, 3.0f)) {
@@ -1009,19 +1027,47 @@ void MyGame::UpdateImGui() {
                     stageRenderer_->BuildFromStageMap(stageMap_);
                 }
             }
-            ImGui::DragFloat3("Block Scale XYZ", &editorBlockScale_.x, 0.01f, 0.1f, 5.0f);
-            if (ImGui::Button("Apply Block Scale")) {
-                if (stageRenderer_) {
-                    stageRenderer_->SetBlockScale(editorBlockScale_);
-                    stageRenderer_->BuildFromStageMap(stageMap_);
-                }
-            }
-            
-            // ツールバーをここに統合
-            DrawEditorToolbar();
         }
+        
+        // ツールバー描画
+        DrawEditorToolbar();
+    }
+    ImGui::End();
+
+    // ==========================================
+    // 3. 下パネル (Tools & Controls)
+    // ==========================================
+    ImGui::SetNextWindowPos(ImVec2(0, io.DisplaySize.y - bottomHeight), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, bottomHeight), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowBgAlpha(1.0f); // 透過なし
+    ImGui::Begin("Tools & Controls", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
+    ImGui::Columns(2, "BottomColumns", false);
+    
+    // 左カラム：操作説明
+    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Editor Controls ]");
+    ImGui::Text("Move Cursor : W, A, S, D, Q(Up), E(Down)");
+    ImGui::Text("Place Block : Enter");
+    ImGui::Text("Remove Block: Space / Backspace");
+    ImGui::Text("Rotate Block: R");
+    ImGui::Text("Move Camera : I, J, K, L, U, O");
+
+    ImGui::NextColumn();
+
+    // 右カラム：現在のステータス
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Current Status ]");
+    ImGui::Text("Selected Block: %s", BlockTypeToString(selectedBlockType_));
+    ImGui::Text("Placeable Blocks: %d", blockInventory_.GetBlockCount());
+    
+    if (currentMode_ == AppMode::StageEditor) {
+        ImGui::Text("Mode: STAGE EDITOR");
+    } else if (currentMode_ == AppMode::GamePlay) {
+        ImGui::Text("Mode: GAME PLAY");
+    } else {
+        ImGui::Text("Mode: DEBUG VIEW");
     }
 
+    ImGui::Columns(1);
     ImGui::End();
 }
 #endif

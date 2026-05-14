@@ -21,6 +21,7 @@ private:
     Matrix4x4 projectionMatrix_;     // ライト視点の正投影行列
     Matrix4x4 viewProjectionMatrix_; // 合成済み行列
 
-    // 影を記録する空間の広さ（ステージの規模に合わせて調整）
+    // 影を記録する空間の広さ（値を小さくするとカメラ周辺の影がより高解像度になる）
+    // ステージ全体をカバーできるように 64.0f に設定
     float shadowRange_ = 64.0f;
 };

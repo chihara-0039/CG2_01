@@ -113,8 +113,8 @@ void DirectXCommon::InitializeCommand() {
 
 void DirectXCommon::InitializeSwapChain() {
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
-    swapChainDesc.Width = WinApp::kClientWidth;
-    swapChainDesc.Height = WinApp::kClientHeight;
+    swapChainDesc.Width = WinApp::kWindowWidth;
+    swapChainDesc.Height = WinApp::kWindowHeight;
     swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     //swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     swapChainDesc.SampleDesc.Count = 1;
@@ -161,8 +161,8 @@ void DirectXCommon::InitializeDepthStencilView() {
 
     // 深度リソース生成
     D3D12_RESOURCE_DESC resourceDesc{};
-    resourceDesc.Width = WinApp::kClientWidth;
-    resourceDesc.Height = WinApp::kClientHeight;
+    resourceDesc.Width = WinApp::kWindowWidth;
+    resourceDesc.Height = WinApp::kWindowHeight;
     resourceDesc.MipLevels = 1;
     resourceDesc.DepthOrArraySize = 1;
     resourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -318,17 +318,25 @@ void DirectXCommon::PreDraw() {
     commandList_->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-    // ビューポート / シザー
+    // 画面上部中央に 1280x720 のゲーム画面を描画するためのオフセット計算
+    float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
+    float offsetY = 0.0f; // 上詰めに変更
+
+    // ビューポート / シザー (ゲーム画面 1280x720 に制限)
     D3D12_VIEWPORT viewport{};
-    viewport.Width = (float)WinApp::kClientWidth;
-    viewport.Height = (float)WinApp::kClientHeight;
+    viewport.Width = static_cast<float>(WinApp::kClientWidth);
+    viewport.Height = static_cast<float>(WinApp::kClientHeight);
+    viewport.TopLeftX = offsetX;
+    viewport.TopLeftY = offsetY;
     viewport.MinDepth = 0.0f;
     viewport.MaxDepth = 1.0f;
     commandList_->RSSetViewports(1, &viewport);
 
     D3D12_RECT scissorRect{};
-    scissorRect.right = WinApp::kClientWidth;
-    scissorRect.bottom = WinApp::kClientHeight;
+    scissorRect.left = static_cast<LONG>(offsetX);
+    scissorRect.top = static_cast<LONG>(offsetY);
+    scissorRect.right = scissorRect.left + WinApp::kClientWidth;
+    scissorRect.bottom = scissorRect.top + WinApp::kClientHeight;
     commandList_->RSSetScissorRects(1, &scissorRect);
 }
 
@@ -401,8 +409,27 @@ void DirectXCommon::BeginImGui() {
     if (ImGui::GetCurrentContext() == nullptr) return;
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
+    
+    ImGuiIO& io = ImGui::GetIO();
+    
+    // スワップチェーンのサイズ（1920x1080）と実際のウィンドウサイズが異なる場合（最大化など）、
+    // ImGuiの内部解像度がズレるのを防ぐため、強制的に1920x1080の仮想解像度に固定する
+    RECT rect;
+    GetClientRect(winApp_->GetHwnd(), &rect);
+    float clientW = static_cast<float>(rect.right - rect.left);
+    float clientH = static_cast<float>(rect.bottom - rect.top);
+
+    if (clientW > 0.0f && clientH > 0.0f) {
+        io.DisplaySize = ImVec2(static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight));
+
+        // マウス座標も仮想解像度（1920x1080）に合わせてスケールする
+        io.MousePos.x = io.MousePos.x * (static_cast<float>(WinApp::kWindowWidth) / clientW);
+        io.MousePos.y = io.MousePos.y * (static_cast<float>(WinApp::kWindowHeight) / clientH);
+    }
+
     ImGui::NewFrame();
 #endif
+
 }
 
 // 描画の実行 (PostDrawの直前などで呼ぶ)
@@ -416,7 +443,24 @@ void DirectXCommon::EndImGui() {
     ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data == nullptr) return;
 
-    // コマンドリストにImGuiの描画コマンドを積む
+    // コマンドリストにImGuiの描画コマンドを積む前に、
+    // ゲーム描画用に小さくしたビューポート（1280x720）をフル画面（1920x1080）に戻す！
+    D3D12_VIEWPORT viewport{};
+    viewport.Width = static_cast<float>(WinApp::kWindowWidth);
+    viewport.Height = static_cast<float>(WinApp::kWindowHeight);
+    viewport.TopLeftX = 0;
+    viewport.TopLeftY = 0;
+    viewport.MinDepth = 0.0f;
+    viewport.MaxDepth = 1.0f;
+    commandList_->RSSetViewports(1, &viewport);
+
+    D3D12_RECT scissorRect{};
+    scissorRect.left = 0;
+    scissorRect.top = 0;
+    scissorRect.right = WinApp::kWindowWidth;
+    scissorRect.bottom = WinApp::kWindowHeight;
+    commandList_->RSSetScissorRects(1, &scissorRect);
+
     ID3D12DescriptorHeap* heaps[] = { imguiSrvHeap_.Get() };
     commandList_->SetDescriptorHeaps(1, heaps);
 

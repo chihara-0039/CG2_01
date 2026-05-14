@@ -6,9 +6,9 @@
 
 class ShadowMap {
 public:
-    // 影用テクスチャのサイズ
-    static const int kWidth = 2048;
-    static const int kHeight = 2048;
+    // 影用テクスチャのサイズ (解像度を上げて影のジャギーを減らす)
+    static const int kWidth = 4096;
+    static const int kHeight = 4096;
 
     void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager);
 
