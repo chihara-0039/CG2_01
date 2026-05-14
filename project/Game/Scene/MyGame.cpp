@@ -857,7 +857,7 @@ void MyGame::UpdateCameraGuideSprites() {
     // ==============================
 
     Vector2 leftOffset = { 0.0f, 0.0f };
-    Vector2 upOffset = { 0.0f, 0.0f };
+    Vector2 upOffset = { 10.0f, 0.0f };
 
     // 右矢印が少し右に寄りすぎているので左へ補正
     Vector2 rightOffset = { -20.0f, 0.0f };
