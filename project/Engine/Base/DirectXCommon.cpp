@@ -422,9 +422,12 @@ void DirectXCommon::BeginImGui() {
     if (clientW > 0.0f && clientH > 0.0f) {
         io.DisplaySize = ImVec2(static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight));
 
-        // マウス座標も仮想解像度（1920x1080）に合わせてスケールする
-        io.MousePos.x = io.MousePos.x * (static_cast<float>(WinApp::kWindowWidth) / clientW);
-        io.MousePos.y = io.MousePos.y * (static_cast<float>(WinApp::kWindowHeight) / clientH);
+        // POINTで生のマウス座標を毎回再取得し、ウィンドウサイズに対する比率から仮想解像度にスケールする
+        POINT p;
+        GetCursorPos(&p);
+        ScreenToClient(winApp_->GetHwnd(), &p);
+        io.MousePos.x = static_cast<float>(p.x) * (static_cast<float>(WinApp::kWindowWidth) / clientW);
+        io.MousePos.y = static_cast<float>(p.y) * (static_cast<float>(WinApp::kWindowHeight) / clientH);
     }
 
     ImGui::NewFrame();
