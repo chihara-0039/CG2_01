@@ -43,6 +43,11 @@ public:
     /// </summary>
     void SetPitch(float pitch) { cameraPitch_ = pitch; }
 
+    /// <summary>
+    /// カメラ位置と角度をデフォルト状態にリセットし、即座に反映します。
+    /// </summary>
+    void ResetCamera(Camera* camera);
+
 private:
     // カメラの極座標パラメータ
     float cameraAngle_ = 0.0f; // 水平方向の回転角度

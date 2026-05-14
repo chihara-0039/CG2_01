@@ -105,3 +105,22 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     camera->SetPosition(pos);
     camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
 }
+
+void GameplayCameraController::ResetCamera(Camera* camera) {
+    if (!camera) return;
+
+    cameraAngle_ = 1.5708f;
+    cameraPitch_ = 0.75f;
+
+    Vector3 pivot = { 4.0f, 9.0f, 4.5f };
+    float distance = 35.0f;
+    float height = 20.0f;
+
+    Vector3 pos;
+    pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
+    pos.y = pivot.y + std::sin(cameraPitch_) * height;
+    pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
+
+    camera->SetPosition(pos);
+    camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
+}
