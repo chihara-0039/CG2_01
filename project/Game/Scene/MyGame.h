@@ -103,7 +103,11 @@ private:
     std::unique_ptr<Sprite> cameraGuideUpSprite_;
     std::unique_ptr<Sprite> cameraGuideDownSprite_;
 
-    uint32_t cameraGuideTextureHandle_ = 0;
+    //5/14佐倉
+    uint32_t cameraGuideLeftTextureHandle_ = 0;
+    uint32_t cameraGuideRightTextureHandle_ = 0;
+    uint32_t cameraGuideUpTextureHandle_ = 0;
+    uint32_t cameraGuideDownTextureHandle_ = 0;
 
     // 追加：ドア用3D F UI
     std::unique_ptr<Model> doorPromptModel_;
