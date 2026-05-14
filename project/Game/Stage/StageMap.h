@@ -108,7 +108,11 @@ public:
     void ClearRebuildFlag() { needsRebuild_ = false; }
     bool IsPSwitchActive() const { return isPSwitchActive_; }
 
+    // ImGui描画用
+    void DrawImGui();
+
 private:
+
     int width_ = 0;
     int height_ = 0;
     int depth_ = 0;

@@ -134,11 +134,12 @@ void MyGame::Initialize() {
                         break;
                     }
                 }
-                if (foundStart) break;
+                if (foundStart) { break; }
             }
-            if (foundStart) break;
+            if (foundStart) { break; }
         }
     }
+
 #else
 
     //4/3佐倉タイトルから開始に変更
@@ -266,23 +267,23 @@ Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
 
 // --- 更新処理 ---
 void MyGame::Update() {
-#ifdef USE_IMGUI
+
+    // ImGuiはDebug（Release以外）ビルドでのみ描画・更新する
+#ifndef NDEBUG
     dxCommon->BeginImGui();
     UpdateImGui();
-    DrawEditorToolbar(); // ★追加：新しいエディタ窓 04/03 秋元
 #endif
+
 
     input->Update();
     bool isGuiCaptured = false;
     // 2. カメラの更新（Blender風操作を適用）
-#ifdef USE_IMGUI
-    // ★修正ポイント：Release時は ImGui::GetIO() を呼ばないようにガードする
-    // または、DebugView か StageEditor の時だけ判定するようにする
-    
+#ifndef NDEBUG
+    // Release時は ImGui::GetIO() を呼ばないようにガードする
     // マウスとキーボードの両方をガード
     isGuiCaptured = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
-
 #endif
+
 
     //  ここで「ライト視点の行列」を取得！これが全ての lightVP
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
@@ -671,9 +672,12 @@ void MyGame::UpdateGamePlay() {
     //4/20佐倉追加
     const auto& mouse = input->GetMouseState();
 
-    //画面サイズ取得
-    float screenWidth = (float)WinApp::kClientWidth;
-    float screenHeight = (float)WinApp::kClientHeight;
+    // 画面サイズ取得（ウィンドウサイズ変更に対応するため動的に取得）
+    RECT rect;
+    GetClientRect(winApp->GetHwnd(), &rect);
+    float screenWidth = static_cast<float>(rect.right - rect.left);
+    float screenHeight = static_cast<float>(rect.bottom - rect.top);
+
 
     //どこを端とするか
     float edgeRatio = 0.1f;
@@ -826,8 +830,12 @@ void MyGame::UpdateCameraGuideSprites() {
         return;
     }
 
-    float screenWidth = static_cast<float>(WinApp::kClientWidth);
-    float screenHeight = static_cast<float>(WinApp::kClientHeight);
+    // 画面サイズ取得（ウィンドウサイズ変更に対応するため動的に取得）
+    RECT rect;
+    GetClientRect(winApp->GetHwnd(), &rect);
+    float screenWidth = static_cast<float>(rect.right - rect.left);
+    float screenHeight = static_cast<float>(rect.bottom - rect.top);
+
 
     float edgeRatio = 0.1f;
 
@@ -863,216 +871,161 @@ void MyGame::UpdateCameraGuideSprites() {
     cameraGuideDownSprite_->Update();
 }
 
-#ifdef USE_IMGUI
+#ifndef NDEBUG
 // ImGuiの更新と描画
 void MyGame::UpdateImGui() {
-    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(340, 520), ImGuiCond_Always);
+    ImGuiIO& io = ImGui::GetIO();
 
-    ImGui::Begin("Debug Window");
+    // 画面右側にインスペクター（設定・情報パネル）を配置
+    float panelWidth = 350.0f;
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panelWidth, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(panelWidth, io.DisplaySize.y), ImGuiCond_Always);
+    
+    // ウィンドウ作成
+    ImGui::Begin("Inspector", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-        1000.0f / ImGui::GetIO().Framerate,
-        ImGui::GetIO().Framerate);
-
-    // モード切替
-    int modeIndex = 0;
-    switch (currentMode_) {
-    case AppMode::DebugView:   modeIndex = 0; break;
-    case AppMode::StageEditor: modeIndex = 1; break;
-    case AppMode::GamePlay:    modeIndex = 2; break;
+    // FPSと終了ボタンを同じ行に配置
+    ImGui::Text("FPS: %.1f (%.3f ms/f)", io.Framerate, 1000.0f / io.Framerate);
+    ImGui::SameLine(panelWidth - 60.0f);
+    if (ImGui::Button("Exit", ImVec2(50, 20))) {
+        PostQuitMessage(0); // アプリケーション終了
     }
 
-    // ImGuiのコンボボックスでモード切替
-    const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay" };
-    if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
-        switch (modeIndex) {
-        case 0: currentMode_ = AppMode::DebugView; break;
-        case 1: currentMode_ = AppMode::StageEditor; break;
-        case 2: currentMode_ = AppMode::GamePlay; break;
-        }
-    }
-
-    // 描画オプション
     ImGui::Separator();
-    ImGui::Text("Draw Flags");
-    ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
-    ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
-    ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
 
-    // ステージエディタ関連のUI
-    ImGui::Separator();
-    ImGui::Text("--- Stage MySet Manager ---");
+    // モード切替（Hierarchy的な役割）
+    if (ImGui::CollapsingHeader("Hierarchy / Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
+        int modeIndex = 0;
+        switch (currentMode_) {
+        case AppMode::DebugView:   modeIndex = 0; break;
+        case AppMode::StageEditor: modeIndex = 1; break;
+        case AppMode::GamePlay:    modeIndex = 2; break;
+        }
 
-    // 1. 新規保存
-    ImGui::InputText("Save Name", newStageName_, IM_ARRAYSIZE(newStageName_));
-    if (ImGui::Button("Save As New")) {
-        std::string path = "Resources/Stages/" + std::string(newStageName_) + ".txt";
-        stageMap_.SaveToFile(path);
-        RefreshStageList(); // リストを更新
+        const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay" };
+        if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
+            switch (modeIndex) {
+            case 0: currentMode_ = AppMode::DebugView; break;
+            case 1: currentMode_ = AppMode::StageEditor; break;
+            case 2: currentMode_ = AppMode::GamePlay; break;
+            }
+        }
+
+        ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
+        ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
+        ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
     }
 
-    ImGui::Spacing();
-
-    // 2. ステージリスト
-    ImGui::Text("Saved Stages:");
-    if (ImGui::BeginListBox("##StageList", ImVec2(-FLT_MIN, 150))) {
-        for (int n = 0; n < (int)stageFiles_.size(); n++) {
-            const bool is_selected = (selectedStageIndex_ == n);
-            if (ImGui::Selectable(stageFiles_[n].c_str(), is_selected)) {
-                selectedStageIndex_ = n;
-            }
-        }
-        ImGui::EndListBox();
-    }
-
-    // 3. 選択したステージへの操作
-    if (selectedStageIndex_ != -1 && selectedStageIndex_ < (int)stageFiles_.size()) {
-        std::string selectedName = stageFiles_[selectedStageIndex_];
-        std::string fullPath = "Resources/Stages/" + selectedName + ".txt";
-
-        if (ImGui::Button("Load Selected")) {
-            stageMap_.LoadFromFile(fullPath);
-            if (stageRenderer_) {
-                stageRenderer_->BuildFromStageMap(stageMap_);
-            }
-
-            // --- 追加：PlayerStartブロックを探してプレイヤーを移動させる ---
-            bool foundStart = false;
-
-            // ステージマップは3次元なので、Y軸を固定してX-Z平面を探索する形になります
-            for (int y = 0; y < stageMap_.GetHeight(); ++y) {
-                // ステージマップは3次元なので、Y軸を固定してX-Z平面を探索する形になります
-                for (int z = 0; z < stageMap_.GetDepth(); ++z) {
-                    // ステージマップを全探索してPlayerStartブロックを探す
-                    for (int x = 0; x < stageMap_.GetWidth(); ++x) {
-                        // セルを取得して、タイプが PlayerStart かチェック
-                        const MapCell* cell = stageMap_.GetCell(x, y, z);
-                        // PlayerStartブロックが見つかったら
-                        if (cell && cell->type == BlockType::PlayerStart) {
-                            // そのブロックの少し上にプレイヤーを配置
-                            player_->SetPosition({ (float)x, (float)y + 1.1f, (float)z });
-
-                            // 見つけたらフラグを立ててループを抜ける
-                            foundStart = true;
-                            break;
-                        }
-                    }
-                    // PlayerStartブロックが見つかったら、残りのループは回さない
-                    if (foundStart) break;
-                }
-                // PlayerStartブロックが見つかったら、残りのループは回さない
-                if (foundStart) break;
-            }
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Overwrite (Save)")) {
-            stageMap_.SaveToFile(fullPath);
-        }
-
-        // --- ここから追加：削除ボタン ---
-        ImGui::SameLine();
-
-        // ボタンの色を赤系に変更（色相 0.0=赤）
-        ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(0.0f, 0.7f, 0.7f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
-
-        if (ImGui::Button("Delete")) {
-            // 1. 物理ファイルを削除
-            std::filesystem::remove(fullPath);
-            // 2. リストを最新の状態に更新
+    // ステージマネージャー
+    if (ImGui::CollapsingHeader("Stage Manager", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::InputText("Save Name", newStageName_, IM_ARRAYSIZE(newStageName_));
+        if (ImGui::Button("Save As New")) {
+            std::string path = "Resources/Stages/" + std::string(newStageName_) + ".txt";
+            stageMap_.SaveToFile(path);
             RefreshStageList();
-            // 3. 削除した項目が選択されたままだと危ないのでリセット
-            selectedStageIndex_ = -1;
         }
 
-        ImGui::PopStyleColor(3); // 色設定を戻す
-    }
-
-    if (ImGui::Button("Refresh List")) { RefreshStageList(); }
-
-    // カメラの情報表示と操作
-    ImGui::Separator();
-    if (ImGui::TreeNode("Camera")) {
-        Transform& camTf = camera->GetTransform();
-
-        ImGui::DragFloat3("Position", &camTf.translate.x, 0.1f);
-        ImGui::DragFloat3("Rotation", &camTf.rotate.x, 0.01f);
-        ImGui::SliderFloat("FOV", camera->GetFovPtr(), 0.01f, 3.14f);
-
-        // カメラリセットボタン
-        if (ImGui::Button("Reset Camera")) {
-            camera->SetPosition({ 6.0f, 8.0f, -12.0f });
-            camera->SetRotation({ 0.6f, 0.0f, 0.0f });
-            camera->SetFov(0.45f);
-        }
-
-        ImGui::TreePop();
-    }
-
-    // ステージマップの情報表示
-    if (ImGui::TreeNode("StageMap Info")) {
-        ImGui::Text("Size: %d x %d x %d",
-            stageMap_.GetWidth(),
-            stageMap_.GetHeight(),
-            stageMap_.GetDepth());
-
-        const MapCell* cell = stageMap_.GetCell(2, 1, 0);
-        if (cell) {
-            ImGui::Text("Cell(2,1,0) type = %d", static_cast<int>(cell->type));
-            ImGui::Text("Cell(2,1,0) solid = %s", cell->isSolid ? "true" : "false");
-        }
-
-        ImGui::TreePop();
-    }
-
-    // マップカーソルの情報表示
-    ImGui::Separator();
-    if (ImGui::TreeNode("Cursor Info")) {
-        const Int3& cursor = mapCursor_->GetIndex();
-        ImGui::Text("Cursor Index: (%d, %d, %d)", cursor.x, cursor.y, cursor.z);
-        ImGui::TreePop();
-    }
-
-    // ステージエディタ用の設定項目
-    ImGui::Separator();
-    if (currentMode_ == AppMode::StageEditor && ImGui::TreeNode("StageEditor Settings")) {
-
-        if (ImGui::SliderFloat("Uniform Block Scale", &editorUniformBlockScale_, 0.1f, 3.0f)) {
-            editorBlockScale_ = {
-                editorUniformBlockScale_,
-                editorUniformBlockScale_,
-                editorUniformBlockScale_
-            };
-
-            if (stageRenderer_) {
-                stageRenderer_->SetBlockScale(editorBlockScale_);
-                stageRenderer_->BuildFromStageMap(stageMap_);
+        ImGui::Text("Saved Stages:");
+        if (ImGui::BeginListBox("##StageList", ImVec2(-FLT_MIN, 100))) {
+            for (int n = 0; n < (int)stageFiles_.size(); n++) {
+                const bool is_selected = (selectedStageIndex_ == n);
+                if (ImGui::Selectable(stageFiles_[n].c_str(), is_selected)) {
+                    selectedStageIndex_ = n;
+                }
             }
+            ImGui::EndListBox();
         }
 
-        ImGui::DragFloat3("Block Scale XYZ", &editorBlockScale_.x, 0.01f, 0.1f, 5.0f);
-        if (ImGui::Button("Apply Block Scale")) {
+        if (selectedStageIndex_ != -1 && selectedStageIndex_ < (int)stageFiles_.size()) {
+            std::string fullPath = "Resources/Stages/" + stageFiles_[selectedStageIndex_] + ".txt";
+            
+            if (ImGui::Button("Load Selected")) {
+                stageMap_.LoadFromFile(fullPath);
+                if (stageRenderer_) {
+                    stageRenderer_->BuildFromStageMap(stageMap_);
+                }
 
-            if (stageRenderer_) {
-                stageRenderer_->SetBlockScale(editorBlockScale_);
-                stageRenderer_->BuildFromStageMap(stageMap_);
+                // PlayerStartブロックを探してプレイヤーを移動
+                bool foundStart = false;
+                for (int y = 0; y < stageMap_.GetHeight(); ++y) {
+                    for (int z = 0; z < stageMap_.GetDepth(); ++z) {
+                        for (int x = 0; x < stageMap_.GetWidth(); ++x) {
+                            const MapCell* cell = stageMap_.GetCell(x, y, z);
+                            if (cell && cell->type == BlockType::PlayerStart) {
+                                player_->SetPosition({ (float)x, (float)y + 1.1f, (float)z });
+                                foundStart = true;
+                                break;
+                            }
+                        }
+                        if (foundStart) { break; }
+                    }
+                    if (foundStart) { break; }
+                }
             }
+            ImGui::SameLine();
+            if (ImGui::Button("Overwrite")) {
+                stageMap_.SaveToFile(fullPath);
+            }
+            ImGui::SameLine();
+            
+            ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(0.0f, 0.7f, 0.7f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
+            if (ImGui::Button("Delete")) {
+                std::filesystem::remove(fullPath);
+                RefreshStageList();
+                selectedStageIndex_ = -1;
+            }
+            ImGui::PopStyleColor(3);
         }
-        ImGui::TreePop();
+
+        if (ImGui::Button("Refresh List")) { RefreshStageList(); }
     }
 
-    ImGui::Separator();
-    ImGui::Text("Placeable Blocks: %d", blockInventory_.GetBlockCount());
-    // デバッグ用：現在選択中のブロックタイプを表示
-    ImGui::Text("Selected Block: %s", BlockTypeToString(selectedBlockType_));
+    // カメラ情報（委譲）
+    if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        camera->DrawImGui();
+    }
 
+    // ステージマップ情報（委譲）
+    if (ImGui::CollapsingHeader("StageMap Info")) {
+        stageMap_.DrawImGui();
+    }
+
+    // カーソル情報（委譲）
+    if (ImGui::CollapsingHeader("Cursor Info")) {
+        mapCursor_->DrawImGui();
+        ImGui::Text("Placeable Blocks: %d", blockInventory_.GetBlockCount());
+        ImGui::Text("Selected Block: %s", BlockTypeToString(selectedBlockType_));
+    }
+
+    // エディタ設定
+    if (currentMode_ == AppMode::StageEditor) {
+        if (ImGui::CollapsingHeader("Stage Editor Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::SliderFloat("Uniform Block Scale", &editorUniformBlockScale_, 0.1f, 3.0f)) {
+                editorBlockScale_ = { editorUniformBlockScale_, editorUniformBlockScale_, editorUniformBlockScale_ };
+                if (stageRenderer_) {
+                    stageRenderer_->SetBlockScale(editorBlockScale_);
+                    stageRenderer_->BuildFromStageMap(stageMap_);
+                }
+            }
+            ImGui::DragFloat3("Block Scale XYZ", &editorBlockScale_.x, 0.01f, 0.1f, 5.0f);
+            if (ImGui::Button("Apply Block Scale")) {
+                if (stageRenderer_) {
+                    stageRenderer_->SetBlockScale(editorBlockScale_);
+                    stageRenderer_->BuildFromStageMap(stageMap_);
+                }
+            }
+            
+            // ツールバーをここに統合
+            DrawEditorToolbar();
+        }
+    }
 
     ImGui::End();
 }
 #endif
+
 
 void MyGame::DrawCameraGuideSprites() {
     if (currentMode_ != AppMode::GamePlay) {
@@ -1402,9 +1355,10 @@ void MyGame::Draw() {
     DrawCameraGuideSprites();
 
     // --- 4. ImGui と 最終出力 ---
-#ifdef USE_IMGUI
+#ifndef NDEBUG
     dxCommon->EndImGui();
 #endif
+
 
     dxCommon->PostDraw();
 }
@@ -1418,9 +1372,10 @@ void MyGame::Finalize() {
 
     sound.Finalize();
 
-#ifdef USE_IMGUI
+#ifndef NDEBUG
     dxCommon->FinalizeImGui();
 #endif
+
 
     // 2. シーン（描画物の所有者）を先に消す
     // GameClearSceneの11文字（COURSECLEAR）はこのタイミングで unique_ptr により解放されます
@@ -1468,6 +1423,7 @@ void MyGame::UpdateGamePlayBlockPlace()
     // 現在カーソル位置
     const Int3& cursor = mapCursor_->GetIndex();
 
+    // カーソル移動処理
     if (input->TriggerKey(DIK_A)) {
         mapCursor_->Move(-1, 0, 0, stageMap_);
     }
@@ -1496,23 +1452,19 @@ void MyGame::UpdateGamePlayBlockPlace()
     if (input->TriggerKey(DIK_RETURN)) {
         Int3 cursorPos = mapCursor_->GetIndex();
 
-        // カーソルの位置に何もない（None）場合のみ置けるようにする
-        if (stageMap_.GetCell(cursorPos)->type == BlockType::None) {
-
-            // ブロックを配置！
-            stageMap_.SetBlock(cursorPos, BlockType::Ground); // 足場を置く
-            stageRenderer_->BuildFromStageMap(stageMap_);     // 描画モデルを再構築（超重要）
-
-            placeableBlockCount_--; // 所持数を減らす
-            currentMode_ = AppMode::GamePlay; // 通常のプレイ画面に戻る
+        // コントローラーを使ってブロックを配置
+        // 成功した場合は所持数も減り、見た目も更新される
+        blockPlacementController_.SetPlaceBlockType(BlockType::Ground);
+        if (blockPlacementController_.TryPlace(cursorPos)) {
+            currentMode_ = AppMode::GamePlay; // 成功したら通常のプレイ画面に戻る
         }
     }
 
-    // ③ キャンセルして戻る処理 (Qキーでもう一度戻るなど)
-    if (input->TriggerKey(DIK_ESCAPE))
-    {
+    // ③ キャンセルして戻る処理 (Escapeキー)
+    if (input->TriggerKey(DIK_ESCAPE)) {
         currentMode_ = AppMode::GamePlay;
     }
+
 
     // カメラ操作（Blender風の操作もできるようにしているので、そちらとキーが被らないように注意してください）
     Transform& camTf = camera->GetTransform();
@@ -1581,78 +1533,76 @@ void MyGame::DrawEditorToolbar()
     // ステージエディタモードの時だけ表示する
     if (currentMode_ != AppMode::StageEditor) return;
 
-    // ウィンドウの設定（位置やサイズを固定したい場合はここを調整）
-    ImGui::SetNextWindowPos(ImVec2(360, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(200, 400), ImGuiCond_FirstUseEver);
+    ImGui::Text("1. Select Gimmick");
+    ImGui::Separator();
 
-    if (ImGui::Begin("Editor Toolbar", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("1. Select Gimmick");
-        ImGui::Separator();
+    // ギミックごとのボタン
+    BlockType types[] = {
+        BlockType::Ground, BlockType::Wall, BlockType::Ladder,
+        BlockType::Star, BlockType::BubblePickup, BlockType::Goal,
+        BlockType::PlayerStart, BlockType::Door,BlockType::PSwitch,
+        BlockType::PBlock,BlockType::CrumblingFloor
+    };
 
-        // ギミックごとのボタン
-        // 選択中のものは色を変えるとかっこいいです
-        BlockType types[] = {
-            BlockType::Ground, BlockType::Wall, BlockType::Ladder,
-            BlockType::Star, BlockType::BubblePickup, BlockType::Goal,
-            BlockType::PlayerStart, BlockType::Door,BlockType::PSwitch,
-            BlockType::PBlock,BlockType::CrumblingFloor
-        };
-
-        for (auto type : types) {
-            bool isSelected = (selectedBlockType_ == type);
-            if (isSelected) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f)); // 選択中は緑っぽく
-            }
-
-            if (ImGui::Button(BlockTypeToString(type), ImVec2(-FLT_MIN, 30))) {
-                selectedBlockType_ = type;
-            }
-
-            if (isSelected) ImGui::PopStyleColor();
+    for (auto type : types) {
+        bool isSelected = (selectedBlockType_ == type);
+        if (isSelected) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f)); // 選択中は緑っぽく
         }
 
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        ImGui::Text("2. Action");
-        // --- 回転ボタン (Rキーの機能) ---
-        if (ImGui::Button("Rotate (R)", ImVec2(-FLT_MIN, 30))) {
-            const Int3& cursor = mapCursor_->GetIndex();
-            MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
-            if (cell && cell->type != BlockType::None) {
-                cell->rotationY += 1.5708f; // 90度回転
-                if (stageRenderer_) stageRenderer_->BuildFromStageMap(stageMap_);
-            }
+        if (ImGui::Button(BlockTypeToString(type), ImVec2(-FLT_MIN, 30))) {
+            selectedBlockType_ = type;
         }
 
-        ImGui::Spacing();
-
-        // 配置実行ボタン
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
-        if (ImGui::Button("PLACE (Enter)", ImVec2(180, 40))) {
-            ApplyPlacement();
+        if (isSelected) {
+            ImGui::PopStyleColor();
         }
-        ImGui::PopStyleColor();
-
-        if (input->TriggerKey(DIK_RETURN))
-        {
-            ApplyPlacement();
-        }
-
-        if (ImGui::Button("REMOVE (Space)", ImVec2(180, 40))) {
-            stageMap_.RemoveBlock(mapCursor_->GetIndex());
-            stageRenderer_->BuildFromStageMap(stageMap_);
-        }
-
-        if (input->TriggerKey(DIK_BACKSPACE))
-        {
-            stageMap_.RemoveBlock(mapCursor_->GetIndex());
-            stageRenderer_->BuildFromStageMap(stageMap_);
-        }
-        
     }
-    ImGui::End();
+
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::Text("2. Action");
+    // --- 回転ボタン (Rキーの機能) ---
+    if (ImGui::Button("Rotate (R)", ImVec2(-FLT_MIN, 30))) {
+        const Int3& cursor = mapCursor_->GetIndex();
+        MapCell* cell = stageMap_.GetCell(cursor.x, cursor.y, cursor.z);
+        if (cell && cell->type != BlockType::None) {
+            cell->rotationY += 1.5708f; // 90度回転
+            if (stageRenderer_) {
+                stageRenderer_->BuildFromStageMap(stageMap_);
+            }
+        }
+    }
+
+    ImGui::Spacing();
+
+    // 配置実行ボタン
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
+    if (ImGui::Button("PLACE (Enter)", ImVec2(-FLT_MIN, 40))) {
+        ApplyPlacement();
+    }
+    ImGui::PopStyleColor();
+
+    if (input->TriggerKey(DIK_RETURN)) {
+        ApplyPlacement();
+    }
+
+    if (ImGui::Button("REMOVE (Space)", ImVec2(-FLT_MIN, 40))) {
+        stageMap_.RemoveBlock(mapCursor_->GetIndex());
+        if (stageRenderer_) {
+            stageRenderer_->BuildFromStageMap(stageMap_);
+        }
+    }
+
+    if (input->TriggerKey(DIK_BACKSPACE)) {
+        stageMap_.RemoveBlock(mapCursor_->GetIndex());
+        if (stageRenderer_) {
+            stageRenderer_->BuildFromStageMap(stageMap_);
+        }
+    }
 }
+
 
 /// <summary>
 ///  ギミックで複雑な処理持ちのやつをここに入れる 04/03 秋元

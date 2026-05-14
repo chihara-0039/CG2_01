@@ -34,6 +34,10 @@ public:
     Transform& GetTransform() { return transform_; }
     float* GetFovPtr() { return &fov_; }
 
+    // ImGui描画用
+    void DrawImGui();
+
+
    
 
 private:

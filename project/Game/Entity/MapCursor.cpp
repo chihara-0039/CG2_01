@@ -1,6 +1,12 @@
 #include "MapCursor.h"
 #include <cassert>
 
+#ifdef USE_IMGUI
+#include "externals/imgui/imgui.h"
+#endif
+
+
+
 MapCursor::~MapCursor() {
     delete cursorObject_;
     cursorObject_ = nullptr;
@@ -102,3 +108,9 @@ Vector3 MapCursor::IndexToWorldPosition() const {
         static_cast<float>(index_.z)
     };
 }
+
+void MapCursor::DrawImGui() {
+#ifdef USE_IMGUI
+    ImGui::Text("Cursor Index: (%d, %d, %d)", index_.x, index_.y, index_.z);
+#endif
+}
