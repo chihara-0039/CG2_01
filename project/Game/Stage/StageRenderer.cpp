@@ -15,6 +15,8 @@ StageRenderer::~StageRenderer() {
 	// ★ ここが抜けていました（追加）
 	delete pSwichModel_;
 	delete pBlockOnModel_;
+	delete crumbleModel_;
+	delete iceBlockModel_;
 
 	groundModel_ = nullptr;
 	wallModel_ = nullptr;
@@ -24,6 +26,8 @@ StageRenderer::~StageRenderer() {
 	doorModel_ = nullptr;
 	pSwichModel_ = nullptr;
 	pBlockOnModel_ = nullptr;
+	crumbleModel_ = nullptr;
+	iceBlockModel_ = nullptr;
 }
 
 // ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス
@@ -101,7 +105,15 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetDxCommon(),
 		"Resources/Models/CollapsedBlocks",
 		"CollapsedBlocks.obj",
-		object3dCommon_->GetTextureManager());
+		object3dCommon_->GetTextureManager()
+	);
+
+	iceBlockModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/block",
+		"block.obj",
+		object3dCommon_->GetTextureManager()
+	);
 }
 
 void StageRenderer::UpdateEffect(const StageMap& stageMap) {
@@ -267,6 +279,16 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f }
 					);
 					break;
+					// ブロックの種類が IceBlock（滑る足場）の場合
+				case BlockType::IceBlock:
+					CreateStageObject(
+						iceBlockModel_,
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f }
+					);
+					break;
+
 				// ブロックの種類が不明な場合は何もしない
 				default:
 				break;

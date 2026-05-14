@@ -254,7 +254,7 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
         std::vector<BlockType> types;
     };
 
-    std::vector<Category> categories = 
+    std::vector<Category> categories =
     {
         {
             "Basic Blocks", // ブロック類
@@ -262,7 +262,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::Ground,
                 BlockType::Wall,
                 BlockType::PBlock,
-                BlockType::CrumblingFloor
+                BlockType::CrumblingFloor,
+                BlockType::IceBlock
             }
         },
         {
