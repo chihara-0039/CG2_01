@@ -877,6 +877,24 @@ void MyGame::UpdateStageSelect()
             stageMap_.LoadFromFile(filePath);
             stageRenderer_->BuildFromStageMap(stageMap_); // 見た目の更新
 
+            //5/14佐倉追加
+            //カメラリセット処理
+            cameraAngle_ = 1.5708f;
+            cameraPitch_ = 0.75f;
+
+            // ★念のため即反映
+            Vector3 pivot = { 4.0f, 9.0f, 4.5f };
+            float distance = 35.0f;
+            float height = 20.0f;
+
+            Vector3 pos;
+            pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
+            pos.y = pivot.y + std::sin(cameraPitch_) * height;
+            pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
+
+            camera->SetPosition(pos);
+            camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
+
             // プレイヤーの位置をスタート地点に戻すなどの処理
             // ResetPlayer(); 
         }
