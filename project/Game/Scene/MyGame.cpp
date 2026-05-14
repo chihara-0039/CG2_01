@@ -201,20 +201,26 @@ void MyGame::Initialize() {
         stageRenderer_.get(),
         &blockInventory_
     );
+   
+    //5/14佐倉
+
     // カメラ回転用UIスプライト
-    cameraGuideTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow.png");
+    cameraGuideLeftTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_left.png");
+    cameraGuideRightTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_right.png");
+    cameraGuideUpTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_up.png");
+    cameraGuideDownTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_down.png");
 
     cameraGuideLeftSprite_ = std::make_unique<Sprite>();
-    cameraGuideLeftSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+    cameraGuideLeftSprite_->Initialize(spriteCommon.get(), cameraGuideLeftTextureHandle_);
 
     cameraGuideRightSprite_ = std::make_unique<Sprite>();
-    cameraGuideRightSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+    cameraGuideRightSprite_->Initialize(spriteCommon.get(), cameraGuideRightTextureHandle_);
 
     cameraGuideUpSprite_ = std::make_unique<Sprite>();
-    cameraGuideUpSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+    cameraGuideUpSprite_->Initialize(spriteCommon.get(), cameraGuideUpTextureHandle_);
 
     cameraGuideDownSprite_ = std::make_unique<Sprite>();
-    cameraGuideDownSprite_->Initialize(spriteCommon.get(), cameraGuideTextureHandle_);
+    cameraGuideDownSprite_->Initialize(spriteCommon.get(), cameraGuideDownTextureHandle_);
 
     // 追加：ドア用3D F UI
     doorPromptModel_ = std::unique_ptr<Model>(
@@ -845,6 +851,41 @@ void MyGame::UpdateCameraGuideSprites() {
     cameraGuideUpSprite_->SetPosition({ centerX, topY });
     cameraGuideDownSprite_->SetPosition({ centerX, bottomY });
 
+    // ==============================
+    // 位置補正
+    // 上矢印・左矢印を基準にする
+    // ==============================
+
+    Vector2 leftOffset = { 0.0f, 0.0f };
+    Vector2 upOffset = { 0.0f, 0.0f };
+
+    // 右矢印が少し右に寄りすぎているので左へ補正
+    Vector2 rightOffset = { -20.0f, 0.0f };
+
+    // 下矢印が下に寄りすぎているので上へ補正
+    Vector2 downOffset = { 0.0f, -30.0f };
+
+    // 画面端に配置
+    cameraGuideLeftSprite_->SetPosition({
+        leftX + leftOffset.x,
+        centerY + leftOffset.y
+        });
+
+    cameraGuideRightSprite_->SetPosition({
+        rightX + rightOffset.x,
+        centerY + rightOffset.y
+        });
+
+    cameraGuideUpSprite_->SetPosition({
+        centerX + upOffset.x,
+        topY + upOffset.y
+        });
+
+    cameraGuideDownSprite_->SetPosition({
+        centerX + downOffset.x,
+        bottomY + downOffset.y
+        });
+
     // サイズ
     cameraGuideLeftSprite_->SetSize({ 64.0f, 64.0f });
     cameraGuideRightSprite_->SetSize({ 64.0f, 64.0f });
@@ -853,9 +894,9 @@ void MyGame::UpdateCameraGuideSprites() {
 
     // arrow.png が上向き矢印想定
     cameraGuideUpSprite_->SetRotation(0.0f);
-    cameraGuideRightSprite_->SetRotation(1.5708f);
-    cameraGuideDownSprite_->SetRotation(3.1415f);
-    cameraGuideLeftSprite_->SetRotation(-1.5708f);
+    cameraGuideRightSprite_->SetRotation(0.0f);
+    cameraGuideDownSprite_->SetRotation(0.0f);
+    cameraGuideLeftSprite_->SetRotation(0.0f);
 
     cameraGuideLeftSprite_->Update();
     cameraGuideRightSprite_->Update();
