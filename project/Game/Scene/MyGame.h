@@ -31,7 +31,8 @@
 
 #include "Sound.h"
 #include "GameplayUIManager.h"
-#include "../Camera/GameplayCameraController.h"
+#include "GameplayCameraController.h"
+#include "StageEditorController.h"
 
 
 class MyGame {
@@ -108,32 +109,18 @@ private:
     AppMode currentMode_ = AppMode::DebugView;
     DebugDrawFlags debugFlags_;
     StageMap stageMap_;
-    BlockType selectedBlockType_ = BlockType::Ground;
-
     GameplayCameraController gameplayCameraController_;
+    StageEditorController stageEditorController_;
 
     bool isGoalReached_ = false;
-    bool isWaitingForSecondDoor_ = false;
-    Int3 firstDoorIndex_ = { -1, -1, -1 };
     int placeableBlockCount_ = 0;
-
-    // エディタUI用
-    Vector3 editorBlockScale_{ 1.0f, 1.0f, 1.0f };
-    float editorUniformBlockScale_ = 1.0f;
-    std::vector<std::string> stageFiles_;
-    char newStageName_[64] = "new_stage";
-    int selectedStageIndex_ = -1;
 
     // 内部関数
     void UpdateImGui();
     void UpdateDebugView();
-    void RefreshStageList();
-    void UpdateStageEditor();
     void UpdateGamePlay();
     void UpdateGamePlayBlockPlace();
     void UpdateTitle();
-    void DrawEditorToolbar();
-    void ApplyPlacement();
 
     // シャボン玉取得・ブロック配置関連
     BlockInventory blockInventory_;
@@ -148,11 +135,6 @@ private:
 
     // ヘルパー関数の戻り値は「生ポインタ」のままでOK（所有権を渡さない「参照」のため）
     Object3d* CreateObject(Model* model, Vector3 pos);
-
-    // リファクタリング用ヘルパー関数
-    void ResetPlayerToStartCell();
-    void HandleEditorCursorInput();
-    void HandleEditorCameraInput();
 
     //5/5佐倉追加
     //サウンド管理

@@ -223,6 +223,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="Game\Scene\MyGame.cpp" />
     <ClCompile Include="Game\UI\GameplayUIManager.cpp" />
     <ClCompile Include="Game\Camera\GameplayCameraController.cpp" />
+    <ClCompile Include="Game\Stage\StageEditorController.cpp" />
     <ClCompile Include="Engine\Math\MyMath.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Object3d.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Object3dCommon.cpp" />
@@ -362,6 +363,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Game\Scene\MyGame.h" />
     <ClInclude Include="Game\UI\GameplayUIManager.h" />
     <ClInclude Include="Game\Camera\GameplayCameraController.h" />
+    <ClInclude Include="Game\Stage\StageEditorController.h" />
     <ClInclude Include="Engine\Math\MyMath.h" />
     <ClInclude Include="Engine\Graphics\3D\Object3d.h" />
     <ClInclude Include="Engine\Graphics\3D\Object3dCommon.h" />

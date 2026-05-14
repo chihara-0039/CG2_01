@@ -6,6 +6,7 @@
 #endif
 
 void GameplayCameraController::Initialize() {
+    // 初期状態の極座標：少し上空から見下ろすデフォルト角度
     cameraAngle_ = 0.0f;
     cameraPitch_ = 0.75f;
 }
@@ -15,6 +16,8 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 
     const auto& mouse = input->GetMouseState();
 
+    // ImGui ウィンドウにマウスがホバーされているかチェック
+    // ホバー中の場合はゲームプレイカメラを回転させないためのガード
     bool isGuiCaptured = false;
 #ifdef USE_IMGUI
     if (ImGui::GetCurrentContext()) {
@@ -22,7 +25,7 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     }
 #endif
 
-    // 画面サイズ取得（実際のウィンドウサイズ）
+    // 現在の実際のウィンドウのクライアント領域サイズを取得
     RECT rect;
     GetClientRect(winApp->GetHwnd(), &rect);
     float currentClientW = static_cast<float>(rect.right - rect.left);
@@ -30,13 +33,13 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 
     if (currentClientW <= 0.0f || currentClientH <= 0.0f) return;
 
-    // 1. マウス座標を 1920x1080 (SwapChainサイズ) 空間にスケールする
+    // 1. マウス座標を 1920x1080 (内部SwapChain解像度) 空間へスケーリング
     float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
     float scaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientH;
     float swapMouseX = static_cast<float>(mouse.posX) * scaleX;
     float swapMouseY = static_cast<float>(mouse.posY) * scaleY;
 
-    // 2. 1280x720 のゲーム画面の開始位置（オフセット 320px）を引いて、ゲーム内座標に変換する
+    // 2. 1280x720 のゲーム画面オフセット (左パネル幅 320px) を差し引き、ゲーム内ビューポート座標へ変換
     float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
     float offsetY = 0.0f;
     float mouseX = swapMouseX - offsetX;
@@ -45,27 +48,28 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     float screenWidth = static_cast<float>(WinApp::kClientWidth);
     float screenHeight = static_cast<float>(WinApp::kClientHeight);
 
+    // 画面端からの反応エリアの比率 (10%)
     float edgeRatio = 0.1f;
     float leftEdge = screenWidth * edgeRatio;
     float rightEdge = screenWidth * (1.0f - edgeRatio);
     float topEdge = screenHeight * edgeRatio;
     float bottomEdge = screenHeight * (1.0f - edgeRatio);
 
-    const float rotateSpeed = 0.025f;
-    const float minPitch = 0.4f;
-    const float maxPitch = 1.5f;
+    const float rotateSpeed = 0.025f; // 回転速度
+    const float minPitch = 0.4f;      // 見下ろし角度の最小値
+    const float maxPitch = 1.5f;      // 見下ろし角度の最大値
     const float upperLimit = 3.0f;
 
-    // クリック中かつImGui操作中でない場合のみ反応(左クリック)
+    // 左クリック中、かつImGuiパネル操作中でない場合のみカメラ回転を実行
     if (mouse.buttons[0] && !isGuiCaptured) {
-        // 横回転
+        // --- 水平方向の回転（左右の画面端クリック） ---
         if (mouseX < leftEdge) {
             cameraAngle_ += rotateSpeed;
         } else if (mouseX > rightEdge) {
             cameraAngle_ -= rotateSpeed;
         }
 
-        // 縦回転
+        // --- 垂直方向の回転（上下の画面端クリック） ---
         if (mouseY < topEdge) {
             cameraPitch_ += rotateSpeed;
             if (cameraPitch_ > upperLimit) {
@@ -79,16 +83,21 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
         }
     }
 
+    // 最終的なピッチ角のクランプ処理
     if (cameraPitch_ > maxPitch) {
         cameraPitch_ = maxPitch;
     }
 
-    // --- カメラ位置計算 ---
+    // ==========================================================
+    // カメラの三次元位置・回転行列の最終計算
+    // ==========================================================
+    // ステージ中央付近の注視点（ピボット）
     Vector3 pivot = { 4.0f, 9.0f, 4.5f };
-    float distance = 35.0f;
-    float height = 20.0f;
+    float distance = 35.0f; // カメラとピボットとの距離
+    float height = 20.0f;   // ベースの高さ
 
     Vector3 pos;
+    // 極座標計算：角度とピッチに基づきピボット周囲を旋回する座標を割り出す
     pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
     pos.y = pivot.y + std::sin(cameraPitch_) * height;
     pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
