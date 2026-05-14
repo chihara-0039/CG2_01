@@ -23,7 +23,8 @@ enum class BlockType : uint32_t {
     Door,
     PSwitch,
     PBlock,
-    CrumblingFloor
+    CrumblingFloor,
+    IceBlock
 };
 
 inline const char* BlockTypeToString(BlockType type) {
@@ -40,6 +41,7 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::PSwitch:        return "PSwitch";
     case BlockType::PBlock:         return "PBlock";
     case BlockType::CrumblingFloor: return "CrumblingFloor";
+    case BlockType::IceBlock:       return "IceBlock";
     default:                        return "Unknown";
     }
 }

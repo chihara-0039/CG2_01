@@ -228,6 +228,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::Wall:
     case BlockType::Star:
     case BlockType::CrumblingFloor:
+    case BlockType::IceBlock:
     cell.isSolid = true;
     break;
 
