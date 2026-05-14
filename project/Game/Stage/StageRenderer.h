@@ -18,6 +18,7 @@ public:
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection);
 
     void Update(const Matrix4x4& lightVP);
+    void DrawShadow(const Matrix4x4& lightVP);
     void Draw();
 
     void UpdateEffect(const StageMap& stageMap);
