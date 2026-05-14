@@ -223,7 +223,15 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
 				// ブロックの種類が PlayerStart（プレイヤーの開始位置）の場合
 				case BlockType::PlayerStart:
-				
+				{
+					Object3d* pObj = CreateStageObject(
+						groundModel_,
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f }
+					);
+					pObj->SetColor({ 1.0f, 0.0f, 0.0f, 1.0f });
+				}
 				break;
 				
 				// ブロックの種類が Door (ドア) の場合

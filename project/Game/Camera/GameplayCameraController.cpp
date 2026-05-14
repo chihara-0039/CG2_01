@@ -19,7 +19,7 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     // ImGui ウィンドウにマウスがホバーされているかチェック
     // ホバー中の場合はゲームプレイカメラを回転させないためのガード
     bool isGuiCaptured = false;
-#ifdef USE_IMGUI
+#if defined(USE_IMGUI) && !defined(NDEBUG)
     if (ImGui::GetCurrentContext()) {
         isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
     }
@@ -40,6 +40,15 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     float swapMouseY = static_cast<float>(mouse.posY) * scaleY;
 
     // 2. 1280x720 のゲーム画面オフセット (左パネル幅 320px) を差し引き、ゲーム内ビューポート座標へ変換
+#ifdef NDEBUG
+    float offsetX = 0.0f;
+    float offsetY = 0.0f;
+    float mouseX = swapMouseX - offsetX;
+    float mouseY = swapMouseY - offsetY;
+
+    float screenWidth = static_cast<float>(WinApp::kWindowWidth);
+    float screenHeight = static_cast<float>(WinApp::kWindowHeight);
+#else
     float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
     float offsetY = 0.0f;
     float mouseX = swapMouseX - offsetX;
@@ -47,6 +56,7 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 
     float screenWidth = static_cast<float>(WinApp::kClientWidth);
     float screenHeight = static_cast<float>(WinApp::kClientHeight);
+#endif
 
     // 画面端からの反応エリアの比率 (10%)
     float edgeRatio = 0.1f;
