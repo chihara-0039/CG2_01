@@ -117,6 +117,7 @@ void MyGame::Initialize() {
     std::string prototypePath = "Resources/Stages/stage1.txt"; // 保存したファイル名に合わせてください
     if (std::filesystem::exists(prototypePath)) {
         stageMap_.LoadFromFile(prototypePath);
+        stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
     }
 #endif
 
@@ -645,12 +646,19 @@ void MyGame::Draw() {
 
     shadowMap_->PostDraw(commandList);
 
-    // dxCommon->PreDraw() 内でこれを行っていない場合、ここで明示的に呼ぶ必要があります
-    // 画面中央の 1280x720 領域（左パネル幅320pxの右側）にゲーム画面をレンダリングする
+#ifdef NDEBUG
+    // Releaseビルド時は全画面表示にする
+    D3D12_VIEWPORT viewport = { 0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f };
+    D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
+    commandList->RSSetViewports(1, &viewport);
+    commandList->RSSetScissorRects(1, &scissor);
+#else
+    // Debugビルド時は ImGui パネル用にビューポートを狭める
     D3D12_VIEWPORT viewport = { 320.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
     D3D12_RECT scissor = { 320, 0, 1600, 720 };
     commandList->RSSetViewports(1, &viewport);
     commandList->RSSetScissorRects(1, &scissor);
+#endif
 
     // ==========================================================
     // 【パス2】 メイン描画（通常のレンダリング ＋ 影の適用）
@@ -882,7 +890,7 @@ void MyGame::UpdateStageSelect()
             gameplayCameraController_.ResetCamera(camera.get());
 
             // プレイヤーの位置をスタート地点に戻すなどの処理
-            // ResetPlayer(); 
+            stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
         }
         // ゲームプレイモードへ切り替え
         currentMode_ = AppMode::GamePlay;

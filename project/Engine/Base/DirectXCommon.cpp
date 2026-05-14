@@ -318,6 +318,23 @@ void DirectXCommon::PreDraw() {
     commandList_->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
+#ifdef NDEBUG
+    D3D12_VIEWPORT viewport{};
+    viewport.Width = static_cast<float>(WinApp::kWindowWidth);
+    viewport.Height = static_cast<float>(WinApp::kWindowHeight);
+    viewport.TopLeftX = 0.0f;
+    viewport.TopLeftY = 0.0f;
+    viewport.MinDepth = 0.0f;
+    viewport.MaxDepth = 1.0f;
+    commandList_->RSSetViewports(1, &viewport);
+
+    D3D12_RECT scissorRect{};
+    scissorRect.left = 0;
+    scissorRect.top = 0;
+    scissorRect.right = WinApp::kWindowWidth;
+    scissorRect.bottom = WinApp::kWindowHeight;
+    commandList_->RSSetScissorRects(1, &scissorRect);
+#else
     // 画面上部中央に 1280x720 のゲーム画面を描画するためのオフセット計算
     float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
     float offsetY = 0.0f; // 上詰めに変更
@@ -338,6 +355,7 @@ void DirectXCommon::PreDraw() {
     scissorRect.right = scissorRect.left + WinApp::kClientWidth;
     scissorRect.bottom = scissorRect.top + WinApp::kClientHeight;
     commandList_->RSSetScissorRects(1, &scissorRect);
+#endif
 }
 
 void DirectXCommon::PostDraw() {
