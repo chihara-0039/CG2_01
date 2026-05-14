@@ -198,6 +198,7 @@ void MyGame::Update() {
 
 
     input->Update();
+    UpdateSceneTransition();//05/14小林 ESCでステージ選択に戻る
     bool isGuiCaptured = false;
     // 2. カメラの更新（Blender風操作を適用）
 #ifndef NDEBUG
@@ -875,6 +876,7 @@ void MyGame::UpdateStageSelect()
         if (std::filesystem::exists(filePath))
         {
             stageMap_.LoadFromFile(filePath);
+            backupMap_ = stageMap_;//バックアップ　05/14小林
             stageRenderer_->BuildFromStageMap(stageMap_); // 見た目の更新
 
             //5/14佐倉追加
@@ -886,5 +888,23 @@ void MyGame::UpdateStageSelect()
         }
         // ゲームプレイモードへ切り替え
         currentMode_ = AppMode::GamePlay;
+    }
+}
+
+void MyGame::UpdateSceneTransition()
+{
+    if ((currentMode_==AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) &&input->TriggerKey(DIK_ESCAPE))
+    {
+        //保存したのを復元
+        stageMap_ = backupMap_;
+
+        stageRenderer_->BuildFromStageMap(stageMap_); // モデルを初期配置に戻す
+        bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_); // 取得状況をリセット
+        stageSelect_->Initialize(object3dCommon.get(),input.get());
+        
+        isGoalReached_ = false;
+
+        if (player_){player_->Respawn();}
+        currentMode_ = AppMode::StageSelect;
     }
 }

@@ -121,6 +121,7 @@ private:
     void UpdateGamePlay();
     void UpdateGamePlayBlockPlace();
     void UpdateTitle();
+    void UpdateSceneTransition();
 
     // シャボン玉取得・ブロック配置関連
     BlockInventory blockInventory_;
@@ -153,4 +154,7 @@ private:
 
 
     float totalTime_ = 0.0f; // 累積時間を保存する変数
+
+    //5/14 小林
+    StageMap backupMap_;
 };
