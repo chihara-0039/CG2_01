@@ -2,6 +2,13 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+#include <algorithm>
+#include <cmath>
+#include <Windows.h>
+
+#ifdef USE_IMGUI
+#include "externals/imgui/imgui.h"
+#endif
 
 void StageMap::Initialize(int width, int height, int depth) {
     assert(width > 0);
@@ -188,6 +195,19 @@ bool StageMap::RemoveBlock(int x, int y, int z) {
 
 bool StageMap::RemoveBlock(const Int3& index) {
     return RemoveBlock(index.x, index.y, index.z);
+}
+
+void StageMap::DrawImGui() {
+#ifdef USE_IMGUI
+    ImGui::Text("Size: %d x %d x %d", width_, height_, depth_);
+
+    // 固定位置のセルの情報など（デバッグ用）
+    const MapCell* cell = GetCell(2, 1, 0);
+    if (cell) {
+        ImGui::Text("Cell(2,1,0) type = %d", static_cast<int>(cell->type));
+        ImGui::Text("Cell(2,1,0) solid = %s", cell->isSolid ? "true" : "false");
+    }
+#endif
 }
 
 int StageMap::ToIndex(int x, int y, int z) const {

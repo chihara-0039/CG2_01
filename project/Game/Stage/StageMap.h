@@ -26,6 +26,24 @@ enum class BlockType : uint32_t {
     CrumblingFloor
 };
 
+inline const char* BlockTypeToString(BlockType type) {
+    switch (type) {
+    case BlockType::None:           return "None";
+    case BlockType::Ground:         return "Ground";
+    case BlockType::Wall:           return "Wall";
+    case BlockType::Ladder:         return "Ladder";
+    case BlockType::Star:           return "Star";
+    case BlockType::BubblePickup:   return "BubblePickup";
+    case BlockType::Goal:           return "Goal";
+    case BlockType::PlayerStart:    return "PlayerStart";
+    case BlockType::Door:           return "Door";
+    case BlockType::PSwitch:        return "PSwitch";
+    case BlockType::PBlock:         return "PBlock";
+    case BlockType::CrumblingFloor: return "CrumblingFloor";
+    default:                        return "Unknown";
+    }
+}
+
 // 1マス分のデータ
 struct MapCell {
     BlockType type = BlockType::None;
@@ -108,7 +126,11 @@ public:
     void ClearRebuildFlag() { needsRebuild_ = false; }
     bool IsPSwitchActive() const { return isPSwitchActive_; }
 
+    // ImGui描画用
+    void DrawImGui();
+
 private:
+
     int width_ = 0;
     int height_ = 0;
     int depth_ = 0;

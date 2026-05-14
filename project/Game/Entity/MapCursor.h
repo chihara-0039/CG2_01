@@ -21,7 +21,11 @@ public:
 
     const Int3& GetIndex() const { return index_; }
 
+    // ImGui描画用
+    void DrawImGui();
+
 private:
+
     Object3dCommon* object3dCommon_ = nullptr;
     Model* cursorModel_ = nullptr;
     Object3d* cursorObject_ = nullptr;

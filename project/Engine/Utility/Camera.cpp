@@ -4,6 +4,11 @@
 #include <cmath>
 #include <algorithm>
 
+#ifdef USE_IMGUI
+#include "externals/imgui/imgui.h"
+#endif
+
+
 Camera::Camera() {
     transform_ = { {1.0f, 1.0f, 1.0f}, {0.3f, 0.0f, 0.0f}, {0.0f, 5.0f, -10.0f} };
     fov_ = 0.45f;
@@ -69,3 +74,19 @@ void Camera::UpdateBlenderStyle(const Input* input, bool isGuiCaptured, HWND hwn
 
     Update();
 }
+
+void Camera::DrawImGui() {
+#ifdef USE_IMGUI
+    ImGui::DragFloat3("Position", &transform_.translate.x, 0.1f);
+    ImGui::DragFloat3("Rotation", &transform_.rotate.x, 0.01f);
+    ImGui::SliderFloat("FOV", &fov_, 0.01f, 3.14f);
+
+    if (ImGui::Button("Reset Camera")) {
+        SetPosition({ 6.0f, 8.0f, -12.0f });
+        SetRotation({ 0.6f, 0.0f, 0.0f });
+        SetFov(0.45f);
+        target_ = { 8.0f, 0.0f, 8.0f };
+        distance_ = 20.0f;
+    }
+#endif
+}

@@ -1,4 +1,4 @@
-﻿#include "object3d.hlsli"
+#include "object3d.hlsli"
 
 
 ConstantBuffer<Material> gMaterial : register(b0);
@@ -38,15 +38,32 @@ PixelShaderOutput main(VertexShaderOutput input)
     // 2. シャドウマップの範囲内の場合のみ判定します
     if (shadowUV.x >= 0.0f && shadowUV.x <= 1.0f && shadowUV.y >= 0.0f && shadowUV.y <= 1.0f)
     {
-        // 遮蔽物までの最短距離を読み取ります
-        float mapDepth = gShadowMap.Sample(gSampler, shadowUV);
+        // 3. PCF (Percentage Closer Filtering) を用いたソフトシャドウ
+        float shadowSum = 0.0f;
+        float2 texelSize = 1.0f / 4096.0f; // ShadowMapの解像度に合わせて1ピクセルのサイズを計算
         
-        // 3. 自分の距離の方が奥にあれば影です。
-        // ※ 0.0005f は「シャドウアクネ（シマシマ）」を防ぐためのバイアスです。
-        if (currentDepth > mapDepth + 0.0005f)
+        // 周囲3x3ピクセルをサンプリング
+        for (int y = -1; y <= 1; ++y)
         {
-            shadowFactor = 0.6f; // 影の中なら暗くする（0.6〜0.7 くらいが綺麗です）
+            for (int x = -1; x <= 1; ++x)
+            {
+                float2 offset = float2(x, y) * texelSize;
+                float mapDepth = gShadowMap.Sample(gSampler, shadowUV + offset);
+                
+                // 自分の距離の方が奥にあれば影と判定（バイアスを加味）
+                float depthDiff = currentDepth - mapDepth;
+                if (depthDiff > 0.0005f)
+                {
+                    // 距離が離れるほど影を薄くする（NDCで0.05以上離れると完全に消える）
+                    float fade = saturate(1.0f - (depthDiff / 0.05f));
+                    shadowSum += fade;
+                }
+            }
         }
+        
+        // 影の濃さを計算（9回のサンプリングのうち、影になった割合）
+        // 完全な影(9/9)なら 0.6f、全く影でない(0/9)なら 1.0f に補間
+        shadowFactor = lerp(1.0f, 0.6f, shadowSum / 9.0f);
     }
 
     // ライティング計算

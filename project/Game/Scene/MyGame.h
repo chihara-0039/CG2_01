@@ -29,7 +29,10 @@
 
 #include "StageSelect.h"
 
-#include"Sound.h"
+#include "Sound.h"
+#include "GameplayUIManager.h"
+#include "GameplayCameraController.h"
+#include "StageEditorController.h"
 
 
 class MyGame {
@@ -97,25 +100,8 @@ private:
     std::unique_ptr<StageSelect> stageSelect_; //5/10 小林
     std::unique_ptr<GameClearScene> gameClearScene_;
 
-    // カメラ回転用UIスプライト
-    std::unique_ptr<Sprite> cameraGuideLeftSprite_;
-    std::unique_ptr<Sprite> cameraGuideRightSprite_;
-    std::unique_ptr<Sprite> cameraGuideUpSprite_;
-    std::unique_ptr<Sprite> cameraGuideDownSprite_;
-
-    //5/14佐倉
-    uint32_t cameraGuideLeftTextureHandle_ = 0;
-    uint32_t cameraGuideRightTextureHandle_ = 0;
-    uint32_t cameraGuideUpTextureHandle_ = 0;
-    uint32_t cameraGuideDownTextureHandle_ = 0;
-
-    // 追加：ドア用3D F UI
-    std::unique_ptr<Model> doorPromptModel_;
-    std::unique_ptr<Object3d> doorPromptObject_;
-
-    // はしご用3D UI
-    std::unique_ptr<Model> ladderPromptModel_;
-    std::unique_ptr<Object3d> ladderPromptObject_;
+    // ゲームプレイ中のUI・プロンプト管理
+    std::unique_ptr<GameplayUIManager> gameplayUIManager_;
 
     // ==========================================================
     // メンバ変数（値や状態）
@@ -123,35 +109,18 @@ private:
     AppMode currentMode_ = AppMode::DebugView;
     DebugDrawFlags debugFlags_;
     StageMap stageMap_;
-    BlockType selectedBlockType_ = BlockType::Ground;
-
-    float gameCameraAngle_ = 0.0f;
-    float targetCameraAngle_ = 0.0f;
-    float cameraAngle_ = 0.0f;
-    float cameraPitch_ = 0.75f;
+    GameplayCameraController gameplayCameraController_;
+    StageEditorController stageEditorController_;
 
     bool isGoalReached_ = false;
-    bool isWaitingForSecondDoor_ = false;
-    Int3 firstDoorIndex_ = { -1, -1, -1 };
     int placeableBlockCount_ = 0;
-
-    // エディタUI用
-    Vector3 editorBlockScale_{ 1.0f, 1.0f, 1.0f };
-    float editorUniformBlockScale_ = 1.0f;
-    std::vector<std::string> stageFiles_;
-    char newStageName_[64] = "new_stage";
-    int selectedStageIndex_ = -1;
 
     // 内部関数
     void UpdateImGui();
     void UpdateDebugView();
-    void RefreshStageList();
-    void UpdateStageEditor();
     void UpdateGamePlay();
     void UpdateGamePlayBlockPlace();
     void UpdateTitle();
-    void DrawEditorToolbar();
-    void ApplyPlacement();
 
     // シャボン玉取得・ブロック配置関連
     BlockInventory blockInventory_;
@@ -159,14 +128,7 @@ private:
     BlockPlacementController blockPlacementController_;
     void UpdateStageSelect(); //5/10追加　小林
 
-    //カメラ回転用
-    void UpdateCameraGuideSprites();
-    void DrawCameraGuideSprites();
 
-    // 追加：ドア用3D F UI更新
-    void UpdateDoorPrompt3D();
-
-    void UpdateLadderPrompt3D();
 
     // 追加：プレイヤーが壁に隠れているか判定
     bool IsPlayerHiddenByWall() const;
