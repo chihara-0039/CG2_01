@@ -5,20 +5,23 @@
 void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager, SpriteCommon* spriteCommon, Object3dCommon* object3dCommon) {
     spriteCommon_ = spriteCommon;
 
-    // カメラ回転用UIスプライト
-    cameraGuideTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow.png");
+    // カメラ回転用UIスプライト（4方向ごとの個別テクスチャ）
+    cameraGuideLeftTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_left.png");
+    cameraGuideRightTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_right.png");
+    cameraGuideUpTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_up.png");
+    cameraGuideDownTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_down.png");
 
     cameraGuideLeftSprite_ = std::make_unique<Sprite>();
-    cameraGuideLeftSprite_->Initialize(spriteCommon, cameraGuideTextureHandle_);
+    cameraGuideLeftSprite_->Initialize(spriteCommon, cameraGuideLeftTextureHandle_);
 
     cameraGuideRightSprite_ = std::make_unique<Sprite>();
-    cameraGuideRightSprite_->Initialize(spriteCommon, cameraGuideTextureHandle_);
+    cameraGuideRightSprite_->Initialize(spriteCommon, cameraGuideRightTextureHandle_);
 
     cameraGuideUpSprite_ = std::make_unique<Sprite>();
-    cameraGuideUpSprite_->Initialize(spriteCommon, cameraGuideTextureHandle_);
+    cameraGuideUpSprite_->Initialize(spriteCommon, cameraGuideUpTextureHandle_);
 
     cameraGuideDownSprite_ = std::make_unique<Sprite>();
-    cameraGuideDownSprite_->Initialize(spriteCommon, cameraGuideTextureHandle_);
+    cameraGuideDownSprite_->Initialize(spriteCommon, cameraGuideDownTextureHandle_);
 
     // ドア用3D F UI
     doorPromptModel_ = std::unique_ptr<Model>(
@@ -84,20 +87,29 @@ void GameplayUIManager::UpdateCameraGuideSprites(bool isGamePlayMode) {
     float centerX = screenWidth * 0.5f;
     float centerY = screenHeight * 0.5f;
 
-    cameraGuideLeftSprite_->SetPosition({ leftX, centerY });
-    cameraGuideRightSprite_->SetPosition({ rightX, centerY });
-    cameraGuideUpSprite_->SetPosition({ centerX, topY });
-    cameraGuideDownSprite_->SetPosition({ centerX, bottomY });
+    // ==============================
+    // 位置オフセットの微調整
+    // ==============================
+    Vector2 leftOffset = { 0.0f, 0.0f };
+    Vector2 upOffset = { 10.0f, 0.0f };
+    Vector2 rightOffset = { -20.0f, 0.0f };
+    Vector2 downOffset = { 0.0f, -30.0f };
+
+    cameraGuideLeftSprite_->SetPosition({ leftX + leftOffset.x, centerY + leftOffset.y });
+    cameraGuideRightSprite_->SetPosition({ rightX + rightOffset.x, centerY + rightOffset.y });
+    cameraGuideUpSprite_->SetPosition({ centerX + upOffset.x, topY + upOffset.y });
+    cameraGuideDownSprite_->SetPosition({ centerX + downOffset.x, bottomY + downOffset.y });
 
     cameraGuideLeftSprite_->SetSize({ 64.0f, 64.0f });
     cameraGuideRightSprite_->SetSize({ 64.0f, 64.0f });
     cameraGuideUpSprite_->SetSize({ 64.0f, 64.0f });
     cameraGuideDownSprite_->SetSize({ 64.0f, 64.0f });
 
+    // 各個別テクスチャですでに正しい向きになっているため回転は不要
     cameraGuideUpSprite_->SetRotation(0.0f);
-    cameraGuideRightSprite_->SetRotation(1.5708f);
-    cameraGuideDownSprite_->SetRotation(3.1415f);
-    cameraGuideLeftSprite_->SetRotation(-1.5708f);
+    cameraGuideRightSprite_->SetRotation(0.0f);
+    cameraGuideDownSprite_->SetRotation(0.0f);
+    cameraGuideLeftSprite_->SetRotation(0.0f);
 
     cameraGuideLeftSprite_->Update();
     cameraGuideRightSprite_->Update();
