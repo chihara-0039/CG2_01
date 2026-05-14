@@ -4,15 +4,17 @@
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
 #endif
+#include <algorithm>
 
 void GameplayCameraController::Initialize() {
     // 初期状態の極座標：少し上空から見下ろすデフォルト角度
-    cameraAngle_ = 0.0f;
+    cameraAngle_ = 1.5708f;
     cameraPitch_ = 0.75f;
+    cameraDistance_ = 35.0f;
 }
 
-void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winApp) {
-    if (!input || !camera || !winApp) return;
+void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winApp,Player*player) {
+    if (!input || !camera || !winApp||!player) return;
 
     const auto& mouse = input->GetMouseState();
 
@@ -93,18 +95,35 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
         }
     }
 
-    // 最終的なピッチ角のクランプ処理
-    if (cameraPitch_ > maxPitch) {
-        cameraPitch_ = maxPitch;
+    cameraPitch_ = std::clamp(cameraPitch_, minPitch, maxPitch);
+
+    // ==========================================================
+    // ★ ズームイン・ズームアウト
+    // マウスホイール上：ズームイン
+    // マウスホイール下：ズームアウト
+    // ==========================================================
+
+    if (!isGuiCaptured) {
+        const float zoomSpeed = 2.0f;
+
+        cameraDistance_ -= static_cast<float>(mouse.wheel) * zoomSpeed;
+        cameraDistance_ = std::clamp(cameraDistance_, minDistance_, maxDistance_);
     }
 
     // ==========================================================
-    // カメラの三次元位置・回転行列の最終計算
-    // ==========================================================
-    // ステージ中央付近の注視点（ピボット）
-    Vector3 pivot = { 4.0f, 9.0f, 4.5f };
-    float distance = 35.0f; // カメラとピボットとの距離
-    float height = 20.0f;   // ベースの高さ
+   // ★ プレイヤー位置を基準にする
+   // ==========================================================
+
+    Vector3 playerPos = player->GetPosition();
+
+    Vector3 pivot = {
+        playerPos.x,
+        playerPos.y + 1.2f,
+        playerPos.z
+    };
+
+    float distance = cameraDistance_;
+    float height = cameraDistance_ * heightRate_;
 
     Vector3 pos;
     // 極座標計算：角度とピッチに基づきピボット周囲を旋回する座標を割り出す
@@ -116,15 +135,24 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
 }
 
-void GameplayCameraController::ResetCamera(Camera* camera) {
-    if (!camera) return;
+void GameplayCameraController::ResetCamera(Camera* camera,Player*player) {
+    if (!camera||!player) return;
 
     cameraAngle_ = 1.5708f;
     cameraPitch_ = 0.75f;
+    cameraDistance_ = 35.0f;
 
-    Vector3 pivot = { 4.0f, 9.0f, 4.5f };
-    float distance = 35.0f;
-    float height = 20.0f;
+    Vector3 playerPos = player->GetPosition();
+
+    Vector3 pivot = {
+        playerPos.x,
+        playerPos.y + 1.2f,
+        playerPos.z
+    };
+
+    float distance = cameraDistance_;
+    float height = cameraDistance_ * heightRate_;
+
 
     Vector3 pos;
     pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
