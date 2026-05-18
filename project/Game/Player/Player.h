@@ -2,6 +2,7 @@
 #include "Object3d.h"
 #include "Input.h"
 #include "StageMap.h"
+#include <memory>
 
 class Player {
 public:
@@ -72,7 +73,7 @@ private:
     bool CheckCollision(const Vector3& pos, const StageMap& map);
 
 private:
-    Object3d* object_ = nullptr;    // プレイヤーの見た目
+    std::unique_ptr<Object3d> object_;    // プレイヤーの見た目
     Vector3 position_ = { 0, 0, 0 }; // 世界座標
     Vector3 rotation_ = { 0, 0, 0 };
     Vector3 velocity_ = { 0, 0, 0 }; // 速度（落下速度を管理）

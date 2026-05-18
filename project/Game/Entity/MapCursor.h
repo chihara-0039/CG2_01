@@ -3,6 +3,7 @@
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Model.h"
+#include <memory>
 
 class MapCursor {
 public:
@@ -27,8 +28,8 @@ public:
 private:
 
     Object3dCommon* object3dCommon_ = nullptr;
-    Model* cursorModel_ = nullptr;
-    Object3d* cursorObject_ = nullptr;
+    std::unique_ptr<Model> cursorModel_;
+    std::unique_ptr<Object3d> cursorObject_;
 
     Int3 index_{ 0, 0, 0 };
 

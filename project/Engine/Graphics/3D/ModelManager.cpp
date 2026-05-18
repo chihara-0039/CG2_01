@@ -2,15 +2,15 @@
 
 // 静的メンバの定義
 Object3dCommon* ModelManager::common_ = nullptr;
-std::unordered_map<std::string, Model*> ModelManager::models_;
-Object3d* ModelManager::internalObject_ = nullptr;
+std::unordered_map<std::string, std::unique_ptr<Model>> ModelManager::models_;
+std::unique_ptr<Object3d> ModelManager::internalObject_;
 Matrix4x4 ModelManager::viewMatrix_ = Math::MakeIdentity4x4();
 Matrix4x4 ModelManager::projectionMatrix_ = Math::MakeIdentity4x4();
 
 void ModelManager::Initialize(Object3dCommon* common) {
     common_ = common;
     // 描画用の実体を一つだけ作っておく
-    internalObject_ = new Object3d();
+    internalObject_ = std::make_unique<Object3d>();
     internalObject_->Initialize(common_);
 }
 
@@ -32,7 +32,7 @@ void ModelManager::Draw(const std::string& modelName, const Vector3& pos, const 
     }
 
     // 2. 使い回し用オブジェクトに設定を流し込む
-    internalObject_->SetModel(models_[modelName]);
+    internalObject_->SetModel(models_[modelName].get());
     internalObject_->SetPosition(pos);
     internalObject_->SetRotation(rot);
     internalObject_->SetScale(scale);
@@ -46,14 +46,8 @@ void ModelManager::Draw(const std::string& modelName, const Vector3& pos, const 
 
 void ModelManager::Finalize() {
     // マップ内のモデルを削除
-    for (auto& pair : models_) {
-        delete pair.second;
-    }
     models_.clear();
 
     // 使い回し用オブジェクトも忘れずに削除
-    if (internalObject_) {
-        delete internalObject_;
-        internalObject_ = nullptr;
-    }
+    internalObject_.reset();
 }

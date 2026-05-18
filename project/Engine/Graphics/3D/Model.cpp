@@ -5,8 +5,8 @@
 
 using namespace Microsoft::WRL;
 
-Model* Model::CreateFromOBJ(DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename, TextureManager* textureManager) {
-    Model* model = new Model();
+std::unique_ptr<Model> Model::CreateFromOBJ(DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename, TextureManager* textureManager) {
+    std::unique_ptr<Model> model = std::make_unique<Model>();
     model->Initialize(dxCommon, directoryPath, filename, textureManager);
     return model;
 }

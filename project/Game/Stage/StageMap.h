@@ -3,13 +3,6 @@
 #include <cstdint>
 #include <string>
 
-// 3次元整数座標
-struct Int3 {
-    int x;
-    int y;
-    int z;
-};
-
 // ブロック種類
 enum class BlockType : uint32_t {
     None = 0,
@@ -44,6 +37,26 @@ inline const char* BlockTypeToString(BlockType type) {
     }
 }
 
+// シャボン玉の中身のエンコード・デコード用ヘルパー関数
+inline int PackBubbleContents(BlockType type, int customId) {
+    return (static_cast<int>(type) & 0xFFFF) | ((customId & 0xFFFF) << 16);
+}
+inline BlockType UnpackBubbleType(int packed) {
+    return static_cast<BlockType>(packed & 0xFFFF);
+}
+inline int UnpackBubbleCustomId(int packed) {
+    return (packed >> 16) & 0xFFFF;
+}
+
+// 3次元整数座標
+struct Int3 {
+    int x;
+    int y;
+    int z;
+};
+
+
+
 // 1マス分のデータ
 struct MapCell {
     BlockType type = BlockType::None;
@@ -60,10 +73,38 @@ struct MapCell {
     bool isHidden = false;      // 現在消えているかどうか
     float respawnTimer = 0.0f;  // 復活までのカウント
     // --- カラー演出用 ---
+    float colorR = 1.0f; // 赤
     float colorG = 1.0f; // 緑 (1.0で通常、0.0に近づくと赤くなる)
     float colorB = 1.0f; // 青
     float opacity = 1.0f; // 透明度 (1.0で表示、0.0で非表示)
 
+};
+
+struct CustomBlockCell {
+    BlockType type = BlockType::None;
+};
+
+// カスタムブロックパーツのプロパティ定義 (3x3x3 の複合ブロックアセンブリ)
+struct CustomBlockPart {
+    int id = 0;              // 1〜5 がカスタムパーツスロット
+    std::string name = "";   // パーツ名
+    BlockType baseType = BlockType::Wall; // 互換性用のベース種類
+    float colorR = 1.0f;     // カスタムカラー
+    float colorG = 1.0f;
+    float colorB = 1.0f;
+
+    CustomBlockCell cells[3][3][3]; // [y][z][x] 3Dアセンブリ形状データ
+
+    bool IsEmpty() const {
+        for (int y = 0; y < 3; ++y) {
+            for (int z = 0; z < 3; ++z) {
+                for (int x = 0; x < 3; ++x) {
+                    if (cells[y][z][x].type != BlockType::None) return false;
+                }
+            }
+        }
+        return true;
+    }
 };
 
 class StageMap {
@@ -126,6 +167,22 @@ public:
     void ClearRebuildFlag() { needsRebuild_ = false; }
     bool IsPSwitchActive() const { return isPSwitchActive_; }
 
+    // --- カスタムブロックパーツ関連 ---
+    const std::vector<CustomBlockPart>& GetCustomParts() const { return customParts_; }
+    std::vector<CustomBlockPart>& GetCustomParts() { return customParts_; }
+    const CustomBlockPart* GetCustomPart(int id) const {
+        if (id >= 1 && id <= (int)customParts_.size()) {
+            return &customParts_[id - 1];
+        }
+        return nullptr;
+    }
+    CustomBlockPart* GetCustomPart(int id) {
+        if (id >= 1 && id <= (int)customParts_.size()) {
+            return &customParts_[id - 1];
+        }
+        return nullptr;
+    }
+
     // ImGui描画用
     void DrawImGui();
 
@@ -136,6 +193,7 @@ private:
     int depth_ = 0;
 
     std::vector<MapCell> cells_;
+    std::vector<CustomBlockPart> customParts_; // カスタムブロックパーツ定義リスト (スロット1〜5)
 
 private:
     int ToIndex(int x, int y, int z) const;
@@ -143,6 +201,4 @@ private:
 
     bool isPSwitchActive_ = false; // Pスイッチの状態
     bool needsRebuild_ = false; // ★追加
-
-    
 };

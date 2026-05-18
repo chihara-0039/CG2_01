@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <unordered_map>
+#include <memory>
 #include "Model.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
@@ -28,8 +29,8 @@ public:
 
 private:
     static Object3dCommon* common_;
-    static std::unordered_map<std::string, Model*> models_;
-    static Object3d* internalObject_; // 描画用の使い回しインスタンス
+    static std::unordered_map<std::string, std::unique_ptr<Model>> models_;
+    static std::unique_ptr<Object3d> internalObject_; // 描画用の使い回しインスタンス
     static Matrix4x4 viewMatrix_;
     static Matrix4x4 projectionMatrix_;
 };

@@ -4,6 +4,7 @@
 #include "MyMath.h"
 #include <string>
 #include <vector>
+#include <memory>
 
 // 頂点データ構造体 (ShaderのInputLayoutに合わせる)
 struct ModelVertexData {
@@ -16,7 +17,7 @@ struct ModelVertexData {
 class Model {
 public:
     // OBJファイルからモデル生成 (ディレクトリパスとファイル名を分けて渡す)
-    static Model* CreateFromOBJ(DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename, TextureManager* textureManager);
+    static std::unique_ptr<Model> CreateFromOBJ(DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename, TextureManager* textureManager);
 
     void Initialize(DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename, TextureManager* textureManager);
     void Draw(ID3D12GraphicsCommandList* commandList);

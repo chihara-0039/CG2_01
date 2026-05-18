@@ -1,4 +1,4 @@
-﻿#include "StageSelect.h"
+#include "StageSelect.h"
 #include <filesystem>
 
 void StageSelect::Initialize(Object3dCommon* objCommon, Input* input)
@@ -38,11 +38,11 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input)
 	);
 
 	// 実体（オブジェクト）を作って初期化
-	stageObject_ = new Object3d();
+	stageObject_ = std::make_unique<Object3d>();
 	stageObject_->Initialize(object3dCommon_);
 
 	// 読み込んだモデルをセットする
-	stageObject_->SetModel(stageModel_);
+	stageObject_->SetModel(stageModel_.get());
 
 	// 位置やサイズを設定（とりあえず原点に置きます）
 	stageObject_->SetPosition({ 0.0f, 0.0f, 5.0f });

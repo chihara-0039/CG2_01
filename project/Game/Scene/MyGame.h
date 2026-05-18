@@ -33,6 +33,7 @@
 #include "GameplayUIManager.h"
 #include "GameplayCameraController.h"
 #include "StageEditorController.h"
+#include "../UI/BlockInventoryUI.h"
 
 
 class MyGame {
@@ -102,6 +103,7 @@ private:
 
     // ゲームプレイ中のUI・プロンプト管理
     std::unique_ptr<GameplayUIManager> gameplayUIManager_;
+    std::unique_ptr<BlockInventoryUI> blockInventoryUI_;
 
     // ==========================================================
     // メンバ変数（値や状態）
