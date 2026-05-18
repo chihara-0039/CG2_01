@@ -52,11 +52,9 @@
     <ClCompile Include="Game\Block\BlockPlacementController.cpp" />
     <ClCompile Include="Game\Block\BubblePickupController.cpp" />
     <ClCompile Include="Game\Block\BlockInventory.cpp" />
-
     <ClCompile Include="Game\Scene\StageSelect.cpp" />
-
-    <ClCompile Include="Sound.cpp" />
-
+    <ClCompile Include="Sound\Sound.cpp" />
+    <ClCompile Include="Game\Stage\StageRespawnController.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Utility\Camera.h" />
@@ -100,11 +98,9 @@
     <ClInclude Include="Game\Block\BlockPlacementController.h" />
     <ClInclude Include="Game\Block\BubblePickupController.h" />
     <ClInclude Include="Game\Block\BlockInventory.h" />
-
     <ClInclude Include="Game\Scene\StageSelect.h" />
-
-    <ClInclude Include="Sound.h" />
-
+    <ClInclude Include="Sound\Sound.h" />
+    <ClInclude Include="Game\Stage\StageRespawnController.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\Particle.hlsli" />

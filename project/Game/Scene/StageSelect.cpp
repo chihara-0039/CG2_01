@@ -54,37 +54,44 @@ void StageSelect::Update()
 	// ステージファイルが一つもない場合は何もしない
 	if (stageFiles_.empty()) return;
 
-	// ファイル数に関わらず、サイコロの6面分（0～5）を回せるように設定
-	int maxStage = 6;
+	// 0:正面 1:右 2:裏 3:左 4:上 5:下
+	//WSADの順番に書いている{ W(上), S(下), A(左), D(右)
+	int moveTable[6][4] = {
+		{ 4, 5, 3, 1 },//0:正面
+		{ 4, 5, 0, 2 },//1:右
+		{ 4, 5, 1, 3 },//2:裏
+		{ 4, 5, 2, 0 },//3:左
+		{ 2, 0, 3, 1 },//4:上
+		{ 0, 2, 3, 1 } //5:下
+	};
 
-	// --- Aキー：前の面へ ---
-	if (input_->TriggerKey(DIK_A))
-	{
-		selectedStageIndex_ = (selectedStageIndex_ - 1 + maxStage) % maxStage;
-	}
+	// 入力検知 (0:W, 1:S, 2:A, 3:D)
+	if (input_->TriggerKey(DIK_W)) { selectedStageIndex_ = moveTable[selectedStageIndex_][0]; }
+	if (input_->TriggerKey(DIK_S)) { selectedStageIndex_ = moveTable[selectedStageIndex_][1]; }
+	if (input_->TriggerKey(DIK_A)) { selectedStageIndex_ = moveTable[selectedStageIndex_][2]; }
+	if (input_->TriggerKey(DIK_D)) { selectedStageIndex_ = moveTable[selectedStageIndex_][3]; }
 
-	// --- Dキー：次の面へ ---
-	if (input_->TriggerKey(DIK_D))
-	{
-		selectedStageIndex_ = (selectedStageIndex_ + 1) % maxStage;
-	}
-
-	// =========================================================
-	// 目標角度の設定（度数法で設定すると分かりやすい）
-	// =========================================================
+	// --- 目標角度の設定 ---
 	float targetDegX = 0.0f;
 	float targetDegY = 0.0f;
 
-	if (selectedStageIndex_ == 0) { targetDegX = 0.0f;   targetDegY = 0.0f; } // 1面：正面
-	else if (selectedStageIndex_ == 1) { targetDegX = 0.0f;   targetDegY = 90.0f; } // 2面：右
-	else if (selectedStageIndex_ == 2) { targetDegX = 0.0f;   targetDegY = 180.0f; } // 3面：裏
-	else if (selectedStageIndex_ == 3) { targetDegX = 0.0f;   targetDegY = 270.0f; } // 4面：左
-	else if (selectedStageIndex_ == 4) { targetDegX = -90.0f; targetDegY = 0.0f; } // 5面：上
-	else if (selectedStageIndex_ == 5) { targetDegX = 90.0f;  targetDegY = 0.0f; } // 6面：下
+	if      (selectedStageIndex_ == 0) { targetDegX = 0.0f;   targetDegY = 0.0f;  } //正面
+	else if (selectedStageIndex_ == 1) { targetDegX = 0.0f;   targetDegY = 90.0f; } //右
+	else if (selectedStageIndex_ == 2) { targetDegX = 0.0f;   targetDegY = 180.0f;} //裏
+	else if (selectedStageIndex_ == 3) { targetDegX = 0.0f;   targetDegY = 270.0f;} //左
+	else if (selectedStageIndex_ == 4) { targetDegX = -90.0f; targetDegY = 0.0f;  } //上
+	else if (selectedStageIndex_ == 5) { targetDegX = 90.0f;  targetDegY = 0.0f;  } //下
 
 	// 度からラジアンに変換して目標値に代入
 	targetRotationX_ = targetDegX * (3.141592f / 180.0f);
 	targetRotationY_ = targetDegY * (3.141592f / 180.0f);
+
+	// 最短回転補正 (Y軸)
+	while (targetRotationY_ - currentRotationY_ > 3.141592f)  targetRotationY_ -= 6.283184f;
+	while (targetRotationY_ - currentRotationY_ < -3.141592f) targetRotationY_ += 6.283184f;
+	// 最短回転補正 (X軸)
+	while (targetRotationX_ - currentRotationX_ > 3.141592f)  targetRotationX_ -= 6.283184f;
+	while (targetRotationX_ - currentRotationX_ < -3.141592f) targetRotationX_ += 6.283184f;
 
 	// --- 滑らかに回転させる計算（イージング） ---
 	currentRotationX_ += (targetRotationX_ - currentRotationX_) * 0.15f;

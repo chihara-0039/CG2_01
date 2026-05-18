@@ -81,8 +81,12 @@ void StageMap::Initialize(int width, int height, int depth) {
     customParts_[4].cells[0][0][0].type = BlockType::Ladder; // 1マスだけ
 }
 
-void StageMap::Update(float deltaTime, float totalTime) {
-    for (auto& cell : cells_) {
+void StageMap::Update(float deltaTime, float totalTime) 
+{
+    for (auto& cell : cells_)
+    {
+#pragma region 崩れる足場
+
         if (cell.type == BlockType::CrumblingFloor) {
             // --- 崩れる処理 ---
             if (!cell.isHidden) {
@@ -125,6 +129,37 @@ void StageMap::Update(float deltaTime, float totalTime) {
             }
             cell.isCrumbling = false;
         }
+#pragma endregion
+
+#pragma region 動く足場
+
+        if (cell.type == BlockType::MovingFloor) {
+            // 1. タイマーを進める（速度を調整したい場合は deltaTime * 1.5f のように倍率をかけます）
+            float moveSpeed = 1.0f;
+            cell.moveTimer += deltaTime * moveSpeed;
+
+            // 2. sin波を使って 0.0 〜 1.0 の間を滑らかに往復する割合(t)を作る
+            // std::sin は -1.0 〜 1.0 を返すので、+1.0 して 0.0 〜 2.0 にし、2.0 で割って 0.0 〜 1.0 に変換します
+            float t = (std::sin(cell.moveTimer) + 1.0f) / 2.0f;
+
+            // 前フレームのオフセットを記憶
+            float oldX = cell.currentOffsetX;
+            float oldY = cell.currentOffsetY;
+            float oldZ = cell.currentOffsetZ;
+
+            // 新しいオフセットを float で滑らかに計算
+            cell.currentOffsetX = static_cast<float>(cell.moveOffset.x) * t;
+            cell.currentOffsetY = static_cast<float>(cell.moveOffset.y) * t;
+            cell.currentOffsetZ = static_cast<float>(cell.moveOffset.z) * t;
+
+            // 1フレーム分の移動量（差分）を記録
+            cell.deltaOffsetX = cell.currentOffsetX - oldX;
+            cell.deltaOffsetY = cell.currentOffsetY - oldY;
+            cell.deltaOffsetZ = cell.currentOffsetZ - oldZ;
+        }
+
+#pragma endregion
+
     }
 }
 
@@ -363,6 +398,38 @@ void StageMap::DrawImGui() {
 #endif
 }
 
+// ★ 追加：動く足場とのワールド座標（AABBボックス型）当たり判定の実装
+const MapCell* StageMap::GetIntersectingMovingFloor(float pX, float pY, float pZ, float rX, float rY, float rZ) const {
+    for (int y = 0; y < height_; ++y) {
+        for (int z = 0; z < depth_; ++z) {
+            for (int x = 0; x < width_; ++x) {
+                const MapCell* cell = GetCell(x, y, z);
+                if (cell && cell->type == BlockType::MovingFloor) {
+                    // 足場の現在のワールド中心座標（グリッド位置 + 滑らかな移動オフセット）
+                    float floorCenterX = static_cast<float>(x) + cell->currentOffsetX;
+                    float floorCenterY = static_cast<float>(y) + 0.5f + cell->currentOffsetY;
+                    float floorCenterZ = static_cast<float>(z) + cell->currentOffsetZ;
+
+                    // プレイヤーの中心（pYは足元なので、高さの半分 rY を足して中心にする）
+                    float playerCenterX = pX;
+                    float playerCenterY = pY + rY;
+                    float playerCenterZ = pZ;
+
+                    float blockSize = 0.5f; // 1マスの半径
+
+                    // AABB（ボックス同士の重なり）判定
+                    if (std::abs(playerCenterX - floorCenterX) < (rX + blockSize) &&
+                        std::abs(playerCenterY - floorCenterY) < (rY + blockSize) &&
+                        std::abs(playerCenterZ - floorCenterZ) < (rZ + blockSize)) {
+                        return cell;
+                    }
+                }
+            }
+        }
+    }
+    return nullptr;
+}
+
 int StageMap::ToIndex(int x, int y, int z) const {
     return x + (z * width_) + (y * width_ * depth_);
 }
@@ -381,6 +448,8 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::Wall:
     case BlockType::Star:
     case BlockType::CrumblingFloor:
+    case BlockType::IceBlock:
+    case BlockType::MovingFloor:
     cell.isSolid = true;
     break;
 

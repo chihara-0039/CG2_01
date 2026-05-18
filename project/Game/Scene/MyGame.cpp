@@ -204,6 +204,7 @@ void MyGame::Update() {
 
 
     input->Update();
+    UpdateSceneTransition();//05/14小林 ESCでステージ選択に戻る
     bool isGuiCaptured = false;
     // 2. カメラの更新（Blender風操作を適用）
 #ifndef NDEBUG
@@ -357,7 +358,7 @@ void MyGame::Update() {
     if (stageRenderer_) {
         stageRenderer_->SetCamera(view, proj);
         // ※ StageRenderer内部でもObject3dのUpdate(lightVP)を呼ぶように修正が必要です
-        stageRenderer_->Update(lightVP);
+        stageRenderer_->Update(stageMap_,lightVP);
     }
 
 	// マップカーソルの更新
@@ -425,7 +426,7 @@ void MyGame::UpdateDebugView() {
 
 void MyGame::UpdateGamePlay() {
 
-    gameplayCameraController_.Update(input.get(), camera.get(), winApp.get());
+    gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(),player_.get());
     // --- ステージマップの更新（崩れる足場のタイマー処理） ---
 
     //5/14佐倉追加
@@ -453,6 +454,17 @@ void MyGame::UpdateGamePlay() {
     if (player_) {
         player_->Update(input.get(), stageMap_, gameplayCameraController_.GetAngle(), lightCamera_->GetViewProjectionMatrix());
     }
+
+    stageRespawnController_.Update(
+        stageMap_,
+        backupMap_,
+        stageRenderer_.get(),
+        player_.get(),
+        &blockInventory_,
+        &bubblePickupController_,
+        &blockPlacementController_,
+        &stageEditorController_
+    );
 
     // --- ステージ再構築 ---
     if (stageMap_.NeedsRebuild()) {
@@ -1002,16 +1014,35 @@ void MyGame::UpdateStageSelect()
         if (std::filesystem::exists(filePath))
         {
             stageMap_.LoadFromFile(filePath);
+            backupMap_ = stageMap_;//バックアップ　05/14小林
             stageRenderer_->BuildFromStageMap(stageMap_); // 見た目の更新
 
             //5/14佐倉追加
             //カメラリセット処理
-            gameplayCameraController_.ResetCamera(camera.get());
-
             // プレイヤーの位置をスタート地点に戻すなどの処理
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+
+            gameplayCameraController_.ResetCamera(camera.get(), player_.get());
         }
         // ゲームプレイモードへ切り替え
         currentMode_ = AppMode::GamePlay;
+    }
+}
+
+void MyGame::UpdateSceneTransition()
+{
+    if ((currentMode_==AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) &&input->TriggerKey(DIK_ESCAPE))
+    {
+        //保存したのを復元
+        stageMap_ = backupMap_;
+
+        stageRenderer_->BuildFromStageMap(stageMap_); // モデルを初期配置に戻す
+        bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_); // 取得状況をリセット
+        stageSelect_->Initialize(object3dCommon.get(),input.get());
+        
+        isGoalReached_ = false;
+
+        if (player_){player_->Respawn();}
+        currentMode_ = AppMode::StageSelect;
     }
 }

@@ -81,7 +81,22 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetDxCommon(),
 		"Resources/Models/CollapsedBlocks",
 		"CollapsedBlocks.obj",
-		object3dCommon_->GetTextureManager());
+		object3dCommon_->GetTextureManager()
+	);
+	// 滑る足場
+	iceBlockModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/block",
+		"block.obj",
+		object3dCommon_->GetTextureManager()
+	);
+	// 動く足場
+	movingFloorModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/wall",
+		"wall.obj",
+		object3dCommon_->GetTextureManager()
+	);
 }
 
 void StageRenderer::UpdateEffect(const StageMap& stageMap) {
@@ -294,6 +309,35 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f }
 					);
 					break;
+					// ブロックの種類が IceBlock（滑る足場）の場合
+				case BlockType::IceBlock:
+					CreateStageObject(
+						iceBlockModel_,
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f }
+					);
+					break;
+					// ブロックの種類が MovingFloor（動く足場）の場合
+				case BlockType::MovingFloor:
+				{
+					// 1. 3Dオブジェクトを生成 (既存の他のブロックと同様の生成処理)
+					Object3d* newObj = CreateStageObject(
+						movingFloorModel_,
+						position,
+						blockScale_,
+						{ 0.0f, cell->rotationY, 0.0f }
+					);
+
+					// 2. 生成に成功したら、更新用のリストに「オブジェクト」と「セルのインデックス」を記録
+					if (newObj) {
+						MovingFloorInstance instance;
+						instance.object = newObj;
+						instance.cellIndex = { x, y, z }; // 現在ループで走査中の [x, y, z]
+						movingFloorInstances_.push_back(instance);
+					}
+				}
+					break;
 				// ブロックの種類が不明な場合は何もしない
 				default:
 				break;
@@ -322,6 +366,41 @@ void StageRenderer::Update(const Matrix4x4& lightVP) {
 		}
 	}
 	for (const auto& obj : previewObjects_) {
+void StageRenderer::Update(const StageMap& stageMap,const Matrix4x4& lightVP)
+{
+
+#pragma region 滑る足場
+
+	// ▼ 追加：動く足場の位置を StageMap の計算結果と同期させる
+	for (auto& instance : movingFloorInstances_) {
+		// マップから対応するセルのデータを取得
+		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
+
+		if (cell && cell->type == BlockType::MovingFloor) {
+			// エディタで配置した時のベース座標（グリッド座標からワールド座標に変換）
+			// ※お手元のプロジェクトのグリッド配置計算（BuildFromStageMap内にある position の計算式）と合わせてください
+			Vector3 basePosition = {
+				static_cast<float>(instance.cellIndex.x) * blockScale_.x,
+				static_cast<float>(instance.cellIndex.y) * blockScale_.y,
+				static_cast<float>(instance.cellIndex.z) * blockScale_.z
+			};
+
+			// ベース座標に、StageMap.cpp の Update で計算された滑らかなオフセット（currentOffset）を加算する
+			// ※currentOffsetにブロックスケールが掛けられていない場合は、ここで blockScale_ を掛けてください
+			Vector3 newPosition = {
+				basePosition.x + (cell->currentOffsetX * blockScale_.x),
+				basePosition.y + (cell->currentOffsetY * blockScale_.y),
+				basePosition.z + (cell->currentOffsetZ * blockScale_.z)
+			};
+
+			// 3Dオブジェクトの座標を更新
+			instance.object->SetPosition(newPosition);
+		}
+	}
+
+#pragma endregion
+
+	for (Object3d* obj : objects_) {
 		if (obj) {
 			obj->Update(lightVP);
 		}
@@ -441,6 +520,8 @@ void StageRenderer::SetPlacementPreview(
 
 void StageRenderer::ClearPlacementPreview() {
 	previewObjects_.clear();
+	// ▼ 追加：動く足場の管理リストをクリア (Object3d自体は objects_ 側で解放されるため clear だけでOK)
+	movingFloorInstances_.clear();
 }
 
 // 指定したモデルと位置・スケール・回転を使ってオブジェクトを生成し、リストに追加して返す

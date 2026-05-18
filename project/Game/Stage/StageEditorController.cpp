@@ -41,24 +41,43 @@ void StageEditorController::RefreshStageList() {
     }
 }
 
+//5/18佐倉変更
 void StageEditorController::ResetPlayerToStartCell(StageMap& stageMap, Player* player) {
     if (!player) return;
+
     bool foundStart = false;
-    // ステージマップ全体を走査し、PlayerStartブロックを探す
+
     for (int y = 0; y < stageMap.GetHeight(); ++y) {
         for (int z = 0; z < stageMap.GetDepth(); ++z) {
             for (int x = 0; x < stageMap.GetWidth(); ++x) {
                 const MapCell* cell = stageMap.GetCell(x, y, z);
+
                 if (cell && cell->type == BlockType::PlayerStart) {
-                    // 発見したらプレイヤーの座標をブロックの上方へ移動
-                    player->SetPosition({ (float)x, (float)y + 1.1f, (float)z });
+                    Vector3 startPos = {
+                        static_cast<float>(x),
+                        static_cast<float>(y) + 1.1f,
+                        static_cast<float>(z)
+                    };
+
+                    player->SetPosition(startPos);
+                    player->SetRespawnPosition(startPos);
+
                     foundStart = true;
                     break;
                 }
             }
+
             if (foundStart) break;
         }
+
         if (foundStart) break;
+    }
+
+    if (!foundStart) {
+        Vector3 defaultPos = { 0.0f, 1.5f, 0.0f };
+
+        player->SetPosition(defaultPos);
+        player->SetRespawnPosition(defaultPos);
     }
 }
 
@@ -139,16 +158,6 @@ void StageEditorController::Update(Input* input, StageMap& stageMap, StageRender
                 needRebuild = true;
             }
         }
-
-        // 数字キーによる配置ブロックのダイレクト切り替えと即時配置
-        if (input->TriggerKey(DIK_1)) { selectedBlockType_ = BlockType::Ground; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_2)) { selectedBlockType_ = BlockType::Wall; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_3)) { selectedBlockType_ = BlockType::BubblePickup; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_4)) { selectedBlockType_ = BlockType::Goal; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_5)) { selectedBlockType_ = BlockType::Ladder; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_6)) { selectedBlockType_ = BlockType::Door; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_7)) { selectedBlockType_ = BlockType::PlayerStart; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-
         // Enterキー：選択中ブロックの配置
         if (input->TriggerKey(DIK_RETURN)) { ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
 
@@ -417,7 +426,7 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
         std::vector<BlockType> types;
     };
 
-    std::vector<Category> categories = 
+    std::vector<Category> categories =
     {
         {
             "Basic Blocks", // ブロック類
@@ -425,7 +434,9 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::Ground,
                 BlockType::Wall,
                 BlockType::PBlock,
-                BlockType::CrumblingFloor
+                BlockType::CrumblingFloor,
+                BlockType::IceBlock,
+                BlockType::MovingFloor
             }
         },
         {
@@ -516,6 +527,15 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
             ImGui::EndTabItem();
         }
 
+        // ブロック選択UIの近くに追加
+        if (selectedBlockType_ == BlockType::MovingFloor) {
+            ImGui::Separator();
+            ImGui::Text("Moving Floor Settings");
+            // X, Y, Z の移動量を設定するスライダー（-10マス 〜 10マス の範囲など）
+            ImGui::SliderInt("Move X", &currentMoveOffset_.x, -10, 10);
+            ImGui::SliderInt("Move Y", &currentMoveOffset_.y, -10, 10);
+            ImGui::SliderInt("Move Z", &currentMoveOffset_.z, -10, 10);
+        }
         ImGui::EndTabBar();
     }
 
@@ -553,6 +573,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
     }
 #endif
 }
+
+    //5/18佐倉変更
 
 void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* stageRenderer, MapCursor* mapCursor, Player* player) {
     if (!mapCursor) return;
@@ -643,8 +665,19 @@ void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* st
         }
 
         // プレイヤースタート地点の場合は即座にプレイヤー座標も更新する
+        MapCell* cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+        if (cell && selectedBlockType_ == BlockType::MovingFloor) {
+            cell->moveOffset = currentMoveOffset_;
+        }
         if (selectedBlockType_ == BlockType::PlayerStart && player) {
-            player->SetPosition({ (float)cursor.x, (float)cursor.y + 1.1f, (float)cursor.z });
+            Vector3 startPos = {
+                static_cast<float>(cursor.x),
+                static_cast<float>(cursor.y) + 1.1f,
+                static_cast<float>(cursor.z)
+            };
+
+            player->SetPosition(startPos);
+            player->SetRespawnPosition(startPos);
         }
     }
 

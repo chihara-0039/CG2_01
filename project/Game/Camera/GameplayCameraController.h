@@ -2,6 +2,7 @@
 #include "Input.h"
 #include "Camera.h"
 #include "WinApp.h"
+#include"Player.h"
 
 /// <summary>
 /// ゲームプレイ中のカメラ操作を管理するコントローラークラス。
@@ -21,7 +22,7 @@ public:
     /// <param name="input">入力管理オブジェクト</param>
     /// <param name="camera">操作対象のカメラ</param>
     /// <param name="winApp">ウィンドウ管理オブジェクト</param>
-    void Update(Input* input, Camera* camera, WinApp* winApp);
+    void Update(Input* input, Camera* camera, WinApp* winApp,Player*player);
 
     /// <summary>
     /// 現在のカメラ横回転角度（ラジアン）を取得します。
@@ -46,10 +47,22 @@ public:
     /// <summary>
     /// カメラ位置と角度をデフォルト状態にリセットし、即座に反映します。
     /// </summary>
-    void ResetCamera(Camera* camera);
+    void ResetCamera(Camera* camera,Player*player);
 
 private:
     // カメラの極座標パラメータ
     float cameraAngle_ = 0.0f; // 水平方向の回転角度
     float cameraPitch_ = 0.75f; // 垂直方向の見下ろし角度
+
+
+    //ズーム制限
+    float minDistance_ = 18.0f;
+    float maxDistance_ = 45.0f;
+
+    //高さ倍率
+    float heightRate_ = 0.55f;
+
+    float cameraFov_ = 0.45f;
+    float minFov_ = 0.25f;
+    float maxFov_ = 0.75f;
 };

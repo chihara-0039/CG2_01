@@ -44,7 +44,8 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 
 	Vector3 move = { 0, 0, 0 };
 
-	if (isOnLadder) {
+	if (isOnLadder) 
+	{
 		velocity_.y = 0;
 
 		// 入力方向の強さを計算
@@ -63,12 +64,15 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 			Vector3 nextPos = position_;
 			nextPos.y += (verticalDir > 0 ? 1.0f : -1.0f) * walkSpeed_;
 
-			if (!CheckCollision(nextPos, map)) {
+			if (!CheckCollision(nextPos, map)) 
+			{
 				position_.y = nextPos.y;
 				// ハシゴの芯に吸い寄せる
 				position_.x += (static_cast<float>(gx) - position_.x) * 0.6f;
 				position_.z += (static_cast<float>(gz) - position_.z) * 0.6f;
-			} else if (verticalDir > 0) {
+			} 
+			else if (verticalDir > 0)
+			{
 				// ★登りきり：ハシゴ自体の向き（cellWaistの回転）を使って押し出す
 				// cellWaist がハシゴのはずなので、その rotationY を取得
 				float exitAngle = (cellWaist ? cellWaist->rotationY : rotation_.y);
@@ -81,8 +85,8 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 				position_.y += 0.1f;
 			}
 		}
-		else {
-
+		else 
+		{
 			// X軸衝突判定
 			Vector3 nextPosX = position_;
 			nextPosX.x += moveSide * 0.3f;
@@ -113,21 +117,72 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 
 		// 入力方向をカメラの回転に合わせる
 		Vector3 inputDir = { 0, 0, 0 };
-		if (input->PushKey(DIK_W)) inputDir.z += 1.0f;
-		if (input->PushKey(DIK_S)) inputDir.z -= 1.0f;
-		if (input->PushKey(DIK_A)) inputDir.x -= 1.0f;
-		if (input->PushKey(DIK_D)) inputDir.x += 1.0f;
+		if (input->PushKey(DIK_W)) inputDir.z += 0.5f;
+		if (input->PushKey(DIK_S)) inputDir.z -= 0.5f;
+		if (input->PushKey(DIK_A)) inputDir.x -= 0.5f;
+		if (input->PushKey(DIK_D)) inputDir.x += 0.5f;
 
 		if (inputDir.x != 0 || inputDir.z != 0) {
 			// カメラのY軸回転に合わせて移動ベクトルを計算
 			move.x = inputDir.x * std::cos(cameraRotY) + inputDir.z * std::sin(cameraRotY);
 			move.z = -inputDir.x * std::sin(cameraRotY) + inputDir.z * std::cos(cameraRotY);
 
-			// 速度と向きを更新
-			move.x *= walkSpeed_;
-			move.z *= walkSpeed_;
+			//// 速度と向きを更新
+			//move.x *= walkSpeed_;
+			//move.z *= walkSpeed_;
 			rotation_.y = std::atan2f(move.x, move.z);
 		}
+
+#pragma region 滑る足場
+
+		// 1. 足元のブロックを特定
+		int gx = static_cast<int>(std::floor(position_.x + 0.5f));
+		int gyBelow = static_cast<int>(std::floor(position_.y - 0.1f)); // 足の少し下
+		int gz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+		const MapCell* cellBelow = map.GetCell(gx, gyBelow, gz);
+		bool isOnIce = (cellBelow && cellBelow->type == BlockType::IceBlock);
+
+		// 2. 加速度と摩擦係数を決定
+		float acceleration = isOnIce ? 0.01f : 0.08f; // 氷なら加速が鈍い
+		float friction = isOnIce ? 0.98f : 0.7f;     // 氷なら速度が減りにくい（1.0に近いほど滑る）
+
+		// 加速
+		velocity_.x += move.x * acceleration;
+		velocity_.z += move.z * acceleration;
+
+		// 摩擦（減速）
+		velocity_.x *= friction;
+		velocity_.z *= friction;
+
+#pragma endregion
+
+#pragma region 動く足場
+
+		// ▼ ▼ 追加：動く足場への追従処理 ▼ ▼
+		// 足元より少し下の位置をチェック
+		Vector3 footCheckPos = position_;
+		// プレイヤーの足元よりほんの少し低い位置を判定するための座標
+		float footCheckY = position_.y - 0.05f;
+		// 左右の判定半径を少しだけ小さく（0.8倍に）することで、ギリギリの端っこに乗ったときのガタつきを防ぐ
+		float footRadiusX = radius_.x * 0.8f;
+		float footRadiusZ = radius_.z * 0.8f;
+		float footRadiusY = 0.05f; // 足元チェック用の薄い判定ボックスの高さ
+
+		const MapCell* ridingFloor = map.GetIntersectingMovingFloor(position_.x, footCheckY, position_.z, footRadiusX, footRadiusY, footRadiusZ);
+		if (ridingFloor) {
+			// 足場が動いた分（deltaOffset）だけ、プレイヤーの座標も強制的に動かす
+			position_.x += ridingFloor->deltaOffsetX;
+			position_.y += ridingFloor->deltaOffsetY;
+			position_.z += ridingFloor->deltaOffsetZ;
+
+			// 足場の上に乗っているので、接地フラグを立てて重力による落下速度をリセット
+			isGrounded_ = true;
+			velocity_.y = 0.0f;
+		}
+		// ▲ ▲ ここまで ▲ ▲
+
+#pragma endregion
 
 		// ジャンプ
 		if (isGrounded_ && input->TriggerKey(DIK_SPACE)) {
@@ -140,12 +195,12 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 
 		// X軸衝突判定
 		Vector3 nextPosX = position_;
-		nextPosX.x += move.x;
+		nextPosX.x += velocity_.x;
 		if (!CheckCollision(nextPosX, map)) position_.x = nextPosX.x;
 
 		// Z軸衝突判定
 		Vector3 nextPosZ = position_;
-		nextPosZ.z += move.z;
+		nextPosZ.z += velocity_.z;
 		if (!CheckCollision(nextPosZ, map)) position_.z = nextPosZ.z;
 
 		// Y軸衝突判定
@@ -160,10 +215,6 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 		}
 	}
 
-	if (position_.y < -10.0f)
-	{
-		Respawn();
-	}
 	CrumbleUpdate(map);
 	PSwitchUpdate(map);
 	DoorWarp(map);
@@ -176,7 +227,8 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 }
 
 // Object3d の行列を更新する（ライトカメラの行列も渡す）
-void Player::UpdateTransform(const Matrix4x4& lightVP) {
+void Player::UpdateTransform(const Matrix4x4& lightVP) 
+{
 	if (object_) {
 		// 内部で持っている Object3d の行列計算だけを行う
 		object_->Update(lightVP);
@@ -235,8 +287,9 @@ bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
 
 				// 指定した座標のセル情報を取得
 				const MapCell* cell = map.GetCell(gx, gy, gz);
-				if (cell && cell->isSolid) {
-					return true; // 壁または地面にぶつかった
+				// ★ 変更：動く足場は固定グリッド判定から除外する
+				if (cell && cell->isSolid && cell->type != BlockType::MovingFloor) {
+					return true;
 				}
 
 				// 秋元追加 04/03
@@ -250,6 +303,12 @@ bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
 			}
 		}
 	}
+
+	// ★ 追加：動いている足場のワールド座標判定（floatにバラして渡す）
+	if (map.GetIntersectingMovingFloor(pos.x, pos.y, pos.z, radius_.x, radius_.y, radius_.z)) {
+		return true;
+	}
+
 	return false;
 }
 

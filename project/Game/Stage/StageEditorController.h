@@ -94,4 +94,7 @@ private:
     // --- ドアギミック用のペアリング管理 ---
     bool isWaitingForSecondDoor_ = false;          // 1つ目のドアを配置し、2つ目を待機中かどうかのフラグ
     Int3 firstDoorIndex_ = { -1, -1, -1 };         // 1つ目に配置されたドアのマップ座標
+
+    // エディタ上で設定する動く足場の移動量
+    Int3 currentMoveOffset_{ 0, 3, 0 }; // 初期値（例として上に3マス）
 };
