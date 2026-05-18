@@ -141,6 +141,10 @@ public:
     }
 
     void ClearRebuildFlag() { needsRebuild_ = false; }
+
+    //5/18佐倉追加
+    void RequestRebuild() { needsRebuild_ = true; }
+
     bool IsPSwitchActive() const { return isPSwitchActive_; }
 
     // ImGui描画用
