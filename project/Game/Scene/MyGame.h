@@ -157,4 +157,4 @@ private:
 
     //5/14 小林
     StageMap backupMap_;
-};
+}
