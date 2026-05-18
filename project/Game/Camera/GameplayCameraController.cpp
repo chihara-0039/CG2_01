@@ -105,11 +105,18 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     // ==========================================================
 
     if (!isGuiCaptured) {
-        const float zoomSpeed = 0.03f;
+        // 5段階くらいで最大・最小ズームに到達させる
+        const float zoomStep = (maxFov_ - minFov_) / 5.0f;
 
-        cameraFov_ -= static_cast<float>(mouse.wheel) * zoomSpeed;
+        if (mouse.wheel > 0) {
+            // ホイール上：ズームイン
+            cameraFov_ -= zoomStep;
+        } else if (mouse.wheel < 0) {
+            // ホイール下：ズームアウト
+            cameraFov_ += zoomStep;
+        }
+
         cameraFov_ = std::clamp(cameraFov_, minFov_, maxFov_);
-
         camera->SetFov(cameraFov_);
     }
 
