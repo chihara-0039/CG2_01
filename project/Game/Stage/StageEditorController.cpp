@@ -38,24 +38,43 @@ void StageEditorController::RefreshStageList() {
     }
 }
 
+//5/18佐倉変更
 void StageEditorController::ResetPlayerToStartCell(StageMap& stageMap, Player* player) {
     if (!player) return;
+
     bool foundStart = false;
-    // ステージマップ全体を走査し、PlayerStartブロックを探す
+
     for (int y = 0; y < stageMap.GetHeight(); ++y) {
         for (int z = 0; z < stageMap.GetDepth(); ++z) {
             for (int x = 0; x < stageMap.GetWidth(); ++x) {
                 const MapCell* cell = stageMap.GetCell(x, y, z);
+
                 if (cell && cell->type == BlockType::PlayerStart) {
-                    // 発見したらプレイヤーの座標をブロックの上方へ移動
-                    player->SetPosition({ (float)x, (float)y + 1.1f, (float)z });
+                    Vector3 startPos = {
+                        static_cast<float>(x),
+                        static_cast<float>(y) + 1.1f,
+                        static_cast<float>(z)
+                    };
+
+                    player->SetPosition(startPos);
+                    player->SetRespawnPosition(startPos);
+
                     foundStart = true;
                     break;
                 }
             }
+
             if (foundStart) break;
         }
+
         if (foundStart) break;
+    }
+
+    if (!foundStart) {
+        Vector3 defaultPos = { 0.0f, 1.5f, 0.0f };
+
+        player->SetPosition(defaultPos);
+        player->SetRespawnPosition(defaultPos);
     }
 }
 
@@ -355,6 +374,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
 #endif
 }
 
+    //5/18佐倉変更
+
 void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* stageRenderer, MapCursor* mapCursor, Player* player) {
     if (!mapCursor) return;
 
@@ -406,7 +427,14 @@ void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* st
         stageMap.SetBlock(cursor, selectedBlockType_);
         // プレイヤースタート地点の場合は即座にプレイヤー座標も更新する
         if (selectedBlockType_ == BlockType::PlayerStart && player) {
-            player->SetPosition({ (float)cursor.x, (float)cursor.y + 1.1f, (float)cursor.z });
+            Vector3 startPos = {
+                static_cast<float>(cursor.x),
+                static_cast<float>(cursor.y) + 1.1f,
+                static_cast<float>(cursor.z)
+            };
+
+            player->SetPosition(startPos);
+            player->SetRespawnPosition(startPos);
         }
     }
 
