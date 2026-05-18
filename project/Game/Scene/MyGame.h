@@ -157,6 +157,5 @@ private:
 
     //5/14 小林
     StageMap backupMap_;
-
     StageRespawnController stageRespawnController_;
 };
