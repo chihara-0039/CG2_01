@@ -10,7 +10,8 @@ void GameplayCameraController::Initialize() {
     // 初期状態の極座標：少し上空から見下ろすデフォルト角度
     cameraAngle_ = 1.5708f;
     cameraPitch_ = 0.75f;
-    cameraDistance_ = 35.0f;
+    // ★追加
+    cameraFov_ = 0.45f;
 }
 
 void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winApp,Player*player) {
@@ -104,32 +105,35 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     // ==========================================================
 
     if (!isGuiCaptured) {
-        const float zoomSpeed = 2.0f;
+        const float zoomSpeed = 0.03f;
 
-        cameraDistance_ -= static_cast<float>(mouse.wheel) * zoomSpeed;
-        cameraDistance_ = std::clamp(cameraDistance_, minDistance_, maxDistance_);
+        cameraFov_ -= static_cast<float>(mouse.wheel) * zoomSpeed;
+        cameraFov_ = std::clamp(cameraFov_, minFov_, maxFov_);
+
+        camera->SetFov(cameraFov_);
     }
 
     // ==========================================================
    // ★ プレイヤー位置を基準にする
    // ==========================================================
 
-    Vector3 playerPos = player->GetPosition();
+   // ズーム前と同じステージ中央基準
+    Vector3 pivot = { 4.0f, 9.0f, 4.5f };
 
-    Vector3 pivot = {
-        playerPos.x,
-        playerPos.y + 1.2f,
-        playerPos.z
-    };
+    // カメラ位置は固定
+    float distance = 35.0f;
+    float height = 20.0f;
 
-    float distance = cameraDistance_;
-    float height = cameraDistance_ * heightRate_;
-
+    // ★ これを追加
     Vector3 pos;
-    // 極座標計算：角度とピッチに基づきピボット周囲を旋回する座標を割り出す
+
+    // 極座標計算
     pos.x = pivot.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * distance;
+
     pos.y = pivot.y + std::sin(cameraPitch_) * height;
+
     pos.z = pivot.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * distance;
+
 
     camera->SetPosition(pos);
     camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
@@ -140,18 +144,14 @@ void GameplayCameraController::ResetCamera(Camera* camera,Player*player) {
 
     cameraAngle_ = 1.5708f;
     cameraPitch_ = 0.75f;
-    cameraDistance_ = 35.0f;
 
-    Vector3 playerPos = player->GetPosition();
+    Vector3 pivot = { 4.0f, 9.0f, 4.5f };
 
-    Vector3 pivot = {
-        playerPos.x,
-        playerPos.y + 1.2f,
-        playerPos.z
-    };
+    float distance = 35.0f;
+    float height = 20.0f;
 
-    float distance = cameraDistance_;
-    float height = cameraDistance_ * heightRate_;
+    cameraFov_ = 0.45f;
+    camera->SetFov(cameraFov_);
 
 
     Vector3 pos;
