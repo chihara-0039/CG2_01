@@ -58,8 +58,15 @@ bool BubblePickupController::TryCollectAt(const Int3& index) {
         return false;
     }
 
-    // シャボン玉を取得して、配置可能ブロックを1個増やす
-    inventory_->AddBlock(1);
+    // シャボン玉に仕込まれている情報をデコード
+    int insideCustomId = UnpackBubbleCustomId(cell->variant);
+    BlockType insideBlock = UnpackBubbleType(cell->variant);
+    if (insideBlock == BlockType::None) {
+        insideBlock = BlockType::Wall; // 安全策としてデフォルトを Wall に
+    }
+    
+    // カスタムIDを保持してインベントリに追加
+    inventory_->AddBlock(insideBlock, 1, insideCustomId);
 
     // マップ上からシャボン玉を消す
     stageMap_->RemoveBlock(index);

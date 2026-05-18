@@ -12,6 +12,9 @@ void StageEditorController::Initialize() {
     
     selectedStageIndex_ = -1;
     selectedBlockType_ = BlockType::Ground;
+    bubbleInsideBlockType_ = BlockType::Wall;
+    selectedCustomPartSlot_ = 1;
+    bubbleInsideCustomSlot_ = 0;
     
     // ドアのペアリング状態の初期化
     isWaitingForSecondDoor_ = false;
@@ -242,6 +245,166 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
             }
         }
     }
+
+    // --- 自分でブロックパーツを作成・カスタマイズする UI ---
+    if (ImGui::CollapsingHeader("Custom Block Maker", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("Select Custom Slot:");
+        for (int i = 1; i <= 5; ++i) {
+            char label[16];
+            sprintf_s(label, "Part %d", i);
+            if (i > 1) ImGui::SameLine();
+            
+            bool isCurrent = (selectedCustomPartSlot_ == i);
+            if (isCurrent) {
+                ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.6f, 0.6f, 0.6f));
+            }
+            if (ImGui::Button(label)) {
+                selectedCustomPartSlot_ = i;
+            }
+            if (isCurrent) {
+                ImGui::PopStyleColor();
+            }
+        }
+
+        auto* part = stageMap.GetCustomPart(selectedCustomPartSlot_);
+        if (part) {
+            bool changed = false;
+
+            // 1. パーツ名編集
+            char nameBuf[32];
+            strcpy_s(nameBuf, part->name.c_str());
+            if (ImGui::InputText("Part Name", nameBuf, sizeof(nameBuf))) {
+                part->name = nameBuf;
+            }
+
+            // 2. カラー編集
+            float color[3] = { part->colorR, part->colorG, part->colorB };
+            if (ImGui::ColorEdit3("Color (RGB)", color)) {
+                part->colorR = color[0];
+                part->colorG = color[1];
+                part->colorB = color[2];
+                changed = true;
+            }
+
+            ImGui::Separator();
+            ImGui::Text("--- 3x3x3 Shape Assembly Editor ---");
+            ImGui::Text("Click cells to cycle: None -> Wall -> Ladder");
+
+            // 編集対象のY座標（レイヤー 0〜2）
+            static int editY = 0;
+            ImGui::Text("Layer (Height Y):");
+            for (int ly = 0; ly < 3; ++ly) {
+                char layerLabel[16];
+                sprintf_s(layerLabel, "Y = %d", ly);
+                if (ly > 0) ImGui::SameLine();
+                if (ImGui::RadioButton(layerLabel, &editY, ly)) {
+                    // レイヤー変更
+                }
+            }
+
+            // 3x3 グリッドの描画 (z, x)
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+            for (int lz = 2; lz >= 0; --lz) { // 奥から手前へ
+                for (int lx = 0; lx < 3; ++lx) {
+                    if (lx > 0) ImGui::SameLine();
+
+                    auto& cell = part->cells[editY][lz][lx];
+                    char btnLabel[64];
+                    
+                    // スロット番号とセル座標で一意なIDを作る
+                    sprintf_s(btnLabel, "%s##%d_%d_%d_%d", 
+                        (cell.type == BlockType::Wall) ? "WALL" : (cell.type == BlockType::Ladder) ? "LAD" : " . ",
+                        selectedCustomPartSlot_, editY, lz, lx);
+
+                    // セル別のカラーをボタンカラーに反映
+                    if (cell.type != BlockType::None) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(part->colorR, part->colorG, part->colorB, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(part->colorR * 1.1f, part->colorG * 1.1f, part->colorB * 1.1f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(part->colorR * 0.8f, part->colorG * 0.8f, part->colorB * 0.8f, 1.0f));
+                    } else {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
+                    }
+
+                    if (ImGui::Button(btnLabel, ImVec2(55.0f, 40.0f))) {
+                        // トグル切り替え: None -> Wall -> Ladder -> None
+                        if (cell.type == BlockType::None) {
+                            cell.type = BlockType::Wall;
+                        } else if (cell.type == BlockType::Wall) {
+                            cell.type = BlockType::Ladder;
+                        } else {
+                            cell.type = BlockType::None;
+                        }
+                        changed = true;
+                    }
+                    ImGui::PopStyleColor(3);
+                }
+            }
+            ImGui::PopStyleVar();
+
+            // 一括クリアボタン
+            if (ImGui::Button("Clear Entire Shape")) {
+                for (int y = 0; y < 3; ++y) {
+                    for (int z = 0; z < 3; ++z) {
+                        for (int x = 0; x < 3; ++x) {
+                            part->cells[y][z][x].type = BlockType::None;
+                        }
+                    }
+                }
+                changed = true;
+            }
+
+            // 変更があったら3D表示をリアルタイム再構築！
+            if (changed && stageRenderer) {
+                stageRenderer->BuildFromStageMap(stageMap);
+            }
+        }
+    }
+
+    if (selectedBlockType_ == BlockType::BubblePickup) {
+        if (ImGui::CollapsingHeader("Bubble Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Bubble Contents:");
+            
+            int currentItem = 0;
+            if (bubbleInsideCustomSlot_ >= 1 && bubbleInsideCustomSlot_ <= 5) {
+                currentItem = bubbleInsideCustomSlot_ + 1;
+            } else {
+                currentItem = (bubbleInsideBlockType_ == BlockType::Ladder) ? 1 : 0;
+            }
+
+            std::vector<std::string> comboItems = { "Default Wall", "Default Ladder" };
+            for (int i = 1; i <= 5; ++i) {
+                const auto* part = stageMap.GetCustomPart(i);
+                std::string displayName = "Custom " + std::to_string(i);
+                if (part && !part->name.empty()) {
+                    displayName += " (" + part->name + ")";
+                }
+                comboItems.push_back(displayName);
+            }
+
+            std::vector<const char*> itemsPtr;
+            for (const auto& item : comboItems) {
+                itemsPtr.push_back(item.c_str());
+            }
+
+            if (ImGui::Combo("Inside Block", &currentItem, itemsPtr.data(), static_cast<int>(itemsPtr.size()))) {
+                if (currentItem == 0) {
+                    bubbleInsideBlockType_ = BlockType::Wall;
+                    bubbleInsideCustomSlot_ = 0;
+                } else if (currentItem == 1) {
+                    bubbleInsideBlockType_ = BlockType::Ladder;
+                    bubbleInsideCustomSlot_ = 0;
+                } else {
+                    bubbleInsideCustomSlot_ = currentItem - 1; // 1〜5
+                    const auto* part = stageMap.GetCustomPart(bubbleInsideCustomSlot_);
+                    if (part) {
+                        bubbleInsideBlockType_ = part->baseType;
+                    }
+                }
+            }
+        }
+    }
     
     // ツールバー（配置ブロックやアクション）の描画
     DrawEditorToolbar(stageMap, stageRenderer, mapCursor, player);
@@ -295,31 +458,30 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
         }
     };
 
-    // タブバーを使ってカテゴリを分ける（省スペースで探しやすい）
+    // タブバーを使ってカテゴリを分ける
     if (ImGui::BeginTabBar("BlockCategoryTabs")) {
         for (const auto& cat : categories) {
             if (ImGui::BeginTabItem(cat.name)) {
 
-                // ボタンの配置（2列のグリッドにするとさらに見やすくなります）
                 float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
                 for (int n = 0; n < cat.types.size(); n++) {
                     BlockType type = cat.types[n];
-                    bool isSelected = (selectedBlockType_ == type);
+                    // 通常ブロックかつ bubbleInsideCustomSlot_ が 0 の場合のみ選択中とみなす
+                    bool isSelected = (selectedBlockType_ == type && bubbleInsideCustomSlot_ == 0);
 
                     if (isSelected) {
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
                     }
 
-                    // ボタン幅を調整して横に並べる例（100px幅）
                     if (ImGui::Button(BlockTypeToString(type), ImVec2(140, 30))) {
                         selectedBlockType_ = type;
+                        bubbleInsideCustomSlot_ = 0; // 通常選択時はカスタムIDを解除
                     }
 
                     if (isSelected) {
                         ImGui::PopStyleColor();
                     }
 
-                    // 次のボタンがウィンドウ幅を超えるなら改行
                     float last_button_x2 = ImGui::GetItemRectMax().x;
                     float next_button_x2 = last_button_x2 + ImGui::GetStyle().ItemSpacing.x + 140;
                     if (n + 1 < cat.types.size() && next_button_x2 < window_visible_x2)
@@ -328,6 +490,43 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 ImGui::EndTabItem();
             }
         }
+
+        // --- 新しいカテゴリタブ「Custom Blocks」を追加 ---
+        if (ImGui::BeginTabItem("Custom Blocks")) {
+            float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+            const auto& parts = stageMap.GetCustomParts();
+            for (int i = 1; i <= 5; ++i) {
+                const auto& part = parts[i - 1];
+                
+                // ボタンの選択状態：選択中ブロックタイプが part.baseType 且つ bubbleInsideCustomSlot_ == i
+                bool isSelected = (selectedBlockType_ == part.baseType && bubbleInsideCustomSlot_ == i);
+                
+                if (isSelected) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.4f, 0.8f, 1.0f)); // カスタムブロック選択は青色
+                }
+
+                std::string btnLabel = part.name;
+                if (btnLabel.empty()) {
+                    btnLabel = "Part " + std::to_string(i);
+                }
+
+                if (ImGui::Button(btnLabel.c_str(), ImVec2(140, 30))) {
+                    selectedBlockType_ = part.baseType;
+                    bubbleInsideCustomSlot_ = i; // カスタムIDを適用
+                }
+
+                if (isSelected) {
+                    ImGui::PopStyleColor();
+                }
+
+                float last_button_x2 = ImGui::GetItemRectMax().x;
+                float next_button_x2 = last_button_x2 + ImGui::GetStyle().ItemSpacing.x + 140;
+                if (i < 5 && next_button_x2 < window_visible_x2)
+                    ImGui::SameLine();
+            }
+            ImGui::EndTabItem();
+        }
+
         // ブロック選択UIの近くに追加
         if (selectedBlockType_ == BlockType::MovingFloor) {
             ImGui::Separator();
@@ -425,7 +624,46 @@ void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* st
         }
     } else {
         // 通常のブロック配置
-        stageMap.SetBlock(cursor, selectedBlockType_);
+        int variant = 0;
+        if (selectedBlockType_ == BlockType::BubblePickup) {
+            // シャボン玉の場合：中身のベースタイプとカスタムIDをパックして variant に仕込む
+            variant = PackBubbleContents(bubbleInsideBlockType_, bubbleInsideCustomSlot_);
+            stageMap.SetBlock(cursor, selectedBlockType_, variant);
+        } else if (selectedBlockType_ == BlockType::Wall || selectedBlockType_ == BlockType::Ladder) {
+            // カスタムブロックを直接配置する場合：variant にカスタムIDをそのまま仕込む
+            if (bubbleInsideCustomSlot_ >= 1 && bubbleInsideCustomSlot_ <= 5) {
+                variant = bubbleInsideCustomSlot_;
+
+                // 🌟 複合カスタムアセンブリパーツを一括配置！！！
+                const auto* part = stageMap.GetCustomPart(bubbleInsideCustomSlot_);
+                if (part && !part->IsEmpty()) {
+                    // アセンブリの各セルを一括配置
+                    for (int ly = 0; ly < 3; ++ly) {
+                        for (int lz = 0; lz < 3; ++lz) {
+                            for (int lx = 0; lx < 3; ++lx) {
+                                const auto& cell = part->cells[ly][lz][lx];
+                                if (cell.type == BlockType::None) continue; // 空セルは無視
+
+                                Int3 targetPos = { cursor.x + lx, cursor.y + ly, cursor.z + lz };
+                                if (stageMap.IsInside(targetPos)) {
+                                    stageMap.SetBlock(targetPos, cell.type, bubbleInsideCustomSlot_);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // 空なら1マスだけフォールバック配置
+                    stageMap.SetBlock(cursor, selectedBlockType_, variant);
+                }
+            } else {
+                // 通常の1マス配置
+                stageMap.SetBlock(cursor, selectedBlockType_, variant);
+            }
+        } else {
+            // その他の通常ブロック配置
+            stageMap.SetBlock(cursor, selectedBlockType_, variant);
+        }
+
         // プレイヤースタート地点の場合は即座にプレイヤー座標も更新する
         MapCell* cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
         if (cell && selectedBlockType_ == BlockType::MovingFloor) {

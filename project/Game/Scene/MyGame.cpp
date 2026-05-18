@@ -171,6 +171,11 @@ void MyGame::Initialize() {
     // UI管理の初期化
     gameplayUIManager_ = std::make_unique<GameplayUIManager>();
     gameplayUIManager_->Initialize(dxCommon.get(), textureManager.get(), spriteCommon.get(), object3dCommon.get());
+
+    // インベントリUIの初期化
+    blockInventoryUI_ = std::make_unique<BlockInventoryUI>();
+    blockInventoryUI_->Initialize(dxCommon.get(), spriteCommon.get(), textureManager.get(), &blockInventory_);
+
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
 }
@@ -381,7 +386,34 @@ void MyGame::Update() {
 
     // UI・プロンプト更新
     if (gameplayUIManager_) {
-        gameplayUIManager_->Update(currentMode_ == AppMode::GamePlay, player_.get(), camera.get(), lightCamera_.get());
+        gameplayUIManager_->Update(currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace, player_.get(), camera.get(), lightCamera_.get());
+    }
+
+    if (blockInventoryUI_) {
+        bool isPlayOrPlace = (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
+        blockInventoryUI_->Update(input.get(), winApp.get(), isPlayOrPlace, &stageMap_);
+
+        // ダブルクリックによる即時設置要求を処理
+        if (blockInventoryUI_->ConsumeUseRequest()) {
+            // 即座に配置モードに移行
+            currentMode_ = AppMode::GamePlay_BlockPlace;
+
+            // 選択されたブロックタイプとカスタムIDをコントローラーに同期
+            BlockType doubleClickedType = blockInventoryUI_->GetSelectedBlockType();
+            int selectedCustomId = blockInventoryUI_->GetSelectedCustomId();
+            blockPlacementController_.SetPlaceBlockType(doubleClickedType);
+            blockPlacementController_.SetPlaceCustomId(selectedCustomId);
+
+            // 現在のカーソル位置に即時配置を試みる
+            Int3 cursorPos = mapCursor_->GetIndex();
+            if (blockPlacementController_.TryPlace(cursorPos)) {
+                // 設置成功後、もしそのブロックの所持数が 0 になったら自動的に通常プレイに戻る
+                bool hasRest = (doubleClickedType == BlockType::Ground) || blockInventory_.HasBlock(doubleClickedType, selectedCustomId);
+                if (!hasRest) {
+                    currentMode_ = AppMode::GamePlay;
+                }
+            }
+        }
     }
 }
 
@@ -470,11 +502,17 @@ void MyGame::UpdateGamePlay() {
 
     /*==================================================
         ▼ 配置モード切り替え
-        Bキーで、所持ブロックがある時だけ配置モードへ入る
+        インベントリUIがアクティブになった場合、またはBキーで配置モードへ
     ==================================================*/
-    if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
+    if (blockInventoryUI_ && blockInventoryUI_->IsActive()) {
         currentMode_ = AppMode::GamePlay_BlockPlace;
         mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
+    } else if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
+        currentMode_ = AppMode::GamePlay_BlockPlace;
+        mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
+        if (blockInventoryUI_) {
+            blockInventoryUI_->ToggleOpen(); // Bキーでもインベントリを開く
+        }
     }
 
     /*==================================================
@@ -790,7 +828,11 @@ void MyGame::Draw() {
     //5/11佐倉
 
     if (gameplayUIManager_) {
-        gameplayUIManager_->DrawSprites(currentMode_ == AppMode::GamePlay);
+        gameplayUIManager_->DrawSprites(currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
+    }
+
+    if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
+        blockInventoryUI_->Draw();
     }
 
     // --- 4. ImGui と 最終出力 ---
@@ -834,6 +876,8 @@ void MyGame::Finalize() {
     // 5. その他のゲームオブジェクトを reset
     if (gameplayUIManager_) gameplayUIManager_->Finalize();
     gameplayUIManager_.reset();
+    if (blockInventoryUI_) blockInventoryUI_->Finalize();
+    blockInventoryUI_.reset();
     player_.reset();
     skydomeObject_.reset();
     skydomeModel_.reset();
@@ -867,21 +911,77 @@ void MyGame::UpdateGamePlayBlockPlace()
     // カーソル移動処理
     stageEditorController_.HandleCursorInput(input.get(), stageMap_, mapCursor_.get(), lightCamera_.get());
 
-    // ② ブロックを置く決定処理 (Enterキー)
-    if (input->TriggerKey(DIK_RETURN)) {
-        Int3 cursorPos = mapCursor_->GetIndex();
-
-        // コントローラーを使ってブロックを配置
-        // 成功した場合は所持数も減り、見た目も更新される
+    // インベントリで選択されているブロックタイプを同期
+    BlockType selectedType = BlockType::Ground;
+    int selectedCustomId = 0;
+    if (blockInventoryUI_) {
+        selectedType = blockInventoryUI_->GetSelectedBlockType();
+        selectedCustomId = blockInventoryUI_->GetSelectedCustomId();
+        blockPlacementController_.SetPlaceBlockType(selectedType);
+        blockPlacementController_.SetPlaceCustomId(selectedCustomId);
+    } else {
         blockPlacementController_.SetPlaceBlockType(BlockType::Ground);
-        if (blockPlacementController_.TryPlace(cursorPos)) {
-            currentMode_ = AppMode::GamePlay; // 成功したら通常のプレイ画面に戻る
+        blockPlacementController_.SetPlaceCustomId(0);
+    }
+
+    // 🌟 半透明リアルタイムプレビューを毎フレーム更新！！！
+    if (stageRenderer_) {
+        stageRenderer_->SetPlacementPreview(stageMap_, cursor, selectedType, selectedCustomId);
+    }
+
+    // ② ブロックを置く決定処理 (Enterキー または ゲーム画面上の左クリック)
+    bool clickOnGameScreen = false;
+    if (input->GetMouseState().buttons[0] && blockInventoryUI_) {
+        // マウス座標がインベントリパネル外のときのみゲーム画面のクリックと判定
+        float screenWidth = static_cast<float>(WinApp::kClientWidth);
+        RECT rect;
+        GetClientRect(winApp->GetHwnd(), &rect);
+        float currentClientW = static_cast<float>(rect.right - rect.left);
+        float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
+        float swapMouseX = static_cast<float>(input->GetMouseState().posX) * scaleX;
+        float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
+        float mouseX = swapMouseX - offsetX;
+
+        if (mouseX < blockInventoryUI_->GetPanelLeftX()) {
+            clickOnGameScreen = true;
         }
     }
 
-    // ③ キャンセルして戻る処理 (Escapeキー)
-    if (input->TriggerKey(DIK_ESCAPE)) {
+    // 前フレームからのマウスクリックトリガーを自前で管理する
+    static bool prevLeftClick = false;
+    bool mouseTrigger = clickOnGameScreen && !prevLeftClick;
+    prevLeftClick = (input->GetMouseState().buttons[0] && clickOnGameScreen);
+
+    if (input->TriggerKey(DIK_RETURN) || mouseTrigger) {
+        Int3 cursorPos = mapCursor_->GetIndex();
+
+        // コントローラーを使ってブロックを配置
+        if (blockPlacementController_.TryPlace(cursorPos)) {
+            // 設置完了後、所持数が 0 になったら自動的に通常プレイに戻る
+            BlockType currentType = blockInventoryUI_ ? blockInventoryUI_->GetSelectedBlockType() : BlockType::Ground;
+            int currentCustomId = blockInventoryUI_ ? blockInventoryUI_->GetSelectedCustomId() : 0;
+            bool hasRest = (currentType == BlockType::Ground) || blockInventory_.HasBlock(currentType, currentCustomId);
+            if (!hasRest) {
+                currentMode_ = AppMode::GamePlay;
+                if (stageRenderer_) {
+                    stageRenderer_->ClearPlacementPreview(); // 🌟 プレビューをクリア！
+                }
+                if (blockInventoryUI_) {
+                    blockInventoryUI_->ToggleOpen(); // インベントリを閉じる
+                }
+            }
+        }
+    }
+
+    // ③ キャンセルして戻る処理 (Escapeキー または インベントリUIが閉じられたとき)
+    if (input->TriggerKey(DIK_ESCAPE) || (blockInventoryUI_ && !blockInventoryUI_->IsActive())) {
         currentMode_ = AppMode::GamePlay;
+        if (stageRenderer_) {
+            stageRenderer_->ClearPlacementPreview(); // 🌟 プレビューをクリア！
+        }
+        if (blockInventoryUI_ && blockInventoryUI_->IsActive()) {
+            blockInventoryUI_->ToggleOpen(); // キーキャンセル時はインベントリも閉じる
+        }
     }
 
     // カメラ操作

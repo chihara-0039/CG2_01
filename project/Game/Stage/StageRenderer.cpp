@@ -4,30 +4,6 @@
 // 解放
 StageRenderer::~StageRenderer() {
 	Clear();
-
-	delete groundModel_;
-	delete wallModel_;
-	delete bubbleModel_;
-	delete goalModel_;
-	delete ladderModel_;
-	delete doorModel_;
-
-	// ★ ここが抜けていました（追加）
-	delete pSwichModel_;
-	delete pBlockOnModel_;
-	delete crumbleModel_;
-	delete iceBlockModel_;
-
-	groundModel_ = nullptr;
-	wallModel_ = nullptr;
-	bubbleModel_ = nullptr;
-	goalModel_ = nullptr;
-	ladderModel_ = nullptr;
-	doorModel_ = nullptr;
-	pSwichModel_ = nullptr;
-	pBlockOnModel_ = nullptr;
-	crumbleModel_ = nullptr;
-	iceBlockModel_ = nullptr;
 }
 
 // ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス
@@ -132,7 +108,7 @@ void StageRenderer::UpdateEffect(const StageMap& stageMap) {
 				if (cell->type == BlockType::None) continue;
 
 				if (objIndex < objects_.size()) {
-					Object3d* obj = objects_[objIndex];
+					Object3d* obj = objects_[objIndex].get();
 					if (cell->type == BlockType::CrumblingFloor) {
 						// マップデータの色と透明度をモデルに反映
 						obj->SetColor({ 1.0f, cell->colorG, cell->colorB, cell->opacity });
@@ -183,7 +159,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				// ブロックの種類が Ground（地面）の場合
 				case BlockType::Ground:
 				CreateStageObject(
-					groundModel_,
+					groundModel_.get(),
 					position,
 					blockScale_,
 					{ 0.0f, 0.0f, 0.0f }
@@ -192,38 +168,77 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
 				// ブロックの種類が Wall（壁）の場合
 				case BlockType::Wall:
-				CreateStageObject(
-					wallModel_,
-					position,
-					blockScale_,
-					{ 0.0f, 0.0f, 0.0f }
-				);
+				{
+					Object3d* obj = CreateStageObject(
+						wallModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f }
+					);
+					if (cell->variant >= 1 && cell->variant <= 5) {
+						const auto* part = stageMap.GetCustomPart(cell->variant);
+						if (part) {
+							obj->SetColor({ part->colorR, part->colorG, part->colorB, 1.0f });
+						}
+					} else if (cell->variant == 6) {
+						// プレイヤー設置の Wall (可愛いライトレッド)
+						obj->SetColor({ 1.0f, 0.4f, 0.4f, 1.0f });
+					}
+				}
 				break;
 
 				// ブロックの種類が Ladder（はしご）の場合
 				case BlockType::Ladder:
-				CreateStageObject(
-					ladderModel_,
-					position,
-					blockScale_,
-					{ 0.0f, cell->rotationY, 0.0f }
-				);
+				{
+					Object3d* obj = CreateStageObject(
+						ladderModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, cell->rotationY, 0.0f }
+					);
+					if (cell->variant >= 1 && cell->variant <= 5) {
+						const auto* part = stageMap.GetCustomPart(cell->variant);
+						if (part) {
+							obj->SetColor({ part->colorR, part->colorG, part->colorB, 1.0f });
+						}
+					} else if (cell->variant == 7) {
+						// プレイヤー設置の Ladder (可愛いライトグリーン)
+						obj->SetColor({ 0.4f, 1.0f, 0.4f, 1.0f });
+					}
+				}
 				break;
 
 				// ブロックの種類が BubblePickup（泡の回収アイテム）の場合
 				case BlockType::BubblePickup:
-				CreateStageObject(
-					bubbleModel_,
-					position,
-					{ blockScale_.x * 0.7f, blockScale_.y * 0.7f, blockScale_.z * 0.7f },
-					{ 0.0f, 0.0f, 0.0f }
-				);
+				{
+					Object3d* obj = CreateStageObject(
+						bubbleModel_.get(),
+						position,
+						{ blockScale_.x * 0.7f, blockScale_.y * 0.7f, blockScale_.z * 0.7f },
+						{ 0.0f, 0.0f, 0.0f }
+					);
+					int insideCustomId = UnpackBubbleCustomId(cell->variant);
+					BlockType insideType = UnpackBubbleType(cell->variant);
+
+					if (insideCustomId >= 1 && insideCustomId <= 5) {
+						const auto* part = stageMap.GetCustomPart(insideCustomId);
+						if (part) {
+							obj->SetColor({ part->colorR, part->colorG, part->colorB, 0.8f });
+						}
+					} else {
+						if (insideType == BlockType::Wall) {
+							obj->SetColor({ 1.0f, 0.5f, 0.5f, 0.8f });
+						} else if (insideType == BlockType::Ladder) {
+							obj->SetColor({ 0.5f, 1.0f, 0.5f, 0.8f });
+						}
+					}
+				}
 				break;
 
 				// ブロックの種類が Goal（ゴール）の場合
 				case BlockType::Goal:
 				CreateStageObject(
-					goalModel_,
+					goalModel_.get(),
 					position,
 					{ blockScale_.x * 0.8f, blockScale_.y * 0.8f, blockScale_.z * 0.8f },
 					{ 0.0f, 0.0f, 0.0f }
@@ -233,7 +248,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				// ブロックの種類が Star（仮のアイテム）の場合
 				case BlockType::Star:
 				CreateStageObject(
-					wallModel_,
+					wallModel_.get(),
 					position,
 					blockScale_,
 					{ 0.0f, 0.0f, 0.0f }
@@ -244,7 +259,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				case BlockType::PlayerStart:
 				{
 					Object3d* pObj = CreateStageObject(
-						groundModel_,
+						groundModel_.get(),
 						position,
 						blockScale_,
 						{ 0.0f, 0.0f, 0.0f }
@@ -256,7 +271,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				// ブロックの種類が Door (ドア) の場合
 				case BlockType::Door:
 					CreateStageObject(
-						doorModel_,
+						doorModel_.get(),
 						position,
 						{ 0.6f, 0.6f, 0.6f },
 						{ 0.0f, 0.0f, 0.0f }
@@ -267,7 +282,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					if (!stageMap.IsPSwitchActive())
 					{
 						CreateStageObject(
-							pSwichModel_,
+							pSwichModel_.get(),
 							position,
 							{ 0.6f, 0.6f, 0.6f },
 							{ 0.0f, 0.0f, 0.0f }
@@ -278,7 +293,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				case BlockType::PBlock:
 					if (!stageMap.IsPSwitchActive()) {
 						CreateStageObject(
-							pBlockOnModel_,
+							pBlockOnModel_.get(),
 							position,
 							blockScale_,
 							{ 0.0f, 0.0f, 0.0f }
@@ -288,7 +303,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
 				case BlockType::CrumblingFloor:
 					CreateStageObject(
-						crumbleModel_, 
+						crumbleModel_.get(), 
 						position,
 						blockScale_, 
 						{ 0.0f, 0.0f, 0.0f }
@@ -335,12 +350,22 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 // カメラ設定を全てのオブジェクトに伝える
 void StageRenderer::SetCamera(const Matrix4x4& view, const Matrix4x4& projection) {
 	// 全てのオブジェクトに対して、カメラのビュー行列とプロジェクション行列を設定する
-	for (Object3d* obj : objects_) {
+	for (const auto& obj : objects_) {
+		obj->SetCamera(view, projection);
+	}
+	for (const auto& obj : previewObjects_) {
 		obj->SetCamera(view, projection);
 	}
 }
 
 // 全てのオブジェクトの更新処理を呼び出す
+void StageRenderer::Update(const Matrix4x4& lightVP) {
+	for (const auto& obj : objects_) {
+		if (obj) {
+			obj->Update(lightVP);
+		}
+	}
+	for (const auto& obj : previewObjects_) {
 void StageRenderer::Update(const StageMap& stageMap,const Matrix4x4& lightVP)
 {
 
@@ -384,7 +409,7 @@ void StageRenderer::Update(const StageMap& stageMap,const Matrix4x4& lightVP)
 
 // 全てのオブジェクトの影描画処理を呼び出す
 void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
-	for (Object3d* obj : objects_) {
+	for (const auto& obj : objects_) {
 		if (obj) {
 			obj->DrawShadow(lightVP);
 		}
@@ -393,17 +418,108 @@ void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
 
 // 全てのオブジェクトの描画処理を呼び出す
 void StageRenderer::Draw() {
-	for (Object3d* obj : objects_) {
+	for (const auto& obj : objects_) {
+		obj->Draw();
+	}
+	// 🌟 半透明プレビューを描画
+	for (const auto& obj : previewObjects_) {
 		obj->Draw();
 	}
 }
 
 // 既存のオブジェクトを全て削除してリストをクリアする
 void StageRenderer::Clear() {
-	for (Object3d* obj : objects_) {
-		delete obj;
-	}
 	objects_.clear();
+	previewObjects_.clear(); // 🌟 プレビューも一緒にクリア
+}
+
+// 🌟 配置プレビュー表示機能の実装
+void StageRenderer::SetPlacementPreview(
+	const StageMap& stageMap,
+	const Int3& cursorIndex,
+	BlockType type,
+	int customId
+) {
+	previewObjects_.clear(); // 既存のプレビューをリセット
+
+	float colorR = 1.0f;
+	float colorG = 1.0f;
+	float colorB = 1.0f;
+	Model* targetModel = wallModel_.get();
+
+	if (customId >= 1 && customId <= 5) {
+		const auto* part = stageMap.GetCustomPart(customId);
+		if (part) {
+			colorR = part->colorR;
+			colorG = part->colorG;
+			colorB = part->colorB;
+			targetModel = (part->baseType == BlockType::Ladder) ? ladderModel_.get() : wallModel_.get();
+		}
+	} else {
+		// 通常ブロックのテーマカラー
+		if (type == BlockType::Wall) {
+			colorR = 1.0f; colorG = 0.4f; colorB = 0.4f;
+			targetModel = wallModel_.get();
+		} else if (type == BlockType::Ladder) {
+			colorR = 0.4f; colorG = 1.0f; colorB = 0.4f;
+			targetModel = ladderModel_.get();
+		} else if (type == BlockType::Ground) {
+			colorR = 0.7f; colorG = 0.7f; colorB = 0.7f;
+			targetModel = groundModel_.get();
+		} else {
+			return; // プレビュー対象外
+		}
+	}
+
+	// 🌟 3x3x3 複合カスタムアセンブリプレビューの作成
+	if (customId >= 1 && customId <= 5) {
+		const auto* part = stageMap.GetCustomPart(customId);
+		if (part && !part->IsEmpty()) {
+			for (int ly = 0; ly < 3; ++ly) {
+				for (int lz = 0; lz < 3; ++lz) {
+					for (int lx = 0; lx < 3; ++lx) {
+						const auto& cell = part->cells[ly][lz][lx];
+						if (cell.type == BlockType::None) continue;
+
+						Vector3 pos = {
+							static_cast<float>(cursorIndex.x + lx),
+							static_cast<float>(cursorIndex.y + ly),
+							static_cast<float>(cursorIndex.z + lz)
+						};
+						Model* cellModel = (cell.type == BlockType::Ladder) ? ladderModel_.get() : wallModel_.get();
+
+						auto obj = std::make_unique<Object3d>();
+						obj->Initialize(object3dCommon_);
+						obj->SetModel(cellModel);
+						obj->SetPosition(pos);
+						obj->SetScale(blockScale_);
+						obj->SetColor({ colorR, colorG, colorB, 0.4f }); // 40%の美しい半透明
+
+						previewObjects_.push_back(std::move(obj));
+					}
+				}
+			}
+			return;
+		}
+	}
+
+	// 🌟 通常の 1 マスプレビューの作成
+	Vector3 pos = {
+		static_cast<float>(cursorIndex.x),
+		static_cast<float>(cursorIndex.y),
+		static_cast<float>(cursorIndex.z)
+	};
+	auto obj = std::make_unique<Object3d>();
+	obj->Initialize(object3dCommon_);
+	obj->SetModel(targetModel);
+	obj->SetPosition(pos);
+	obj->SetScale(blockScale_);
+	obj->SetColor({ colorR, colorG, colorB, 0.4f }); // 40%の美しい半透明
+	previewObjects_.push_back(std::move(obj));
+}
+
+void StageRenderer::ClearPlacementPreview() {
+	previewObjects_.clear();
 	// ▼ 追加：動く足場の管理リストをクリア (Object3d自体は objects_ 側で解放されるため clear だけでOK)
 	movingFloorInstances_.clear();
 }
@@ -411,19 +527,20 @@ void StageRenderer::Clear() {
 // 指定したモデルと位置・スケール・回転を使ってオブジェクトを生成し、リストに追加して返す
 Object3d* StageRenderer::CreateStageObject(
 	Model* model,
-	// ブロックの位置（ステージマップのセルの位置をワールド座標に変換したもの）
+	// ブロックの位置（ステージマップ of セルの位置をワールド座標に変換したもの）
 	const Vector3& position,
 	const Vector3& scale,
 	const Vector3& rotation
 	// ブロックの回転（今回は全て0でいいと思う）
 ) {
-	Object3d* obj = new Object3d();
+	auto obj = std::make_unique<Object3d>();
 	obj->Initialize(object3dCommon_);
 	obj->SetModel(model);
 	obj->SetPosition(position);
 	obj->SetScale(scale);
 	obj->SetRotation(rotation);
-
-	objects_.push_back(obj);
-	return obj;
+	
+	Object3d* ptr = obj.get();
+	objects_.push_back(std::move(obj));
+	return ptr;
 }

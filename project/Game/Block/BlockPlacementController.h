@@ -18,6 +18,8 @@ public:
 
     // 配置するブロック種類を変えたい時用
     void SetPlaceBlockType(BlockType type) { placeBlockType_ = type; }
+    void SetPlaceCustomId(int id) { placeCustomId_ = id; }
+    int GetPlaceCustomId() const { return placeCustomId_; }
 
 private:
     bool CanPlaceAt(const Int3& index) const;
@@ -29,4 +31,5 @@ private:
 
     // とりあえず入手ブロックは Ground として置く
     BlockType placeBlockType_ = BlockType::Ground;
+    int placeCustomId_ = 0; // 0: 通常, 1〜5: カスタム
 };

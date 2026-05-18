@@ -7,13 +7,7 @@
 
 
 
-MapCursor::~MapCursor() {
-    delete cursorObject_;
-    cursorObject_ = nullptr;
-
-    delete cursorModel_;
-    cursorModel_ = nullptr;
-}
+MapCursor::~MapCursor() = default;
 
 void MapCursor::Initialize(Object3dCommon* object3dCommon) {
     assert(object3dCommon);
@@ -27,9 +21,9 @@ void MapCursor::Initialize(Object3dCommon* object3dCommon) {
         object3dCommon_->GetTextureManager()
     );
 
-    cursorObject_ = new Object3d();
+    cursorObject_ = std::make_unique<Object3d>();
     cursorObject_->Initialize(object3dCommon_);
-    cursorObject_->SetModel(cursorModel_);
+    cursorObject_->SetModel(cursorModel_.get());
 
     // 大きすぎないように小さめ
     cursorObject_->SetScale({ 0.5f, 0.5f, 0.5f });

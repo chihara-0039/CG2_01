@@ -2,6 +2,7 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <algorithm>
 #include <cmath>
 #include <Windows.h>
@@ -21,6 +22,63 @@ void StageMap::Initialize(int width, int height, int depth) {
 
     cells_.resize(width_ * height_ * depth_);
     Clear();
+
+    // 5つのカスタムブロックパーツスロットをデフォルト値で初期化
+    customParts_.resize(5);
+    for (int i = 0; i < 5; ++i) {
+        customParts_[i].id = i + 1;
+        customParts_[i].baseType = BlockType::Wall;
+        customParts_[i].colorR = 1.0f;
+        customParts_[i].colorG = 1.0f;
+        customParts_[i].colorB = 1.0f;
+
+        // 全セルを None に初期化
+        for (int y = 0; y < 3; ++y) {
+            for (int z = 0; z < 3; ++z) {
+                for (int x = 0; x < 3; ++x) {
+                    customParts_[i].cells[y][z][x].type = BlockType::None;
+                }
+            }
+        }
+    }
+
+    // 楽しい複合プリセット形状の設定！
+    // Slot 1: L-SHIELD (L字の壁足場パーツ)
+    customParts_[0].name = "L-SHIELD";
+    customParts_[0].colorR = 0.9f; customParts_[0].colorG = 0.3f; customParts_[0].colorB = 0.3f; // スタイリッシュ赤
+    customParts_[0].cells[0][0][0].type = BlockType::Wall;
+    customParts_[0].cells[0][0][1].type = BlockType::Wall;
+    customParts_[0].cells[0][0][2].type = BlockType::Wall;
+    customParts_[0].cells[1][0][2].type = BlockType::Wall;
+    customParts_[0].cells[2][0][2].type = BlockType::Wall;
+
+    // Slot 2: T-BRIDGE (T字足場パーツ)
+    customParts_[1].name = "T-BRIDGE";
+    customParts_[1].colorR = 0.9f; customParts_[1].colorG = 0.8f; customParts_[1].colorB = 0.2f; // ゴールド黄色
+    customParts_[1].cells[0][0][1].type = BlockType::Wall;
+    customParts_[1].cells[1][0][1].type = BlockType::Wall;
+    customParts_[1].cells[2][0][0].type = BlockType::Wall;
+    customParts_[1].cells[2][0][1].type = BlockType::Wall;
+    customParts_[1].cells[2][0][2].type = BlockType::Wall;
+
+    // Slot 3: LADDER-WALL (ハシゴ付き壁)
+    customParts_[2].name = "LADDER-WALL";
+    customParts_[2].colorR = 0.2f; customParts_[2].colorG = 0.7f; customParts_[2].colorB = 0.9f; // ライトブルー
+    customParts_[2].cells[0][0][1].type = BlockType::Wall;
+    customParts_[2].cells[1][0][1].type = BlockType::Wall;
+    customParts_[2].cells[2][0][1].type = BlockType::Wall;
+    customParts_[2].cells[0][0][0].type = BlockType::Ladder;
+    customParts_[2].cells[1][0][0].type = BlockType::Ladder;
+    customParts_[2].cells[2][0][0].type = BlockType::Ladder;
+
+    // Slot 4 & 5: 空白のカスタム用スロット
+    customParts_[3].name = "MY PART A";
+    customParts_[3].colorR = 0.4f; customParts_[3].colorG = 0.9f; customParts_[3].colorB = 0.4f; // ライムグリーン
+    customParts_[3].cells[0][0][0].type = BlockType::Wall; // 1マスだけ
+
+    customParts_[4].name = "MY PART B";
+    customParts_[4].colorR = 0.8f; customParts_[4].colorG = 0.4f; customParts_[4].colorB = 0.9f; // パープル
+    customParts_[4].cells[0][0][0].type = BlockType::Ladder; // 1マスだけ
 }
 
 void StageMap::Update(float deltaTime, float totalTime) 
@@ -109,21 +167,45 @@ void StageMap::SaveToFile(const std::string& filename) {
     std::ofstream ofs(filename);
     if (!ofs.is_open()) return;
 
+    // ヘッダー: サイズ
     ofs << width_ << " " << height_ << " " << depth_ << "\n";
 
+    // カスタムブロック定義を書き出す
+    for (const auto& part : customParts_) {
+        ofs << "PART " << part.id << " "
+            << static_cast<int>(part.baseType) << " "
+            << part.colorR << " "
+            << part.colorG << " "
+            << part.colorB << " "
+            << part.name << "\n";
+
+        // アセンブリの各セルで None でないものを書き出す
+        for (int y = 0; y < 3; ++y) {
+            for (int z = 0; z < 3; ++z) {
+                for (int x = 0; x < 3; ++x) {
+                    if (part.cells[y][z][x].type != BlockType::None) {
+                        ofs << "PARTCELL " << part.id << " "
+                            << x << " " << y << " " << z << " "
+                            << static_cast<int>(part.cells[y][z][x].type) << "\n";
+                    }
+                }
+            }
+        }
+    }
+
+    // ブロックデータ
     for (int y = 0; y < height_; ++y) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
                 const MapCell* cell = GetCell(x, y, z);
-                if (cell->type == BlockType::None) continue; // 空ブロックは保存しない（ファイル軽量化）
+                if (cell->type == BlockType::None) continue; // 空ブロックは保存しない
 
-                // ★回転角 (rotationX, rotationY) も保存する
                 ofs << x << " " << y << " " << z << " "
                     << static_cast<int>(cell->type) << " "
-                    << cell->rotationX << " " << cell->rotationY << "\n";
+                    << cell->rotationX << " " << cell->rotationY << " "
+                    << cell->variant << "\n";
 
-                if (cell->type == BlockType::Door)
-                {
+                if (cell->type == BlockType::Door) {
                     ofs << cell->doorTargetIndex.x << " "
                         << cell->doorTargetIndex.y << " "
                         << cell->doorTargetIndex.z << " ";
@@ -138,28 +220,99 @@ void StageMap::LoadFromFile(const std::string& filename) {
     std::ifstream ifs(filename);
     if (!ifs.is_open()) return;
 
+    std::string firstLine;
+    if (!std::getline(ifs, firstLine)) return;
+
+    std::stringstream ss(firstLine);
     int w, h, d;
-    ifs >> w >> h >> d;
+    if (!(ss >> w >> h >> d)) return;
     Initialize(w, h, d);
 
-    int x, y, z, type;
-    float rotX, rotY;
-    // ★ 6つの値をセットで読み込む
-    while (ifs >> x >> y >> z >> type >> rotX >> rotY) {
-        SetBlock(x, y, z, static_cast<BlockType>(type));
-        MapCell* cell = GetCell(x, y, z);
-        if (cell) {
-            cell->rotationX = rotX;
-            cell->rotationY = rotY;
-        }
-        if (cell->type == BlockType::Door) {
-            ifs >> cell->doorTargetIndex.x
-                >> cell->doorTargetIndex.y
-                >> cell->doorTargetIndex.z;
-        }
-        else {
-            // ドア以外のブロックならワープ先は初期値にしておく
-            cell->doorTargetIndex = { 0, 0, 0 };
+    // 各スロットがファイルロードによってクリアされたかを追跡するフラグ
+    bool partCleared[5] = { false, false, false, false, false };
+
+    std::string line;
+    while (std::getline(ifs, line)) {
+        if (line.empty()) continue;
+
+        std::stringstream lineSS(line);
+        std::string token;
+        lineSS >> token;
+
+        if (token == "PART") {
+            int id, baseTypeVal;
+            float r, g, b;
+            lineSS >> id >> baseTypeVal >> r >> g >> b;
+            std::string name;
+            std::getline(lineSS, name);
+            // 先頭のスペースを除去
+            if (!name.empty() && name[0] == ' ') {
+                name = name.substr(1);
+            }
+
+            if (id >= 1 && id <= (int)customParts_.size()) {
+                auto& part = customParts_[id - 1];
+                part.id = id;
+                part.baseType = static_cast<BlockType>(baseTypeVal);
+                part.colorR = r;
+                part.colorG = g;
+                part.colorB = b;
+                part.name = name;
+            }
+        } else if (token == "PARTCELL") {
+            int id, lx, ly, lz, typeVal;
+            if (lineSS >> id >> lx >> ly >> lz >> typeVal) {
+                if (id >= 1 && id <= (int)customParts_.size()) {
+                    auto& part = customParts_[id - 1];
+
+                    // ファイルにアセンブリセル情報があるスロットのみ、初回出現時に元のプリセット形状をクリアして適用
+                    if (!partCleared[id - 1]) {
+                        for (int y = 0; y < 3; ++y) {
+                            for (int z = 0; z < 3; ++z) {
+                                for (int x = 0; x < 3; ++x) {
+                                    part.cells[y][z][x].type = BlockType::None;
+                                }
+                            }
+                        }
+                        partCleared[id - 1] = true;
+                    }
+
+                    if (lx >= 0 && lx < 3 && ly >= 0 && ly < 3 && lz >= 0 && lz < 3) {
+                        part.cells[ly][lz][lx].type = static_cast<BlockType>(typeVal);
+                    }
+                }
+            }
+        } else {
+            // 通常のブロック配置行（token は x 座標）
+            int x = std::stoi(token);
+            int y, z, typeVal;
+            float rotX, rotY;
+            int variant = 0;
+
+            // 互換性重視の完璧なパース設計：
+            // 残りパラメータが 5個（y z typeVal rotX rotY）以上あればパース成功
+            if (lineSS >> y >> z >> typeVal >> rotX >> rotY) {
+                // さらに variant があれば読み込む（なければデフォルトの0を使用）
+                lineSS >> variant;
+
+                BlockType type = static_cast<BlockType>(typeVal);
+                SetBlock(x, y, z, type, variant);
+                MapCell* cell = GetCell(x, y, z);
+                if (cell) {
+                    cell->rotationX = rotX;
+                    cell->rotationY = rotY;
+
+                    // ドアの追加データ
+                    if (cell->type == BlockType::Door) {
+                        ifs >> cell->doorTargetIndex.x
+                            >> cell->doorTargetIndex.y
+                            >> cell->doorTargetIndex.z;
+                        // 改行を消費
+                        std::string dummy;
+                        std::getline(ifs, dummy);
+                    }
+                }
+            }
         }
     }
     ifs.close();

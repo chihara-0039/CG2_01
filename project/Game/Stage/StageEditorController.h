@@ -85,7 +85,12 @@ private:
     int selectedStageIndex_ = -1;                  // リストボックスで選択中のインデックス
 
     BlockType selectedBlockType_ = BlockType::Ground; // 現在配置対象となっているブロック種別
+    BlockType bubbleInsideBlockType_ = BlockType::Wall; // シャボン玉（BubblePickup）に仕込むブロック種別
     
+    // --- カスタムブロックパーツ作成用 ---
+    int selectedCustomPartSlot_ = 1;               // 編集中のカスタムスロット (1〜5)
+    int bubbleInsideCustomSlot_ = 0;               // シャボン玉に仕込むカスタムID (0: デフォルト, 1〜5: カスタムパーツ)
+
     // --- ドアギミック用のペアリング管理 ---
     bool isWaitingForSecondDoor_ = false;          // 1つ目のドアを配置し、2つ目を待機中かどうかのフラグ
     Int3 firstDoorIndex_ = { -1, -1, -1 };         // 1つ目に配置されたドアのマップ座標

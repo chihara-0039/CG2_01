@@ -1,13 +1,11 @@
 #include "Player.h"
 #include <cmath>
 
-Player::~Player() {
-	delete object_;
-}
+Player::~Player() = default;
 
 // 初期化：描画用コンポーネントとモデルを設定
 void Player::Initialize(Object3dCommon* common, Model* model) {
-	object_ = new Object3d();
+	object_ = std::make_unique<Object3d>();
 	object_->Initialize(common);
 	object_->SetModel(model);
 	// キノピオ隊長のように、モデルを直立させるための初期回転

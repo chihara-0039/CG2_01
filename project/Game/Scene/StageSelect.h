@@ -6,6 +6,7 @@
 #include "Input.h"
 #include <vector>
 #include <string>
+#include <memory>
 
 class StageSelect
 {
@@ -29,8 +30,8 @@ private:
 	int selectedStageIndex_ = 0;
 	bool isFinished_ = false;
 
-	Model* stageModel_ = nullptr;
-	Object3d* stageObject_ = nullptr;
+	std::unique_ptr<Model> stageModel_;
+	std::unique_ptr<Object3d> stageObject_;
 
 	Vector3 rotation_ = { 0.0f, 0.0f, 0.0f };
 

@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <memory>
 #include "StageMap.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
@@ -23,25 +24,33 @@ public:
 
     void UpdateEffect(const StageMap& stageMap);
 
+    // 🌟 配置プレビュー表示機能
+    void SetPlacementPreview(
+        const StageMap& stageMap,
+        const Int3& cursorIndex,
+        BlockType type,
+        int customId
+    );
+    void ClearPlacementPreview();
+
     void Clear();
 
 private:
     Object3dCommon* object3dCommon_ = nullptr;
 
-    Model* groundModel_ = nullptr;
-    Model* wallModel_ = nullptr;
-    Model* bubbleModel_ = nullptr;
-    Model* goalModel_ = nullptr;
-    Model* ladderModel_ = nullptr;
-    Model* doorModel_ = nullptr;
-    Model* pSwichModel_ = nullptr;
-    Model* pBlockOnModel_ = nullptr;
-    Model* crumbleModel_ = nullptr;
-    Model* iceBlockModel_ = nullptr;
-    Model* movingFloorModel_ = nullptr;
+    std::unique_ptr<Model> groundModel_;
+    std::unique_ptr<Model> wallModel_;
+    std::unique_ptr<Model> bubbleModel_;
+    std::unique_ptr<Model> goalModel_;
+    std::unique_ptr<Model> ladderModel_;
+    std::unique_ptr<Model> doorModel_;
+    std::unique_ptr<Model> pSwichModel_;
+    std::unique_ptr<Model> pBlockOnModel_;
+    //Model* PBlockOff_ = nullptr;
+    std::unique_ptr<Model> crumbleModel_;
 
-
-    std::vector<Object3d*> objects_;
+    std::vector<std::unique_ptr<Object3d>> objects_;
+    std::vector<std::unique_ptr<Object3d>> previewObjects_; // 🌟 半透明プレビュー用オブジェクト
     Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };
 
 private:
