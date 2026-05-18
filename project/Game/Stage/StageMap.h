@@ -24,7 +24,8 @@ enum class BlockType : uint32_t {
     PSwitch,
     PBlock,
     CrumblingFloor,
-    IceBlock
+    IceBlock,
+    MovingFloor
 };
 
 inline const char* BlockTypeToString(BlockType type) {
@@ -42,6 +43,7 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::PBlock:         return "PBlock";
     case BlockType::CrumblingFloor: return "CrumblingFloor";
     case BlockType::IceBlock:       return "IceBlock";
+    case BlockType::MovingFloor:    return "MovingFloor";
     default:                        return "Unknown";
     }
 }
@@ -66,6 +68,19 @@ struct MapCell {
     float colorB = 1.0f; // 青
     float opacity = 1.0f; // 透明度 (1.0で表示、0.0で非表示)
 
+    // ▼ 追加：動く足場用（どの方向に何マス動くか）
+    Int3 moveOffset{ 0, 0, 0 };
+    // 動く足場の計算用データ
+    float moveTimer = 0.0f;                  // サイン波計算用のタイマー
+    // 現在の滑らかな移動オフセット
+    float currentOffsetX = 0.0f;
+    float currentOffsetY = 0.0f;
+    float currentOffsetZ = 0.0f;
+
+    // 1フレームあたりの移動量（差分：プレイヤーを一緒に引っ張るために使用）
+    float deltaOffsetX = 0.0f;
+    float deltaOffsetY = 0.0f;
+    float deltaOffsetZ = 0.0f;
 };
 
 class StageMap {
@@ -130,6 +145,9 @@ public:
 
     // ImGui描画用
     void DrawImGui();
+
+    // 動く足場用のワールド座標当たり判定
+    const MapCell* GetIntersectingMovingFloor(float pX, float pY, float pZ, float rX, float rY, float rZ) const;
 
 private:
 
