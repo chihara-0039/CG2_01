@@ -238,7 +238,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </ClCompile>
     <ClCompile Include="Engine\Utility\LightCamera.cpp" />
     <ClCompile Include="Game\Scene\StageSelect.cpp" />
-    <ClCompile Include="Sound.cpp" />
+    <ClCompile Include="Sound\Sound.cpp" />
     <ClCompile Include="src\app\main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Depelopment|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Depelopment|x64'">true</WholeProgramOptimization>
@@ -249,7 +249,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="Engine\Graphics\2D\TextureManager.cpp" />
     <ClCompile Include="Engine\Base\WinApp.cpp" />
     <ClCompile Include="Game\Scene\TitleScene.cpp" />
-    <ClCompile Include="StageRespawnController.cpp" />
+    <ClCompile Include="Game\Stage\StageRespawnController.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Resources\shaders\hlsl\Particle.PS.hlsl">
@@ -377,8 +377,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\Graphics\3D\ShadowMap.h" />
     <ClInclude Include="Game\Scene\TitleScene.h" />
     <ClInclude Include="Engine\Utility\LightCamera.h" />
-    <ClInclude Include="Sound.h" />
-    <ClInclude Include="StageRespawnController.h" />
+    <ClInclude Include="Sound\Sound.h" />
+    <ClInclude Include="Game\Stage\StageRespawnController.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\Particle.hlsli">
