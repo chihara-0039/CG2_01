@@ -423,6 +423,17 @@ void MyGame::UpdateGamePlay() {
         player_->Update(input.get(), stageMap_, gameplayCameraController_.GetAngle(), lightCamera_->GetViewProjectionMatrix());
     }
 
+    stageRespawnController_.Update(
+        stageMap_,
+        backupMap_,
+        stageRenderer_.get(),
+        player_.get(),
+        &blockInventory_,
+        &bubblePickupController_,
+        &blockPlacementController_,
+        &stageEditorController_
+    );
+
     // --- ステージ再構築 ---
     if (stageMap_.NeedsRebuild()) {
         stageRenderer_->BuildFromStageMap(stageMap_);

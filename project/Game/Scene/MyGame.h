@@ -33,7 +33,7 @@
 #include "GameplayUIManager.h"
 #include "GameplayCameraController.h"
 #include "StageEditorController.h"
-
+#include "StageRespawnController.h"
 
 class MyGame {
 public:
@@ -157,4 +157,6 @@ private:
 
     //5/14 小林
     StageMap backupMap_;
-}
+
+    StageRespawnController stageRespawnController_;
+};

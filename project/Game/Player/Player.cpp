@@ -217,10 +217,6 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 		}
 	}
 
-	if (position_.y < -10.0f)
-	{
-		Respawn();
-	}
 	CrumbleUpdate(map);
 	PSwitchUpdate(map);
 	DoorWarp(map);
