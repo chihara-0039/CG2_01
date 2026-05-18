@@ -155,16 +155,6 @@ void StageEditorController::Update(Input* input, StageMap& stageMap, StageRender
                 needRebuild = true;
             }
         }
-
-        // 数字キーによる配置ブロックのダイレクト切り替えと即時配置
-        if (input->TriggerKey(DIK_1)) { selectedBlockType_ = BlockType::Ground; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_2)) { selectedBlockType_ = BlockType::Wall; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_3)) { selectedBlockType_ = BlockType::BubblePickup; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_4)) { selectedBlockType_ = BlockType::Goal; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_5)) { selectedBlockType_ = BlockType::Ladder; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_6)) { selectedBlockType_ = BlockType::Door; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-        if (input->TriggerKey(DIK_7)) { selectedBlockType_ = BlockType::PlayerStart; ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
-
         // Enterキー：選択中ブロックの配置
         if (input->TriggerKey(DIK_RETURN)) { ApplyPlacement(stageMap, stageRenderer, mapCursor, player); }
 
@@ -282,7 +272,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::Wall,
                 BlockType::PBlock,
                 BlockType::CrumblingFloor,
-                BlockType::IceBlock
+                BlockType::IceBlock,
+                BlockType::MovingFloor
             }
         },
         {
@@ -336,6 +327,15 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 }
                 ImGui::EndTabItem();
             }
+        }
+        // ブロック選択UIの近くに追加
+        if (selectedBlockType_ == BlockType::MovingFloor) {
+            ImGui::Separator();
+            ImGui::Text("Moving Floor Settings");
+            // X, Y, Z の移動量を設定するスライダー（-10マス 〜 10マス の範囲など）
+            ImGui::SliderInt("Move X", &currentMoveOffset_.x, -10, 10);
+            ImGui::SliderInt("Move Y", &currentMoveOffset_.y, -10, 10);
+            ImGui::SliderInt("Move Z", &currentMoveOffset_.z, -10, 10);
         }
         ImGui::EndTabBar();
     }
@@ -427,6 +427,10 @@ void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* st
         // 通常のブロック配置
         stageMap.SetBlock(cursor, selectedBlockType_);
         // プレイヤースタート地点の場合は即座にプレイヤー座標も更新する
+        MapCell* cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+        if (cell && selectedBlockType_ == BlockType::MovingFloor) {
+            cell->moveOffset = currentMoveOffset_;
+        }
         if (selectedBlockType_ == BlockType::PlayerStart && player) {
             Vector3 startPos = {
                 static_cast<float>(cursor.x),

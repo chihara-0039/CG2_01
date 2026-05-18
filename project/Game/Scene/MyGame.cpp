@@ -353,7 +353,7 @@ void MyGame::Update() {
     if (stageRenderer_) {
         stageRenderer_->SetCamera(view, proj);
         // ※ StageRenderer内部でもObject3dのUpdate(lightVP)を呼ぶように修正が必要です
-        stageRenderer_->Update(lightVP);
+        stageRenderer_->Update(stageMap_,lightVP);
     }
 
 	// マップカーソルの更新
