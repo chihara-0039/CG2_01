@@ -54,8 +54,6 @@ private:
     float cameraAngle_ = 0.0f; // 水平方向の回転角度
     float cameraPitch_ = 0.75f; // 垂直方向の見下ろし角度
 
-    //カメラズーム距離
-    float cameraDistance_ = 35.0f;
 
     //ズーム制限
     float minDistance_ = 18.0f;
@@ -63,4 +61,8 @@ private:
 
     //高さ倍率
     float heightRate_ = 0.55f;
+
+    float cameraFov_ = 0.45f;
+    float minFov_ = 0.25f;
+    float maxFov_ = 0.75f;
 };
