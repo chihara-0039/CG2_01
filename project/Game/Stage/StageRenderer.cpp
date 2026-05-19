@@ -100,8 +100,8 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// ▼ 追加：鍵モデル設定
 	keyModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources/Models/star",
-		"star.obj",
+		"Resources/Models/key",
+		"key.obj",
 		object3dCommon_->GetTextureManager()
 	);
 

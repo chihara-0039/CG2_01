@@ -51,70 +51,70 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 
 	if (isOnLadder) 
 	{
-		velocity_.y = 0;
 
-		// 入力方向の強さを計算
-		float moveForward = 0.0f;
-		if (input->PushKey(DIK_W)) moveForward += 1.0f;
-		if (input->PushKey(DIK_S)) moveForward -= 1.0f;
+#pragma region はしご
+
+		velocity_.y = 0; // ハシゴ中は重力による落下を止める
+
+		// 入力方向の強さを計算（W/Sキーで上下、A/Dキーで左右に整理）
+		float moveVertical = 0.0f;
+		if (input->PushKey(DIK_W)) moveVertical += 1.0f;
+		if (input->PushKey(DIK_S)) moveVertical -= 1.0f;
 
 		float moveSide = 0.0f;
 		if (input->PushKey(DIK_D)) moveSide += 1.0f;
 		if (input->PushKey(DIK_A)) moveSide -= 1.0f;
 
-		// 「前」か「右」への入力があれば登る、逆なら下りる
-		float verticalDir = moveForward + moveSide;
-
-		if (verticalDir >= 0.0f) {
+		// 1. 登る・下りる入力がある時だけ上下移動と吸い寄せを行う
+		if (moveVertical != 0.0f) {
 			Vector3 nextPos = position_;
-			nextPos.y += (verticalDir > 0 ? 1.0f : -1.0f) * walkSpeed_;
+			nextPos.y += moveVertical * walkSpeed_;
 
-			if (!CheckCollision(nextPos, map)) 
+			if (!CheckCollision(nextPos, map))
 			{
 				position_.y = nextPos.y;
-				// ハシゴの芯に吸い寄せる
-				position_.x += (static_cast<float>(gx) - position_.x) * 0.6f;
-				position_.z += (static_cast<float>(gz) - position_.z) * 0.6f;
-			} 
-			else if (verticalDir > 0)
+
+				// ★修正：ハシゴの芯に吸い寄せる際にも壁判定を行う！
+				// これで横からハシゴに触れてもブロックにめり込みません
+				Vector3 targetPosX = position_;
+				targetPosX.x += (static_cast<float>(gx) - position_.x) * 0.6f;
+				if (!CheckCollision(targetPosX, map)) position_.x = targetPosX.x;
+
+				Vector3 targetPosZ = position_;
+				targetPosZ.z += (static_cast<float>(gz) - position_.z) * 0.6f;
+				if (!CheckCollision(targetPosZ, map)) position_.z = targetPosZ.z;
+			}
+			else if (moveVertical > 0.0f)
 			{
-				// ★登りきり：ハシゴ自体の向き（cellWaistの回転）を使って押し出す
-				// cellWaist がハシゴのはずなので、その rotationY を取得
+				// ★登りきり：ハシゴ自体の向きを使って押し出す
 				float exitAngle = (cellWaist ? cellWaist->rotationY : rotation_.y);
 
 				float pushForward = 0.2f;
-				position_.x += std::sin(exitAngle) * pushForward;
-				position_.z += std::cos(exitAngle) * pushForward;
-
+				Vector3 exitPos = position_;
+				exitPos.x += std::sin(exitAngle) * pushForward;
+				exitPos.z += std::cos(exitAngle) * pushForward;
 				// 少し上に上げて床判定を確実に踏ませる
-				position_.y += 0.1f;
+				exitPos.y += 0.1f;
+
+				// 押し出し先にも壁がないか一応チェックしてから移動
+				if (!CheckCollision(exitPos, map)) {
+					position_ = exitPos;
+				}
 			}
 		}
-		else 
+		else if (moveSide != 0.0f)
 		{
-			// X軸衝突判定
+			// 2. 上下入力がなく、左右入力がある場合（ハシゴからの離脱など）
 			Vector3 nextPosX = position_;
 			nextPosX.x += moveSide * 0.3f;
 			if (!CheckCollision(nextPosX, map)) position_.x = nextPosX.x;
-
-			// Z軸衝突判定
-			Vector3 nextPosZ = position_;
-			nextPosZ.z += moveForward * 0.3f;
-			if (!CheckCollision(nextPosZ, map)) position_.z = nextPosZ.z;
-
-			// Y軸衝突判定
-			Vector3 nextPosY = position_;
-			nextPosY.y += velocity_.y;
-			if (CheckCollision(nextPosY, map)) {
-				if (velocity_.y < 0) isGrounded_ = true;
-				velocity_.y = 0;
-			}
-			else {
-				position_.y = nextPosY.y;
-				isGrounded_ = false;
-			}
 		}
+
+		// ハシゴ中は接地扱いにしてジャンプなどを可能にする
 		isGrounded_ = true;
+
+#pragma endregion
+
 	} 
 	else
 	{
