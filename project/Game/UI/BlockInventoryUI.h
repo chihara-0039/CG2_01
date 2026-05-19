@@ -86,6 +86,7 @@ private:
     float panelWidth_ = 320.0f;
     float panelHeight_ = 720.0f;
     float tabWidth_ = 64.0f; // 取っ手（タブ）の幅
+    float arrowWidth_ = 45.0f; // 実際に画面に残す矢印部分の幅
 
     bool prevMouseLeft_ = false;
 

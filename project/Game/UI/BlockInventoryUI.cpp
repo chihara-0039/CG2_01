@@ -68,7 +68,7 @@ void BlockInventoryUI::Initialize(DirectXCommon* dxCommon, SpriteCommon* spriteC
     addBtn(BlockType::Wall,   5, 174.0f, 490.0f, "Resources/Models/wall/wall.png");
 
     // 4. アニメーション座標の初期化
-    closedPos_ = { 1280.0f - tabWidth_, 0.0f };
+    closedPos_ = { 1280.0f - arrowWidth_, 0.0f };
     openedPos_ = { 1280.0f - panelWidth_, 0.0f };
     currentPos_ = closedPos_;
     state_ = State::Closed;
@@ -129,8 +129,10 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
 
     // --- 2. 取っ手クリックによる開閉制御 ---
     if (clickTrigger) {
-        bool hoverTab = (mouseX >= currentPos_.x && mouseX <= currentPos_.x + tabWidth_ &&
-                         mouseY >= 0.0f && mouseY <= panelHeight_);
+        float arrowMinY = 0.0f; // 右上の黒い矢印があるY範囲（Y: 0〜130px）
+        float arrowMaxY = 130.0f;
+        bool hoverTab = (mouseX >= currentPos_.x && mouseX <= currentPos_.x + arrowWidth_ &&
+                         mouseY >= arrowMinY && mouseY <= arrowMaxY);
         if (hoverTab) {
             ToggleOpen();
             return;
