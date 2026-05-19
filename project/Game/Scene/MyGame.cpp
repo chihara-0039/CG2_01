@@ -178,6 +178,14 @@ void MyGame::Initialize() {
 
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
+
+    // スキニングオブジェクトとデバッグ用の立方体モデルを初期化
+    skinnedObject_ = std::make_unique<SkinnedObject>();
+    skinnedObject_->Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
+    skinnedObject_->SetPosition({ 0.0f, 1.5f, 0.0f }); // プレイヤーの初期Y座標と合わせる
+    skinnedObject_->SetScale({ 1.0f, 1.0f, 1.0f });
+
+    debugCubeModel_ = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/cube", "cube.obj", textureManager.get()));
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -316,6 +324,14 @@ void MyGame::Update() {
                 currentMode_ = AppMode::StageSelect;
             }
         }
+        break;
+
+    case AppMode::SkinningEditor:
+        if (skinnedObject_) {
+            skinnedObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+            skinnedObject_->Update(dxCommon.get(), lightVP);
+        }
+        break;
 
         gameClearScene_->Update();
     }
@@ -558,17 +574,19 @@ void MyGame::UpdateImGui() {
     if (ImGui::CollapsingHeader("Hierarchy / Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
         int modeIndex = 0;
         switch (currentMode_) {
-        case AppMode::DebugView:   modeIndex = 0; break;
-        case AppMode::StageEditor: modeIndex = 1; break;
-        case AppMode::GamePlay:    modeIndex = 2; break;
+        case AppMode::DebugView:      modeIndex = 0; break;
+        case AppMode::StageEditor:    modeIndex = 1; break;
+        case AppMode::GamePlay:       modeIndex = 2; break;
+        case AppMode::SkinningEditor: modeIndex = 3; break;
         }
 
-        const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay" };
+        const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay", "SkinningEditor" };
         if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
             switch (modeIndex) {
             case 0: currentMode_ = AppMode::DebugView; break;
             case 1: currentMode_ = AppMode::StageEditor; break;
             case 2: currentMode_ = AppMode::GamePlay; break;
+            case 3: currentMode_ = AppMode::SkinningEditor; break;
             }
         }
         ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
@@ -621,12 +639,147 @@ void MyGame::UpdateImGui() {
         ImGui::Text("Mode: STAGE EDITOR");
     } else if (currentMode_ == AppMode::GamePlay) {
         ImGui::Text("Mode: GAME PLAY");
+    } else if (currentMode_ == AppMode::SkinningEditor) {
+        ImGui::Text("Mode: SKINNING EDITOR");
     } else {
         ImGui::Text("Mode: DEBUG VIEW");
     }
 
     ImGui::Columns(1);
     ImGui::End();
+
+    // ==========================================
+    // 4. 右パネル (Skinning Editor Options)
+    // ==========================================
+    if (currentMode_ == AppMode::SkinningEditor && skinnedObject_) {
+        // 右側にパネルを配置
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panelWidth, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(panelWidth, io.DisplaySize.y - bottomHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(1.0f); // 透過なし
+        ImGui::Begin("Skinning Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Skinned Mesh Settings ]");
+        
+        bool playAnim = skinnedObject_->IsPlayAnimation();
+        if (ImGui::Checkbox("Play Test Animation", &playAnim)) {
+            skinnedObject_->SetPlayAnimation(playAnim);
+        }
+
+        float speed = skinnedObject_->GetAnimationSpeed();
+        if (ImGui::SliderFloat("Anim Speed", &speed, 0.0f, 3.0f, "%.2f")) {
+            skinnedObject_->SetAnimationSpeed(speed);
+        }
+
+        bool showSkeleton = skinnedObject_->IsShowSkeleton();
+        if (ImGui::Checkbox("Show Skeleton Bones", &showSkeleton)) {
+            skinnedObject_->SetShowSkeleton(showSkeleton);
+        }
+
+        if (ImGui::Button("Reset to T-Pose", ImVec2(-FLT_MIN, 24))) {
+            skinnedObject_->GetModel()->ResetPose();
+        }
+
+        // --- Custom Motion Editor ---
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Custom Motion Editor ]");
+
+        bool playCustom = skinnedObject_->IsPlayCustomAnimation();
+        if (ImGui::Checkbox("Play Custom Motion", &playCustom)) {
+            skinnedObject_->SetPlayCustomAnimation(playCustom);
+            if (playCustom) {
+                skinnedObject_->SetPlayAnimation(false); // テストアニメーションと排他
+            }
+        }
+
+        float duration = skinnedObject_->GetModel()->GetMotionDuration();
+        if (ImGui::InputFloat("Motion Duration", &duration, 0.1f, 1.0f, "%.2f")) {
+            if (duration < 0.1f) duration = 0.1f;
+            skinnedObject_->GetModel()->SetMotionDuration(duration);
+        }
+
+        float curTime = skinnedObject_->GetCurrentKeyframeTime();
+        if (ImGui::SliderFloat("Timeline Time", &curTime, 0.0f, duration, "%.2f sec")) {
+            skinnedObject_->SetCurrentKeyframeTime(curTime);
+            if (!playCustom) {
+                skinnedObject_->ApplyMotion(curTime);
+            }
+        }
+
+        if (ImGui::Button("Add Keyframe (Current Pose)", ImVec2(-FLT_MIN, 24))) {
+            skinnedObject_->AddKeyframe(curTime);
+        }
+
+        if (ImGui::Button("Clear All Keyframes", ImVec2(-FLT_MIN, 24))) {
+            skinnedObject_->ClearKeyframes();
+        }
+
+        if (ImGui::Button("Generate Walk Preset", ImVec2(-FLT_MIN, 24))) {
+            skinnedObject_->GenerateWalkPreset();
+        }
+
+        static char motionPath[256] = "Resources/Animations/test_motion.txt";
+        ImGui::InputText("Motion Path", motionPath, IM_ARRAYSIZE(motionPath));
+
+        if (ImGui::Button("Save Motion to File", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f, 24))) {
+            skinnedObject_->SaveMotion(motionPath);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Load Motion from File", ImVec2(-FLT_MIN, 24))) {
+            skinnedObject_->LoadMotion(motionPath);
+        }
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Bone Transformations ]");
+
+        auto& joints = skinnedObject_->GetModel()->GetJoints();
+        int selectedJoint = skinnedObject_->GetSelectedJointIndex();
+        
+        // ジョイント名のリスト作成
+        std::vector<const char*> jointNames;
+        for (const auto& j : joints) {
+            jointNames.push_back(j.name.c_str());
+        }
+
+        if (ImGui::Combo("Select Bone", &selectedJoint, jointNames.data(), static_cast<int>(jointNames.size()))) {
+            skinnedObject_->SetSelectedJointIndex(selectedJoint);
+        }
+
+        if (selectedJoint >= 0 && selectedJoint < static_cast<int>(joints.size())) {
+            auto& joint = joints[selectedJoint];
+            
+            ImGui::Text("Index: %d | Parent: %d", selectedJoint, joint.parentIndex);
+            ImGui::Separator();
+
+            // 回転スライダー (ラジアン -> デグリー)
+            Vector3 rotDeg = {
+                joint.rotation.x * 180.0f / 3.14159265f,
+                joint.rotation.y * 180.0f / 3.14159265f,
+                joint.rotation.z * 180.0f / 3.14159265f
+            };
+
+            ImGui::Text("Rotation (Degrees):");
+            if (ImGui::SliderFloat("Rot X", &rotDeg.x, -180.0f, 180.0f, "%.1f")) {
+                joint.rotation.x = rotDeg.x * 3.14159265f / 180.0f;
+            }
+            if (ImGui::SliderFloat("Rot Y", &rotDeg.y, -180.0f, 180.0f, "%.1f")) {
+                joint.rotation.y = rotDeg.y * 3.14159265f / 180.0f;
+            }
+            if (ImGui::SliderFloat("Rot Z", &rotDeg.z, -180.0f, 180.0f, "%.1f")) {
+                joint.rotation.z = rotDeg.z * 3.14159265f / 180.0f;
+            }
+
+            ImGui::Separator();
+            ImGui::Text("Translation Offset:");
+            ImGui::DragFloat3("Translate", &joint.translation.x, 0.01f, -2.0f, 2.0f, "%.3f");
+
+            ImGui::Text("Scale:");
+            ImGui::DragFloat3("Scale", &joint.scale.x, 0.01f, 0.1f, 5.0f, "%.3f");
+        } else {
+            ImGui::Text("No bone selected.");
+        }
+
+        ImGui::End();
+    }
 }
 #endif
 
@@ -718,6 +871,10 @@ void MyGame::Draw() {
         player_->DrawShadow(lightVP);
     }
 
+    if (currentMode_ == AppMode::SkinningEditor && skinnedObject_) {
+        skinnedObject_->DrawShadow(lightVP);
+    }
+
     if (stageRenderer_) {
         stageRenderer_->DrawShadow(lightVP);
     }
@@ -768,6 +925,17 @@ void MyGame::Draw() {
         // B. クリアシーン
         else if (currentMode_ == AppMode::GameClear) {
             if (gameClearScene_) gameClearScene_->Draw();
+        }
+        else if (currentMode_ == AppMode::SkinningEditor) {
+            // 背景（天球）
+            if (skydomeObject_) {
+                skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                skydomeObject_->Draw();
+            }
+            if (skinnedObject_) {
+                skinnedObject_->Draw();
+                skinnedObject_->DrawSkeleton(object3dCommon.get(), debugCubeModel_.get(), camera->GetViewMatrix(), camera->GetProjectionMatrix());
+            }
         }
         // C. 通常ゲーム画面（エディタ・プレイ中・デバッグ）
         else {
@@ -888,6 +1056,8 @@ void MyGame::Finalize() {
     if (blockInventoryUI_) blockInventoryUI_->Finalize();
     blockInventoryUI_.reset();
     player_.reset();
+    skinnedObject_.reset();
+    debugCubeModel_.reset();
     skydomeObject_.reset();
     skydomeModel_.reset();
     sprite.reset();
