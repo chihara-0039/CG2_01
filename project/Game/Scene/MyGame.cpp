@@ -383,6 +383,7 @@ void MyGame::Update() {
     lightCamera_->Update(lightDir, player_->GetPosition());
 
     object3dCommon->SetLightDirection(lightDir);
+    object3dCommon->SetCameraPosition(camera->GetPosition());
 
     // UI・プロンプト更新
     if (gameplayUIManager_) {
@@ -657,7 +658,7 @@ bool MyGame::IsPlayerHiddenByWall() const {
         diff.z / length
     };
 
-    const float step = 0.25f;
+    const float step = 0.8f;
 
     for (float t = step; t < length - 1.0f; t += step) {
         Vector3 checkPos = {

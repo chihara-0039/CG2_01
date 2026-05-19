@@ -5,6 +5,7 @@
 #include <format>
 #include <thread>
 #include <stdexcept>
+#include <filesystem>
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
@@ -214,52 +215,64 @@ void DirectXCommon::WaitForGpu() {
 }
 
 ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, const wchar_t* profile) {
+    // 1. 絶対パスに事前変換する（これで相対インクルード解決が完全に保証されます）
+    std::filesystem::path absolutePath = std::filesystem::absolute(filePath);
+    std::wstring absFilePath = absolutePath.wstring();
+    std::wstring absDirectoryPath = absolutePath.parent_path().wstring();
+
     // --- デバッグログ：何を読み込もうとしているか出力 ---
     OutputDebugStringW(L"----------------------------------------\n");
-    OutputDebugStringW(L"Begin CompileShader: ");
-    OutputDebugStringW(filePath.c_str());
+    OutputDebugStringW(L"Begin CompileShader (Absolute): ");
+    OutputDebugStringW(absFilePath.c_str());
     OutputDebugStringW(L"\n");
 
-    // 1. hlslファイルを読む
+    // 2. hlslファイルを読む
     ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
-    HRESULT hr = dxcUtils_->LoadFile(filePath.c_str(), nullptr, &shaderSource);
+    HRESULT hr = dxcUtils_->LoadFile(absFilePath.c_str(), nullptr, &shaderSource);
 
     // ★ここが最重要：ファイルが見つからなかったら例外を投げる
     if (FAILED(hr)) {
         OutputDebugStringA("ERROR: Failed to load shader file.\n");
         OutputDebugStringA("Please check if the file path is correct and the file exists.\n");
-        OutputDebugStringW(filePath.c_str()); // 失敗したパスを表示
+        OutputDebugStringW(absFilePath.c_str()); // 失敗したパスを表示
         OutputDebugStringA("\n----------------------------------------\n");
         // 警告回避：一文字ずつ明示的に char にキャストして変換する
         std::string pathStr;
-        for (wchar_t w : filePath) {
+        for (wchar_t w : absFilePath) {
             pathStr += static_cast<char>(w);
         }
 
         throw std::runtime_error("Shader File Not Found: " + pathStr);
     }
 
-    // 2. コンパイル引数準備
+    // 3. コンパイル引数準備
     DxcBuffer shaderSourceBuffer;
     shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
     shaderSourceBuffer.Size = shaderSource->GetBufferSize();
     shaderSourceBuffer.Encoding = DXC_CP_UTF8;
 
-    LPCWSTR arguments[] = {
-        filePath.c_str(),
+    // 様々な表記法に対応するため、-I 展開形と結合形、相対/絶対の全てをインクルードパスに登録
+    std::wstring includeOptionCombined = L"-I" + absDirectoryPath;
+    std::wstring includeOptionCombinedRel = L"-I" + filePath.substr(0, filePath.find_last_of(L"/\\"));
+
+    std::vector<LPCWSTR> compileArgs = {
+        absFilePath.c_str(),
         L"-E", L"main",
         L"-T", profile,
         L"-Zi", L"-Qembed_debug",
         L"-Od",
         L"-Zpr",
+        L"-I", absDirectoryPath.c_str(),     // -I 絶対パス (分離)
+        includeOptionCombined.c_str(),        // -I絶対パス (結合)
+        includeOptionCombinedRel.c_str(),     // -I相対パス (結合)
     };
 
-    // 3. コンパイル実行
+    // 4. コンパイル実行
     ComPtr<IDxcResult> shaderResult = nullptr;
     hr = dxcCompiler_->Compile(
         &shaderSourceBuffer,
-        arguments,
-        _countof(arguments),
+        compileArgs.data(),
+        static_cast<UINT32>(compileArgs.size()),
         includeHandler_.Get(),
         IID_PPV_ARGS(&shaderResult));
 
