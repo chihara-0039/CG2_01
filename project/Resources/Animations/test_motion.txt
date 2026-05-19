@@ -1,0 +1,47 @@
+Duration 2
+NumJoints 15
+JointName Pelvis
+NumKeyframes 1
+Keyframe 0 0,0.8,0 0,0,0 1,1,1
+JointName Spine
+NumKeyframes 1
+Keyframe 0 0,0.3,0 0,0,0 1,1,1
+JointName Head
+NumKeyframes 1
+Keyframe 0 0,0.3,0 0,0,0 1,1,1
+JointName LeftShoulder
+NumKeyframes 1
+Keyframe 0 -0.25,0.2,0 0,0,0 1,1,1
+JointName LeftElbow
+NumKeyframes 1
+Keyframe 0 -0.25,0,0 0,0,0 1,1,1
+JointName LeftHand
+NumKeyframes 1
+Keyframe 0 -0.2,0,0 0,0,0 1,1,1
+JointName RightShoulder
+NumKeyframes 1
+Keyframe 0 0.25,0.2,0 0,0,0 1,1,1
+JointName RightElbow
+NumKeyframes 1
+Keyframe 0 0.25,0,0 0,0,0 1,1,1
+JointName RightHand
+NumKeyframes 1
+Keyframe 0 0.2,0,0 0,0,0 1,1,1
+JointName LeftHip
+NumKeyframes 1
+Keyframe 0 -0.15,-0.1,0 0,0,0 1,1,1
+JointName LeftKnee
+NumKeyframes 1
+Keyframe 0 0,-0.35,0 0,0,0 1,1,1
+JointName LeftFoot
+NumKeyframes 1
+Keyframe 0 0,-0.35,0 0,0,0 1,1,1
+JointName RightHip
+NumKeyframes 1
+Keyframe 0 0.15,-0.1,0 0,0,0 1,1,1
+JointName RightKnee
+NumKeyframes 1
+Keyframe 0 0,-0.35,0 0,0,0 1,1,1
+JointName RightFoot
+NumKeyframes 1
+Keyframe 0 0,-0.35,0 0,0,0 1,1,1

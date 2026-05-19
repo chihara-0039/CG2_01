@@ -64,6 +64,7 @@ public:
     bool LoadMotion(const std::string& filePath) { return skinnedModel_->LoadMotion(filePath); }
     void ApplyMotion(float time) { skinnedModel_->ApplyMotion(time); }
     void GenerateWalkPreset() { skinnedModel_->GenerateWalkPreset(); }
+    void GenerateRunPreset() { skinnedModel_->GenerateRunPreset(); }
 
     void SetPlayCustomAnimation(bool play) { playCustomAnimation_ = play; }
     bool IsPlayCustomAnimation() const { return playCustomAnimation_; }
