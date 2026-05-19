@@ -97,4 +97,6 @@ private:
 
     // エディタ上で設定する動く足場の移動量
     Int3 currentMoveOffset_{ 0, 3, 0 }; // 初期値（例として上に3マス）
+
+    int selectedDoorId_ = 1; // 現在選択中のドア番号 (1〜9など)
 };

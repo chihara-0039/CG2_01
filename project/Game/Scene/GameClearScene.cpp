@@ -134,3 +134,39 @@ void GameClearScene::Draw() {
         }
     }
 }
+
+void GameClearScene::SkipAnimation() {
+
+    timer_ = 9999.0f;
+
+    for (int i = 0; i < letters_.size(); i++) {
+
+        letters_[i].isVisible = true;
+
+        // 通常演出の最終位置と同じにする
+        letters_[i].baseY = -3.0f;
+        letters_[i].position = {
+            -6.0f + i * 1.2f,
+            -3.0f,
+            0.0f
+        };
+
+        // バウンド終了状態
+        letters_[i].bounceTime = 30.0f;
+
+        // 通常サイズ
+        letters_[i].scale = { 1.0f, 1.0f, 1.0f };
+
+        // Objectにも即反映
+        letters_[i].object->SetPosition(letters_[i].position);
+        letters_[i].object->SetScale(letters_[i].scale);
+    }
+
+    isAllFinished_ = true;
+    finishTimer_ = 20.0f;
+
+    cameraPos_.z = -20.0f;
+    camera_.SetPosition(cameraPos_);
+    camera_.SetRotation(cameraRot_);
+    camera_.Update();
+}

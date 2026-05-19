@@ -459,6 +459,37 @@ void StageMap::RemoveConnectedKeyBlocks(int x, int y, int z)
     RemoveConnectedKeyBlocks(x, y, z - 1); // 後
 }
 
+Int3 StageMap::FindPairedDoor(int srcX, int srcY, int srcZ) const
+{
+    const MapCell* srcCell = GetCell(srcX, srcY, srcZ);
+    // そもそも指定座標がドアではない、または存在しない場合は元の座標を返す
+    if (!srcCell || srcCell->type != BlockType::Door) {
+        return { srcX, srcY, srcZ };
+    }
+
+    // 入ったドアの番号（ID）
+    int targetDoorId = srcCell->variant;
+
+    // マップ全体をループして、同じドア番号を持つ「別の座標のドア」を探す
+    for (int y = 0; y < height_; ++y) {
+        for (int z = 0; z < depth_; ++z) {
+            for (int x = 0; x < width_; ++x) {
+                // 自分自身の座標はスキップ
+                if (x == srcX && y == srcY && z == srcZ) continue;
+
+                const MapCell* cell = GetCell(x, y, z);
+                // 同じ種類のブロック（Door）かつ、同じ識別番号（variant）のセルが見つかった場合
+                if (cell && cell->type == BlockType::Door && cell->variant == targetDoorId) {
+                    return { x, y, z }; // 相方の座標を返す
+                }
+            }
+        }
+    }
+
+    // 万が一、相方のドアが見つからなかった（1つしか配置していない）場合はワープさせず元の座標を返す
+    return { srcX, srcY, srcZ };
+}
+
 int StageMap::ToIndex(int x, int y, int z) const {
     return x + (z * width_) + (y * width_ * depth_);
 }

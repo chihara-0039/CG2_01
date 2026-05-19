@@ -362,8 +362,10 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
         }
     }
 
-    if (selectedBlockType_ == BlockType::BubblePickup) {
-        if (ImGui::CollapsingHeader("Bubble Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (selectedBlockType_ == BlockType::BubblePickup)
+    {
+        if (ImGui::CollapsingHeader("Bubble Settings", ImGuiTreeNodeFlags_DefaultOpen)) 
+        {
             ImGui::Text("Bubble Contents:");
             
             int currentItem = 0;
@@ -406,6 +408,15 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
         }
     }
     
+    if (selectedBlockType_ == BlockType::Door) 
+    {
+        if (ImGui::CollapsingHeader("Door Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // ドアの番号を 1 〜 9 の間で選べるスライダー（または InputInt）
+            ImGui::SliderInt("Door ID Number", &selectedDoorId_, 1, 9, "ID: %d");
+            ImGui::Text("Doors with the same ID will connect to each other.");
+        }
+    }
+
     // ツールバー（配置ブロックやアクション）の描画
     DrawEditorToolbar(stageMap, stageRenderer, mapCursor, player);
     ImGui::End();
@@ -587,42 +598,16 @@ void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* st
     // ==========================================================
     // ドア配置時の特殊処理（ペアリング管理）
     // ==========================================================
-    if (selectedBlockType_ == BlockType::Door) {
-        // すでにドアがある場所へ再配置・削除する場合のリンク解除処理
-        if (oldCell && oldCell->type == BlockType::Door) {
-            Int3 target = oldCell->doorTargetIndex;
-            if (target.x != cursor.x || target.y != cursor.y || target.z != cursor.z) {
-                MapCell* pairedCell = stageMap.GetCell(target.x, target.y, target.z);
-                if (pairedCell && pairedCell->type == BlockType::Door) {
-                    pairedCell->doorTargetIndex = target; // 相手のワープ先を自身へ戻す（解除）
-                }
-            }
+    if (selectedBlockType_ == BlockType::Door)
+    {
+        // 第3引数の variant に選択中のドア番号 (selectedDoorId_) を渡して配置
+        stageMap.SetBlock(cursor, BlockType::Door, selectedDoorId_);
 
-            // ペアリング待機中の1つ目ドアを削除した場合のキャンセル処理
-            if (isWaitingForSecondDoor_ &&
-                firstDoorIndex_.x == cursor.x &&
-                firstDoorIndex_.y == cursor.y &&
-                firstDoorIndex_.z == cursor.z) {
-                isWaitingForSecondDoor_ = false;
-            }
-        }
-
-        stageMap.SetBlock(cursor, BlockType::Door);
-        if (!isWaitingForSecondDoor_) {
-            // ▼ 1つ目のドア配置時：2つ目の配置待機モードへ移行
-            firstDoorIndex_ = cursor;
-            isWaitingForSecondDoor_ = true;
-            MapCell* cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
-            if (cell) cell->doorTargetIndex = cursor;
-        } else {
-            // ▼ 2つ目のドア配置時：相互にリンク先座標を設定してペアリングを完了
-            MapCell* cell2 = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
-            if (cell2) cell2->doorTargetIndex = firstDoorIndex_;
-
-            MapCell* cell1 = stageMap.GetCell(firstDoorIndex_.x, firstDoorIndex_.y, firstDoorIndex_.z);
-            if (cell1) cell1->doorTargetIndex = cursor;
-
-            isWaitingForSecondDoor_ = false;
+        // 既存のファイル保存フォーマット（直後に座標を3つ要求する仕様）との互換性を保つため、
+        // doorTargetIndex には一旦自身の座標かダミー値を書き込んでおきます
+        MapCell* cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+        if (cell) {
+            cell->doorTargetIndex = cursor;
         }
     } else {
         // 通常のブロック配置
