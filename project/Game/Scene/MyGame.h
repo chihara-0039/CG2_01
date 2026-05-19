@@ -22,6 +22,7 @@
 #include "LightCamera.h"
 #include "TitleScene.h"
 #include "GameClearScene.h"
+#include "SkinnedObject.h"
 #include "../Block/BlockInventory.h"
 #include "../Block/BubblePickupController.h"
 #include "../Block/BlockPlacementController.h"
@@ -56,7 +57,8 @@ private:
         StageEditor,
         GamePlay,
         GamePlay_BlockPlace,
-        GameClear
+        GameClear,
+        SkinningEditor
     };
 
     struct DebugDrawFlags {
@@ -88,6 +90,10 @@ private:
     std::unique_ptr<StageRenderer> stageRenderer_;
     std::unique_ptr<MapCursor> mapCursor_;
     std::unique_ptr<Player> player_;
+    
+    // スキニングテスト用
+    std::unique_ptr<SkinnedObject> skinnedObject_;
+    std::unique_ptr<Model> debugCubeModel_;
 
     // スカイドーム
     std::unique_ptr<Model> skydomeModel_;

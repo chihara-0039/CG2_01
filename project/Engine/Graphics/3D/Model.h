@@ -20,10 +20,18 @@ public:
     static std::unique_ptr<Model> CreateFromOBJ(DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename, TextureManager* textureManager);
 
     void Initialize(DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename, TextureManager* textureManager);
+    
+    // 頂点配列から初期化する関数を追加 (OBJファイルを使わない動的モデル生成用)
+    void InitializeFromVertices(DirectXCommon* dxCommon, const std::vector<ModelVertexData>& vertices, uint32_t textureHandle);
+    
+    // 頂点データを動的に更新する関数
+    void UpdateVertexBuffer(const std::vector<ModelVertexData>& vertices);
+
     void Draw(ID3D12GraphicsCommandList* commandList);
 
     // ゲッター
     uint32_t GetTextureHandle() const { return textureHandle_; }
+    size_t GetVertexCount() const { return vertices_.size(); }
 
 private:
     void LoadObjFile(const std::string& directoryPath, const std::string& filename);

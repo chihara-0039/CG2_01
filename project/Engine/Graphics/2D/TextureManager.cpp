@@ -144,6 +144,9 @@ void TextureManager::Initialize(DirectXCommon* dxCommon) {
 #ifdef USE_IMGUI
     TextureData reserve;
     reserve.resource = nullptr;
+    reserve.srvHandleCPU = srvHeap_->GetCPUDescriptorHandleForHeapStart();
+    reserve.srvHandleGPU = srvHeap_->GetGPUDescriptorHandleForHeapStart();
+    reserve.resourceDesc = {};
     textures_.push_back(reserve);
 #endif
 }

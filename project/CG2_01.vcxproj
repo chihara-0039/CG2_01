@@ -217,6 +217,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="Engine\Base\Logger.cpp" />
     <ClCompile Include="Game\Entity\MapCursor.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Model.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\SkinnedModel.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\SkinnedObject.cpp" />
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
     <ClCompile Include="Game\Scene\GameClearScene.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
@@ -356,6 +358,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\Base\Logger.h" />
     <ClInclude Include="Game\Entity\MapCursor.h" />
     <ClInclude Include="Engine\Graphics\3D\Model.h" />
+    <ClInclude Include="Engine\Graphics\3D\SkinnedModel.h" />
+    <ClInclude Include="Engine\Graphics\3D\SkinnedObject.h" />
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
     <ClInclude Include="Game\Scene\GameClearScene.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />

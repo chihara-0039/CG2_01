@@ -165,6 +165,40 @@ void Model::LoadMaterialFile(const std::string& directoryPath, const std::string
     }
 }
 
+void Model::InitializeFromVertices(DirectXCommon* dxCommon, const std::vector<ModelVertexData>& vertices, uint32_t textureHandle) {
+    vertices_ = vertices;
+    textureHandle_ = textureHandle;
+    
+    if (vertices_.empty()) {
+        OutputDebugStringA("Error: Vertices empty in InitializeFromVertices!\n");
+        return;
+    }
+    
+    CreateBuffers(dxCommon);
+}
+
+void Model::UpdateVertexBuffer(const std::vector<ModelVertexData>& vertices) {
+    // 頂点数が一致することを確認 (またはリサイズが必要だが、スキニングでは不変)
+    if (vertices.size() != vertices_.size()) {
+        OutputDebugStringA("Warning: Vertex count mismatch in UpdateVertexBuffer!\n");
+        // 念のため更新後のサイズに合わせる
+        vertices_ = vertices;
+        return;
+    }
+    
+    vertices_ = vertices;
+    if (!vertexBuffer_) {
+        return;
+    }
+    
+    ModelVertexData* vertMap = nullptr;
+    HRESULT hr = vertexBuffer_->Map(0, nullptr, (void**)&vertMap);
+    if (SUCCEEDED(hr)) {
+        std::copy(vertices_.begin(), vertices_.end(), vertMap);
+        vertexBuffer_->Unmap(0, nullptr);
+    }
+}
+
 void Model::Draw(ID3D12GraphicsCommandList* commandList) {
     // ★安全策：バッファがない場合は描画しない
     if (!vertexBuffer_) {
