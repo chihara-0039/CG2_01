@@ -8,8 +8,8 @@
 
 void GameplayCameraController::Initialize() {
     // 初期状態の極座標：少し上空から見下ろすデフォルト角度
-    cameraAngle_ = 1.5708f;
-    cameraPitch_ = 0.75f;
+    cameraAngle_ = 6.267f;
+    cameraPitch_ = 0.400f;
     // ★追加
     cameraFov_ = 0.45f;
 }
@@ -146,18 +146,67 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
 }
 
-void GameplayCameraController::ResetCamera(Camera* camera,Player*player) {
+void GameplayCameraController::ResetCamera(Camera* camera,Player*player,int stageIndex) {
     if (!camera||!player) return;
 
-    cameraAngle_ = 1.5708f;
-    cameraPitch_ = 0.75f;
-
     Vector3 pivot = { 4.0f, 9.0f, 4.5f };
-
     float distance = 35.0f;
     float height = 20.0f;
 
+    cameraAngle_ = 1.5708f;
+    cameraPitch_ = 0.75f;
     cameraFov_ = 0.45f;
+
+    switch (stageIndex) {
+    case 0:
+        pivot = { 4.014f, 9.0f, 4.5f };
+        cameraAngle_ = 6.267f;
+        cameraPitch_ = 0.400f;
+        distance = 35.0f;
+        height = 20.0f;
+        break;
+
+    case 1:
+        pivot = { 4.014f, 9.0f, 4.5f };
+        cameraAngle_ = 6.267f;
+        cameraPitch_ = 0.400f;
+        distance = 35.0f;
+        height = 20.0f;
+        break;
+
+    case 2:
+        pivot = { 4.271f, 9.0f, 4.5f };
+        cameraAngle_ = 3.15f;
+        cameraPitch_ = 0.400f;
+        distance = 32.236f;
+        height = 0.550f;
+        break;
+
+    case 3:
+        pivot = { 5.0f, 7.0f, 10.0f };
+        cameraAngle_ = -1.5708f;
+        cameraPitch_ = 0.7f;
+        distance = 30.0f;
+        height = 16.0f;
+        break;
+
+    case 4:
+        pivot = { 8.0f, 12.0f, 8.0f };
+        cameraAngle_ = 1.5708f;
+        cameraPitch_ = 1.1f;
+        distance = 38.0f;
+        height = 25.0f;
+        break;
+
+    case 5:
+        pivot = { 4.0f, 6.0f, 4.0f };
+        cameraAngle_ = 1.5708f;
+        cameraPitch_ = 0.6f;
+        distance = 28.0f;
+        height = 14.0f;
+        break;
+    }
+
     camera->SetFov(cameraFov_);
 
 
@@ -168,4 +217,5 @@ void GameplayCameraController::ResetCamera(Camera* camera,Player*player) {
 
     camera->SetPosition(pos);
     camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
+    camera->Update();
 }

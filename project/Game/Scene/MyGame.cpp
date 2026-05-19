@@ -1201,7 +1201,8 @@ void MyGame::UpdateStageSelect()
             // プレイヤーの位置をスタート地点に戻すなどの処理
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
 
-            gameplayCameraController_.ResetCamera(camera.get(), player_.get());
+            int stageIndex = stageSelect_->GetSelectedIndex();
+            gameplayCameraController_.ResetCamera(camera.get(), player_.get(), stageIndex);
         }
         // ゲームプレイモードへ切り替え
         currentMode_ = AppMode::GamePlay;

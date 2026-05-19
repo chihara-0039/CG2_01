@@ -47,7 +47,7 @@ public:
     /// <summary>
     /// カメラ位置と角度をデフォルト状態にリセットし、即座に反映します。
     /// </summary>
-    void ResetCamera(Camera* camera,Player*player);
+    void ResetCamera(Camera* camera,Player*player,int stageIndex);
 
 private:
     // カメラの極座標パラメータ
@@ -65,4 +65,9 @@ private:
     float cameraFov_ = 0.45f;
     float minFov_ = 0.25f;
     float maxFov_ = 0.75f;
+
+    Vector3 cameraPivot_ = { 4.0f, 9.0f, 4.5f };
+    float cameraDistance_ = 35.0f;
+    float cameraHeight_ = 20.0f;
 };
+
