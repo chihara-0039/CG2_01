@@ -15,6 +15,9 @@ public:
 
     // 5/11 小林　ループするよう
     bool IsFinished() const { return isAllFinished_; }
+
+    //5/19佐倉
+    void SkipAnimation();
 private:
     // 各文字データを管理する構造体
     struct Letter {
