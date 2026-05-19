@@ -296,22 +296,28 @@ void MyGame::Update() {
         break;
 
     case AppMode::GameClear://4/13佐倉
-        if (gameClearScene_) {
-            gameClearScene_->Update();
+        // ▼ SPACEで演出スキップ
+        if (input->TriggerKey(DIK_SPACE)) {
 
-            if (gameClearScene_->IsFinished() && input->TriggerKey(DIK_SPACE))
-            {
+            // まだ演出途中ならスキップ
+            if (!gameClearScene_->IsFinished()) {
+                gameClearScene_->SkipAnimation();
+            }
+            // 演出終了後ならステージ選択へ戻る
+            else {
+
                 stageSelect_->Initialize(object3dCommon.get(), input.get());
                 gameClearScene_->Initialize(object3dCommon.get());
-              
+
                 isGoalReached_ = false;
                 stageMap_.Clear();
                 player_->Respawn();
-                
+
                 currentMode_ = AppMode::StageSelect;
             }
         }
-        break;
+
+        gameClearScene_->Update();
     }
 
     camera->Update();
