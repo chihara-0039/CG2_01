@@ -56,7 +56,7 @@ private:
     Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };
 
 private:
-    Object3d* CreateStageObject(Model* model, const Vector3& position, const Vector3& scale, const Vector3& rotation);
+    Object3d* CreateStageObject(Model* model, const Vector3& position, const Vector3& scale, const Vector3& rotation, BlockType type = BlockType::None);
 
     // ▼ 追加：動く足場とマップ上のセル位置を紐付ける構造体
         struct MovingFloorInstance {

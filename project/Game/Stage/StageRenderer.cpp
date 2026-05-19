@@ -86,8 +86,8 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// 滑る足場
 	iceBlockModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources/Models/block",
-		"block.obj",
+		"Resources/Models/iceBlock",
+		"iceBlock.obj",
 		object3dCommon_->GetTextureManager()
 	);
 	// 動く足場
@@ -162,7 +162,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					groundModel_.get(),
 					position,
 					blockScale_,
-					{ 0.0f, 0.0f, 0.0f }
+					{ 0.0f, 0.0f, 0.0f },
+					BlockType::Ground
 				);
 				break;
 
@@ -173,7 +174,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						wallModel_.get(),
 						position,
 						blockScale_,
-						{ 0.0f, 0.0f, 0.0f }
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::Wall
 					);
 					if (cell->variant >= 1 && cell->variant <= 5) {
 						const auto* part = stageMap.GetCustomPart(cell->variant);
@@ -194,7 +196,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						ladderModel_.get(),
 						position,
 						blockScale_,
-						{ 0.0f, cell->rotationY, 0.0f }
+						{ 0.0f, cell->rotationY, 0.0f },
+						BlockType::Ladder
 					);
 					if (cell->variant >= 1 && cell->variant <= 5) {
 						const auto* part = stageMap.GetCustomPart(cell->variant);
@@ -215,7 +218,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						bubbleModel_.get(),
 						position,
 						{ blockScale_.x * 0.7f, blockScale_.y * 0.7f, blockScale_.z * 0.7f },
-						{ 0.0f, 0.0f, 0.0f }
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::BubblePickup
 					);
 					int insideCustomId = UnpackBubbleCustomId(cell->variant);
 					BlockType insideType = UnpackBubbleType(cell->variant);
@@ -241,7 +245,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					goalModel_.get(),
 					position,
 					{ blockScale_.x * 0.8f, blockScale_.y * 0.8f, blockScale_.z * 0.8f },
-					{ 0.0f, 0.0f, 0.0f }
+					{ 0.0f, 0.0f, 0.0f },
+					BlockType::Goal
 				);
 				break;
 
@@ -251,7 +256,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					wallModel_.get(),
 					position,
 					blockScale_,
-					{ 0.0f, 0.0f, 0.0f }
+					{ 0.0f, 0.0f, 0.0f },
+					BlockType::Star
 				);
 				break;
 
@@ -262,7 +268,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						groundModel_.get(),
 						position,
 						blockScale_,
-						{ 0.0f, 0.0f, 0.0f }
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::PlayerStart
 					);
 					pObj->SetColor({ 1.0f, 0.0f, 0.0f, 1.0f });
 				}
@@ -274,7 +281,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						doorModel_.get(),
 						position,
 						{ 0.6f, 0.6f, 0.6f },
-						{ 0.0f, 0.0f, 0.0f }
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::Door
 					);
 					break;
 					// ブロックの種類が PSwitch(Pスイッチ) の場合
@@ -285,7 +293,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 							pSwichModel_.get(),
 							position,
 							{ 0.6f, 0.6f, 0.6f },
-							{ 0.0f, 0.0f, 0.0f }
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::PSwitch
 						);
 					}
 					break;
@@ -296,7 +305,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 							pBlockOnModel_.get(),
 							position,
 							blockScale_,
-							{ 0.0f, 0.0f, 0.0f }
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::PBlock
 						);
 					}
 					break;
@@ -306,7 +316,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						crumbleModel_.get(), 
 						position,
 						blockScale_, 
-						{ 0.0f, 0.0f, 0.0f }
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::CrumblingFloor
 					);
 					break;
 					// ブロックの種類が IceBlock（滑る足場）の場合
@@ -315,7 +326,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						iceBlockModel_.get(),
 						position,
 						blockScale_,
-						{ 0.0f, 0.0f, 0.0f }
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::IceBlock
 					);
 					break;
 					// ブロックの種類が MovingFloor（動く足場）の場合
@@ -326,7 +338,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						movingFloorModel_.get(),
 						position,
 						blockScale_,
-						{ 0.0f, cell->rotationY, 0.0f }
+						{ 0.0f, cell->rotationY, 0.0f },
+						BlockType::MovingFloor
 					);
 
 					// 2. 生成に成功したら、更新用のリストに「オブジェクト」と「セルのインデックス」を記録
@@ -460,6 +473,15 @@ void StageRenderer::SetPlacementPreview(
 		} else if (type == BlockType::Ground) {
 			colorR = 0.7f; colorG = 0.7f; colorB = 0.7f;
 			targetModel = groundModel_.get();
+		} else if (type == BlockType::IceBlock) {
+			colorR = 0.5f; colorG = 0.85f; colorB = 1.0f; // 美しいアイスブルー
+			targetModel = iceBlockModel_.get();
+		} else if (type == BlockType::MovingFloor) {
+			colorR = 0.9f; colorG = 0.65f; colorB = 0.4f; // オレンジプレート
+			targetModel = movingFloorModel_.get();
+		} else if (type == BlockType::CrumblingFloor) {
+			colorR = 0.8f; colorG = 0.6f; colorB = 0.4f;   // ボロボロのブロック色
+			targetModel = crumbleModel_.get();
 		} else {
 			return; // プレビュー対象外
 		}
@@ -524,8 +546,8 @@ Object3d* StageRenderer::CreateStageObject(
 	// ブロックの位置（ステージマップ of セルの位置をワールド座標に変換したもの）
 	const Vector3& position,
 	const Vector3& scale,
-	const Vector3& rotation
-	// ブロックの回転（今回は全て0でいいと思う）
+	const Vector3& rotation,
+	BlockType type
 ) {
 	auto obj = std::make_unique<Object3d>();
 	obj->Initialize(object3dCommon_);
@@ -534,6 +556,59 @@ Object3d* StageRenderer::CreateStageObject(
 	obj->SetScale(scale);
 	obj->SetRotation(rotation);
 	
+	// 高品質マイクロマテリアル設定の自動適用
+	switch (type) {
+	case BlockType::Ground:
+		obj->SetShininess(0.3f);
+		obj->SetMetallic(0.0f);
+		obj->SetEmissive(0.0f);
+		break;
+	case BlockType::Wall:
+		obj->SetShininess(0.4f);
+		obj->SetMetallic(0.0f);
+		obj->SetEmissive(0.0f);
+		break;
+	case BlockType::Ladder:
+		obj->SetShininess(0.5f);
+		obj->SetMetallic(0.2f);
+		obj->SetEmissive(0.0f);
+		break;
+	case BlockType::IceBlock:
+		obj->SetShininess(0.95f); // 氷ならではの鋭く美しいハイライト
+		obj->SetMetallic(0.7f);   // 氷ならではの鏡面感のある反射
+		obj->SetEmissive(0.1f);   // ほんのりと輝く氷の質感
+		break;
+	case BlockType::Goal:
+	case BlockType::Star:
+		obj->SetShininess(0.8f);
+		obj->SetMetallic(0.5f);
+		obj->SetEmissive(0.7f);   // ゴールやスターは幻想的に自己発光
+		break;
+	case BlockType::CrumblingFloor:
+		obj->SetShininess(0.15f); // 崩れそうなボロボロの床（マットでザラザラした質感）
+		obj->SetMetallic(0.0f);
+		obj->SetEmissive(0.0f);
+		break;
+	case BlockType::MovingFloor:
+		obj->SetShininess(0.7f);  // 重厚な金属・石の質感
+		obj->SetMetallic(0.4f);
+		obj->SetEmissive(0.0f);
+		break;
+	case BlockType::PSwitch:
+	case BlockType::PBlock:
+		obj->SetShininess(0.8f);
+		obj->SetMetallic(0.3f);
+		obj->SetEmissive(0.4f);   // スイッチ系は軽く自己発光して目立たせる
+		break;
+	case BlockType::BubblePickup:
+		obj->SetShininess(0.9f);  // シャボン玉の透明で滑らかなハイライト
+		obj->SetMetallic(0.1f);
+		obj->SetEmissive(0.3f);   // 内部の輝きを表現
+		break;
+	default:
+		break;
+	}
+
 	Object3d* ptr = obj.get();
 	objects_.push_back(std::move(obj));
 	return ptr;

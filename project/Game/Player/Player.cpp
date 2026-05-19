@@ -10,6 +10,11 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 	object_->SetModel(model);
 	// キノピオ隊長のように、モデルを直立させるための初期回転
 	object_->SetRotation({ 0.0f, 0.0f, 0.0f });
+	
+	// 自機キャラクターの微小光沢・高級メタル反射設定
+	object_->SetShininess(0.6f);
+	object_->SetMetallic(0.15f);
+	object_->SetEmissive(0.0f);
 }
 
 // 更新：移動・重力・当たり判定の処理

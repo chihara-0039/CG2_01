@@ -27,5 +27,8 @@ public:
 private:
     int wallCount_ = 0;
     int ladderCount_ = 0;
+    int iceCount_ = 0;
+    int movingCount_ = 0;
+    int crumbleCount_ = 0;
     int customCounts_[5] = { 0, 0, 0, 0, 0 }; // カスタムパーツ (1〜5) の所持数
 };

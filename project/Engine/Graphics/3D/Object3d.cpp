@@ -28,6 +28,9 @@ void Object3d::Initialize(Object3dCommon* object3dCommon) {
 
     materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
     materialData_->enableLighting = 1;
+    materialData_->shininess = 0.5f;
+    materialData_->metallic = 0.0f;
+    materialData_->emissive = 0.0f;
     materialData_->uvTransform = Math::MakeIdentity4x4();
 }
 
