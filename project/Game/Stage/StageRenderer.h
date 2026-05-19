@@ -48,6 +48,8 @@ private:
     std::unique_ptr<Model> pBlockOnModel_;
     //Model* PBlockOff_ = nullptr;
     std::unique_ptr<Model> crumbleModel_;
+    std::unique_ptr<Model> iceBlockModel_;
+    std::unique_ptr<Model> movingFloorModel_;
 
     std::vector<std::unique_ptr<Object3d>> objects_;
     std::vector<std::unique_ptr<Object3d>> previewObjects_; // 🌟 半透明プレビュー用オブジェクト
