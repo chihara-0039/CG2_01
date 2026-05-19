@@ -106,4 +106,6 @@ private:
     // ▼ 追加：鍵を持っているかどうかのフラグ
     bool hasKey_ = false;
 
+    bool hasJustWarped_ = false; // ワープ直後フラグ
+
 };

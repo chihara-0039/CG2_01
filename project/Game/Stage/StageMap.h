@@ -243,6 +243,11 @@ public:
     // ▼ 追加：指定座標から繋がっている鍵ブロックをすべて消去する関数
     void RemoveConnectedKeyBlocks(int x, int y, int z);
 
+    /// <summary>
+    /// 指定した座標のドアと同じID（variant）を持つ、相方のドアの座標を検索する
+    /// </summary>
+    Int3 FindPairedDoor(int srcX, int srcY, int srcZ) const;
+
 private:
 
     int width_ = 0;

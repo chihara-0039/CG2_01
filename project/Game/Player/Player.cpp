@@ -245,36 +245,60 @@ void Player::UpdateTransform(const Matrix4x4& lightVP)
 // ドアに触れているか判定して、触れていてかつFキーがトリガーされたらワープする
 void Player::DoorWarp(const StageMap& map)
 {
+	// 1. プレイヤーの足元のグリッド座標（整数）を計算
 	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
 	int gyBottom = static_cast<int>(std::floor(position_.y + 0.1f));
 	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
 
+	// 現在足元にあるセルを取得
 	const MapCell* cell = map.GetCell(gx, gyBottom, gz);
 
 	// 毎フレーム一度falseに戻す
 	isNearDoor_ = false;
 
+	// 足元がドアブロックだった場合
 	if (cell && cell->type == BlockType::Door)
 	{
 		isNearDoor_ = true;
 
-		// ドアの上にFを出す座標
+		// ドアの上に「Fキー」などのUIを出すワールド座標を設定
 		nearDoorWorldPos_ = {
 			static_cast<float>(gx),
 			static_cast<float>(gyBottom) + 1.0f,
 			static_cast<float>(gz)
 		};
 
-		if (input_->TriggerKey(DIK_F))
+		// 【ワープ実行処理】
+		// ドアの中にいて、Fキーが押され、かつ「ワープ直後フラグ」が立っていない場合のみ実行
+		if (input_->TriggerKey(DIK_F) && !hasJustWarped_)
 		{
-			Int3 doorWarpTarget = cell->doorTargetIndex;
+			// 2. マップ全体から、自分（gx, gyBottom, gz）と同じドア番号(variant)を持つ相方の座標を検索
+			// ※前回 StageMap に追加した関数を呼び出します
+			Int3 destination = map.FindPairedDoor(gx, gyBottom, gz);
 
-			position_.x = static_cast<float>(doorWarpTarget.x);
-			position_.y = static_cast<float>(doorWarpTarget.y);
-			position_.z = static_cast<float>(doorWarpTarget.z);
+			// 3. 相方のドアが見つかった場合（検索結果が現在の座標と異なる場合）
+			if (destination.x != gx || destination.y != gyBottom || destination.z != gz)
+			{
+				// ワープ先の座標を設定
+				// ※ destination.y（ブロックの底面）にプレイヤーの足元がぴったり乗るよう、
+				//    キノピオ隊長の着地位置として少しだけ高さを浮かせます（+0.1fなど環境に合わせて調整）
+				position_.x = static_cast<float>(destination.x);
+				position_.y = static_cast<float>(destination.y) + 0.1f;
+				position_.z = static_cast<float>(destination.z);
 
-			velocity_ = { 0.0f, 0.0f, 0.0f };
+				// ワープした衝撃で物理移動がバグらないよう、落下速度や移動慣性を完全にゼロにリセット
+				velocity_ = { 0.0f, 0.0f, 0.0f };
+
+				// ワープ直後フラグを立てる（これでこのフレームや次フレームでの連続誤作動を防ぐ）
+				hasJustWarped_ = true;
+			}
 		}
+	}
+	else
+	{
+		// 4. ドアから完全に離れたら、再ワープ防止フラグをリセットする
+		// これにより、別のドア（または一度離れて入り直した時）で再びワープができるようになります
+		hasJustWarped_ = false;
 	}
 }
 
