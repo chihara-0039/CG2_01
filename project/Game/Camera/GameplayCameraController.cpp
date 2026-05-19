@@ -179,7 +179,8 @@ void GameplayCameraController::ResetCamera(Camera* camera,Player*player,int stag
         cameraAngle_ = 3.15f;
         cameraPitch_ = 0.400f;
         distance = 32.236f;
-        height = 0.550f;
+        height = 20.970f;
+        cameraFov_ = 0.550f;
         break;
 
     case 3:
