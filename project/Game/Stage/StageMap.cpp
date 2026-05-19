@@ -500,3 +500,8 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
 
     return cell;
 }
+
+void StageMap::ResetPSwitchState()
+{
+    isPSwitchActive_ = false;
+}

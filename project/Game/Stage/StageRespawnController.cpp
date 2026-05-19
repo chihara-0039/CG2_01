@@ -1,4 +1,5 @@
 #include "StageRespawnController.h"
+
 void StageRespawnController::Update(
     StageMap& stageMap,
     const StageMap& backupMap,
@@ -17,35 +18,26 @@ void StageRespawnController::Update(
         return;
     }
 
-    stageMap = backupMap;
+    // Pスイッチ状態だけ戻す
+    if (stageMap.IsPSwitchActive()) {
+        stageMap.ResetPSwitchStateNoRebuild();
+        if (stageRenderer) {
+            stageRenderer->ApplyPSwitchVisualState(stageMap);
+        }
+    }
 
-    // 見た目の再構築を次フレームに予約する
-    stageMap.RequestRebuild();
-
-
-    // 所持ブロックもリセット
     if (blockInventory) {
         blockInventory->Initialize(0);
     }
 
-    // コントローラーを復元後のstageMapに接続し直す
     if (bubblePickupController && stageRenderer && blockInventory) {
-        bubblePickupController->Initialize(
-            &stageMap,
-            stageRenderer,
-            blockInventory
-        );
+        bubblePickupController->Initialize(&stageMap, stageRenderer, blockInventory);
     }
 
     if (blockPlacementController && stageRenderer && blockInventory) {
-        blockPlacementController->Initialize(
-            &stageMap,
-            stageRenderer,
-            blockInventory
-        );
+        blockPlacementController->Initialize(&stageMap, stageRenderer, blockInventory);
     }
 
-    // プレイヤーをPlayerStartに戻す
     if (stageEditorController) {
         stageEditorController->ResetPlayerToStartCell(stageMap, player);
     }

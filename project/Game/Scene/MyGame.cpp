@@ -443,17 +443,17 @@ void MyGame::UpdateGamePlay() {
     totalTime_ += deltaTime;
     stageMap_.Update(deltaTime, totalTime_);
 
-    // もし足場が消えて「再構築」が必要になったら Renderer を更新する
-    if (stageMap_.NeedsRebuild()) {
-        stageRenderer_->BuildFromStageMap(stageMap_);
-        stageMap_.ResetRebuildFlag(); // ★これを忘れると、1回きりしか更新されません！
-    }
-
+    
     stageRenderer_->UpdateEffect(stageMap_);
 
     // --- プレイヤー更新 ---
     if (player_) {
         player_->Update(input.get(), stageMap_, gameplayCameraController_.GetAngle(), lightCamera_->GetViewProjectionMatrix());
+    }
+
+    if (stageMap_.NeedsRebuild()) {
+        stageRenderer_->ApplyPSwitchVisualState(stageMap_);
+        stageMap_.ClearRebuildFlag();
     }
 
     stageRespawnController_.Update(
@@ -491,6 +491,8 @@ void MyGame::UpdateGamePlay() {
     int gx = static_cast<int>(std::floor(pPos.x + 0.5f));
     int gy = static_cast<int>(std::floor(pPos.y));
     int gz = static_cast<int>(std::floor(pPos.z + 0.5f));
+
+   
 
     /*==================================================
         ▼ ゴール判定（★追加部分）

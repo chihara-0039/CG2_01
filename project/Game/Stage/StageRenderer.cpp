@@ -302,29 +302,38 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					break;
 					// ブロックの種類が PSwitch(Pスイッチ) の場合
 				case BlockType::PSwitch:
-					if (!stageMap.IsPSwitchActive())
-					{
-						CreateStageObject(
-							pSwichModel_.get(),
-							position,
-							{ 0.6f, 0.6f, 0.6f },
-							{ 0.0f, 0.0f, 0.0f },
-							BlockType::PSwitch
-						);
+				{
+					Vector3 scale = { 0.6f, 0.6f, 0.6f };
+
+					Object3d* obj = CreateStageObject(
+						pSwichModel_.get(),
+						position,
+						scale,
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::PSwitch
+					);
+
+					if (obj) {
+						pSwitchObjects_.push_back({ obj, scale });
 					}
-					break;
-					// ブロックの種類が PBlock (Pブロック) の場合
+				}
+				break;
+
 				case BlockType::PBlock:
-					if (!stageMap.IsPSwitchActive()) {
-						CreateStageObject(
-							pBlockOnModel_.get(),
-							position,
-							blockScale_,
-							{ 0.0f, 0.0f, 0.0f },
-							BlockType::PBlock
-						);
+				{
+					Object3d* obj = CreateStageObject(
+						pBlockOnModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::PBlock
+					);
+
+					if (obj) {
+						pBlockObjects_.push_back({ obj, blockScale_ });
 					}
-					break;
+				}
+				break;
 
 				case BlockType::CrumblingFloor:
 					CreateStageObject(
@@ -472,6 +481,10 @@ void StageRenderer::Clear() {
 	objects_.clear();
 	previewObjects_.clear(); // 🌟 プレビューも一緒にクリア
 	movingFloorInstances_.clear(); // ★追加：動く足場の管理リストもクリアしてダングリングポインタを防ぐ
+
+	//5/19佐倉
+	pSwitchObjects_.clear();
+	pBlockObjects_.clear();
 }
 
 // 🌟 配置プレビュー表示機能の実装
@@ -646,4 +659,30 @@ Object3d* StageRenderer::CreateStageObject(
 	Object3d* ptr = obj.get();
 	objects_.push_back(std::move(obj));
 	return ptr;
+}
+
+//5/19佐倉
+void StageRenderer::ApplyPSwitchVisualState(const StageMap& stageMap)
+{
+	const bool active = stageMap.IsPSwitchActive();
+
+	for (auto& item : pSwitchObjects_) {
+		if (!item.object) continue;
+
+		if (active) {
+			item.object->SetScale({ 0.0f, 0.0f, 0.0f });
+		} else {
+			item.object->SetScale(item.normalScale);
+		}
+	}
+
+	for (auto& item : pBlockObjects_) {
+		if (!item.object) continue;
+
+		if (active) {
+			item.object->SetScale({ 0.0f, 0.0f, 0.0f });
+		} else {
+			item.object->SetScale(item.normalScale);
+		}
+	}
 }
