@@ -97,6 +97,21 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		"wall.obj",
 		object3dCommon_->GetTextureManager()
 	);
+	// ▼ 追加：鍵モデル設定
+	keyModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/star",
+		"star.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
+	// ▼ 追加：鍵ブロックモデル設定
+	keyBlockModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/wall",
+		"wall.obj",
+		object3dCommon_->GetTextureManager()
+	);
 }
 
 void StageRenderer::UpdateEffect(const StageMap& stageMap) {
@@ -337,6 +352,25 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						movingFloorInstances_.push_back(instance);
 					}
 				}
+					break;
+					// ▼ 追加：鍵の場合
+				case BlockType::Key:
+					CreateStageObject(
+						keyModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f } // 必要に応じて回転
+					);
+					break;
+
+					// ▼ 追加：鍵ブロックの場合
+				case BlockType::KeyBlock:
+					CreateStageObject(
+						keyBlockModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f }
+					);
 					break;
 				// ブロックの種類が不明な場合は何もしない
 				default:

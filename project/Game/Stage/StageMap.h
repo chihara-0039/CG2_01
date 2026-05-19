@@ -18,7 +18,9 @@ enum class BlockType : uint32_t {
     PBlock,
     CrumblingFloor,
     IceBlock,
-    MovingFloor
+    MovingFloor,
+    Key,        // 拾える鍵
+    KeyBlock    // 鍵で開くブロック
 };
 
 inline const char* BlockTypeToString(BlockType type) {
@@ -37,6 +39,8 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::CrumblingFloor: return "CrumblingFloor";
     case BlockType::IceBlock:       return "IceBlock";
     case BlockType::MovingFloor:    return "MovingFloor";
+    case BlockType::Key:            return "Key";
+    case BlockType::KeyBlock:       return "KeyBlock";
     default:                        return "Unknown";
     }
 }
@@ -209,6 +213,9 @@ public:
 
     // 動く足場用のワールド座標当たり判定
     const MapCell* GetIntersectingMovingFloor(float pX, float pY, float pZ, float rX, float rY, float rZ) const;
+
+    // ▼ 追加：指定座標から繋がっている鍵ブロックをすべて消去する関数
+    void RemoveConnectedKeyBlocks(int x, int y, int z);
 
 private:
 

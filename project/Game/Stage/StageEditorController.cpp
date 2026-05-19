@@ -436,7 +436,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::PBlock,
                 BlockType::CrumblingFloor,
                 BlockType::IceBlock,
-                BlockType::MovingFloor
+                BlockType::MovingFloor,
+                BlockType::KeyBlock
             }
         },
         {
@@ -447,7 +448,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::BubblePickup,
                 BlockType::Goal,
                 BlockType::Door,
-                BlockType::PSwitch
+                BlockType::PSwitch,
+                BlockType::Key
             }
         },
         {
