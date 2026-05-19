@@ -50,6 +50,9 @@ private:
     std::unique_ptr<Model> crumbleModel_;
     std::unique_ptr<Model> iceBlockModel_;
     std::unique_ptr<Model> movingFloorModel_;
+    // ▼ 追加 ▼
+    std::unique_ptr<Model> keyModel_;
+    std::unique_ptr<Model> keyBlockModel_;
 
     std::vector<std::unique_ptr<Object3d>> objects_;
     std::vector<std::unique_ptr<Object3d>> previewObjects_; // 🌟 半透明プレビュー用オブジェクト
@@ -59,10 +62,11 @@ private:
     Object3d* CreateStageObject(Model* model, const Vector3& position, const Vector3& scale, const Vector3& rotation);
 
     // ▼ 追加：動く足場とマップ上のセル位置を紐付ける構造体
-        struct MovingFloorInstance {
-        Object3d* object = nullptr; // 3Dオブジェクトへのポインタ
-        Int3 cellIndex;            // StageMap上での [x, y, z] の位置
-    };
+        struct MovingFloorInstance 
+        {
+            Object3d* object = nullptr; // 3Dオブジェクトへのポインタ
+            Int3 cellIndex;            // StageMap上での [x, y, z] の位置
+        };
 
     // ▼ 追加：ステージ内のすべての動く足場を管理するリスト
     std::vector<MovingFloorInstance> movingFloorInstances_;

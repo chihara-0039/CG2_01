@@ -68,9 +68,15 @@ public:
         return ladderWorldPos_;
     }
 
+    // ▼ 追加：鍵の更新処理と所持フラグの取得・設定
+    void KeyUpdate(StageMap& map);
+    bool HasKey() const { return hasKey_; }
+    void SetHasKey(bool hasKey) { hasKey_ = hasKey; }
+    // ▲ ここまで ▲
+
 private:
     // マップのブロックと衝突しているかチェックするヘルパー
-    bool CheckCollision(const Vector3& pos, const StageMap& map);
+    bool CheckCollision(const Vector3& pos, StageMap& map);
 
 private:
     std::unique_ptr<Object3d> object_;    // プレイヤーの見た目
@@ -97,5 +103,7 @@ private:
     // はしごUI用
     bool isOnLadder_ = false;
     Vector3 ladderWorldPos_ = { 0.0f, 0.0f, 0.0f };
+    // ▼ 追加：鍵を持っているかどうかのフラグ
+    bool hasKey_ = false;
 
 };

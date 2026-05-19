@@ -219,6 +219,8 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	PSwitchUpdate(map);
 	DoorWarp(map);
 	
+	// ▼ 追加：鍵の取得チェック
+	KeyUpdate(map);
 
 	// --- 表示更新 ---
 	object_->SetPosition(position_);
@@ -271,8 +273,26 @@ void Player::DoorWarp(const StageMap& map)
 	}
 }
 
+void Player::KeyUpdate(StageMap& map)
+{
+	// プレイヤーの中心付近（足元〜腰）のマスを取得
+	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
+	int gy = static_cast<int>(std::floor(position_.y + 0.5f));
+	int gz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+	MapCell* cell = map.GetCell(gx, gy, gz);
+
+	// 触れているのが鍵だったら取得
+	if (cell && cell->type == BlockType::Key) {
+		hasKey_ = true;                 // 鍵を取得
+		cell->type = BlockType::None;   // マップから鍵を消す
+		cell->isSolid = false;
+		map.RequestRebuild();           // ステージの見た目を再構築
+	}
+}
+
 // 衝突判定ロジック
-bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
+bool Player::CheckCollision(const Vector3& pos, StageMap& map) {
 	// プレイヤーの当たり判定ボックス（四隅など）が StageMap の solid なセルに重なっているか
 	// 足元、腰、頭の3段階で高さをチェック
 	float checkOffsetsY[] = { 0.1f, 0.8f, 1.5f };
@@ -286,11 +306,33 @@ bool Player::CheckCollision(const Vector3& pos, const StageMap& map) {
 				int gz = static_cast<int>(std::floor(pos.z + dz + 0.5f));
 
 				// 指定した座標のセル情報を取得
-				const MapCell* cell = map.GetCell(gx, gy, gz);
+				MapCell* cell = map.GetCell(gx, gy, gz);
+
+				// ▼ 追加：鍵ブロックの判定と破壊 ▼
+				if (cell && cell->type == BlockType::KeyBlock) {
+					if (hasKey_) {
+						// 鍵を持っている場合は開ける（消費する）
+						hasKey_ = false;
+						// ★ 変更：1マスだけではなく、繋がっている塊をすべて消す
+						map.RemoveConnectedKeyBlocks(gx, gy, gz);
+						map.RequestRebuild();         // ステージの見た目を再構築
+
+						// ブロックが消えたので、ここには壁が無いこととして判定を続ける
+						continue;
+					}
+					else {
+						// 鍵を持っていない場合は普通の壁として扱う
+						return true;
+					}
+				}
+				// ▲ ここまで ▲
+
 				// ★ 変更：動く足場は固定グリッド判定から除外する
 				if (cell && cell->isSolid && cell->type != BlockType::MovingFloor) {
 					return true;
 				}
+
+
 
 				// 秋元追加 04/03
 				if (cell && cell->type == BlockType::PBlock) {
@@ -318,6 +360,9 @@ void Player::Respawn()
 	position_ = respawnPosition;
 	velocity_ = { 0.0f,0.0f,0.0f };
 	rotation_ = { 0.0f,0.0f,0.0f };
+
+	// ▼ 追加：リスポーン時は鍵を失う
+	hasKey_ = false;
 }
 
 // Pスイッチの更新：足元のセルをチェックして、Pスイッチがあればマップに状態変更を通知

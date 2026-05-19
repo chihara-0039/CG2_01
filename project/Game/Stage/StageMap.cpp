@@ -430,6 +430,35 @@ const MapCell* StageMap::GetIntersectingMovingFloor(float pX, float pY, float pZ
     return nullptr;
 }
 
+void StageMap::RemoveConnectedKeyBlocks(int x, int y, int z)
+{
+    // マップの範囲外なら処理を抜ける
+    if (x < 0 || x >= width_ || y < 0 || y >= height_ || z < 0 || z >= depth_) {
+        return;
+    }
+
+    // 指定座標のセルを取得
+    MapCell* cell = GetCell(x, y, z);
+
+    // セルが存在しない、または「鍵ブロック」でなければ処理を抜ける
+    // (既に None になっている場合もここで止まるため、無限ループを防げます)
+    if (!cell || cell->type != BlockType::KeyBlock) {
+        return;
+    }
+
+    // 自身のブロックを消去する
+    cell->type = BlockType::None;
+    cell->isSolid = false;
+
+    // 上下左右前後の6方向に対して、同じ処理を芋づる式に呼び出す（再帰呼び出し）
+    RemoveConnectedKeyBlocks(x + 1, y, z); // 右
+    RemoveConnectedKeyBlocks(x - 1, y, z); // 左
+    RemoveConnectedKeyBlocks(x, y + 1, z); // 上
+    RemoveConnectedKeyBlocks(x, y - 1, z); // 下
+    RemoveConnectedKeyBlocks(x, y, z + 1); // 前
+    RemoveConnectedKeyBlocks(x, y, z - 1); // 後
+}
+
 int StageMap::ToIndex(int x, int y, int z) const {
     return x + (z * width_) + (y * width_ * depth_);
 }
@@ -450,6 +479,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::CrumblingFloor:
     case BlockType::IceBlock:
     case BlockType::MovingFloor:
+    case BlockType::KeyBlock:    // 鍵ブロックは通り抜けられない
     cell.isSolid = true;
     break;
 
@@ -459,6 +489,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::Door:
     case BlockType::PSwitch:
     case BlockType::PBlock:
+    case BlockType::Key:         // 鍵は通り抜けられる
     cell.isSolid = false;
     break;
 
