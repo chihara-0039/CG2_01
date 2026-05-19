@@ -312,7 +312,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					// ブロックの種類が IceBlock（滑る足場）の場合
 				case BlockType::IceBlock:
 					CreateStageObject(
-						iceBlockModel_,
+						iceBlockModel_.get(),
 						position,
 						blockScale_,
 						{ 0.0f, 0.0f, 0.0f }
@@ -323,7 +323,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				{
 					// 1. 3Dオブジェクトを生成 (既存の他のブロックと同様の生成処理)
 					Object3d* newObj = CreateStageObject(
-						movingFloorModel_,
+						movingFloorModel_.get(),
 						position,
 						blockScale_,
 						{ 0.0f, cell->rotationY, 0.0f }
@@ -359,18 +359,7 @@ void StageRenderer::SetCamera(const Matrix4x4& view, const Matrix4x4& projection
 }
 
 // 全てのオブジェクトの更新処理を呼び出す
-void StageRenderer::Update(const Matrix4x4& lightVP) {
-	for (const auto& obj : objects_) {
-		if (obj) {
-			obj->Update(lightVP);
-		}
-	}
-	for (const auto& obj : previewObjects_) {
-void StageRenderer::Update(const StageMap& stageMap,const Matrix4x4& lightVP)
-{
-
-#pragma region 滑る足場
-
+void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 	// ▼ 追加：動く足場の位置を StageMap の計算結果と同期させる
 	for (auto& instance : movingFloorInstances_) {
 		// マップから対応するセルのデータを取得
@@ -378,7 +367,6 @@ void StageRenderer::Update(const StageMap& stageMap,const Matrix4x4& lightVP)
 
 		if (cell && cell->type == BlockType::MovingFloor) {
 			// エディタで配置した時のベース座標（グリッド座標からワールド座標に変換）
-			// ※お手元のプロジェクトのグリッド配置計算（BuildFromStageMap内にある position の計算式）と合わせてください
 			Vector3 basePosition = {
 				static_cast<float>(instance.cellIndex.x) * blockScale_.x,
 				static_cast<float>(instance.cellIndex.y) * blockScale_.y,
@@ -386,7 +374,6 @@ void StageRenderer::Update(const StageMap& stageMap,const Matrix4x4& lightVP)
 			};
 
 			// ベース座標に、StageMap.cpp の Update で計算された滑らかなオフセット（currentOffset）を加算する
-			// ※currentOffsetにブロックスケールが掛けられていない場合は、ここで blockScale_ を掛けてください
 			Vector3 newPosition = {
 				basePosition.x + (cell->currentOffsetX * blockScale_.x),
 				basePosition.y + (cell->currentOffsetY * blockScale_.y),
@@ -398,9 +385,15 @@ void StageRenderer::Update(const StageMap& stageMap,const Matrix4x4& lightVP)
 		}
 	}
 
-#pragma endregion
+	// 全てのメインオブジェクトに対して、更新処理を呼び出す
+	for (const auto& obj : objects_) {
+		if (obj) {
+			obj->Update(lightVP);
+		}
+	}
 
-	for (Object3d* obj : objects_) {
+	// 全てのプレビューオブジェクトに対して、更新処理を呼び出す
+	for (const auto& obj : previewObjects_) {
 		if (obj) {
 			obj->Update(lightVP);
 		}
