@@ -76,6 +76,8 @@ void Object3dCommon::SetDefaultLight() {
         lightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         lightData_->direction = { 0.0f, -1.0f, 0.0f };
         lightData_->intensity = 1.0f;
+        lightData_->cameraPosition = { 0.0f, 0.0f, -10.0f };
+        lightData_->paddingLight = 0.0f;
     }
 }
 

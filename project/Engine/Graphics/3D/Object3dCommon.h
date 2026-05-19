@@ -13,6 +13,8 @@ struct DirectionalLight {
     Vector4 color;
     Vector3 direction;
     float intensity;
+    Vector3 cameraPosition; // カメラの位置を追加（スペキュラー・リムライト計算用）
+    float paddingLight;     // 16バイトアライメント用パディング
 };
 
 class Object3dCommon {
@@ -34,6 +36,7 @@ public:
     void SetLightDirection(const Vector3& direction) { if (lightData_) lightData_->direction = Math::Normalize(direction); }
     void SetLightColor(const Vector4& color) { if (lightData_) lightData_->color = color; }
     void SetLightIntensity(float intensity) { if (lightData_) lightData_->intensity = intensity; }
+    void SetCameraPosition(const Vector3& cameraPosition) { if (lightData_) lightData_->cameraPosition = cameraPosition; }
 
     D3D12_GPU_VIRTUAL_ADDRESS GetLightGPUVirtualAddress() const { return lightResource_->GetGPUVirtualAddress(); }
 

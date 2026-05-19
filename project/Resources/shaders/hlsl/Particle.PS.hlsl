@@ -1,4 +1,9 @@
-#include "Particle.hlsli"
+struct VertexShaderOutput
+{
+    float4 position : SV_POSITION;
+    float2 texcoord : TEXCOORD0;
+    float4 color : COLOR0;
+};
 
 Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
@@ -12,13 +17,13 @@ PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
     
-    // ƒeƒNƒXƒ`ƒƒƒTƒ“ƒvƒŠƒ“ƒO
+    // ãƒ†ã‚¯ã‚¹ãƒãƒ£ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°
     float4 textureColor = gTexture.Sample(gSampler, input.texcoord);
     
-    // ƒeƒNƒXƒ`ƒƒ‚ÌF * ƒp[ƒeƒBƒNƒ‹‚ÌF
+    // ãƒ†ã‚¯ã‚¹ãƒãƒ£ã®è‰² * ãƒ‘ãƒ¼ãƒ†ã‚£ã‚¯ãƒ«ã®è‰²
     output.color = textureColor * input.color;
     
-    // ƒAƒ‹ƒtƒ@ƒeƒXƒg (Š®‘S‚É“§–¾‚È•”•ª‚Í•`‰æ‚µ‚È‚¢)
+    // ã‚¢ãƒ«ãƒ•ã‚¡ãƒ†ã‚¹ãƒˆ (å®Œå…¨ã«é€æ˜ãªéƒ¨åˆ†ã¯æç”»ã—ãªã„)
     if (output.color.a == 0.0f)
     {
         discard;

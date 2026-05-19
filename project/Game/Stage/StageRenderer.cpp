@@ -424,6 +424,7 @@ void StageRenderer::Draw() {
 void StageRenderer::Clear() {
 	objects_.clear();
 	previewObjects_.clear(); // 🌟 プレビューも一緒にクリア
+	movingFloorInstances_.clear(); // ★追加：動く足場の管理リストもクリアしてダングリングポインタを防ぐ
 }
 
 // 🌟 配置プレビュー表示機能の実装

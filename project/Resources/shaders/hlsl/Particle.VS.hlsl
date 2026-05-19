@@ -1,14 +1,19 @@
-#include "Particle.hlsli"
+struct VertexShaderOutput
+{
+    float4 position : SV_POSITION;
+    float2 texcoord : TEXCOORD0;
+    float4 color : COLOR0;
+};
 
 struct VertexShaderInput
 {
-    // --- ’¸“_ƒf[ƒ^ (Slot 0) ---
+    // --- é ‚ç‚¹ãƒ‡ãƒ¼ã‚¿ (Slot 0) ---
     float4 position : POSITION0;
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL0;
 
-    // --- ƒCƒ“ƒXƒ^ƒ“ƒXƒf[ƒ^ (Slot 1) ---
-    // s—ñ‚ğ4‚Â‚ÌƒxƒNƒgƒ‹‚Æ‚µ‚Ä–¾¦“I‚Éó‚¯æ‚é
+    // --- ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ãƒ‡ãƒ¼ã‚¿ (Slot 1) ---
+    // è¡Œåˆ—ã‚’4ã¤ã®ãƒ™ã‚¯ãƒˆãƒ«ã¨ã—ã¦æ˜ç¤ºçš„ã«å—ã‘å–ã‚‹
     float4 wvpRow0 : INSTANCE_WVP0; // Index 0
     float4 wvpRow1 : INSTANCE_WVP1; // Index 1
     float4 wvpRow2 : INSTANCE_WVP2; // Index 2
@@ -21,14 +26,14 @@ VertexShaderOutput main(VertexShaderInput input)
 {
     VertexShaderOutput output;
     
-    // 4‚Â‚ÌƒxƒNƒgƒ‹‚ğ1‚Â‚Ìs—ñ‚É•œŒ³‚·‚é
+    // 4ã¤ã®ãƒ™ã‚¯ãƒˆãƒ«ã‚’1ã¤ã®è¡Œåˆ—ã«å¾©å…ƒã™ã‚‹
     float4x4 WVP;
     WVP[0] = input.wvpRow0;
     WVP[1] = input.wvpRow1;
     WVP[2] = input.wvpRow2;
     WVP[3] = input.wvpRow3;
     
-    // À•W•ÏŠ·
+    // åº§æ¨™å¤‰æ›
     output.position = mul(input.position, WVP);
     output.texcoord = input.texcoord;
     output.color = input.color;

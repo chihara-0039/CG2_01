@@ -5,6 +5,7 @@ struct VertexShaderOutput
     float32_t2 texcoord : TEXCOORD0;
     float32_t3 normal : NORMAL0;
     float32_t4 lightSpacePosition : POSITION0;
+    float32_t3 worldPosition : POSITION1; // ワールド空間の位置を追加
 };
 
 //05_03
@@ -27,4 +28,6 @@ struct DirectionalLight
     float32_t4 color;
     float32_t3 direction;
     float intensity;
+    float32_t3 cameraPosition; // カメラの位置を追加
+    float paddingLight;        // アライメント用パディング
 };

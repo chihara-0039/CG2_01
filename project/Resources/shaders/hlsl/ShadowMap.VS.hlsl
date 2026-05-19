@@ -1,21 +1,36 @@
-#include "object3d.hlsli"
+struct VertexShaderOutput
+{
+    float4 position : SV_POSITION;
+    float2 texcoord : TEXCOORD0;
+    float3 normal : NORMAL0;
+    float4 lightSpacePosition : POSITION0;
+    float3 worldPosition : POSITION1;
+};
+
+struct TransformationMatrix
+{
+    float4x4 WVP;
+    float4x4 World;
+    float4x4 lightViewProjection;
+};
+
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
 
 struct VertexShaderInput
 {
-    float32_t4 position : POSITION0;
+    float4 position : POSITION0;
 };
 
 struct ShaderVertexOutput
 {
-    float32_t4 position : SV_POSITION;
+    float4 position : SV_POSITION;
 };
 
 VertexShaderOutput main(VertexShaderInput input)
 {
     VertexShaderOutput output;
-    // šd—vFWVP‚Å‚Í‚È‚­uWorlds—ñ ~ ƒ‰ƒCƒgs—ñv‚ğ’¼ÚŒvZ‚µ‚Äg‚¤
-    float32_t4x4 lightWVP = mul(gTransformationMatrix.World, gTransformationMatrix.lightViewProjection);
+    // â˜…é‡è¦ï¼šWVPã§ã¯ãªãã€ŒWorldè¡Œåˆ— Ã— ãƒ©ã‚¤ãƒˆè¡Œåˆ—ã€ã‚’ç›´æ¥è¨ˆç®—ã—ã¦ä½¿ã†
+    float4x4 lightWVP = mul(gTransformationMatrix.World, gTransformationMatrix.lightViewProjection);
     output.position = mul(input.position, lightWVP);
     return output;
 }

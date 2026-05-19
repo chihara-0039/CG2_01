@@ -1,27 +1,40 @@
-#include "object3d.hlsli"
+struct VertexShaderOutput
+{
+    float4 position : SV_POSITION;
+    float2 texcoord : TEXCOORD0;
+    float3 normal : NORMAL0;
+    float4 lightSpacePosition : POSITION0;
+    float3 worldPosition : POSITION1; // ãƒ¯ãƒ¼ãƒ«ãƒ‰ç©ºé–“ã®ä½ç½®ã‚’è¿½åŠ 
+};
+
+struct TransformationMatrix
+{
+    float4x4 WVP;
+    float4x4 World;
+    float4x4 lightViewProjection;
+};
 
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
 
 struct VertexSgaderInput
 {
-    float32_t4 position : POSITION0;
-    float32_t2 texcoord : TEXCOORD0;
-    float32_t3 normal : NORMAL0;
+    float4 position : POSITION0;
+    float2 texcoord : TEXCOORD0;
+    float3 normal : NORMAL0;
 };
-
 
 VertexShaderOutput main(VertexSgaderInput input)
 {
     VertexShaderOutput output;
     output.position = mul(input.position, gTransformationMatrix.WVP);
     output.texcoord = input.texcoord;
-    output.normal = normalize(mul((float32_t3x3) gTransformationMatrix.World, input.normal));
+    output.normal = normalize(mul((float3x3) gTransformationMatrix.World, input.normal));
     
-    // ƒ‚ƒfƒ‹‚Ì’¸“_‚ðu¢ŠE‚Ì‚Ç‚±‚É‚¢‚é‚©v‚É•ÏŠ·
-    float32_t4 worldPos = mul(input.position, gTransformationMatrix.World);
+    // ãã®ä¸–ç•Œåº§æ¨™ã‚’ã€Œãƒ©ã‚¤ãƒˆè¦–ç‚¹ã®è¡Œåˆ—ã€ã§å¤‰æ›ã—ã¦ãƒ”ã‚¯ã‚»ãƒ«ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã«é€ã‚‹
+    float4 worldPos = mul(input.position, gTransformationMatrix.World);
     
-    // ‚»‚Ì¢ŠEÀ•W‚ðuƒ‰ƒCƒgŽ‹“_‚Ìs—ñv‚Å•ÏŠ·‚µ‚ÄƒsƒNƒZƒ‹ƒVƒF[ƒ_[‚É‘—‚é
     output.lightSpacePosition = mul(worldPos, gTransformationMatrix.lightViewProjection);
+    output.worldPosition = worldPos.xyz;
     
     return output;
 }
