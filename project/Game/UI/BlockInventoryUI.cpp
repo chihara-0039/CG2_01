@@ -60,6 +60,11 @@ void BlockInventoryUI::Initialize(DirectXCommon* dxCommon, SpriteCommon* spriteC
     addBtn(BlockType::Wall,   0, 174.0f, 220.0f, "Resources/Models/wall/wall.png");
     addBtn(BlockType::Ladder, 0, 174.0f, 310.0f, "Resources/Models/ladder/ladder.png");
 
+    // 新規特殊ブロック (空き座標を有効活用)
+    addBtn(BlockType::IceBlock,       0, 249.0f, 130.0f, "Resources/Models/iceBlock/iceBlock.png");
+    addBtn(BlockType::MovingFloor,    0, 249.0f, 490.0f, "Resources/Models/wall/wall.png");
+    addBtn(BlockType::CrumblingFloor, 0, 174.0f, 580.0f, "Resources/Models/CollapsedBlocks/CollapsedBlocks.png");
+
     // カスタムブロックスロット 1〜5 (空き位置に並べる)
     addBtn(BlockType::Wall,   1, 249.0f, 220.0f, "Resources/Models/wall/wall.png");
     addBtn(BlockType::Wall,   2, 249.0f, 310.0f, "Resources/Models/wall/wall.png");
@@ -159,6 +164,17 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
                 }
                 btn.sprite->Initialize(spriteCommon_, btn.textureHandle);
                 btn.sprite->SetSize(btn.size);
+            }
+        } else {
+            // 通常の特殊ブロックタイプ用のカラー補正
+            if (btn.type == BlockType::IceBlock) {
+                colorR = 0.5f;
+                colorG = 0.85f;
+                colorB = 1.0f; // 美しいアイスブルー
+            } else if (btn.type == BlockType::MovingFloor) {
+                colorR = 0.9f;
+                colorG = 0.65f;
+                colorB = 0.4f; // インダストリアルオレンジ
             }
         }
 
@@ -284,6 +300,12 @@ void BlockInventoryUI::Draw() {
                         ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.5f, 0.9f), "WALL");
                     } else if (btn.type == BlockType::Ladder) {
                         ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.5f, 0.9f), "LADDER");
+                    } else if (btn.type == BlockType::IceBlock) {
+                        ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 0.9f), "ICE");
+                    } else if (btn.type == BlockType::MovingFloor) {
+                        ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.5f, 0.9f), "MOVING");
+                    } else if (btn.type == BlockType::CrumblingFloor) {
+                        ImGui::TextColored(ImVec4(0.8f, 0.6f, 0.4f, 0.9f), "CRUMBLE");
                     }
                 }
             }

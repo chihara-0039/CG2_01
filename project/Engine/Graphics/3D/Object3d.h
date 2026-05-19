@@ -15,7 +15,9 @@ struct TransformationMatrix {
 struct Material {
     Vector4 color;
     int32_t enableLighting;
-    float padding[3];
+    float shininess;      // 光沢の強さと鋭さ (0.0:マット 〜 1.0:極めて滑らか・高光沢)
+    float metallic;       // 金属感 (0.0:非金属 〜 1.0:金属的な色の反射)
+    float emissive;       // 自己発光 (0.0:発光なし 〜 1.0以上:暗闇でも光る)
     Matrix4x4 uvTransform;
 };
 
@@ -46,6 +48,9 @@ public:
     // マテリアル制御
     void SetColor(const Vector4& color) { if (materialData_) materialData_->color = color; }
     void SetEnableLighting(bool enable) { if (materialData_) materialData_->enableLighting = (enable ? 1 : 0); }
+    void SetShininess(float shininess) { if (materialData_) materialData_->shininess = shininess; }
+    void SetMetallic(float metallic) { if (materialData_) materialData_->metallic = metallic; }
+    void SetEmissive(float emissive) { if (materialData_) materialData_->emissive = emissive; }
     void SetUVTransform(const Transform& uvTransform);
 
 private:

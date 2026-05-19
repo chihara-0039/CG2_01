@@ -11,6 +11,9 @@ struct Material
 {
     float4 color;
     int enableLighting;
+    float shininess;
+    float metallic;
+    float emissive;
     float4x4 uvTransform;
 };
 
@@ -86,15 +89,30 @@ PixelShaderOutput main(VertexShaderOutput input)
         float3 viewDir = normalize(gDirectionalLight.cameraPosition - input.worldPosition);
         float3 lightDir = normalize(-gDirectionalLight.direction);
         float3 halfDir = normalize(lightDir + viewDir);
-        float specular = pow(saturate(dot(normalize(input.normal), halfDir)), 48.0f);
-        float3 specColor = gDirectionalLight.color.rgb * gDirectionalLight.intensity * specular * 0.35f * shadowFactor;
+        
+        // gMaterial.shininess を反射光の広がり（指数）にマッピング
+        // 0.0f の時は 8.0f（鈍い光）、1.0f の時は 256.0f（非常に鋭いハイライト）
+        float specPower = lerp(8.0f, 256.0f, gMaterial.shininess);
+        float specular = pow(saturate(dot(normalize(input.normal), halfDir)), specPower);
+        
+        // metallic が高いほど、スペキュラー色にマテリアルの色を強く混ぜる（金属特有の反射光）
+        float3 specBaseColor = lerp(float3(1.0f, 1.0f, 1.0f), gMaterial.color.rgb, gMaterial.metallic);
+        
+        // shininess に応じて反射の強さを調節
+        float specIntensity = lerp(0.15f, 0.8f, gMaterial.shininess);
+        
+        float3 specColor = gDirectionalLight.color.rgb * gDirectionalLight.intensity * specular * specBaseColor * specIntensity * shadowFactor;
         
         // 3. リムライト (Rim Light) - 物体の輪郭を光らせて立体感を極限まで高める
         float rim = pow(1.0f - saturate(dot(normalize(input.normal), viewDir)), 4.0f);
-        float3 rimColor = float3(1.0f, 1.0f, 1.0f) * rim * 0.25f * gDirectionalLight.intensity;
+        // emissive に応じてリムライトの光り方を補強
+        float3 rimColor = float3(1.0f, 1.0f, 1.0f) * rim * (0.25f + gMaterial.emissive * 0.5f) * gDirectionalLight.intensity;
+        
+        // 4. 自発光 (Emission) - 光源がなくても自己発光する
+        float3 emissiveColor = gMaterial.color.rgb * gMaterial.emissive;
         
         // 最終カラー合成
-        output.color.rgb = diffuseColor + specColor + rimColor;
+        output.color.rgb = diffuseColor + specColor + rimColor + emissiveColor;
         output.color.a = gMaterial.color.a * textureColor.a;
     }
     else

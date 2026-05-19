@@ -2,10 +2,14 @@
 
 void BlockInventory::Initialize(int initialCount) {
     // 互換性のため、初期カウントは Wall に割り当てる
-    wallCount_ = initialCount;
-    ladderCount_ = 0;
+    // プレイヤーが十分に遊べるよう、各ブロック種別のデフォルト所持数を99個にする
+    wallCount_ = (initialCount > 0) ? initialCount : 99;
+    ladderCount_ = 99;
+    iceCount_ = 99;
+    movingCount_ = 99;
+    crumbleCount_ = 99;
     for (int i = 0; i < 5; ++i) {
-        customCounts_[i] = 0;
+        customCounts_[i] = 99;
     }
 }
 
@@ -21,6 +25,12 @@ void BlockInventory::AddBlock(BlockType type, int count, int customId) {
             wallCount_ += count;
         } else if (type == BlockType::Ladder) {
             ladderCount_ += count;
+        } else if (type == BlockType::IceBlock) {
+            iceCount_ += count;
+        } else if (type == BlockType::MovingFloor) {
+            movingCount_ += count;
+        } else if (type == BlockType::CrumblingFloor) {
+            crumbleCount_ += count;
         }
     }
 }
@@ -50,6 +60,21 @@ bool BlockInventory::ConsumeBlock(BlockType type, int count, int customId) {
                 ladderCount_ -= count;
                 return true;
             }
+        } else if (type == BlockType::IceBlock) {
+            if (iceCount_ >= count) {
+                iceCount_ -= count;
+                return true;
+            }
+        } else if (type == BlockType::MovingFloor) {
+            if (movingCount_ >= count) {
+                movingCount_ -= count;
+                return true;
+            }
+        } else if (type == BlockType::CrumblingFloor) {
+            if (crumbleCount_ >= count) {
+                crumbleCount_ -= count;
+                return true;
+            }
         }
     }
 
@@ -69,12 +94,18 @@ int BlockInventory::GetBlockCount(BlockType type, int customId) const {
         return wallCount_;
     } else if (type == BlockType::Ladder) {
         return ladderCount_;
+    } else if (type == BlockType::IceBlock) {
+        return iceCount_;
+    } else if (type == BlockType::MovingFloor) {
+        return movingCount_;
+    } else if (type == BlockType::CrumblingFloor) {
+        return crumbleCount_;
     }
     return 0;
 }
 
 int BlockInventory::GetBlockCount() const {
-    int total = wallCount_ + ladderCount_;
+    int total = wallCount_ + ladderCount_ + iceCount_ + movingCount_ + crumbleCount_;
     for (int i = 0; i < 5; ++i) {
         total += customCounts_[i];
     }
@@ -83,10 +114,10 @@ int BlockInventory::GetBlockCount() const {
 
 bool BlockInventory::HasBlock(BlockType type, int customId) const {
     return GetBlockCount(type, customId) > 0;
-}
+    }
 
 bool BlockInventory::HasBlock() const {
-    if (wallCount_ > 0 || ladderCount_ > 0) return true;
+    if (wallCount_ > 0 || ladderCount_ > 0 || iceCount_ > 0 || movingCount_ > 0 || crumbleCount_ > 0) return true;
     for (int i = 0; i < 5; ++i) {
         if (customCounts_[i] > 0) return true;
     }
