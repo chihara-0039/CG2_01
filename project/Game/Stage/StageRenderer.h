@@ -24,6 +24,8 @@ public:
 
     void UpdateEffect(const StageMap& stageMap);
 
+    void ApplyPSwitchVisualState(const StageMap& stageMap);
+
     // 🌟 配置プレビュー表示機能
     void SetPlacementPreview(
         const StageMap& stageMap,
@@ -70,5 +72,13 @@ private:
 
     // ▼ 追加：ステージ内のすべての動く足場を管理するリスト
     std::vector<MovingFloorInstance> movingFloorInstances_;
+
+    struct PSwitchVisualObject {
+        Object3d* object = nullptr;
+        Vector3 normalScale{ 1.0f, 1.0f, 1.0f };
+    };
+
+    std::vector<PSwitchVisualObject> pSwitchObjects_;
+    std::vector<PSwitchVisualObject> pBlockObjects_;
 
 };

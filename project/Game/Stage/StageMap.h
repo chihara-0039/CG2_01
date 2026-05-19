@@ -173,11 +173,34 @@ public:
 
     // スイッチ取得
     void SetPSwitchActive(bool active) {
-        if (isPSwitchActive_ != active) {
-            isPSwitchActive_ = active;
-            needsRebuild_ = true; // ★状態が変わったらフラグを立てる
+        if (isPSwitchActive_ == active) {
+            return;
+        }
+
+        isPSwitchActive_ = active;
+        needsRebuild_ = true;
+
+        for (auto& cell : cells_) {
+            if (cell.type == BlockType::PBlock) {
+                cell.isSolid = !active;
+                cell.isHidden = active;
+            }
         }
     }
+
+    void ResetPSwitchStateNoRebuild() {
+        isPSwitchActive_ = false;
+
+        for (auto& cell : cells_) {
+            if (cell.type == BlockType::PBlock) {
+                cell.isSolid = true;
+                cell.isHidden = false;
+            }
+        }
+    }
+
+
+
     bool NeedsRebuild() const { return needsRebuild_; }
 
     // ★ これを追加：フラグを「再構築の必要なし（false）」に戻す
@@ -191,6 +214,9 @@ public:
     void RequestRebuild() { needsRebuild_ = true; }
 
     bool IsPSwitchActive() const { return isPSwitchActive_; }
+
+    //5/19佐倉
+    void ResetPSwitchState();
 
     // --- カスタムブロックパーツ関連 ---
     const std::vector<CustomBlockPart>& GetCustomParts() const { return customParts_; }
