@@ -750,6 +750,9 @@ void MyGame::UpdateImGui() {
 
         const char* skyboxModes[] = { "Ignore", "Link (Multiply)" };
         ImGui::Combo("Skybox Color Link", &skyboxLinkMode_, skyboxModes, IM_ARRAYSIZE(skyboxModes));
+
+        const char* effectNames[] = { "Normal", "Grayscale", "Sepia" };
+        ImGui::Combo("Post Effect", &postEffectMode_, effectNames, IM_ARRAYSIZE(effectNames));
     }
 
     if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1387,7 +1390,13 @@ void MyGame::Draw() {
 
         // コピー用 PSO と RootSignature のバインド
         commandList->SetGraphicsRootSignature(copyRootSignature_.Get());
-        commandList->SetPipelineState(copyPipelineState_.Get());
+        if (postEffectMode_ == 1) {
+            commandList->SetPipelineState(grayscalePipelineState_.Get());
+        } else if (postEffectMode_ == 2) {
+            commandList->SetPipelineState(sepiaPipelineState_.Get());
+        } else {
+            commandList->SetPipelineState(copyPipelineState_.Get());
+        }
 
         ID3D12DescriptorHeap* copyHeaps[] = { srvHeap_.Get() };
         commandList->SetDescriptorHeaps(1, copyHeaps);
@@ -1809,27 +1818,23 @@ void MyGame::InitializeOffscreenRendering() {
     hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&copyRootSignature_));
     assert(SUCCEEDED(hr));
 
-    // 5. コピー用 PipelineState (PSO) の作成
-    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/CopyImage.VS.hlsl", L"vs_6_0");
-    Microsoft::WRL::ComPtr<IDxcBlob> psBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/CopyImage.PS.hlsl", L"ps_6_0");
+    // 5. ポストプロセス用 PipelineState (PSO) の作成
+    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Fullscreen.VS.hlsl", L"vs_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psCopyBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/CopyImage.PS.hlsl", L"ps_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psGrayBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Grayscale.PS.hlsl", L"ps_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psSepiaBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Sepia.PS.hlsl", L"ps_6_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
     psoDesc.pRootSignature = copyRootSignature_.Get();
     psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
-
     psoDesc.InputLayout.pInputElementDescs = nullptr;
     psoDesc.InputLayout.NumElements = 0;
-
     psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
-
     psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-
     psoDesc.DepthStencilState.DepthEnable = false;
     psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.NumRenderTargets = 1;
     psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -1837,7 +1842,19 @@ void MyGame::InitializeOffscreenRendering() {
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
+    // A. コピー (Normal)
+    psoDesc.PS = { psCopyBlob->GetBufferPointer(), psCopyBlob->GetBufferSize() };
     hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&copyPipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // B. グレースケール
+    psoDesc.PS = { psGrayBlob->GetBufferPointer(), psGrayBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&grayscalePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // C. セピア調
+    psoDesc.PS = { psSepiaBlob->GetBufferPointer(), psSepiaBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&sepiaPipelineState_));
     assert(SUCCEEDED(hr));
 }
 
