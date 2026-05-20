@@ -324,6 +324,9 @@ void MyGame::Update() {
                 currentMode_ = AppMode::StageSelect;
             }
         }
+
+        gameClearScene_->Update();
+
         break;
 
     case AppMode::SkinningEditor:
