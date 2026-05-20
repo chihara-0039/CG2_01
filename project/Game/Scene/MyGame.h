@@ -90,7 +90,7 @@ private:
     std::unique_ptr<StageRenderer> stageRenderer_;
     std::unique_ptr<MapCursor> mapCursor_;
     std::unique_ptr<Player> player_;
-    
+
     // スキニングテスト用
     std::unique_ptr<SkinnedObject> skinnedObject_;
     std::unique_ptr<Model> debugCubeModel_;
