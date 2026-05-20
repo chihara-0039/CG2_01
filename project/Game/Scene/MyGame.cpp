@@ -8,8 +8,41 @@
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
+#include <cmath>
+#include <cstdio>
 
+namespace {
+    // ベクトルと行列の乗算 (平行移動あり)
+    Vector3 TransformCoord(const Vector3& v, const Matrix4x4& m) {
+        float w = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
+        if (std::abs(w) < 1e-5f) w = 1.0f;
+        return {
+            (v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0]) / w,
+            (v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1]) / w,
+            (v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2]) / w
+        };
+    }
 
+    // Vector4と行列の乗算
+    Vector4 TransformVec4(const Vector4& v, const Matrix4x4& m) {
+        return {
+            v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + v.w * m.m[3][0],
+            v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + v.w * m.m[3][1],
+            v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + v.w * m.m[3][2],
+            v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + v.w * m.m[3][3]
+        };
+    }
+
+    // ドット積
+    float Dot(const Vector3& v1, const Vector3& v2) {
+        return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+    }
+
+    // ベクトルの長さ
+    float Length(const Vector3& v) {
+        return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    }
+}
 
 // --- MyGameクラスの実装 ---
 void MyGame::Initialize() {
@@ -182,10 +215,49 @@ void MyGame::Initialize() {
     // スキニングオブジェクトとデバッグ用の立方体モデルを初期化
     skinnedObject_ = std::make_unique<SkinnedObject>();
     skinnedObject_->Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
-    skinnedObject_->SetPosition({ 0.0f, 1.5f, 0.0f }); // プレイヤーの初期Y座標と合わせる
+    skinnedObject_->SetPosition({ 0.0f, 0.0f, 0.0f }); // 地面(Y=0.0f)に接地させる
     skinnedObject_->SetScale({ 1.0f, 1.0f, 1.0f });
 
     debugCubeModel_ = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/cube", "cube.obj", textureManager.get()));
+
+    // 地面グリッド線の生成 (-10m から 10m まで 1m刻み)
+    for (int i = -10; i <= 10; ++i) {
+        // X方向に並び、Z方向に伸びる線 (縦線)
+        auto lineX = std::make_unique<Object3d>();
+        lineX->Initialize(object3dCommon.get());
+        lineX->SetModel(debugCubeModel_.get());
+        lineX->SetPosition({ (float)i, 0.0f, 0.0f });
+        lineX->SetScale({ 0.015f, 0.002f, 10.0f }); // 極めて細長く、薄い
+        // X=0 の中心線は赤、それ以外はグレー
+        if (i == 0) {
+            lineX->SetColor({ 1.0f, 0.0f, 0.0f, 1.0f });
+        } else {
+            lineX->SetColor({ 0.35f, 0.35f, 0.35f, 1.0f });
+        }
+        lineX->SetEnableLighting(false);
+        gridLines_.push_back(std::move(lineX));
+
+        // Z方向に並び、X方向に伸びる線 (横線)
+        auto lineZ = std::make_unique<Object3d>();
+        lineZ->Initialize(object3dCommon.get());
+        lineZ->SetModel(debugCubeModel_.get());
+        lineZ->SetPosition({ 0.0f, 0.0f, (float)i });
+        lineZ->SetScale({ 10.0f, 0.002f, 0.015f });
+        // Z=0 の中心線は青、それ以外はグレー
+        if (i == 0) {
+            lineZ->SetColor({ 0.0f, 0.0f, 1.0f, 1.0f });
+        } else {
+            lineZ->SetColor({ 0.35f, 0.35f, 0.35f, 1.0f });
+        }
+        lineZ->SetEnableLighting(false);
+        gridLines_.push_back(std::move(lineZ));
+    }
+
+#ifndef NDEBUG
+    if (camera) {
+        camera->SetAspectRatio(1280.0f / 720.0f);
+    }
+#endif
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -211,14 +283,26 @@ void MyGame::Update() {
 #endif
 
 
+    // モード遷移時のカメラ強制リセット
+    if (currentMode_ != prevMode_) {
+        if (currentMode_ == AppMode::SkinningEditor) {
+            // スキニングエディタ移行時：モデルの目の前へカメラを合わせる
+            camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
+        } else if (currentMode_ == AppMode::StageEditor) {
+            // ステージエディタ移行時：ステージ全体が見える位置へ
+            camera->ForceReset({ 8.0f, 0.0f, 8.0f }, 20.0f, { 0.6f, 0.0f, 0.0f });
+        }
+        prevMode_ = currentMode_;
+    }
+
     input->Update();
     UpdateSceneTransition();//05/14小林 ESCでステージ選択に戻る
     bool isGuiCaptured = false;
     // 2. カメラの更新（Blender風操作を適用）
 #ifndef NDEBUG
     // Release時は ImGui::GetIO() を呼ばないようにガードする
-    // マウスとキーボードの両方をガード
-    isGuiCaptured = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
+    // マウスのみをガード (キーボードフォーカスがImGuiにあっても中ドラッグ等は反応させる)
+    isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
 #endif
 
 
@@ -328,6 +412,67 @@ void MyGame::Update() {
 
     case AppMode::SkinningEditor:
         if (skinnedObject_) {
+            // 左クリックが押された瞬間に、画面上のボーンとの衝突判定を行う
+            const auto& mouse = input->GetMouseState();
+            if (mouse.buttons[0] && input->TriggerMouseButton(0) && !isGuiCaptured) {
+                // スクリーン座標を取得 (Windowsのクライアント領域)
+                POINT pt;
+                GetCursorPos(&pt);
+                ScreenToClient(winApp->GetHwnd(), &pt);
+
+                // NDC（デバイス正規化座標）への変換
+                float ndcX = (float)pt.x;
+                // Debugビルド時は左側に 320px の UI パネルがあるので、ビューポート幅は 1280px。
+                // 左側の 320px 分を差し引く。
+                ndcX -= 320.0f;
+
+                float x = (2.0f * ndcX) / 1280.0f - 1.0f;
+                float y = 1.0f - (2.0f * (float)pt.y) / 720.0f;
+
+                // ビュー・プロジェクション逆行列を用いて、カメラのレイを構築
+                Matrix4x4 invVP = Math::Inverse(Math::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix()));
+                Vector4 nearPoint = { x, y, 0.0f, 1.0f };
+                Vector4 farPoint = { x, y, 1.0f, 1.0f };
+
+                Vector4 rayStartWorld4 = ::TransformVec4(nearPoint, invVP);
+                Vector4 rayEndWorld4 = ::TransformVec4(farPoint, invVP);
+
+                Vector3 rayStart = { rayStartWorld4.x / rayStartWorld4.w, rayStartWorld4.y / rayStartWorld4.w, rayStartWorld4.z / rayStartWorld4.w };
+                Vector3 rayEnd = { rayEndWorld4.x / rayEndWorld4.w, rayEndWorld4.y / rayEndWorld4.w, rayEndWorld4.z / rayEndWorld4.w };
+                Vector3 rayDir = Math::Normalize({ rayEnd.x - rayStart.x, rayEnd.y - rayStart.y, rayEnd.z - rayStart.z });
+
+                // 各ジョイント（関節）のグローバル位置とレイの最短距離を判定
+                int closestJointIndex = -1;
+                float minDistance = 0.15f; // クリック判定の許容半径 (15cm)
+
+                const auto& joints = skinnedObject_->GetModel()->GetJoints();
+                for (size_t i = 0; i < joints.size(); ++i) {
+                    Vector3 jointPos = ::TransformCoord(
+                        { 0.0f, 0.0f, 0.0f },
+                        Math::Multiply(
+                            joints[i].globalMatrix,
+                            Math::MakeAffineMatrix(skinnedObject_->GetScale(), skinnedObject_->GetRotation(), skinnedObject_->GetPosition())
+                        )
+                    );
+
+                    // レイと球の交差判定 (線分から球の中心への垂線の足)
+                    Vector3 v = { jointPos.x - rayStart.x, jointPos.y - rayStart.y, jointPos.z - rayStart.z };
+                    float t = ::Dot(v, rayDir);
+                    if (t > 0.0f) {
+                        Vector3 projPoint = { rayStart.x + rayDir.x * t, rayStart.y + rayDir.y * t, rayStart.z + rayDir.z * t };
+                        float dist = ::Length({ jointPos.x - projPoint.x, jointPos.y - projPoint.y, jointPos.z - projPoint.z });
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            closestJointIndex = (int)i;
+                        }
+                    }
+                }
+
+                if (closestJointIndex != -1) {
+                    skinnedObject_->SetSelectedJointIndex(closestJointIndex);
+                }
+            }
+
             skinnedObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
             skinnedObject_->Update(dxCommon.get(), lightVP);
         }
@@ -611,41 +756,129 @@ void MyGame::UpdateImGui() {
     stageEditorController_.DrawImGui(stageMap_, stageRenderer_.get(), mapCursor_.get(), player_.get());
 
     // ==========================================
-    // 3. 下パネル (Tools & Controls)
+    // 3. 下パネル (Tools & Controls / Custom Motion Timeline)
     // ==========================================
     ImGui::SetNextWindowPos(ImVec2(0, io.DisplaySize.y - bottomHeight), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, bottomHeight), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(1.0f); // 透過なし
     ImGui::Begin("Tools & Controls", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-    ImGui::Columns(2, "BottomColumns", false);
-    
-    // 左カラム：操作説明
-    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Editor Controls ]");
-    ImGui::Text("Move Cursor : W, A, S, D, Q(Up), E(Down)");
-    ImGui::Text("Place Block : Enter");
-    ImGui::Text("Remove Block: Space / Backspace");
-    ImGui::Text("Rotate Block: R");
-    ImGui::Text("Move Camera : I, J, K, L, U, O");
+    if (currentMode_ == AppMode::SkinningEditor && skinnedObject_) {
+        // スキニングモード時のタイムライン
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Custom Motion Animation Timeline ]");
+        
+        float duration = skinnedObject_->GetModel()->GetMotionDuration();
+        float curTime = skinnedObject_->GetCurrentKeyframeTime();
+        bool playCustom = skinnedObject_->IsPlayCustomAnimation();
 
-    ImGui::NextColumn();
+        // タイムラインスライダー
+        if (ImGui::SliderFloat("Current Time", &curTime, 0.0f, duration, "%.2f sec")) {
+            skinnedObject_->SetCurrentKeyframeTime(curTime);
+            if (!playCustom) {
+                skinnedObject_->ApplyMotion(curTime);
+            }
+        }
 
-    // 右カラム：現在のステータス
-    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Current Status ]");
-    ImGui::Text("Selected Block: %s", BlockTypeToString(stageEditorController_.GetSelectedBlockType()));
-    ImGui::Text("Placeable Blocks: %d", blockInventory_.GetBlockCount());
-    
-    if (currentMode_ == AppMode::StageEditor) {
-        ImGui::Text("Mode: STAGE EDITOR");
-    } else if (currentMode_ == AppMode::GamePlay) {
-        ImGui::Text("Mode: GAME PLAY");
-    } else if (currentMode_ == AppMode::SkinningEditor) {
-        ImGui::Text("Mode: SKINNING EDITOR");
+        ImGui::Separator();
+        ImGui::Text("Joint Name");
+        ImGui::SameLine(180.0f);
+        ImGui::Text("Registered KeyFrames (Click to jump / preview)");
+        ImGui::SameLine(io.DisplaySize.x - 280.0f);
+        ImGui::Text("Current Trans / Rot (Euler)");
+
+        ImGui::Separator();
+
+        // ジョイントリストとキーフレームのタイムライン表示
+        auto& joints = skinnedObject_->GetModel()->GetJoints();
+        int selectedJoint = skinnedObject_->GetSelectedJointIndex();
+
+        // 描画領域をスクロール可能に
+        ImGui::BeginChild("TimelineScroll", ImVec2(0, 0), true);
+        for (size_t i = 0; i < joints.size(); ++i) {
+            bool isSelected = (static_cast<int>(i) == selectedJoint);
+            if (isSelected) {
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "> %s", joints[i].name.c_str());
+            } else {
+                ImGui::Text("  %s", joints[i].name.c_str());
+            }
+
+            // クリックしてジョイント選択
+            if (ImGui::IsItemClicked()) {
+                skinnedObject_->SetSelectedJointIndex(static_cast<int>(i));
+            }
+
+            // 横軸にキーフレームを描画
+            ImGui::SameLine(180.0f);
+            const auto& anim = joints[i].animation;
+            if (anim.keyframes.empty()) {
+                ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1.0f), "(No Keyframes)");
+            } else {
+                for (size_t k = 0; k < anim.keyframes.size(); ++k) {
+                    char btnId[32];
+                    sprintf_s(btnId, sizeof(btnId), "%.2f##kf_%zu_%zu", anim.keyframes[k].time, i, k);
+                    
+                    // 現在のタイムライン時間に近いキーフレームは黄色くハイライト
+                    bool isActive = (std::abs(anim.keyframes[k].time - curTime) < 0.05f);
+                    if (isActive) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.6f, 0.0f, 1.0f));
+                    }
+
+                    if (ImGui::Button(btnId, ImVec2(45, 18))) {
+                        // クリックしたらそのキーフレームの時間にジャンプ
+                        skinnedObject_->SetCurrentKeyframeTime(anim.keyframes[k].time);
+                        skinnedObject_->ApplyMotion(anim.keyframes[k].time);
+                    }
+
+                    if (isActive) {
+                        ImGui::PopStyleColor();
+                    }
+                    ImGui::SameLine();
+                }
+                ImGui::NewLine(); // 行送り
+            }
+
+            // 現在のトランスフォーム値を右端に表示
+            ImGui::SameLine(io.DisplaySize.x - 280.0f);
+            Vector3 rotDeg = {
+                joints[i].rotation.x * 180.0f / 3.14159265f,
+                joints[i].rotation.y * 180.0f / 3.14159265f,
+                joints[i].rotation.z * 180.0f / 3.14159265f
+            };
+            ImGui::Text("%.2f, %.2f, %.2f / %.1f, %.1f, %.1f",
+                joints[i].translation.x, joints[i].translation.y, joints[i].translation.z,
+                rotDeg.x, rotDeg.y, rotDeg.z);
+        }
+        ImGui::EndChild();
+
     } else {
-        ImGui::Text("Mode: DEBUG VIEW");
-    }
+        // 通常ゲームモード時の下パネル (操作説明など)
+        ImGui::Columns(2, "BottomColumns", false);
+        
+        // 左カラム：操作説明
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Editor Controls ]");
+        ImGui::Text("Move Cursor : W, A, S, D, Q(Up), E(Down)");
+        ImGui::Text("Place Block : Enter");
+        ImGui::Text("Remove Block: Space / Backspace");
+        ImGui::Text("Rotate Block: R");
+        ImGui::Text("Move Camera : I, J, K, L, U, O");
 
-    ImGui::Columns(1);
+        ImGui::NextColumn();
+
+        // 右カラム：現在のステータス
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Current Status ]");
+        ImGui::Text("Selected Block: %s", BlockTypeToString(stageEditorController_.GetSelectedBlockType()));
+        ImGui::Text("Placeable Blocks: %d", blockInventory_.GetBlockCount());
+        
+        if (currentMode_ == AppMode::StageEditor) {
+            ImGui::Text("Mode: STAGE EDITOR");
+        } else if (currentMode_ == AppMode::GamePlay) {
+            ImGui::Text("Mode: GAME PLAY");
+        } else {
+            ImGui::Text("Mode: DEBUG VIEW");
+        }
+
+        ImGui::Columns(1);
+    }
     ImGui::End();
 
     // ==========================================
@@ -675,8 +908,26 @@ void MyGame::UpdateImGui() {
             skinnedObject_->SetShowSkeleton(showSkeleton);
         }
 
-        if (ImGui::Button("Reset to T-Pose", ImVec2(-FLT_MIN, 24))) {
+        if (ImGui::Button("Reset to Pose (Arms Down)", ImVec2(-FLT_MIN, 24))) {
             skinnedObject_->GetModel()->ResetPose();
+        }
+
+        // --- Camera Presets (Blender-Style) ---
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Camera Presets (Blender-Style) ]");
+        if (ImGui::Button("Focus Model", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f, 24))) {
+            camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Front View", ImVec2(-FLT_MIN, 24))) {
+            camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.0f, 0.0f, 0.0f });
+        }
+        if (ImGui::Button("Side View", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f, 24))) {
+            camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.0f, 1.5708f, 0.0f });
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Top View", ImVec2(-FLT_MIN, 24))) {
+            camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 1.5708f, 0.0f, 0.0f });
         }
 
         // --- Custom Motion Editor ---
@@ -715,6 +966,10 @@ void MyGame::UpdateImGui() {
 
         if (ImGui::Button("Generate Walk Preset", ImVec2(-FLT_MIN, 24))) {
             skinnedObject_->GenerateWalkPreset();
+        }
+
+        if (ImGui::Button("Generate Run Preset", ImVec2(-FLT_MIN, 24))) {
+            skinnedObject_->GenerateRunPreset();
         }
 
         static char motionPath[256] = "Resources/Animations/test_motion.txt";
@@ -931,6 +1186,12 @@ void MyGame::Draw() {
             if (skydomeObject_) {
                 skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                 skydomeObject_->Draw();
+            }
+            // 地面グリッドの描画
+            for (auto& line : gridLines_) {
+                line->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                line->Update(lightVP);
+                line->Draw();
             }
             if (skinnedObject_) {
                 skinnedObject_->Draw();

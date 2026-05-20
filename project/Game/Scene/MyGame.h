@@ -94,6 +94,7 @@ private:
     // スキニングテスト用
     std::unique_ptr<SkinnedObject> skinnedObject_;
     std::unique_ptr<Model> debugCubeModel_;
+    std::vector<std::unique_ptr<Object3d>> gridLines_;
 
     // スカイドーム
     std::unique_ptr<Model> skydomeModel_;
@@ -116,6 +117,7 @@ private:
     // メンバ変数（値や状態）
     // ==========================================================
     AppMode currentMode_ = AppMode::DebugView;
+    AppMode prevMode_ = AppMode::Title;
     DebugDrawFlags debugFlags_;
     StageMap stageMap_;
     GameplayCameraController gameplayCameraController_;

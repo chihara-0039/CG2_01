@@ -89,4 +89,19 @@ void Camera::DrawImGui() {
         distance_ = 20.0f;
     }
 #endif
+}
+
+void Camera::ForceReset(const Vector3& target, float distance, const Vector3& rotation) {
+    target_ = target;
+    distance_ = distance;
+    transform_.rotate = rotation;
+
+    // 最終的な座標計算
+    Matrix4x4 matRot = Math::Multiply(Math::MakeRotateXMatrix(transform_.rotate.x), Math::MakeRotateYMatrix(transform_.rotate.y));
+    Vector3 offset = { 0, 0, -distance_ };
+    transform_.translate.x = target_.x + (offset.x * matRot.m[0][0] + offset.y * matRot.m[1][0] + offset.z * matRot.m[2][0]);
+    transform_.translate.y = target_.y + (offset.x * matRot.m[0][1] + offset.y * matRot.m[1][1] + offset.z * matRot.m[2][1]);
+    transform_.translate.z = target_.z + (offset.x * matRot.m[0][2] + offset.y * matRot.m[1][2] + offset.z * matRot.m[2][2]);
+
+    Update();
 }

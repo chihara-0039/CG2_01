@@ -26,6 +26,10 @@ public:
     void SetPosition(const Vector3& pos) { transform_.translate = pos; }
     void SetRotation(const Vector3& rot) { transform_.rotate = rot; }
     void SetFov(float fov) { fov_ = fov; }
+    void SetTarget(const Vector3& target) { target_ = target; }
+    void SetDistance(float distance) { distance_ = distance; }
+    void SetAspectRatio(float aspect) { aspectRatio_ = aspect; }
+    void ForceReset(const Vector3& target, float distance, const Vector3& rotation);
 
     // Blender風操作を更新 (Inputポインタを受け取る)
     void UpdateBlenderStyle(const class Input* input, bool isGuiCaptured, HWND hwnd);
