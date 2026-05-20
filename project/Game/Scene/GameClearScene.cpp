@@ -169,4 +169,13 @@ void GameClearScene::SkipAnimation() {
     camera_.SetPosition(cameraPos_);
     camera_.SetRotation(cameraRot_);
     camera_.Update();
+
+    const Matrix4x4& view = camera_.GetViewMatrix();
+    const Matrix4x4& proj = camera_.GetProjectionMatrix();
+
+    for (auto& letter : letters_) {
+        letter.object->SetCamera(view, proj);
+        letter.object->Update(Math::MakeIdentity4x4());
+    }
+
 }

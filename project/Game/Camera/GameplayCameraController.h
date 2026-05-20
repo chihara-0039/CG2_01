@@ -50,6 +50,9 @@ public:
     void ResetCamera(Camera* camera,Player*player,int stageIndex);
 
 private:
+    void ApplyCamera(Camera* camera);
+private:
+
     // カメラの極座標パラメータ
     float cameraAngle_ = 0.0f; // 水平方向の回転角度
     float cameraPitch_ = 0.75f; // 垂直方向の見下ろし角度
@@ -69,5 +72,7 @@ private:
     Vector3 cameraPivot_ = { 4.0f, 9.0f, 4.5f };
     float cameraDistance_ = 35.0f;
     float cameraHeight_ = 20.0f;
+
+    bool cameraDirty_ = true;
 };
 
