@@ -103,6 +103,12 @@ void MyGame::Initialize() {
     // 【Developmentビルド時】デバッグビューモードから開始
     currentMode_ = AppMode::DebugView;
 
+    // 天球は最初からOFF
+    debugFlags_.showSkybox = false;
+
+    // Offscreen Rendering は ON
+    offscreenEnabled_ = true;
+
     std::string prototypePath = "Resources/Stages/stage1.txt";
     if (std::filesystem::exists(prototypePath)) {
         stageMap_.LoadFromFile(prototypePath);
@@ -112,6 +118,12 @@ void MyGame::Initialize() {
     // 【Releaseビルド時】直接ゲームを開始する
     currentMode_ = AppMode::GamePlay;
 
+    // 天球はON
+    debugFlags_.showSkybox = true;
+
+    // Offscreen Rendering は OFF
+    offscreenEnabled_ = false;
+
     // "Stage1.txt" があれば自動ロード
     std::string startStage = "Resources/Stages/Stage1.txt";
     if (std::filesystem::exists(startStage)) {
@@ -119,18 +131,14 @@ void MyGame::Initialize() {
         stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
     }
 #else
-    // 【Debugビルド時】デバッグビューモードから開始
-    currentMode_ = AppMode::DebugView;
+    // 【Debugビルド時】タイトルから開始
+    currentMode_ = AppMode::Title;
 
-    // デバッグモード（Debugビルド時）は最初から天球のチェックをOFFにする
-    debugFlags_.showSkybox = false;
+    // 天球は最初からON
+    debugFlags_.showSkybox = true;
 
-    // 2. ★手動配置を消して、保存した「プロトタイプ」をロードする
-    std::string prototypePath = "Resources/Stages/stage1.txt"; // 保存したファイル名に合わせてください
-    if (std::filesystem::exists(prototypePath)) {
-        stageMap_.LoadFromFile(prototypePath);
-        stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
-    }
+    // Offscreen Rendering は OFF
+    offscreenEnabled_ = false;
 #endif
 
     // 1. モデルのロード（フォルダとファイル名に注意）
