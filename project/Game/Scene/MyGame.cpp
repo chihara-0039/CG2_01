@@ -99,7 +99,16 @@ void MyGame::Initialize() {
     // ステージエディタ管理で初期化済み
 
     // --- 3. ビルド設定による初期化分岐 ---
-#ifdef NDEBUG
+#ifdef DEVELOPMENT
+    // 【Developmentビルド時】デバッグビューモードから開始
+    currentMode_ = AppMode::DebugView;
+
+    std::string prototypePath = "Resources/Stages/stage1.txt";
+    if (std::filesystem::exists(prototypePath)) {
+        stageMap_.LoadFromFile(prototypePath);
+        stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+    }
+#elif defined(NDEBUG)
     // 【Releaseビルド時】直接ゲームを開始する
     currentMode_ = AppMode::GamePlay;
 
@@ -109,12 +118,12 @@ void MyGame::Initialize() {
         stageMap_.LoadFromFile(startStage);
         stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
     }
-
 #else
+    // 【Debugビルド時】デバッグビューモードから開始
+    currentMode_ = AppMode::DebugView;
 
-    // 【Debugビルド時】
-    currentMode_ = AppMode::Title;
-
+    // デバッグモード（Debugビルド時）は最初から天球のチェックをOFFにする
+    debugFlags_.showSkybox = false;
 
     // 2. ★手動配置を消して、保存した「プロトタイプ」をロードする
     std::string prototypePath = "Resources/Stages/stage1.txt"; // 保存したファイル名に合わせてください
@@ -216,6 +225,9 @@ void MyGame::Initialize() {
         lineZ->SetColor((i == 0) ? Vector4{ 0.2f, 0.2f, 0.8f, 1.0f } : Vector4{ 0.35f, 0.35f, 0.38f, 1.0f });
         gridLines_.push_back(std::move(lineZ));
     }
+
+    // オフスクリーンレンダリングの初期化
+    InitializeOffscreenRendering();
 }
 
 // ヘルパー関数：モデルと位置を指定して3Dオブジェクトを生成し、リストに追加して返す
@@ -376,7 +388,7 @@ void MyGame::Update() {
 
             if (mouse0Trigger && !isGuiCaptured) {
                 // デバッグ時は左側に320pxのオフセットがあるため、マウスのX座標を調整
-                float mouseX = mouse.posX;
+                float mouseX = static_cast<float>(mouse.posX);
 #ifndef NDEBUG
                 mouseX -= 320.0f;          // ビューポートのXオフセット
                 float drawWidth = 1280.0f; // ビューポートの幅
@@ -384,7 +396,7 @@ void MyGame::Update() {
                 float drawWidth = (float)WinApp::kClientWidth;
 #endif
                 float ndcX = (2.0f * mouseX) / drawWidth - 1.0f;
-                float ndcY = 1.0f - (2.0f * mouse.posY) / WinApp::kClientHeight;
+                float ndcY = 1.0f - (2.0f * static_cast<float>(mouse.posY)) / WinApp::kClientHeight;
 
                 // 逆ビュー・プロジェクション行列
                 Matrix4x4 vp = Math::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
@@ -719,8 +731,17 @@ void MyGame::UpdateImGui() {
             }
         }
         ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
+        ImGui::Checkbox("Show Skybox", &debugFlags_.showSkybox);
         ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
         ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
+    }
+
+    if (ImGui::CollapsingHeader("Offscreen Rendering (RenderTexture)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Enable Offscreen Rendering", &offscreenEnabled_);
+        ImGui::ColorEdit4("Clear Color (VRAM)", &offscreenClearColor_.x);
+
+        const char* skyboxModes[] = { "Ignore", "Link (Multiply)" };
+        ImGui::Combo("Skybox Color Link", &skyboxLinkMode_, skyboxModes, IM_ARRAYSIZE(skyboxModes));
     }
 
     if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1178,6 +1199,15 @@ bool MyGame::IsPlayerHiddenByWall() const {
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
 
+    // 天球のカラー同期
+    if (skydomeObject_) {
+        if (skyboxLinkMode_ == 1) {
+            skydomeObject_->SetColor(offscreenClearColor_);
+        } else {
+            skydomeObject_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+        }
+    }
+
     // ==========================================================
     // 【パス1】 シャドウマップへの描き込み（影の生成）
     // ==========================================================
@@ -1213,141 +1243,259 @@ void MyGame::Draw() {
 
     shadowMap_->PostDraw(commandList);
 
+    if (offscreenEnabled_) {
+        // ==========================================================
+        // 【オフスクリーン描画】 RenderTexture へのレンダリング
+        // ==========================================================
+        
+        // 1. RenderTexture の状態を RENDER_TARGET に遷移
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = renderTexture_.Get();
+        barrier.Transition.StateBefore = renderTextureState_;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        if (barrier.Transition.StateBefore != barrier.Transition.StateAfter) {
+            commandList->ResourceBarrier(1, &barrier);
+        }
+        renderTextureState_ = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+        // 2. レンダーターゲットに RenderTexture をセット、クリア
+        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvHeap_->GetCPUDescriptorHandleForHeapStart();
+        D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dxCommon->GetDsvHeap()->GetCPUDescriptorHandleForHeapStart();
+        commandList->OMSetRenderTargets(1, &rtvHandle, false, &dsvHandle);
+
+        // ビューポートとシザーは RenderTexture のサイズ (1280x720) に合わせる
+        D3D12_VIEWPORT offscreenViewport = { 0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
+        D3D12_RECT offscreenScissor = { 0, 0, 1280, 720 };
+        commandList->RSSetViewports(1, &offscreenViewport);
+        commandList->RSSetScissorRects(1, &offscreenScissor);
+
+        // クリア処理
+        float clearColor[4] = { offscreenClearColor_.x, offscreenClearColor_.y, offscreenClearColor_.z, offscreenClearColor_.w };
+        commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+        commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
+        // 3. 通常のシーン描画処理を実行
+        if (debugFlags_.show3DObjects) {
+            ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
+            commandList->SetDescriptorHeaps(1, heaps);
+
+            object3dCommon->PreDraw();
+            commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+
+            // A. タイトルシーン
+            if (currentMode_ == AppMode::Title) {
+                if (titleScene_) titleScene_->Draw();
+            }
+            // ステージセレクト
+            else if (currentMode_ == AppMode::StageSelect) {
+                if (stageSelect_) stageSelect_->Draw();
+            }
+            // B. クリアシーン
+            else if (currentMode_ == AppMode::GameClear) {
+                if (gameClearScene_) gameClearScene_->Draw();
+            }
+            // スキニングエディター
+            else if (currentMode_ == AppMode::SkinningEditor) {
+                if (debugFlags_.showSkybox && skydomeObject_) {
+                    skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                    skydomeObject_->Draw();
+                }
+                for (auto& line : gridLines_) {
+                    line->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                    line->Update(lightVP);
+                    line->Draw();
+                }
+                if (skinnedObject_) {
+                    skinnedObject_->Draw();
+                    skinnedObject_->DrawSkeleton(object3dCommon.get(), debugCubeModel_.get(), camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                }
+            }
+            // C. 通常ゲーム画面
+            else {
+                if (debugFlags_.showSkybox && skydomeObject_) {
+                    skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                    skydomeObject_->Draw();
+                }
+                if (currentMode_ == AppMode::StageEditor ||
+                    currentMode_ == AppMode::GamePlay ||
+                    currentMode_ == AppMode::GamePlay_BlockPlace) {
+
+                    if (stageRenderer_) stageRenderer_->Draw();
+                    if (currentMode_ == AppMode::GamePlay) {
+                        if (player_) player_->Draw();
+                        if (IsPlayerHiddenByWall()) {
+                            object3dCommon->PreDrawPlayerHighlight();
+                            player_->DrawHighlight();
+                            object3dCommon->PreDraw();
+                            commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                        }
+                        if (gameplayUIManager_) {
+                            gameplayUIManager_->Draw3DPrompts(currentMode_ == AppMode::GamePlay, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
+                        }
+                    }
+                    if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
+                        mapCursor_->Draw();
+                    }
+                }
+                if (currentMode_ == AppMode::DebugView) {
+                    for (auto& obj : objectList) {
+                        if (obj) obj->Draw();
+                    }
+                    if (player_) player_->Draw();
+                }
+            }
+        }
+
+        if (debugFlags_.showParticles) {
+            particleManager->Draw();
+        }
+
+        if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
+            spriteCommon->PreDraw();
+            if (sprite) sprite->Draw();
+        }
+
+        if (gameplayUIManager_) {
+            gameplayUIManager_->DrawSprites(currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
+        }
+
+        if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
+            blockInventoryUI_->Draw();
+        }
+
+        // 4. RenderTexture の状態を PIXEL_SHADER_RESOURCE に遷移
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        commandList->ResourceBarrier(1, &barrier);
+        renderTextureState_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+        // ==========================================================
+        // 【メインコピーパス】 バックバッファへの転送
+        // ==========================================================
+        dxCommon->PreDraw();
+
+        // コピー用 PSO と RootSignature のバインド
+        commandList->SetGraphicsRootSignature(copyRootSignature_.Get());
+        commandList->SetPipelineState(copyPipelineState_.Get());
+
+        ID3D12DescriptorHeap* copyHeaps[] = { srvHeap_.Get() };
+        commandList->SetDescriptorHeaps(1, copyHeaps);
+
+        // スロット0(t0)に RenderTexture の SRV をバインド
+        commandList->SetGraphicsRootDescriptorTable(0, srvHeap_->GetGPUDescriptorHandleForHeapStart());
+
+        // 三角形3頂点の描画
+        commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        commandList->DrawInstanced(3, 1, 0, 0);
+
+    } else {
+        // ==========================================================
+        // 【従来パス】 直接バックバッファに描画
+        // ==========================================================
 #ifdef NDEBUG
-    // Releaseビルド時は全画面表示にする
-    D3D12_VIEWPORT viewport = { 0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f };
-    D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
-    commandList->RSSetViewports(1, &viewport);
-    commandList->RSSetScissorRects(1, &scissor);
+        D3D12_VIEWPORT viewport = { 0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f };
+        D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
+        commandList->RSSetViewports(1, &viewport);
+        commandList->RSSetScissorRects(1, &scissor);
 #else
-    // Debugビルド時は ImGui パネル用にビューポートを狭める
-    D3D12_VIEWPORT viewport = { 320.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
-    D3D12_RECT scissor = { 320, 0, 1600, 720 };
-    commandList->RSSetViewports(1, &viewport);
-    commandList->RSSetScissorRects(1, &scissor);
+        D3D12_VIEWPORT viewport = { 320.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
+        D3D12_RECT scissor = { 320, 0, 1600, 720 };
+        commandList->RSSetViewports(1, &viewport);
+        commandList->RSSetScissorRects(1, &scissor);
 #endif
 
-    // ==========================================================
-    // 【パス2】 メイン描画（通常のレンダリング ＋ 影の適用）
-    // ==========================================================
-    dxCommon->PreDraw();
+        dxCommon->PreDraw();
 
-    if (debugFlags_.show3DObjects) {
-        // --- 1. ヒープと共通設定（影を出すための最重要準備） ---
-        ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
-        commandList->SetDescriptorHeaps(1, heaps);
+        if (debugFlags_.show3DObjects) {
+            ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
+            commandList->SetDescriptorHeaps(1, heaps);
 
-        object3dCommon->PreDraw();
+            object3dCommon->PreDraw();
+            commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
 
-        // ★重要：スロット4(t1)に影テクスチャを渡す
-        // これを各シーンの描画（Draw）より「前」に呼ぶのが影を出す秘訣です
-        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
-
-        // --- 2. シーンごとの分岐描画 ---
-
-        // A. タイトルシーン
-        if (currentMode_ == AppMode::Title) {
-            if (titleScene_) titleScene_->Draw();
-        }
-        // ステージセレクト追加　05/10小林
-        else if (currentMode_ == AppMode::StageSelect)
-        {
-            if (stageSelect_) stageSelect_->Draw();
-        }
-        // B. クリアシーン
-        else if (currentMode_ == AppMode::GameClear) {
-            if (gameClearScene_) gameClearScene_->Draw();
-        }
-        else if (currentMode_ == AppMode::SkinningEditor) {
-            // 背景（天球）
-            if (skydomeObject_) {
-                skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-                skydomeObject_->Draw();
+            // A. タイトルシーン
+            if (currentMode_ == AppMode::Title) {
+                if (titleScene_) titleScene_->Draw();
             }
-            // 地面グリッドの描画
-            for (auto& line : gridLines_) {
-                line->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-                line->Update(lightVP);
-                line->Draw();
+            // ステージセレクト
+            else if (currentMode_ == AppMode::StageSelect) {
+                if (stageSelect_) stageSelect_->Draw();
             }
-            if (skinnedObject_) {
-                skinnedObject_->Draw();
-                skinnedObject_->DrawSkeleton(object3dCommon.get(), debugCubeModel_.get(), camera->GetViewMatrix(), camera->GetProjectionMatrix());
+            // B. クリアシーン
+            else if (currentMode_ == AppMode::GameClear) {
+                if (gameClearScene_) gameClearScene_->Draw();
             }
-        }
-        // C. 通常ゲーム画面（エディタ・プレイ中・デバッグ）
-        else {
-            // 背景（天球）
-            if (skydomeObject_) {
-                skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-                skydomeObject_->Draw();
+            // スキニングエディター
+            else if (currentMode_ == AppMode::SkinningEditor) {
+                if (debugFlags_.showSkybox && skydomeObject_) {
+                    skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                    skydomeObject_->Draw();
+                }
+                for (auto& line : gridLines_) {
+                    line->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                    line->Update(lightVP);
+                    line->Draw();
+                }
+                if (skinnedObject_) {
+                    skinnedObject_->Draw();
+                    skinnedObject_->DrawSkeleton(object3dCommon.get(), debugCubeModel_.get(), camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                }
             }
+            // C. 通常ゲーム画面
+            else {
+                if (debugFlags_.showSkybox && skydomeObject_) {
+                    skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                    skydomeObject_->Draw();
+                }
+                if (currentMode_ == AppMode::StageEditor ||
+                    currentMode_ == AppMode::GamePlay ||
+                    currentMode_ == AppMode::GamePlay_BlockPlace) {
 
-            // ステージとプレイヤー
-            if (currentMode_ == AppMode::StageEditor ||
-                currentMode_ == AppMode::GamePlay ||
-                currentMode_ == AppMode::GamePlay_BlockPlace) {
-
-                if (stageRenderer_) stageRenderer_->Draw();
-                if (currentMode_ == AppMode::GamePlay)
-                {
+                    if (stageRenderer_) stageRenderer_->Draw();
+                    if (currentMode_ == AppMode::GamePlay) {
+                        if (player_) player_->Draw();
+                        if (IsPlayerHiddenByWall()) {
+                            object3dCommon->PreDrawPlayerHighlight();
+                            player_->DrawHighlight();
+                            object3dCommon->PreDraw();
+                            commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                        }
+                        if (gameplayUIManager_) {
+                            gameplayUIManager_->Draw3DPrompts(currentMode_ == AppMode::GamePlay, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
+                        }
+                    }
+                    if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
+                        mapCursor_->Draw();
+                    }
+                }
+                if (currentMode_ == AppMode::DebugView) {
+                    for (auto& obj : objectList) {
+                        if (obj) obj->Draw();
+                    }
                     if (player_) player_->Draw();
-
-                    // 壁で隠れている時だけ白強調
-                    if (IsPlayerHiddenByWall()) {
-                        object3dCommon->PreDrawPlayerHighlight();
-                        player_->DrawHighlight();
-
-                        // 通常描画設定に戻す
-                        object3dCommon->PreDraw();
-                        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
-                    }
-
-                    if (gameplayUIManager_) {
-                        gameplayUIManager_->Draw3DPrompts(currentMode_ == AppMode::GamePlay, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
-                    }
-
-                }               
-               
-                if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
-                    mapCursor_->Draw();
-                }
-
-
-            }
-
-            // デバッグビュー（リストの全表示）
-            if (currentMode_ == AppMode::DebugView) {
-                for (auto& obj : objectList) {
-                    if (obj) {
-                        obj->Draw();
-                    }
-                }
-                if (player_) {
-                    player_->Draw();
                 }
             }
         }
-    }
 
-    // --- 3. パーティクル・スプライト（共通） ---
-    if (debugFlags_.showParticles) {
-        particleManager->Draw();
-    }
+        if (debugFlags_.showParticles) {
+            particleManager->Draw();
+        }
 
-    if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
-        spriteCommon->PreDraw();
-        if (sprite) sprite->Draw();
-    }
+        if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
+            spriteCommon->PreDraw();
+            if (sprite) sprite->Draw();
+        }
 
-    //5/11佐倉
+        if (gameplayUIManager_) {
+            gameplayUIManager_->DrawSprites(currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
+        }
 
-    if (gameplayUIManager_) {
-        gameplayUIManager_->DrawSprites(currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
-    }
-
-    if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
-        blockInventoryUI_->Draw();
+        if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
+            blockInventoryUI_->Draw();
+        }
     }
 
     // --- 4. ImGui と 最終出力 ---
@@ -1563,4 +1711,164 @@ void MyGame::UpdateSceneTransition()
         if (player_){player_->Respawn();}
         currentMode_ = AppMode::StageSelect;
     }
+}
+
+void MyGame::InitializeOffscreenRendering() {
+    auto device = dxCommon->GetDevice();
+
+    // 1. RenderTexture の生成
+    renderTexture_ = CreateRenderTextureResource(
+        device,
+        1280,
+        720,
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        offscreenClearColor_
+    );
+
+    // 2. RTV デスクリプタヒープと RTV の作成
+    D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc{};
+    rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    rtvHeapDesc.NumDescriptors = 1;
+    rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    HRESULT hr = device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&rtvHeap_));
+    assert(SUCCEEDED(hr));
+
+    device->CreateRenderTargetView(
+        renderTexture_.Get(),
+        nullptr,
+        rtvHeap_->GetCPUDescriptorHandleForHeapStart()
+    );
+
+    // 3. SRV デスクリプタヒープと SRV の作成
+    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc{};
+    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    srvHeapDesc.NumDescriptors = 1;
+    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    hr = device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap_));
+    assert(SUCCEEDED(hr));
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    device->CreateShaderResourceView(
+        renderTexture_.Get(),
+        &srvDesc,
+        srvHeap_->GetCPUDescriptorHandleForHeapStart()
+    );
+
+    // 4. コピー用 RootSignature の作成
+    D3D12_DESCRIPTOR_RANGE descriptorRange{};
+    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange.NumDescriptors = 1;
+    descriptorRange.BaseShaderRegister = 0; // t0
+    descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_PARAMETER rootParameter{};
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
+    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRange;
+
+    D3D12_STATIC_SAMPLER_DESC staticSampler{};
+    staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSampler.MaxLOD = D3D12_FLOAT32_MAX;
+    staticSampler.ShaderRegister = 0; // s0
+    staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+    rootSignatureDesc.NumParameters = 1;
+    rootSignatureDesc.pParameters = &rootParameter;
+    rootSignatureDesc.NumStaticSamplers = 1;
+    rootSignatureDesc.pStaticSamplers = &staticSampler;
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+    hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+    if (FAILED(hr)) {
+        if (errorBlob) {
+            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+        }
+        assert(false);
+    }
+    hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&copyRootSignature_));
+    assert(SUCCEEDED(hr));
+
+    // 5. コピー用 PipelineState (PSO) の作成
+    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/CopyImage.VS.hlsl", L"vs_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/CopyImage.PS.hlsl", L"ps_6_0");
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
+    psoDesc.pRootSignature = copyRootSignature_.Get();
+    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+
+    psoDesc.InputLayout.pInputElementDescs = nullptr;
+    psoDesc.InputLayout.NumElements = 0;
+
+    psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
+
+    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    psoDesc.DepthStencilState.DepthEnable = false;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&copyPipelineState_));
+    assert(SUCCEEDED(hr));
+}
+
+Microsoft::WRL::ComPtr<ID3D12Resource> MyGame::CreateRenderTextureResource(
+    ID3D12Device* device,
+    uint32_t width,
+    uint32_t height,
+    DXGI_FORMAT format,
+    const Vector4& clearColor) {
+
+    D3D12_RESOURCE_DESC resourceDesc{};
+    resourceDesc.Width = width;
+    resourceDesc.Height = height;
+    resourceDesc.MipLevels = 1;
+    resourceDesc.DepthOrArraySize = 1;
+    resourceDesc.Format = format;
+    resourceDesc.SampleDesc.Count = 1;
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+    D3D12_HEAP_PROPERTIES heapProperties{};
+    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+    D3D12_CLEAR_VALUE clearValue{};
+    clearValue.Format = format;
+    clearValue.Color[0] = clearColor.x;
+    clearValue.Color[1] = clearColor.y;
+    clearValue.Color[2] = clearColor.z;
+    clearValue.Color[3] = clearColor.w;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    HRESULT hr = device->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_RENDER_TARGET,
+        &clearValue,
+        IID_PPV_ARGS(&resource)
+    );
+    assert(SUCCEEDED(hr));
+    return resource;
 }

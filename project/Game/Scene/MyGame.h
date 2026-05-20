@@ -63,6 +63,7 @@ private:
 
     struct DebugDrawFlags {
         bool show3DObjects = true;
+        bool showSkybox = true;
         bool showSprite = true;
         bool showParticles = true;
     };
@@ -169,4 +170,22 @@ private:
     //5/14 小林
     StageMap backupMap_;
     StageRespawnController stageRespawnController_;
+
+    // --- オフスクリーンレンダリング(RenderTexture)用 ---
+    Microsoft::WRL::ComPtr<ID3D12Resource> renderTexture_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> copyRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipelineState_;
+    bool offscreenEnabled_ = true;
+    Vector4 offscreenClearColor_ = { 1.0f, 0.0f, 0.0f, 1.0f }; // 赤背景でクリア
+    D3D12_RESOURCE_STATES renderTextureState_ = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    int skyboxLinkMode_ = 0; // 0: None, 1: Link (Multiply)
+    void InitializeOffscreenRendering();
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
+        ID3D12Device* device,
+        uint32_t width,
+        uint32_t height,
+        DXGI_FORMAT format,
+        const Vector4& clearColor);
 };
