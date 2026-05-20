@@ -53,13 +53,23 @@ void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureMa
     // 6. 描画用の Model クラスを生成
     model_ = std::make_unique<Model>();
     model_->InitializeFromVertices(dxCommon, animatedVertices_, texHandle);
+
+    // 7. 初期ポーズを適用 (腕を下ろした状態にする)
+    ResetPose();
 }
 
 void SkinnedModel::ResetPose() {
-    for (auto& joint : joints_) {
-        joint.rotation = { 0.0f, 0.0f, 0.0f };
-        joint.scale = { 1.0f, 1.0f, 1.0f };
-        // translation は CreateHumanoidSkeleton で初期化されたままとする
+    for (size_t i = 0; i < joints_.size(); ++i) {
+        joints_[i].scale = { 1.0f, 1.0f, 1.0f };
+        
+        // 初期ポーズを「気をつけ（腕を下ろした状態）」にする
+        if (joints_[i].name == "LeftShoulder") {
+            joints_[i].rotation = { 0.0f, 0.0f, 1.3f };  // 左腕を下ろす (プラス回転)
+        } else if (joints_[i].name == "RightShoulder") {
+            joints_[i].rotation = { 0.0f, 0.0f, -1.3f }; // 右腕を下ろす (マイナス回転)
+        } else {
+            joints_[i].rotation = { 0.0f, 0.0f, 0.0f };
+        }
     }
 }
 
@@ -692,6 +702,73 @@ void SkinnedModel::GenerateWalkPreset() {
         // 2.0秒で1サイクル（周期 2 * PI）にするため、スピードを調節する
         // スピード speed = PI (t = 2.0秒のとき、入力値 = 2.0 * PI となる)
         ApplyTestAnimation(t, 3.14159265f);
+
+        // その瞬間のポーズをキーフレームとして記録
+        AddKeyframe(t);
+    }
+
+    // 元のポーズ（編集状態）を復元
+    for (size_t i = 0; i < joints_.size(); ++i) {
+        joints_[i].translation = origTrans[i];
+        joints_[i].rotation = origRot[i];
+        joints_[i].scale = origScale[i];
+    }
+}
+
+void SkinnedModel::GenerateRunPreset() {
+    ClearKeyframes();
+
+    // 小走りは1サイクル1.0秒の素早いループが綺麗
+    motionData_.duration = 1.0f;
+    float step = 0.05f; // 1.0秒間を0.05秒刻み（合計21キーフレーム）で生成
+
+    // 一時的にポーズを退避
+    std::vector<Vector3> origTrans(joints_.size());
+    std::vector<Vector3> origRot(joints_.size());
+    std::vector<Vector3> origScale(joints_.size());
+    for (size_t i = 0; i < joints_.size(); ++i) {
+        origTrans[i] = joints_[i].translation;
+        origRot[i] = joints_[i].rotation;
+        origScale[i] = joints_[i].scale;
+    }
+
+    for (float t = 0.0f; t <= 1.0f + 1e-4f; t += step) {
+        // 1.0秒で1サイクル（周期 2 * PI）にするため、スピードは 2.0 * PI
+        float angle = t * 2.0f * 3.14159265f;
+
+        ResetPose(); // Tポーズからスタート
+
+        // --- 小走りロジック ---
+        // 1. 骨盤 (腰) の上下運動 (走る際の弾み) と左右のひねり
+        joints_[0].translation.y = 0.76f + std::abs(std::sin(angle * 2.0f)) * 0.06f;
+        joints_[0].rotation.y = std::sin(angle) * 0.1f;
+        joints_[0].rotation.z = std::sin(angle) * 0.05f;
+
+        // 2. 脊椎 (胸) の前傾姿勢（走る時は前につんのめる）
+        joints_[1].rotation.x = 0.18f; // 前傾
+        joints_[1].rotation.y = -std::sin(angle) * 0.08f; // 上半身の逆ひねり
+
+        // 3. 足（太ももと膝）
+        // 左太もも(9), 左膝(10) | 右太もも(12), 右膝(13)
+        joints_[9].rotation.x = std::sin(angle) * 0.7f;
+        joints_[12].rotation.x = -std::sin(angle) * 0.7f;
+
+        // 膝は後ろにのみ大きく曲がる（走る時のキックと引きつけ）
+        joints_[10].rotation.x = (std::sin(angle + 1.57f) + 1.0f) * 0.55f;
+        joints_[13].rotation.x = (-std::sin(angle + 1.57f) + 1.0f) * 0.55f;
+
+        // 4. 腕（肩と肘）
+        // 左肩(3), 左肘(4) | 右肩(6), 右肘(7)
+        // 腕を大きく前後に振り、肘は90度近くに固定したまま振る
+        joints_[3].rotation.x = -std::sin(angle) * 0.7f;
+        joints_[6].rotation.x = std::sin(angle) * 0.7f;
+
+        // 肘は90度（約1.3ラジアン）曲げて固定気味にする
+        joints_[4].rotation.z = -1.3f - std::sin(angle) * 0.15f;
+        joints_[7].rotation.z = 1.3f + std::sin(angle) * 0.15f;
+
+        // 首を少し前に向ける
+        joints_[2].rotation.x = -0.1f;
 
         // その瞬間のポーズをキーフレームとして記録
         AddKeyframe(t);

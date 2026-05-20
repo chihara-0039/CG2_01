@@ -140,7 +140,7 @@ void StageEditorController::Update(Input* input, StageMap& stageMap, StageRender
 #if defined(USE_IMGUI) && !defined(NDEBUG)
     // ImGui のウィンドウやボタンを操作中の場合はエディタのショートカットキーを無効化
     if (ImGui::GetCurrentContext()) {
-        isGuiCaptured = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
+        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
     }
 #endif
 

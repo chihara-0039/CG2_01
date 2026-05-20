@@ -78,6 +78,7 @@ public:
     bool LoadMotion(const std::string& filePath);
     void ApplyMotion(float time);
     void GenerateWalkPreset();
+    void GenerateRunPreset();
 
     // ゲッター・セッター
     float GetMotionDuration() const { return motionData_.duration; }
