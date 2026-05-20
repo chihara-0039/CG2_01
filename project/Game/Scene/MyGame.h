@@ -177,10 +177,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> copyRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sepiaPipelineState_;
     bool offscreenEnabled_ = true;
     Vector4 offscreenClearColor_ = { 1.0f, 0.0f, 0.0f, 1.0f }; // 赤背景でクリア
     D3D12_RESOURCE_STATES renderTextureState_ = D3D12_RESOURCE_STATE_RENDER_TARGET;
     int skyboxLinkMode_ = 0; // 0: None, 1: Link (Multiply)
+    int postEffectMode_ = 0; // 0: Normal, 1: Grayscale, 2: Sepia
     void InitializeOffscreenRendering();
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
         ID3D12Device* device,
