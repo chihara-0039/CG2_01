@@ -14,6 +14,7 @@
 #include "Model.h"
 #include "Sprite.h"
 #include "Camera.h"
+#include "Skybox.h"
 #include "StageMap.h"
 #include "StageRenderer.h"
 #include "MapCursor.h"
@@ -184,6 +185,12 @@ private:
     D3D12_RESOURCE_STATES renderTextureState_ = D3D12_RESOURCE_STATE_RENDER_TARGET;
     int skyboxLinkMode_ = 0; // 0: None, 1: Link (Multiply)
     int postEffectMode_ = 0; // 0: Normal, 1: Grayscale, 2: Sepia
+    std::unique_ptr<Skybox> skybox_;
+    uint32_t skyboxTextureHandle_ = 0;
+    bool showSkyboxCubemap_ = false;
+    bool useFirstPersonCamera_ = false;
+    float fpsCameraYaw_ = 0.0f;
+    float fpsCameraPitch_ = 0.0f;
     void InitializeOffscreenRendering();
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
         ID3D12Device* device,

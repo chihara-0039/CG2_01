@@ -106,8 +106,8 @@ void MyGame::Initialize() {
     // 天球は最初からOFF
     debugFlags_.showSkybox = false;
 
-    // Offscreen Rendering は ON
-    offscreenEnabled_ = true;
+    // Offscreen Rendering は OFF
+    offscreenEnabled_ = false;
 
     std::string prototypePath = "Resources/Stages/stage1.txt";
     if (std::filesystem::exists(prototypePath)) {
@@ -154,6 +154,12 @@ void MyGame::Initialize() {
 
     // 4. 設定：ステージを包むサイズにする（500〜1000程度）
     skydomeObject_->SetScale({ 500.0f, 500.0f, 500.0f });
+
+    // Skybox の初期化
+    skyboxTextureHandle_ = textureManager->LoadTexture("Resources/dds/rostock_laage_airport_4k.dds");
+    skybox_ = std::make_unique<Skybox>();
+    skybox_->Initialize(object3dCommon.get(), skyboxTextureHandle_);
+    skybox_->SetScale({ 50.0f, 50.0f, 50.0f }); // デフォルトサイズ
 
     // ステージ描画オブジェクトの生成と構築
     stageRenderer_ = std::make_unique<StageRenderer>();
@@ -297,6 +303,12 @@ void MyGame::Update() {
         // 天球の座標を常にカメラと同じにする
         skydomeObject_->SetPosition(camera->GetPosition());
         skydomeObject_->Update(Math::MakeIdentity4x4());
+    }
+
+    if (skybox_ && showSkyboxCubemap_) {
+        skybox_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+        skybox_->SetPosition(camera->GetPosition());
+        skybox_->Update();
     }
 
     //試しにサウンド更新 
@@ -595,7 +607,52 @@ void MyGame::UpdateDebugView() {
 
 void MyGame::UpdateGamePlay() {
 
-    gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(),player_.get());
+    if (!useFirstPersonCamera_) {
+        gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
+    } else {
+        // 一人称カメラ (FPS Camera) の更新
+        const auto& mouse = input->GetMouseState();
+        bool isGuiCaptured = false;
+        #ifndef NDEBUG
+        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
+        #endif
+
+        if (mouse.buttons[0] && !isGuiCaptured) {
+            RECT rect;
+            GetClientRect(winApp->GetHwnd(), &rect);
+            float currentClientW = static_cast<float>(rect.right - rect.left);
+            float currentClientH = static_cast<float>(rect.bottom - rect.top);
+            if (currentClientW > 0.0f && currentClientH > 0.0f) {
+                float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
+                float scaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientH;
+                float mouseX = static_cast<float>(mouse.posX) * scaleX;
+                float mouseY = static_cast<float>(mouse.posY) * scaleY;
+
+                float edgeRatio = 0.15f;
+                float leftEdge = WinApp::kWindowWidth * edgeRatio;
+                float rightEdge = WinApp::kWindowWidth * (1.0f - edgeRatio);
+                float topEdge = WinApp::kWindowHeight * edgeRatio;
+                float bottomEdge = WinApp::kWindowHeight * (1.0f - edgeRatio);
+
+                const float rotateSpeed = 0.03f;
+                if (mouseX < leftEdge) fpsCameraYaw_ += rotateSpeed;
+                else if (mouseX > rightEdge) fpsCameraYaw_ -= rotateSpeed;
+                if (mouseY < topEdge) fpsCameraPitch_ += rotateSpeed;
+                else if (mouseY > bottomEdge) fpsCameraPitch_ -= rotateSpeed;
+
+                fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
+            }
+        }
+
+        if (player_) {
+            Vector3 playerPos = player_->GetPosition();
+            // プレイヤーの頭の高さ (目の高さ: Y + 1.2f) にカメラを配置
+            Vector3 cameraPos = { playerPos.x, playerPos.y + 1.2f, playerPos.z };
+            camera->SetPosition(cameraPos);
+            camera->SetRotation({ fpsCameraPitch_, fpsCameraYaw_, 0.0f });
+        }
+        camera->Update();
+    }
     // --- ステージマップの更新（崩れる足場のタイマー処理） ---
 
     //5/14佐倉追加
@@ -740,6 +797,7 @@ void MyGame::UpdateImGui() {
         }
         ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
         ImGui::Checkbox("Show Skybox", &debugFlags_.showSkybox);
+        ImGui::Checkbox("Show Skybox (Cubemap)", &showSkyboxCubemap_);
         ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
         ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
     }
@@ -756,6 +814,11 @@ void MyGame::UpdateImGui() {
     }
 
     if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Use First-Person Camera", &useFirstPersonCamera_);
+        if (useFirstPersonCamera_) {
+            ImGui::SliderFloat("FPS Camera Yaw", &fpsCameraYaw_, -6.28f, 6.28f);
+            ImGui::SliderFloat("FPS Camera Pitch", &fpsCameraPitch_, -1.4f, 1.4f);
+        }
         camera->DrawImGui();
     }
     if (ImGui::CollapsingHeader("StageMap Info")) {
@@ -1310,7 +1373,9 @@ void MyGame::Draw() {
             }
             // スキニングエディター
             else if (currentMode_ == AppMode::SkinningEditor) {
-                if (debugFlags_.showSkybox && skydomeObject_) {
+                if (showSkyboxCubemap_ && skybox_) {
+                    skybox_->Draw();
+                } else if (debugFlags_.showSkybox && skydomeObject_) {
                     skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                     skydomeObject_->Draw();
                 }
@@ -1326,7 +1391,9 @@ void MyGame::Draw() {
             }
             // C. 通常ゲーム画面
             else {
-                if (debugFlags_.showSkybox && skydomeObject_) {
+                if (showSkyboxCubemap_ && skybox_) {
+                    skybox_->Draw();
+                } else if (debugFlags_.showSkybox && skydomeObject_) {
                     skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                     skydomeObject_->Draw();
                 }
@@ -1398,6 +1465,7 @@ void MyGame::Draw() {
             commandList->SetPipelineState(copyPipelineState_.Get());
         }
 
+        // コピー用のデスクリプタヒープをバインド
         ID3D12DescriptorHeap* copyHeaps[] = { srvHeap_.Get() };
         commandList->SetDescriptorHeaps(1, copyHeaps);
 
@@ -1413,23 +1481,27 @@ void MyGame::Draw() {
         // 【従来パス】 直接バックバッファに描画
         // ==========================================================
 #ifdef NDEBUG
+		// リリースモードでは、描画領域をウィンドウ全体 (0,0)-(1280,720) に設定して描画する。
         D3D12_VIEWPORT viewport = { 0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f };
         D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
         commandList->RSSetViewports(1, &viewport);
         commandList->RSSetScissorRects(1, &scissor);
 #else
+		// デバッグモードでは、描画領域をウィンドウの右側 (320,0)-(1600,720) に限定して描画する。これにより、左側にImGuiのデバッグパネルを表示しつつ、右側でゲームの描画を確認できる。
         D3D12_VIEWPORT viewport = { 320.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
         D3D12_RECT scissor = { 320, 0, 1600, 720 };
         commandList->RSSetViewports(1, &viewport);
         commandList->RSSetScissorRects(1, &scissor);
 #endif
-
+		// クリア処理
         dxCommon->PreDraw();
 
         if (debugFlags_.show3DObjects) {
+			// 描画に必要なSRVヒープをセット
             ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
             commandList->SetDescriptorHeaps(1, heaps);
 
+			// 3Dオブジェクトの描画前に共通設定を行う（ルートシグネチャや定数バッファのセットなど）
             object3dCommon->PreDraw();
             commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
 
@@ -1447,15 +1519,19 @@ void MyGame::Draw() {
             }
             // スキニングエディター
             else if (currentMode_ == AppMode::SkinningEditor) {
-                if (debugFlags_.showSkybox && skydomeObject_) {
+                if (showSkyboxCubemap_ && skybox_) {
+                    skybox_->Draw();
+                } else if (debugFlags_.showSkybox && skydomeObject_) {
                     skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                     skydomeObject_->Draw();
                 }
+				// グリッドラインはスキニングエディターモードでのみ表示する想定でしたが、デバッグフラグで全モードに表示させることも可能にしました。
                 for (auto& line : gridLines_) {
                     line->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                     line->Update(lightVP);
                     line->Draw();
                 }
+				// スキニングエディターでは、スキンメッシュとスケルトンの両方を描画する。通常はスキニングエディターモードでのみ描画する想定でしたが、フラグで全モードに表示させることも可能にしました。
                 if (skinnedObject_) {
                     skinnedObject_->Draw();
                     skinnedObject_->DrawSkeleton(object3dCommon.get(), debugCubeModel_.get(), camera->GetViewMatrix(), camera->GetProjectionMatrix());
@@ -1463,53 +1539,71 @@ void MyGame::Draw() {
             }
             // C. 通常ゲーム画面
             else {
-                if (debugFlags_.showSkybox && skydomeObject_) {
+                if (showSkyboxCubemap_ && skybox_) {
+                    // スカイボックスはカメラ位置に常に追従させて描画する。
+                    skybox_->Draw();
+					// スカイボックスは通常の描画順序とは異なり、最初に描画する。
+                } else if (debugFlags_.showSkybox && skydomeObject_) {
+					// スカイドームもカメラに追従させて描画
                     skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                     skydomeObject_->Draw();
                 }
+				// グリッドラインはスキニングエディターモードでのみ表示する想定でしたが、デバッグフラグで全モードに表示させることも可能にしました。
                 if (currentMode_ == AppMode::StageEditor ||
                     currentMode_ == AppMode::GamePlay ||
                     currentMode_ == AppMode::GamePlay_BlockPlace) {
 
-                    if (stageRenderer_) stageRenderer_->Draw();
+					// ステージはゲームプレイ中とステージエディターモードで表示する想定でしたが、デバッグフラグで全モードに表示させることも可能にしました。
+                    if (stageRenderer_) { stageRenderer_->Draw(); }
+					// プレイヤーはゲームプレイ中にのみ表示する想定でしたが、デバッグフラグで全モードに表示させることも可能にしました。
                     if (currentMode_ == AppMode::GamePlay) {
-                        if (player_) player_->Draw();
+                        if (player_) { player_->Draw(); }
+						// プレイヤーが壁に隠れている場合は、ハイライトを描画して存在をわかりやすくする。通常はゲームプレイ中にしか存在しない想定ですが、フラグで全モードに表示させることも可能にしました。
                         if (IsPlayerHiddenByWall()) {
                             object3dCommon->PreDrawPlayerHighlight();
                             player_->DrawHighlight();
                             object3dCommon->PreDraw();
                             commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
                         }
+						// 3Dプロンプトはゲームプレイ中にのみ表示する想定でしたが、デバッグフラグで全モードに表示させることも可能にしました。
                         if (gameplayUIManager_) {
                             gameplayUIManager_->Draw3DPrompts(currentMode_ == AppMode::GamePlay, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
                         }
                     }
+					// マップカーソルはステージエディターモードとブロック配置モードで表示する想定でしたが、デバッグフラグで全モードに表示させることも可能にしました。
                     if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
                         mapCursor_->Draw();
                     }
                 }
+				// デバッグビューでは、objectList 内のすべてのオブジェクトとプレイヤーを描画する。通常はデバッグ用のオブジェクトが多い想定ですが、フラグで全モードに表示させることも可能にしました。
                 if (currentMode_ == AppMode::DebugView) {
                     for (auto& obj : objectList) {
                         if (obj) obj->Draw();
                     }
-                    if (player_) player_->Draw();
+					// プレイヤーもデバッグビューで常に描画する。通常はゲームプレイ中にしか存在しない想定ですが、フラグで全モードに表示させることも可能にしました。
+                    if (player_) { player_->Draw(); }
                 }
             }
         }
 
+		// パーティクルとスプライトは、3Dオブジェクトの描画とは別のパスで描画する。
         if (debugFlags_.showParticles) {
             particleManager->Draw();
         }
 
+		// スプライトはさらに別のパスで描画する。通常はデバッグビューでのみ表示する想定ですが、フラグで全モードに表示させることも可能にしました。
         if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
             spriteCommon->PreDraw();
             if (sprite) sprite->Draw();
         }
 
+		// ゲームプレイ中のUIは、3Dオブジェクトやパーティクルとは別のパスで描画する。
         if (gameplayUIManager_) {
             gameplayUIManager_->DrawSprites(currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
         }
 
+
+		// ブロック配置モードのインベントリUIも、通常の3Dオブジェクト描画とは別のパスで描画する。
         if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
             blockInventoryUI_->Draw();
         }
