@@ -152,8 +152,8 @@ void MyGame::Initialize() {
     // 3. 設定：空は自ら光るのでライトをオフにする
     skydomeObject_->SetEnableLighting(false);
 
-    // 4. 設定：ステージを包むサイズにする（500〜1000程度）
-    skydomeObject_->SetScale({ 500.0f, 500.0f, 500.0f });
+    // 4. 設定：ステージを包むサイズにする（カメラの Far Z が 100 なので 90 程度にする）
+    skydomeObject_->SetScale({ 90.0f, 90.0f, 90.0f });
 
     // Skybox の初期化
     skyboxTextureHandle_ = textureManager->LoadTexture("Resources/dds/rostock_laage_airport_4k.dds");
@@ -598,14 +598,25 @@ void MyGame::Update() {
     }
 }
 
-//パーティクル発生のテスト（スペースキーを押すと発生）
+// パーティクル発生のテスト（スペースキーを押すと発生）
 void MyGame::UpdateDebugView() {
     if (input->TriggerKey(DIK_SPACE)) {
         particleManager->Emit({ 0, 0, 0 }, 10);
     }
+    // デバッグモードでもWASDカーソル移動をカメラ相対で動かす
+    stageEditorController_.HandleCursorInput(input.get(), stageMap_, mapCursor_.get(), lightCamera_.get(), camera.get());
 }
 
 void MyGame::UpdateGamePlay() {
+    // Cキーでカメラ切り替え (トグル)
+    if (input->TriggerKey(DIK_C)) {
+        useFirstPersonCamera_ = !useFirstPersonCamera_;
+        if (useFirstPersonCamera_ && player_) {
+            // 一人称に切り替えた瞬間、カメラの向きをプレイヤーの向きと水平方向に同期する
+            fpsCameraYaw_ = player_->GetRotation().y;
+            fpsCameraPitch_ = 0.0f;
+        }
+    }
 
     if (!useFirstPersonCamera_) {
         gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
@@ -673,7 +684,8 @@ void MyGame::UpdateGamePlay() {
 
     // --- プレイヤー更新 ---
     if (player_) {
-        player_->Update(input.get(), stageMap_, gameplayCameraController_.GetAngle(), lightCamera_->GetViewProjectionMatrix());
+        float cameraRotY = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
+        player_->Update(input.get(), stageMap_, cameraRotY, lightCamera_->GetViewProjectionMatrix());
     }
 
     if (stageMap_.NeedsRebuild()) {
@@ -1375,6 +1387,9 @@ void MyGame::Draw() {
             else if (currentMode_ == AppMode::SkinningEditor) {
                 if (showSkyboxCubemap_ && skybox_) {
                     skybox_->Draw();
+                    // 標準のPSOとShadowMapのバインドを復帰
+                    object3dCommon->PreDraw();
+                    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
                 } else if (debugFlags_.showSkybox && skydomeObject_) {
                     skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                     skydomeObject_->Draw();
@@ -1393,6 +1408,9 @@ void MyGame::Draw() {
             else {
                 if (showSkyboxCubemap_ && skybox_) {
                     skybox_->Draw();
+                    // 標準のPSOとShadowMapのバインドを復帰
+                    object3dCommon->PreDraw();
+                    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
                 } else if (debugFlags_.showSkybox && skydomeObject_) {
                     skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                     skydomeObject_->Draw();
@@ -1403,12 +1421,14 @@ void MyGame::Draw() {
 
                     if (stageRenderer_) stageRenderer_->Draw();
                     if (currentMode_ == AppMode::GamePlay) {
-                        if (player_) player_->Draw();
-                        if (IsPlayerHiddenByWall()) {
-                            object3dCommon->PreDrawPlayerHighlight();
-                            player_->DrawHighlight();
-                            object3dCommon->PreDraw();
-                            commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                        if (player_ && !useFirstPersonCamera_) {
+                            player_->Draw();
+                            if (IsPlayerHiddenByWall()) {
+                                object3dCommon->PreDrawPlayerHighlight();
+                                player_->DrawHighlight();
+                                object3dCommon->PreDraw();
+                                commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                            }
                         }
                         if (gameplayUIManager_) {
                             gameplayUIManager_->Draw3DPrompts(currentMode_ == AppMode::GamePlay, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
@@ -1428,6 +1448,8 @@ void MyGame::Draw() {
         }
 
         if (debugFlags_.showParticles) {
+            ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
+            commandList->SetDescriptorHeaps(1, particleHeaps);
             particleManager->Draw();
         }
 
@@ -1521,6 +1543,9 @@ void MyGame::Draw() {
             else if (currentMode_ == AppMode::SkinningEditor) {
                 if (showSkyboxCubemap_ && skybox_) {
                     skybox_->Draw();
+                    // 標準のPSOとShadowMapのバインドを復帰
+                    object3dCommon->PreDraw();
+                    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
                 } else if (debugFlags_.showSkybox && skydomeObject_) {
                     skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                     skydomeObject_->Draw();
@@ -1543,6 +1568,9 @@ void MyGame::Draw() {
                     // スカイボックスはカメラ位置に常に追従させて描画する。
                     skybox_->Draw();
 					// スカイボックスは通常の描画順序とは異なり、最初に描画する。
+                    // 標準のPSOとShadowMapのバインドを復帰
+                    object3dCommon->PreDraw();
+                    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
                 } else if (debugFlags_.showSkybox && skydomeObject_) {
 					// スカイドームもカメラに追従させて描画
                     skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
@@ -1557,13 +1585,15 @@ void MyGame::Draw() {
                     if (stageRenderer_) { stageRenderer_->Draw(); }
 					// プレイヤーはゲームプレイ中にのみ表示する想定でしたが、デバッグフラグで全モードに表示させることも可能にしました。
                     if (currentMode_ == AppMode::GamePlay) {
-                        if (player_) { player_->Draw(); }
-						// プレイヤーが壁に隠れている場合は、ハイライトを描画して存在をわかりやすくする。通常はゲームプレイ中にしか存在しない想定ですが、フラグで全モードに表示させることも可能にしました。
-                        if (IsPlayerHiddenByWall()) {
-                            object3dCommon->PreDrawPlayerHighlight();
-                            player_->DrawHighlight();
-                            object3dCommon->PreDraw();
-                            commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                        if (player_ && !useFirstPersonCamera_) {
+                            player_->Draw();
+                            // プレイヤーが壁に隠れている場合は、ハイライトを描画して存在をわかりやすくする。通常はゲームプレイ中にしか存在しない想定ですが、フラグで全モードに表示させることも可能にしました。
+                            if (IsPlayerHiddenByWall()) {
+                                object3dCommon->PreDrawPlayerHighlight();
+                                player_->DrawHighlight();
+                                object3dCommon->PreDraw();
+                                commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                            }
                         }
 						// 3Dプロンプトはゲームプレイ中にのみ表示する想定でしたが、デバッグフラグで全モードに表示させることも可能にしました。
                         if (gameplayUIManager_) {
@@ -1588,6 +1618,8 @@ void MyGame::Draw() {
 
 		// パーティクルとスプライトは、3Dオブジェクトの描画とは別のパスで描画する。
         if (debugFlags_.showParticles) {
+            ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
+            commandList->SetDescriptorHeaps(1, particleHeaps);
             particleManager->Draw();
         }
 
@@ -1685,7 +1717,7 @@ void MyGame::UpdateGamePlayBlockPlace()
     const Int3& cursor = mapCursor_->GetIndex();
 
     // カーソル移動処理
-    stageEditorController_.HandleCursorInput(input.get(), stageMap_, mapCursor_.get(), lightCamera_.get());
+    stageEditorController_.HandleCursorInput(input.get(), stageMap_, mapCursor_.get(), lightCamera_.get(), camera.get());
 
     // インベントリで選択されているブロックタイプを同期
     BlockType selectedType = BlockType::Ground;

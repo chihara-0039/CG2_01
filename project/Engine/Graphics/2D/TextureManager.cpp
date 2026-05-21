@@ -176,12 +176,11 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
         hr = DirectX::LoadFromWICFile(wFilePath.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
     }
     
-    // ★ここで失敗を検知して止める
+    // ★ここで失敗を検知する。アサートではなく警告ログ＋フォールバックで続行する
     if (FAILED(hr)) {
-        // コンソールに失敗したファイル名を表示
-        std::string message = "Failed to load texture: " + filePath + "\n";
+        std::string message = "[TextureManager] WARNING: Failed to load texture (file not found or unsupported format): " + filePath + "\n";
         OutputDebugStringA(message.c_str());
-        assert(SUCCEEDED(hr)); // ここで強制停止させる
+        // ハンドル0（ダミー/白テクスチャ）を返してクラッシュを防ぐ
         return 0;
     }
 
@@ -363,12 +362,18 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
     srvDesc.Format = data.resourceDesc.Format;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     
-    if (metadata.miscFlags & DirectX::TEX_MISC_TEXTURECUBE) {
+    if ((metadata.miscFlags & DirectX::TEX_MISC_TEXTURECUBE) || metadata.arraySize == 6) {
+        char buf[256];
+        sprintf_s(buf, "[TextureManager] LoadTexture Cubemap: path=%s, arraySize=%d, miscFlags=%d, index=%d\n", filePath.c_str(), (int)metadata.arraySize, (int)metadata.miscFlags, (int)index);
+        OutputDebugStringA(buf);
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
         srvDesc.TextureCube.MipLevels = UINT(metadata.mipLevels);
         srvDesc.TextureCube.MostDetailedMip = 0;
         srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
     } else {
+        char buf[256];
+        sprintf_s(buf, "[TextureManager] LoadTexture 2D: path=%s, arraySize=%d, miscFlags=%d, index=%d\n", filePath.c_str(), (int)metadata.arraySize, (int)metadata.miscFlags, (int)index);
+        OutputDebugStringA(buf);
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         srvDesc.Texture2D.MipLevels = UINT(metadata.mipLevels);
     }
@@ -398,7 +403,15 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
 // SRVヒープのCPUハンドルを取得する関数。
 // 指定されたテクスチャハンドルに対応するSRVのCPUハンドルを返す。
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureHandle) {
-    return textures_[textureHandle].srvHandleGPU;
+    auto handle = textures_[textureHandle].srvHandleGPU;
+    auto start = srvHeap_->GetGPUDescriptorHandleForHeapStart();
+    int diffIndex = (int)((handle.ptr - start.ptr) / descriptorSizeSRV_);
+    if (diffIndex != (int)textureHandle) {
+        char buf[256];
+        sprintf_s(buf, "[TextureManager] ERROR: GetSrvHandleGPU mismatch! handle=%u, calculated_index=%d\n", textureHandle, diffIndex);
+        OutputDebugStringA(buf);
+    }
+    return handle;
 }
 
 // SRVヒープのGPUハンドルを取得する関数。

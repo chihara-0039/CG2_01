@@ -42,8 +42,10 @@ void Sprite::Update() {
     Matrix4x4 viewMatrix = Math::MakeIdentity4x4();
     Matrix4x4 projectionMatrix = Math::MakeOrthographicMatrix(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 100.0f);
 
+	// ワールド・ビュー・プロジェクション行列の計算
     Matrix4x4 wvpMatrix = Math::Multiply(worldMatrix, Math::Multiply(viewMatrix, projectionMatrix));
 
+	// シェーダーに転送
     transformationMatrixData_->WVP = wvpMatrix;
 }
 
@@ -69,6 +71,7 @@ void Sprite::Draw() {
     commandList->DrawInstanced(6, 1, 0, 0);
 }
 
+// テクスチャ切り抜き設定
 void Sprite::SetTextureRect(const Vector2& position, const Vector2& size) {
     textureLeftTop_ = position;
     textureSize_ = size;
@@ -76,6 +79,7 @@ void Sprite::SetTextureRect(const Vector2& position, const Vector2& size) {
     transferNeeded_ = true;
 }
 
+// テクスチャ変更
 void Sprite::SetTexture(uint32_t textureHandle) {
     textureHandle_ = textureHandle;
     auto& desc = spriteCommon_->GetTextureManager()->GetResourceDesc(textureHandle_);
@@ -83,6 +87,7 @@ void Sprite::SetTexture(uint32_t textureHandle) {
     transferNeeded_ = true;
 }
 
+// 頂点バッファの作成
 void Sprite::CreateVertexBuffer() {
     auto device = spriteCommon_->GetDxCommon()->GetDevice();
 
@@ -101,36 +106,46 @@ void Sprite::CreateVertexBuffer() {
     vertexBufferView_.StrideInBytes = sizeof(VertexData);
 }
 
+// マテリアルバッファの作成
 void Sprite::CreateMaterialBuffer() {
+	// マテリアルは色のみなので、サイズはMaterial構造体分で十分ですが、256バイトアラインメントに合わせてサイズを調整します
     auto device = spriteCommon_->GetDxCommon()->GetDevice();
     size_t sizeIB = (sizeof(Material) + 0xff) & ~0xff;
     D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
     D3D12_RESOURCE_DESC resDesc = {};
+	// バッファリソースの設定
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resDesc.Width = sizeIB;
     resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
     resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
 
+	// 初期値は白色
     device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&materialResource_));
     materialResource_->Map(0, nullptr, (void**)&materialData_);
     materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
 }
 
+// トランスフォームバッファの作成
 void Sprite::CreateTransformationMatrixBuffer() {
+	// トランスフォームはWVP行列のみですが、256バイトアラインメントに合わせてサイズを調整します
     auto device = spriteCommon_->GetDxCommon()->GetDevice();
     size_t sizeIB = (sizeof(TransformationMatrix) + 0xff) & ~0xff;
     D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
     D3D12_RESOURCE_DESC resDesc = {};
+
+	// バッファリソースの設定
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resDesc.Width = sizeIB;
     resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
     resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
 
+	// 初期値は単位行列
     device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&transformationMatrixResource_));
     transformationMatrixResource_->Map(0, nullptr, (void**)&transformationMatrixData_);
     transformationMatrixData_->WVP = Math::MakeIdentity4x4();
 }
 
+// 頂点データの更新（サイズや切り抜き変更時）
 void Sprite::UpdateVertexData() {
     VertexData* vertMap = nullptr;
     vertexBuffer_->Map(0, nullptr, (void**)&vertMap);
@@ -169,5 +184,6 @@ void Sprite::UpdateVertexData() {
     vertMap[5].position = { rightPos, topPos, 0.0f, 1.0f };
     vertMap[5].texcoord = { right, top };
 
+	// マップ解除
     vertexBuffer_->Unmap(0, nullptr);
 }

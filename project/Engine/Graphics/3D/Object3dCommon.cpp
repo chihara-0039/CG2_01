@@ -52,6 +52,11 @@ void Object3dCommon::PreDraw() {
         return;
     }
 
+    if (textureManager_) {
+        ID3D12DescriptorHeap* heaps[] = { textureManager_->GetSrvHeap() };
+        commandList->SetDescriptorHeaps(1, heaps);
+    }
+
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(pipelineState_.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -63,6 +68,11 @@ void Object3dCommon::PreDrawPlayerHighlight() {
     if (!rootSignature_ || !playerHighlightPipelineState_) {
         assert(false && "RootSignature or PlayerHighlightPipelineState is NULL!");
         return;
+    }
+
+    if (textureManager_) {
+        ID3D12DescriptorHeap* heaps[] = { textureManager_->GetSrvHeap() };
+        commandList->SetDescriptorHeaps(1, heaps);
     }
 
     commandList->SetGraphicsRootSignature(rootSignature_.Get());

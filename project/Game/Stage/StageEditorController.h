@@ -36,7 +36,7 @@ public:
     /// <summary>
     /// WASD/QE キーによるマップカーソルの三次元移動処理を行います。
     /// </summary>
-    void HandleCursorInput(Input* input, StageMap& stageMap, MapCursor* mapCursor, LightCamera* lightCamera);
+    void HandleCursorInput(Input* input, StageMap& stageMap, MapCursor* mapCursor, LightCamera* lightCamera, Camera* camera);
 
     /// <summary>
     /// IJKL/UO キーによるエディタ専用カメラの移動・回転操作を行います。

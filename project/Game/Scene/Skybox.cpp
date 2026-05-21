@@ -191,6 +191,11 @@ void Skybox::Update() {
 void Skybox::Draw() {
     auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
 
+    if (object3dCommon_->GetTextureManager()) {
+        ID3D12DescriptorHeap* heaps[] = { object3dCommon_->GetTextureManager()->GetSrvHeap() };
+        commandList->SetDescriptorHeaps(1, heaps);
+    }
+
     commandList->SetPipelineState(pipelineState_.Get());
     commandList->SetGraphicsRootSignature(object3dCommon_->GetRootSignature());
 
