@@ -116,20 +116,32 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 
 void StageRenderer::UpdateEffect(const StageMap& stageMap) {
 	size_t objIndex = 0;
+
 	for (int y = 0; y < stageMap.GetHeight(); ++y) {
 		for (int z = 0; z < stageMap.GetDepth(); ++z) {
 			for (int x = 0; x < stageMap.GetWidth(); ++x) {
-				const MapCell* cell = stageMap.GetCell(x, y, z);
-				if (cell->type == BlockType::None) continue;
 
-				if (objIndex < objects_.size()) {
-					Object3d* obj = objects_[objIndex].get();
-					if (cell->type == BlockType::CrumblingFloor) {
-						// マップデータの色と透明度をモデルに反映
-						obj->SetColor({ 1.0f, cell->colorG, cell->colorB, cell->opacity });
-					}
-					objIndex++;
+				const MapCell* cell = stageMap.GetCell(x, y, z);
+				if (!cell || cell->type == BlockType::None) {
+					continue;
 				}
+
+				if (objIndex >= objects_.size()) {
+					return;
+				}
+
+				Object3d* obj = objects_[objIndex].get();
+
+				if (cell->type == BlockType::CrumblingFloor) {
+					obj->SetColor({
+						1.0f,
+						cell->colorG,
+						cell->colorB,
+						cell->opacity
+					});
+				}
+
+				objIndex++;
 			}
 		}
 	}
@@ -449,11 +461,11 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 	}
 
 	// 全てのプレビューオブジェクトに対して、更新処理を呼び出す
-	for (const auto& obj : previewObjects_) {
+	/*for (const auto& obj : previewObjects_) {
 		if (obj) {
 			obj->Update(lightVP);
 		}
-	}
+	}*/
 }
 
 // 全てのオブジェクトの影描画処理を呼び出す

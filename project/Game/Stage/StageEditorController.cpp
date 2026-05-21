@@ -1,6 +1,7 @@
+
 #include "StageEditorController.h"
 #include <cmath>
-
+#include <algorithm>
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
 #endif
@@ -223,14 +224,39 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
     ImGui::SetNextWindowBgAlpha(1.0f); // 透過なし
     ImGui::Begin("Stage Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
+	// --- ステージの保存・読み込み管理 UI ---
     if (ImGui::CollapsingHeader("Stage Manager", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::InputText("Save Name", newStageName_, IM_ARRAYSIZE(newStageName_));
+		// 新規保存ボタン
         if (ImGui::Button("Save As New")) {
             std::string path = "Resources/Stages/" + std::string(newStageName_) + ".txt";
             stageMap.SaveToFile(path);
             RefreshStageList();
         }
 
+        ImGui::Separator();
+        ImGui::Text("New Blank Stage");
+
+        ImGui::InputInt("Width", &newStageWidth_);
+        ImGui::InputInt("Height", &newStageHeight_);
+        ImGui::InputInt("Depth", &newStageDepth_);
+
+        // std::max は Windows の max マクロと衝突することがあるので使わない
+        if (newStageWidth_ < 1) { newStageWidth_ = 1; }
+        if (newStageHeight_ < 1) { newStageHeight_ = 1; }
+        if (newStageDepth_ < 1) { newStageDepth_ = 1; }
+
+        if (ImGui::Button("Create Blank Stage")) {
+            stageMap.Initialize(newStageWidth_, newStageHeight_, newStageDepth_);
+
+            if (stageRenderer) {
+                stageRenderer->BuildFromStageMap(stageMap);
+            }
+
+            ResetPlayerToStartCell(stageMap, player);
+        }
+
+        // 保存されているステージファイルの一覧を表示
         ImGui::Text("Saved Stages:");
         // 保存されているステージファイルの一覧をリストボックス表示
         if (ImGui::BeginListBox("##StageList", ImVec2(-FLT_MIN, 100))) {
