@@ -169,30 +169,41 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
     // WIC_FLAGS_FORCE_SRGBフラグを指定して、sRGBカラースペースで読み込むようにしている。
     std::wstring wFilePath = ConvertString(filePath);
 
-	// LoadFromWICFile関数の呼び出しに失敗した場合は、
-    // HRESULTをチェックしてエラーを検出する。
-    // 失敗した場合は、コンソールに失敗したファイル名を表示し、
-    // assertで強制停止させる。
-    HRESULT hr = DirectX::LoadFromWICFile(wFilePath.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+    HRESULT hr;
+    if (wFilePath.ends_with(L".dds") || wFilePath.ends_with(L".DDS")) {
+        hr = DirectX::LoadFromDDSFile(wFilePath.c_str(), DirectX::DDS_FLAGS_NONE, nullptr, image);
+    } else {
+        hr = DirectX::LoadFromWICFile(wFilePath.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+    }
     
-    // ★ここで失敗を検知して止める
+    // ★ここで失敗を検知する。アサートではなく警告ログ＋フォールバックで続行する
     if (FAILED(hr)) {
-        // コンソールに失敗したファイル名を表示
-        std::string message = "Failed to load texture: " + filePath + "\n";
+        std::string message = "[TextureManager] WARNING: Failed to load texture (file not found or unsupported format): " + filePath + "\n";
         OutputDebugStringA(message.c_str());
-        assert(SUCCEEDED(hr)); // ここで強制停止させる
+        // ハンドル0（ダミー/白テクスチャ）を返してクラッシュを防ぐ
         return 0;
     }
 
+    DirectX::TexMetadata originalMetadata = image.GetMetadata();
+
     // 3. ミップマップ生成
     DirectX::ScratchImage mipImages;
-
-	// GenerateMipMaps関数を呼び出して、
-    // 読み込んだテクスチャからミップマップを生成する。
-    // 生成されたミップマップは、別のScratchImage構造体に格納される。
-    hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(), image.GetMetadata(), DirectX::TEX_FILTER_SRGB, 0, mipImages);
-	// ★ここで失敗を検知して止める
-    assert(SUCCEEDED(hr));
+    if (DirectX::IsCompressed(originalMetadata.format) ||
+        originalMetadata.miscFlags & DirectX::TEX_MISC_TEXTURECUBE ||
+        originalMetadata.arraySize == 6) {
+        // CubeMapはGenerateMipMapsせず、そのまま使う
+        mipImages = std::move(image);
+    } else {
+        hr = DirectX::GenerateMipMaps(
+            image.GetImages(),
+            image.GetImageCount(),
+            image.GetMetadata(),
+            DirectX::TEX_FILTER_SRGB,
+            0,
+            mipImages
+        );
+        assert(SUCCEEDED(hr));
+    }
 
 
     // 4. テクスチャリソースの作成
@@ -229,9 +240,10 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
 
     // 5. 中間リソース（Upload Heap）の作成
     // データ転送に必要なサイズやレイアウトを計算
-    std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts(metadata.mipLevels);
+    UINT64 subresourceCount = metadata.mipLevels * metadata.arraySize;
+    std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts(subresourceCount);
     UINT64 uploadBufferSize = 0;
-    dxCommon_->GetDevice()->GetCopyableFootprints(&textureDesc, 0, UINT(metadata.mipLevels), 0, layouts.data(), nullptr, nullptr, &uploadBufferSize);
+    dxCommon_->GetDevice()->GetCopyableFootprints(&textureDesc, 0, UINT(subresourceCount), 0, layouts.data(), nullptr, nullptr, &uploadBufferSize);
 
 	// CPUアクセス可能なアップロードヒープを作成。
     // D3D12_HEAP_TYPE_UPLOADを指定して、CPUから書き込み可能で、
@@ -273,49 +285,58 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
     hr = intermediateResource->Map(0, nullptr, reinterpret_cast<void**>(&pData));
     assert(SUCCEEDED(hr));
 
-	// ミップマップごとにデータを転送するためのループ。
-    // DirectXTexのScratchImageからミップマップのイメージデータを取得し、
-    // アップロード用の中間リソースにコピーする。
-    for (size_t i = 0; i < metadata.mipLevels; ++i) {
-        const DirectX::Image* img = mipImages.GetImage(i, 0, 0);
+	// 配列（Cubeの各面など）とミップマップごとにデータを転送するためのループ。
+    for (size_t arrayIdx = 0; arrayIdx < metadata.arraySize; ++arrayIdx) {
+        for (size_t mipIdx = 0; mipIdx < metadata.mipLevels; ++mipIdx) {
+            size_t subresourceIdx = arrayIdx * metadata.mipLevels + mipIdx;
+            const DirectX::Image* img = mipImages.GetImage(mipIdx, arrayIdx, 0);
+            assert(img);
 
-        // 書き込み先のポインタ計算（レイアウトのオフセットを加算）
-        uint8_t* dstStart = pData + layouts[i].Offset;
-        const uint8_t* srcStart = img->pixels;
+            // 書き込み先のポインタ計算（レイアウトのオフセットを加算）
+            uint8_t* dstStart = pData + layouts[subresourceIdx].Offset;
+            const uint8_t* srcStart = img->pixels;
 
-        // 行ごとにコピー（アライメント対応）
-        for (size_t y = 0; y < img->height; ++y) {
-            memcpy(
-                dstStart + y * layouts[i].Footprint.RowPitch,
-                srcStart + y * img->rowPitch,
-                img->rowPitch
-            );
+            // 圧縮フォーマットと非圧縮フォーマットでコピーする行数を変更
+            size_t numRows = 0;
+            if (DirectX::IsCompressed(metadata.format)) {
+                // BC圧縮などの場合、ブロック行数を計算 (1ブロックは4x4ピクセル)
+                numRows = (img->height + 3) / 4;
+            } else {
+                numRows = img->height;
+            }
+
+            // 行ごとにコピー（アライメント対応）
+            for (size_t y = 0; y < numRows; ++y) {
+                memcpy(
+                    dstStart + y * layouts[subresourceIdx].Footprint.RowPitch,
+                    srcStart + y * img->rowPitch,
+                    img->rowPitch
+                );
+            }
         }
     }
 	// データのコピーが完了したら、リソースをアンマップする。
-    // Unmap関数を呼び出して、リソースをアンマップする。
-    // 0は、アンマップするサブリソースのインデックスを指定する。
-    // nullptrは、書き込み範囲を指定するためのD3D12_RANGE構造体へのポインタで、
-    // ここでは全体をアンマップするためにnullptrを指定している。
     intermediateResource->Unmap(0, nullptr);
 
     // 7. データ転送コマンド発行（Upload Heap -> Texture Resource）
     auto commandList = dxCommon_->GetCommandList();
 
-	// 各ミップレベルごとに、CopyTextureRegionコマンドを発行して、
-	// アップロード用の中間リソースからテクスチャリソースにデータを転送する。
-    for (size_t i = 0; i < metadata.mipLevels; ++i) {
-        D3D12_TEXTURE_COPY_LOCATION dst = {};
-        dst.pResource = textureResource.Get();
-        dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        dst.SubresourceIndex = UINT(i);
+    for (size_t arrayIdx = 0; arrayIdx < metadata.arraySize; ++arrayIdx) {
+        for (size_t mipIdx = 0; mipIdx < metadata.mipLevels; ++mipIdx) {
+            size_t subresourceIdx = arrayIdx * metadata.mipLevels + mipIdx;
 
-        D3D12_TEXTURE_COPY_LOCATION src = {};
-        src.pResource = intermediateResource.Get();
-        src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        src.PlacedFootprint = layouts[i];
+            D3D12_TEXTURE_COPY_LOCATION dst = {};
+            dst.pResource = textureResource.Get();
+            dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            dst.SubresourceIndex = UINT(subresourceIdx);
 
-        commandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+            D3D12_TEXTURE_COPY_LOCATION src = {};
+            src.pResource = intermediateResource.Get();
+            src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            src.PlacedFootprint = layouts[subresourceIdx];
+
+            commandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+        }
     }
 
     // 8. リソースバリア（CopyDest -> PixelShaderResource）
@@ -351,8 +372,22 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = data.resourceDesc.Format;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = UINT(metadata.mipLevels);
+    
+    if ((metadata.miscFlags & DirectX::TEX_MISC_TEXTURECUBE) || metadata.arraySize == 6) {
+        char buf[256];
+        sprintf_s(buf, "[TextureManager] LoadTexture Cubemap: path=%s, arraySize=%d, miscFlags=%d, index=%d\n", filePath.c_str(), (int)metadata.arraySize, (int)metadata.miscFlags, (int)index);
+        OutputDebugStringA(buf);
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+        srvDesc.TextureCube.MipLevels = UINT(metadata.mipLevels);
+        srvDesc.TextureCube.MostDetailedMip = 0;
+        srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+    } else {
+        char buf[256];
+        sprintf_s(buf, "[TextureManager] LoadTexture 2D: path=%s, arraySize=%d, miscFlags=%d, index=%d\n", filePath.c_str(), (int)metadata.arraySize, (int)metadata.miscFlags, (int)index);
+        OutputDebugStringA(buf);
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = UINT(metadata.mipLevels);
+    }
 
 	// CreateShaderResourceView関数を呼び出して、
     // テクスチャリソースに対するSRVを作成する。
@@ -379,7 +414,15 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
 // SRVヒープのCPUハンドルを取得する関数。
 // 指定されたテクスチャハンドルに対応するSRVのCPUハンドルを返す。
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureHandle) {
-    return textures_[textureHandle].srvHandleGPU;
+    auto handle = textures_[textureHandle].srvHandleGPU;
+    auto start = srvHeap_->GetGPUDescriptorHandleForHeapStart();
+    int diffIndex = (int)((handle.ptr - start.ptr) / descriptorSizeSRV_);
+    if (diffIndex != (int)textureHandle) {
+        char buf[256];
+        sprintf_s(buf, "[TextureManager] ERROR: GetSrvHandleGPU mismatch! handle=%u, calculated_index=%d\n", textureHandle, diffIndex);
+        OutputDebugStringA(buf);
+    }
+    return handle;
 }
 
 // SRVヒープのGPUハンドルを取得する関数。

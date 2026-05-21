@@ -81,22 +81,37 @@ void StageEditorController::ResetPlayerToStartCell(StageMap& stageMap, Player* p
     }
 }
 
-void StageEditorController::HandleCursorInput(Input* input, StageMap& stageMap, MapCursor* mapCursor, LightCamera* lightCamera) {
-    if (!input || !mapCursor || !lightCamera) return;
+void StageEditorController::HandleCursorInput(Input* input, StageMap& stageMap, MapCursor* mapCursor, LightCamera* lightCamera, Camera* camera) {
+    if (!input || !mapCursor || !lightCamera || !camera) return;
 
-    // WASD と QE キーによる三次元グリッド上のカーソル移動
-    if (input->TriggerKey(DIK_A)) {
-        mapCursor->Move(-1, 0, 0, stageMap);
+    float cameraRotY = camera->GetTransform().rotate.y;
+
+    // 入力方向ベクトル
+    int inputX = 0;
+    int inputZ = 0;
+
+    if (input->TriggerKey(DIK_A)) { inputX -= 1; }
+    if (input->TriggerKey(DIK_D)) { inputX += 1; }
+    if (input->TriggerKey(DIK_W)) { inputZ += 1; }
+    if (input->TriggerKey(DIK_S)) { inputZ -= 1; }
+
+    if (inputX != 0 || inputZ != 0) {
+        // カメラの回転に基づいて移動ベクトルを計算
+        float moveX = (float)inputX * std::cos(cameraRotY) + (float)inputZ * std::sin(cameraRotY);
+        float moveZ = -(float)inputX * std::sin(cameraRotY) + (float)inputZ * std::cos(cameraRotY);
+
+        // グリッド移動なので、絶対値が大きい方の軸へ移動する
+        int dx = 0;
+        int dz = 0;
+        if (std::abs(moveX) > std::abs(moveZ)) {
+            dx = moveX > 0.0f ? 1 : -1;
+        } else {
+            dz = moveZ > 0.0f ? 1 : -1;
+        }
+
+        mapCursor->Move(dx, 0, dz, stageMap);
     }
-    if (input->TriggerKey(DIK_D)) {
-        mapCursor->Move(1, 0, 0, stageMap);
-    }
-    if (input->TriggerKey(DIK_W)) {
-        mapCursor->Move(0, 0, 1, stageMap);
-    }
-    if (input->TriggerKey(DIK_S)) {
-        mapCursor->Move(0, 0, -1, stageMap);
-    }
+
     if (input->TriggerKey(DIK_Q)) {
         mapCursor->Move(0, 1, 0, stageMap);
     }
@@ -146,7 +161,7 @@ void StageEditorController::Update(Input* input, StageMap& stageMap, StageRender
 
     if (!isGuiCaptured) {
         // カーソルのキー操作を処理
-        HandleCursorInput(input, stageMap, mapCursor, lightCamera);
+        HandleCursorInput(input, stageMap, mapCursor, lightCamera, camera);
 
         const Int3& cursor = mapCursor->GetIndex();
 

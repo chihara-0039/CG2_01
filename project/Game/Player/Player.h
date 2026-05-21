@@ -32,6 +32,8 @@ public:
     // 座標の設定と取得
     void SetPosition(const Vector3& pos) { position_ = pos; }
     const Vector3& GetPosition() const { return position_; }
+    void SetRotation(const Vector3& rot) { rotation_ = rot; }
+    const Vector3& GetRotation() const { return rotation_; }
 
     // カメラの行列をセットする
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection) {
