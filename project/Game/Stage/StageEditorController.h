@@ -102,4 +102,13 @@ private:
 
     //5/21佐倉追加
     int selectedPSwitchId_ = 1;
+	int holdFrame_ = 0; // キーを押し続けているフレーム数をカウントする変数（長押し判定用）
+	int placeHoldFrame_ = 0; // ブロック配置の長押しフレーム数
+
+	// キーのリピート入力を判定するヘルパー関数
+    bool RepeatKey(Input* input, BYTE key, int firstDelay = 20, int interval = 5);
+
+	int newStageWidth_ = 100;    // 新規ステージの幅（X方向）
+	int newStageHeight_ = 100;    // 新規ステージの高さ（Y方向）
+	int newStageDepth_ = 100;    // 新規ステージのサイズを指定する入力バッファ（ImGui用）
 };

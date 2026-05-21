@@ -94,7 +94,7 @@ void MyGame::Initialize() {
    
 
     // 1. ステージマップのサイズ初期化
-    stageMap_.Initialize(16, 10, 16);
+    stageMap_.Initialize(100, 100, 100);
 
     // ステージエディタ管理で初期化済み
 
@@ -137,6 +137,12 @@ void MyGame::Initialize() {
     // 天球は最初からON
     debugFlags_.showSkybox = true;
 
+    // 2. ★手動配置を消して、保存した「プロトタイプ」をロードする
+    std::string prototypePath = "Resources/Stages/stage01.txt"; // 保存したファイル名に合わせてください
+    if (std::filesystem::exists(prototypePath)) {
+        stageMap_.LoadFromFile(prototypePath);
+        stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+    }
     // Offscreen Rendering は OFF
     offscreenEnabled_ = false;
 #endif
