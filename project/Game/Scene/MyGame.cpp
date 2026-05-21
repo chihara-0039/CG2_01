@@ -94,7 +94,7 @@ void MyGame::Initialize() {
    
 
     // 1. ステージマップのサイズ初期化
-    stageMap_.Initialize(16, 10, 16);
+    stageMap_.Initialize(100, 100, 100);
 
     // ステージエディタ管理で初期化済み
 
