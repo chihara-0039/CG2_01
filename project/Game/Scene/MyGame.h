@@ -198,4 +198,6 @@ private:
         uint32_t height,
         DXGI_FORMAT format,
         const Vector4& clearColor);
+
+    
 };

@@ -24,5 +24,7 @@ public:
 
 private:
     static constexpr float kFallY = -10.0f;
+
+    bool isRespawning_ = false;
 };
 

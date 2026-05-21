@@ -100,6 +100,8 @@ private:
 
     int selectedDoorId_ = 1; // 現在選択中のドア番号 (1〜9など)
 
+    //5/21佐倉追加
+    int selectedPSwitchId_ = 1;
 	int holdFrame_ = 0; // キーを押し続けているフレーム数をカウントする変数（長押し判定用）
 	int placeHoldFrame_ = 0; // ブロック配置の長押しフレーム数
 

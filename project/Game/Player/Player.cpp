@@ -356,6 +356,15 @@ bool Player::CheckCollision(const Vector3& pos, StageMap& map) {
 				}
 				// ▲ ここまで ▲
 
+				//// Pブロック判定
+				//if (cell && cell->type == BlockType::PBlock) {
+				//	if (cell->isHidden || !cell->isSolid) {
+				//		continue;
+				//	}
+
+				//	return true;
+				//}
+
 				// ★ 変更：動く足場は固定グリッド判定から除外する
 				if (cell && cell->isSolid && cell->type != BlockType::MovingFloor) {
 					return true;
@@ -410,7 +419,7 @@ void Player::PSwitchUpdate(StageMap& map)
 	{
 		// Pスイッチの判定
 		if (cellBelow && cellBelow->type == BlockType::PSwitch) {
-			map.SetPSwitchActive(true); // これで needsRebuild_ が true になる
+			map.SetPSwitchActive(cellBelow->variant); // これで needsRebuild_ が true になる
 		}
 	}
 }
