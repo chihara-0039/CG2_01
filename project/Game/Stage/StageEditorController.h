@@ -36,7 +36,7 @@ public:
     /// <summary>
     /// WASD/QE キーによるマップカーソルの三次元移動処理を行います。
     /// </summary>
-    void HandleCursorInput(Input* input, StageMap& stageMap, MapCursor* mapCursor, LightCamera* lightCamera);
+    void HandleCursorInput(Input* input, StageMap& stageMap, MapCursor* mapCursor, LightCamera* lightCamera, Camera* camera);
 
     /// <summary>
     /// IJKL/UO キーによるエディタ専用カメラの移動・回転操作を行います。
@@ -99,4 +99,10 @@ private:
     Int3 currentMoveOffset_{ 0, 3, 0 }; // 初期値（例として上に3マス）
 
     int selectedDoorId_ = 1; // 現在選択中のドア番号 (1〜9など)
+
+	int holdFrame_ = 0; // キーを押し続けているフレーム数をカウントする変数（長押し判定用）
+	int placeHoldFrame_ = 0; // ブロック配置の長押しフレーム数
+
+	// キーのリピート入力を判定するヘルパー関数
+    bool RepeatKey(Input* input, BYTE key, int firstDelay = 20, int interval = 5);
 };

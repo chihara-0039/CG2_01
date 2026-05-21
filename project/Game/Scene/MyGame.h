@@ -14,6 +14,7 @@
 #include "Model.h"
 #include "Sprite.h"
 #include "Camera.h"
+#include "Skybox.h"
 #include "StageMap.h"
 #include "StageRenderer.h"
 #include "MapCursor.h"
@@ -63,6 +64,7 @@ private:
 
     struct DebugDrawFlags {
         bool show3DObjects = true;
+        bool showSkybox = true;
         bool showSprite = true;
         bool showParticles = true;
     };
@@ -90,10 +92,11 @@ private:
     std::unique_ptr<StageRenderer> stageRenderer_;
     std::unique_ptr<MapCursor> mapCursor_;
     std::unique_ptr<Player> player_;
-    
+
     // スキニングテスト用
     std::unique_ptr<SkinnedObject> skinnedObject_;
     std::unique_ptr<Model> debugCubeModel_;
+    std::vector<std::unique_ptr<Object3d>> gridLines_;
 
     // スカイドーム
     std::unique_ptr<Model> skydomeModel_;
@@ -116,6 +119,7 @@ private:
     // メンバ変数（値や状態）
     // ==========================================================
     AppMode currentMode_ = AppMode::DebugView;
+    AppMode prevMode_ = AppMode::DebugView;
     DebugDrawFlags debugFlags_;
     StageMap stageMap_;
     GameplayCameraController gameplayCameraController_;
@@ -167,4 +171,31 @@ private:
     //5/14 小林
     StageMap backupMap_;
     StageRespawnController stageRespawnController_;
+
+    // --- オフスクリーンレンダリング(RenderTexture)用 ---
+    Microsoft::WRL::ComPtr<ID3D12Resource> renderTexture_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> copyRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sepiaPipelineState_;
+    bool offscreenEnabled_ = true;
+    Vector4 offscreenClearColor_ = { 1.0f, 0.0f, 0.0f, 1.0f }; // 赤背景でクリア
+    D3D12_RESOURCE_STATES renderTextureState_ = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    int skyboxLinkMode_ = 0; // 0: None, 1: Link (Multiply)
+    int postEffectMode_ = 0; // 0: Normal, 1: Grayscale, 2: Sepia
+    std::unique_ptr<Skybox> skybox_;
+    uint32_t skyboxTextureHandle_ = 0;
+    bool showSkyboxCubemap_ = false;
+    bool useFirstPersonCamera_ = false;
+    float fpsCameraYaw_ = 0.0f;
+    float fpsCameraPitch_ = 0.0f;
+    void InitializeOffscreenRendering();
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
+        ID3D12Device* device,
+        uint32_t width,
+        uint32_t height,
+        DXGI_FORMAT format,
+        const Vector4& clearColor);
 };

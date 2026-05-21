@@ -45,6 +45,7 @@ public: // メンバ関数
     ID3D12Device* GetDevice() const { return device_.Get(); }
     ID3D12GraphicsCommandList* GetCommandList() const { return commandList_.Get(); }
     size_t GetBackBufferCount() const { return 2; }
+    ID3D12DescriptorHeap* GetDsvHeap() const { return dsvDescriptorHeap_.Get(); }
 
 private: // メンバ関数(内部処理)
     void InitializeDevice();
