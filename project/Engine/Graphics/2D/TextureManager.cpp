@@ -184,13 +184,24 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
         return 0;
     }
 
+    DirectX::TexMetadata originalMetadata = image.GetMetadata();
+
     // 3. ミップマップ生成
     DirectX::ScratchImage mipImages;
-
-    if (DirectX::IsCompressed(image.GetMetadata().format)) {
+    if (DirectX::IsCompressed(originalMetadata.format) ||
+        originalMetadata.miscFlags & DirectX::TEX_MISC_TEXTURECUBE ||
+        originalMetadata.arraySize == 6) {
+        // CubeMapはGenerateMipMapsせず、そのまま使う
         mipImages = std::move(image);
     } else {
-        hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(), image.GetMetadata(), DirectX::TEX_FILTER_SRGB, 0, mipImages);
+        hr = DirectX::GenerateMipMaps(
+            image.GetImages(),
+            image.GetImageCount(),
+            image.GetMetadata(),
+            DirectX::TEX_FILTER_SRGB,
+            0,
+            mipImages
+        );
         assert(SUCCEEDED(hr));
     }
 
