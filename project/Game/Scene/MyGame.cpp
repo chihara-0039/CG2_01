@@ -689,7 +689,7 @@ void MyGame::UpdateGamePlay() {
     }
 
     if (stageMap_.NeedsRebuild()) {
-        stageRenderer_->ApplyPSwitchVisualState(stageMap_);
+        stageRenderer_->BuildFromStageMap(stageMap_);
         stageMap_.ClearRebuildFlag();
     }
 
@@ -704,12 +704,7 @@ void MyGame::UpdateGamePlay() {
         &stageEditorController_
     );
 
-    // --- ステージ再構築 ---
-    if (stageMap_.NeedsRebuild()) {
-        stageRenderer_->BuildFromStageMap(stageMap_);
-        stageMap_.ClearRebuildFlag();
-    }
-
+   
     /*==================================================
     ▼ プレイヤー座標取得
     ==================================================*/

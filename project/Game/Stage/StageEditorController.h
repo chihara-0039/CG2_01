@@ -99,4 +99,7 @@ private:
     Int3 currentMoveOffset_{ 0, 3, 0 }; // 初期値（例として上に3マス）
 
     int selectedDoorId_ = 1; // 現在選択中のドア番号 (1〜9など)
+
+    //5/21佐倉追加
+    int selectedPSwitchId_ = 1;
 };

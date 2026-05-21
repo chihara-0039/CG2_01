@@ -432,6 +432,16 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
         }
     }
 
+    // ▼ ここから追加
+    if (selectedBlockType_ == BlockType::PSwitch ||
+        selectedBlockType_ == BlockType::PBlock)
+    {
+        if (ImGui::CollapsingHeader("P Switch Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::SliderInt("P Switch ID Number", &selectedPSwitchId_, 1, 9, "ID: %d");
+            ImGui::Text("PSwitch and PBlock with the same ID will connect.");
+        }
+    }
+
     // ツールバー（配置ブロックやアクション）の描画
     DrawEditorToolbar(stageMap, stageRenderer, mapCursor, player);
     ImGui::End();
@@ -624,7 +634,20 @@ void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* st
         if (cell) {
             cell->doorTargetIndex = cursor;
         }
-    } else {
+    } // ==========================================================
+    // ▼ 追加：Pスイッチ / Pブロック配置時の特殊処理
+    // ==========================================================
+    else if (selectedBlockType_ == BlockType::PSwitch ||
+        selectedBlockType_ == BlockType::PBlock)
+    {
+        stageMap.SetBlock(cursor, selectedBlockType_, selectedPSwitchId_);
+
+        MapCell* cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+        if (cell && selectedBlockType_ == BlockType::PBlock) {
+            cell->isSolid = true;
+            cell->isHidden = false;
+        }
+    }else {
         // 通常のブロック配置
         int variant = 0;
         if (selectedBlockType_ == BlockType::BubblePickup) {
