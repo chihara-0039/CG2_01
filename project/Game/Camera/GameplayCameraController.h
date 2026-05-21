@@ -74,5 +74,7 @@ private:
     float cameraHeight_ = 20.0f;
 
     bool cameraDirty_ = true;
+
+    int currentStageIndex_ = 0;
 };
 

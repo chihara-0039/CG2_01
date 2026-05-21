@@ -36,6 +36,15 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     // ズーム：ホイールが動いた時だけ処理
     // ==========================================================
     if (!isGuiCaptured && mouse.wheel != 0) {
+
+        float minFov = minFov_;
+        float maxFov = maxFov_;
+
+        if (currentStageIndex_ == 3) {
+            minFov = 0.25f; // もっとズームインできる
+            maxFov = 0.80f; // もっとズームアウトできる
+        }
+
         const float zoomStep = (maxFov_ - minFov_) / 5.0f;
 
         if (mouse.wheel > 0) {
@@ -87,8 +96,13 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
             float bottomEdge = screenHeight * (1.0f - edgeRatio);
 
             const float rotateSpeed = 0.025f;
-            const float minPitch = 0.4f;
-            const float maxPitch = 1.5f;
+             float minPitch = 0.4f;
+             float maxPitch = 1.5f;
+
+            if (currentStageIndex_ == 3) {
+                minPitch = 0.2f;  // 下方向にもっと回せる
+                maxPitch = 1.5f;
+            }
 
             if (mouseX < leftEdge) {
                 cameraAngle_ += rotateSpeed;
@@ -134,6 +148,8 @@ void GameplayCameraController::ApplyCamera(Camera* camera) {
 void GameplayCameraController::ResetCamera(Camera* camera, Player* player, int stageIndex) {
     if (!camera || !player) return;
 
+    currentStageIndex_ = stageIndex;
+
     cameraPivot_ = { 4.0f, 9.0f, 4.5f };
     cameraDistance_ = 35.0f;
     cameraHeight_ = 20.0f;
@@ -172,7 +188,7 @@ void GameplayCameraController::ResetCamera(Camera* camera, Player* player, int s
 
     case 3:
         cameraPivot_ = { 5.0f, 7.0f, 10.0f };
-        cameraAngle_ = -1.5708f;
+        cameraAngle_ = 1.5708f;
         cameraPitch_ = 0.7f;
         cameraDistance_ = 30.0f;
         cameraHeight_ = 16.0f;
