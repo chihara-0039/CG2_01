@@ -114,7 +114,7 @@ void MyGame::Initialize() {
 
 
     // 2. ★手動配置を消して、保存した「プロトタイプ」をロードする
-    std::string prototypePath = "Resources/Stages/stage1.txt"; // 保存したファイル名に合わせてください
+    std::string prototypePath = "Resources/Stages/stage01.txt"; // 保存したファイル名に合わせてください
     if (std::filesystem::exists(prototypePath)) {
         stageMap_.LoadFromFile(prototypePath);
         stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
