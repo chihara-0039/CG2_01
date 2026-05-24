@@ -75,12 +75,16 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
             float swapMouseY = static_cast<float>(mouse.posY) * scaleY;
 
 #ifdef NDEBUG
-            float mouseX = swapMouseX;
-            float mouseY = swapMouseY;
+            float mouseX = static_cast<float>(mouse.posX) *
+                (static_cast<float>(WinApp::kClientWidth) / currentClientW);
 
-            float screenWidth = static_cast<float>(WinApp::kWindowWidth);
-            float screenHeight = static_cast<float>(WinApp::kWindowHeight);
+            float mouseY = static_cast<float>(mouse.posY) *
+                (static_cast<float>(WinApp::kClientHeight) / currentClientH);
+
+            float screenWidth = static_cast<float>(WinApp::kClientWidth);
+            float screenHeight = static_cast<float>(WinApp::kClientHeight);
 #else
+
             float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
             float mouseX = swapMouseX - offsetX;
             float mouseY = swapMouseY;
@@ -104,18 +108,51 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
                 maxPitch = 1.5f;
             }
 
-            if (mouseX < leftEdge) {
+            const float hitSize = 90.0f;
+            const float half = hitSize * 0.5f;
+
+            float leftX = screenWidth * edgeRatio * 0.5f;
+            float rightX = screenWidth * (1.0f - edgeRatio * 0.5f);
+            float topY = screenHeight * edgeRatio * 0.5f;
+            float bottomY = screenHeight * (1.0f - edgeRatio * 0.5f);
+
+            float centerX = screenWidth * 0.5f;
+            float centerY = screenHeight * 0.5f;
+
+#ifdef NDEBUG
+            Vector2 leftOffset = { 0.0f, 0.0f };
+            Vector2 rightOffset = { -40.0f, 0.0f };
+            Vector2 upOffset = { 0.0f, 0.0f };
+            Vector2 downOffset = { 0.0f, -60.0f };
+#else
+            Vector2 leftOffset = { 0.0f, 0.0f };
+            Vector2 rightOffset = { -20.0f, 0.0f };
+            Vector2 upOffset = { 0.0f, 0.0f };
+            Vector2 downOffset = { 0.0f, -20.0f };
+#endif
+
+            auto CheckHitBox = [&](float x, float y) {
+                return mouseX >= x - half &&
+                    mouseX <= x + half &&
+                    mouseY >= y - half &&
+                    mouseY <= y + half;
+                };
+
+            bool hitLeft = CheckHitBox(leftX + leftOffset.x, centerY + leftOffset.y);
+            bool hitRight = CheckHitBox(rightX + rightOffset.x, centerY + rightOffset.y);
+            bool hitUp = CheckHitBox(centerX + upOffset.x, topY + upOffset.y);
+            bool hitDown = CheckHitBox(centerX + downOffset.x, bottomY + downOffset.y);
+
+            if (hitLeft) {
                 cameraAngle_ += rotateSpeed;
                 changed = true;
-            } else if (mouseX > rightEdge) {
+            } else if (hitRight) {
                 cameraAngle_ -= rotateSpeed;
                 changed = true;
-            }
-
-            if (mouseY < topEdge) {
+            } else if (hitUp) {
                 cameraPitch_ += rotateSpeed;
                 changed = true;
-            } else if (mouseY > bottomEdge) {
+            } else if (hitDown) {
                 cameraPitch_ -= rotateSpeed;
                 changed = true;
             }

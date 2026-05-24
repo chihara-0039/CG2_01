@@ -162,11 +162,17 @@ void GameplayUIManager::UpdateCameraGuide(bool isGamePlay, Input* input, WinApp*
     float centerX = screenWidth * 0.5f;
     float centerY = screenHeight * 0.5f;
 
-    // 位置補正
+#ifdef NDEBUG
+    Vector2 leftOffset = { 0.0f, 0.0f };
+    Vector2 rightOffset = { -40.0f, 0.0f };
+    Vector2 upOffset = { 0.0f, 0.0f };
+    Vector2 downOffset = { 0.0f, -60.0f };
+#else
     Vector2 leftOffset = { 0.0f, 0.0f };
     Vector2 rightOffset = { -20.0f, 0.0f };
     Vector2 upOffset = { 0.0f, 0.0f };
     Vector2 downOffset = { 0.0f, -20.0f };
+#endif    
 
     // ふわふわ用時間
     cameraGuideTime_ += 1.0f / 60.0f;
@@ -181,46 +187,76 @@ void GameplayUIManager::UpdateCameraGuide(bool isGamePlay, Input* input, WinApp*
     float currentClientW = static_cast<float>(rect.right - rect.left);
     float currentClientH = static_cast<float>(rect.bottom - rect.top);
 
+    if (currentClientW <= 0.0f || currentClientH <= 0.0f) {
+        return;
+    }
+
     float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
     float scaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientH;
 
     float swapMouseX = static_cast<float>(mouse.posX) * scaleX;
     float swapMouseY = static_cast<float>(mouse.posY) * scaleY;
 
-    // 左パネル320pxぶんを引いて、ゲーム画面内座標にする
-    float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
+    float offsetX = 0.0f;
     float offsetY = 0.0f;
 
+#if defined(USE_IMGUI) && !defined(NDEBUG)
+    offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
+#endif;
+
+#ifdef NDEBUG
+    // Release：UIは kClientWidth / kClientHeight 基準なので、
+    // マウスも同じ座標系に合わせる
+    float mouseX = static_cast<float>(mouse.posX) *
+        (static_cast<float>(WinApp::kClientWidth) / currentClientW);
+
+    float mouseY = static_cast<float>(mouse.posY) *
+        (static_cast<float>(WinApp::kClientHeight) / currentClientH);
+#else
+    // develop：ImGuiぶんを引く
     float mouseX = swapMouseX - offsetX;
     float mouseY = swapMouseY - offsetY;
-
-    bool hoverLeft = mouseX < leftEdge;
-    bool hoverRight = mouseX > rightEdge;
-    bool hoverUp = mouseY < topEdge;
-    bool hoverDown = mouseY > bottomEdge;
+#endif
 
     float normalSize = 64.0f;
     float glowSize = 78.0f;
 
-    cameraGuideLeftSprite_->SetPosition({
+    Vector2 leftPos = {
         leftX + leftOffset.x,
         centerY + leftOffset.y + floating
-        });
+    };
 
-    cameraGuideRightSprite_->SetPosition({
+    Vector2 rightPos = {
         rightX + rightOffset.x,
         centerY + rightOffset.y + floating
-        });
+    };
 
-    cameraGuideUpSprite_->SetPosition({
+    Vector2 upPos = {
         centerX + upOffset.x,
         topY + upOffset.y + floating
-        });
+    };
 
-    cameraGuideDownSprite_->SetPosition({
+    Vector2 downPos = {
         centerX + downOffset.x,
         bottomY + downOffset.y + floating
-        });
+    };
+
+    auto CheckHitBox = [&](Vector2 pos) {
+        return mouseX >= pos.x &&
+            mouseX <= pos.x + normalSize &&
+            mouseY >= pos.y &&
+            mouseY <= pos.y + normalSize;
+        };
+
+    bool hoverLeft = CheckHitBox(leftPos);
+    bool hoverRight = CheckHitBox(rightPos);
+    bool hoverUp = CheckHitBox(upPos);
+    bool hoverDown = CheckHitBox(downPos);
+
+    cameraGuideLeftSprite_->SetPosition(leftPos);
+    cameraGuideRightSprite_->SetPosition(rightPos);
+    cameraGuideUpSprite_->SetPosition(upPos);
+    cameraGuideDownSprite_->SetPosition(downPos);
 
     cameraGuideLeftSprite_->SetSize({
         hoverLeft ? glowSize : normalSize,
