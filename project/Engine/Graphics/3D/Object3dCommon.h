@@ -31,6 +31,11 @@ public:
 	// 影用のパイプラインステートも必要になるのでゲッターを追加
     ID3D12PipelineState* GetShadowPipelineState() const { return shadowPipelineState_.Get(); }
 
+    // インスタンシング用ゲッター
+    ID3D12RootSignature* GetInstancedRootSignature() const { return instancedRootSignature_.Get(); }
+    ID3D12PipelineState* GetInstancedPipelineState() const { return instancedPipelineState_.Get(); }
+    ID3D12PipelineState* GetInstancedShadowPipelineState() const { return instancedShadowPipelineState_.Get(); }
+
     // ライト制御
     void SetDefaultLight();
     void SetLightDirection(const Vector3& direction) { if (lightData_) lightData_->direction = Math::Normalize(direction); }
@@ -58,6 +63,11 @@ private:
 	// 影用のパイプラインステートも作成する関数を追加
     void CreateShadowPipeline();
 
+    // インスタンシング用の作成関数を追加
+    void CreateInstancedRootSignature();
+    void CreateInstancedGraphicsPipeline();
+    void CreateInstancedShadowPipeline();
+
     //自機影用パイプラインステート作成関数
     void CreatePlayerHighlightPipeline();
 
@@ -78,4 +88,9 @@ private:
 
     //自機影用パイプラインステート作成
     Microsoft::WRL::ComPtr<ID3D12PipelineState> playerHighlightPipelineState_;
+
+    // インスタンシング用リソース
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> instancedRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> instancedPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> instancedShadowPipelineState_;
 };

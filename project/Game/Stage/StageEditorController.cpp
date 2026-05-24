@@ -153,63 +153,54 @@ void StageEditorController::HandleCameraInput(Input* input, Camera* camera) {
 
 // エディタモードにおける毎フレームの更新処理（キー入力、配置・削除判定など）を行います。
 void StageEditorController::Update(Input* input, StageMap& stageMap, StageRenderer* stageRenderer, MapCursor* mapCursor, LightCamera* lightCamera, Player* player, Camera* camera) {
-    if (!input || !mapCursor) return;
+    if (!input) return;
 
-    bool needRebuild = false;
-    bool isGuiCaptured = false;
-#if defined(USE_IMGUI) && !defined(NDEBUG)
-    // ImGui のウィンドウやボタンを操作中の場合はエディタのショートカットキーを無効化
-    if (ImGui::GetCurrentContext()) {
-        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
+    // 長押しフレームの更新
+    if (input->PushKey(DIK_RETURN) || input->PushKey(DIK_SPACE) || 
+        input->PushKey(DIK_A) || input->PushKey(DIK_D) || 
+        input->PushKey(DIK_W) || input->PushKey(DIK_S) ||
+        input->PushKey(DIK_Q) || input->PushKey(DIK_E)) {
+        holdFrame_++;
+    } else {
+        holdFrame_ = 0;
     }
-#endif
 
-    if (!isGuiCaptured) {
-        if (input->PushKey(DIK_W) || input->PushKey(DIK_A) ||
-            input->PushKey(DIK_S) || input->PushKey(DIK_D) ||
-            input->PushKey(DIK_Q) || input->PushKey(DIK_E)) {
-            holdFrame_++;
-        } else {
-            holdFrame_ = 0;
+    // 1. カーソル操作 (WASD / QE)
+    HandleCursorInput(input, stageMap, mapCursor, lightCamera, camera);
+
+    // 2. エディタカメラ操作 (IJKL / UO)
+    HandleCameraInput(input, camera);
+
+    // 3. ブロック配置 (Enter)
+    if (input->TriggerKey(DIK_RETURN) || RepeatKey(input, DIK_RETURN, 20, 5)) {
+        ApplyPlacement(stageMap, stageRenderer, mapCursor, player);
+    }
+
+    // 4. ブロック削除 (Space)
+    if (input->TriggerKey(DIK_SPACE) || RepeatKey(input, DIK_SPACE, 20, 5)) {
+        if (mapCursor) {
+            stageMap.RemoveBlock(mapCursor->GetIndex());
+            if (stageRenderer) {
+                stageRenderer->BuildFromStageMap(stageMap);
+            }
         }
+    }
 
-
-
-        // カーソルのキー操作を処理
-        HandleCursorInput(input, stageMap, mapCursor, lightCamera, camera);
-
-        const Int3& cursor = mapCursor->GetIndex();
-
-        // Rキー：ブロックのY軸回転（90度ずつ）
-        if (input->TriggerKey(DIK_R)) {
+    // 5. ブロック回転 (Rキー)
+    if (input->TriggerKey(DIK_R)) {
+        if (mapCursor) {
+            const Int3& cursor = mapCursor->GetIndex();
             MapCell* cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
             if (cell && cell->type != BlockType::None) {
                 cell->rotationY += 1.5708f;
-                needRebuild = true;
+                if (stageRenderer) {
+                    stageRenderer->BuildFromStageMap(stageMap);
+                }
             }
         }
-        // Enterキー：選択中ブロックの配置
-        if (RepeatKey(input, DIK_RETURN, 12, 4)) {
-            ApplyPlacement(stageMap, stageRenderer, mapCursor, player);
-        }
-
-        // Space / Backspaceキー：ブロックの削除
-        if (RepeatKey(input, DIK_SPACE, 12, 4) ||
-            RepeatKey(input, DIK_BACKSPACE, 12, 4)) {
-            stageMap.RemoveBlock(cursor);
-            needRebuild = true;
-        }
     }
-
-
-    // 変更があった場合のみステージの3Dモデル表示を再構築する
-    /*if (needRebuild && stageRenderer) {
-        stageRenderer->BuildFromStageMap(stageMap);
-    }*/
-
-    // カメラのキー操作を処理
-    HandleCameraInput(input, camera);
 }
+
 
 // ImGui によるエディタ用パネル（セーブロード、設定、ツールバー）を描画します。
 void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRenderer, MapCursor* mapCursor, Player* player) {

@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <memory>
+#include <unordered_map>
 #include "StageMap.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
@@ -81,4 +82,62 @@ private:
     std::vector<PSwitchVisualObject> pSwitchObjects_;
     std::vector<PSwitchVisualObject> pBlockObjects_;
 
+private:
+    // インスタンシング描画用のデータ構造
+    struct InstanceData {
+        Matrix4x4 world;
+        Vector4 color;
+        float shininess;
+        float metallic;
+        float emissive;
+        float padding[3];
+    };
+
+    struct ViewProjectionMatrix {
+        Matrix4x4 viewProjection;
+        Matrix4x4 lightViewProjection;
+    };
+
+    // インスタンシング用の定数バッファ (View/Projection)
+    Microsoft::WRL::ComPtr<ID3D12Resource> viewProjectionResource_;
+    ViewProjectionMatrix* viewProjectionData_ = nullptr;
+
+    // モデルごとの StructuredBuffer 管理用
+    struct InstancedBufferInfo {
+        Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
+        UINT maxInstances = 0;
+    };
+    std::unordered_map<Model*, InstancedBufferInfo> instancedBuffers_;
+
+    // 最後に使用されたライトのViewProjection行列 (メンバ変数に保存)
+    Matrix4x4 lastLightVP_{};
+
+    // StructuredBuffer を動的に生成・取得するヘルパー
+    ID3D12Resource* GetOrCreateInstancedBuffer(Model* model, UINT numInstances);
+
+    // --- 高速インスタンシング描画用グループ管理構造とメソッド ---
+public:
+    struct RenderInstance {
+        Object3d* object = nullptr;
+        size_t index = 0; // objects_ または previewObjects_ 内のインデックス
+    };
+
+    struct RenderGroup {
+        Model* model = nullptr;
+        std::vector<RenderInstance> instances;
+        std::vector<InstanceData> instanceData;
+        Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
+        UINT maxInstances = 0;
+        bool isDirty = true;
+    };
+
+private:
+    std::vector<RenderGroup> renderGroups_;
+    std::vector<RenderGroup> previewRenderGroups_;
+    // オブジェクトの生ポインタから、renderGroups_ 内の [グループインデックス, インスタンスインデックス] を高速に引くためのマップ
+    std::unordered_map<Object3d*, std::pair<size_t, size_t>> objectToInstanceMap_;
+
+    void BuildRenderGroups();
+    void BuildPreviewRenderGroups();
+    void MarkDirty(Object3d* obj);
 };

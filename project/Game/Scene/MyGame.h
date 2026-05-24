@@ -142,6 +142,9 @@ private:
     BlockPlacementController blockPlacementController_;
     void UpdateStageSelect(); //5/10追加　小林
 
+    // 共通の描画処理 (オフスクリーンと通常描画で共有)
+    void RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4& lightVP);
+
 
 
     // 追加：プレイヤーが壁に隠れているか判定

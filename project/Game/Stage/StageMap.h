@@ -23,6 +23,12 @@ enum class BlockType : uint32_t {
     KeyBlock    // 鍵で開くブロック
 };
 
+struct MovingFloorRef {
+    int x = 0;
+    int y = 0;
+    int z = 0;
+};
+
 inline const char* BlockTypeToString(BlockType type) {
     switch (type) {
     case BlockType::None:           return "None";
@@ -256,6 +262,8 @@ public:
     // ▼ 追加：指定座標から繋がっている鍵ブロックをすべて消去する関数
     void RemoveConnectedKeyBlocks(int x, int y, int z);
 
+	// ★ 追加：動く足場のリストを再構築する関数（ロード後やサイズ変更後に呼ぶ）
+    void RebuildMovingFloorList();
     /// <summary>
     /// 指定した座標のドアと同じID（variant）を持つ、相方のドアの座標を検索する
     /// </summary>
@@ -269,6 +277,7 @@ private:
 
     std::vector<MapCell> cells_;
     std::vector<CustomBlockPart> customParts_; // カスタムブロックパーツ定義リスト (スロット1〜5)
+    std::vector<MovingFloorRef> movingFloors_;
 
 private:
     int ToIndex(int x, int y, int z) const;

@@ -28,6 +28,7 @@ public:
     void UpdateVertexBuffer(const std::vector<ModelVertexData>& vertices);
 
     void Draw(ID3D12GraphicsCommandList* commandList);
+    void DrawInstanced(ID3D12GraphicsCommandList* commandList, UINT instanceCount);
 
     // ゲッター
     uint32_t GetTextureHandle() const { return textureHandle_; }
