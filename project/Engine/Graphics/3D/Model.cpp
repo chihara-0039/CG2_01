@@ -208,3 +208,12 @@ void Model::Draw(ID3D12GraphicsCommandList* commandList) {
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList->DrawInstanced(UINT(vertices_.size()), 1, 0, 0);
 }
+
+void Model::DrawInstanced(ID3D12GraphicsCommandList* commandList, UINT instanceCount) {
+    if (!vertexBuffer_ || instanceCount == 0) {
+        return;
+    }
+
+    commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+    commandList->DrawInstanced(UINT(vertices_.size()), instanceCount, 0, 0);
+}

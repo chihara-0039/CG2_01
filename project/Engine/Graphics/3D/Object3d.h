@@ -53,6 +53,14 @@ public:
     void SetEmissive(float emissive) { if (materialData_) materialData_->emissive = emissive; }
     void SetUVTransform(const Transform& uvTransform);
 
+    // ゲッター
+    Model* GetModel() const { return model_; }
+    const Transform& GetTransform() const { return transform_; }
+    const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }
+    const Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }
+    const Material& GetMaterial() const { return *materialData_; }
+
+
 private:
 	// Object3dCommonのポインタを保持しておく（描画時に必要）
     Object3dCommon* object3dCommon_ = nullptr;

@@ -112,6 +112,22 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		"wall.obj",
 		object3dCommon_->GetTextureManager()
 	);
+
+	// インスタンシング用の ViewProjection 定数バッファを作成
+	D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+	D3D12_RESOURCE_DESC resDesc = {};
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resDesc.Width = (sizeof(ViewProjectionMatrix) + 0xff) & ~0xff;
+	resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+
+	HRESULT hr = object3dCommon_->GetDxCommon()->GetDevice()->CreateCommittedResource(
+		&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+		IID_PPV_ARGS(&viewProjectionResource_)
+	);
+	assert(SUCCEEDED(hr));
+	viewProjectionResource_->Map(0, nullptr, (void**)&viewProjectionData_);
 }
 
 void StageRenderer::UpdateEffect(const StageMap& stageMap) {
@@ -139,6 +155,8 @@ void StageRenderer::UpdateEffect(const StageMap& stageMap) {
 						cell->colorB,
 						cell->opacity
 					});
+					// 崩れる床の色・透明度更新によりDirty化
+					MarkDirty(obj);
 				}
 
 				objIndex++;
@@ -413,6 +431,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 			}
 		}
 	}
+	// リビルド後にインスタンス描画グループを再構築する
+	BuildRenderGroups();
 }
 
 // カメラ設定を全てのオブジェクトに伝える
@@ -428,64 +448,180 @@ void StageRenderer::SetCamera(const Matrix4x4& view, const Matrix4x4& projection
 
 // 全てのオブジェクトの更新処理を呼び出す
 void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
-	// ▼ 追加：動く足場の位置を StageMap の計算結果と同期させる
-	for (auto& instance : movingFloorInstances_) {
-		// マップから対応するセルのデータを取得
-		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
+	lastLightVP_ = lightVP;
 
+	for (auto& instance : movingFloorInstances_) {
+		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
 		if (cell && cell->type == BlockType::MovingFloor) {
-			// エディタで配置した時のベース座標（グリッド座標からワールド座標に変換）
 			Vector3 basePosition = {
 				static_cast<float>(instance.cellIndex.x) * blockScale_.x,
 				static_cast<float>(instance.cellIndex.y) * blockScale_.y,
 				static_cast<float>(instance.cellIndex.z) * blockScale_.z
 			};
 
-			// ベース座標に、StageMap.cpp の Update で計算された滑らかなオフセット（currentOffset）を加算する
 			Vector3 newPosition = {
 				basePosition.x + (cell->currentOffsetX * blockScale_.x),
 				basePosition.y + (cell->currentOffsetY * blockScale_.y),
 				basePosition.z + (cell->currentOffsetZ * blockScale_.z)
 			};
 
-			// 3Dオブジェクトの座標を更新
 			instance.object->SetPosition(newPosition);
+			instance.object->Update(lightVP); // 動く床のみ行列を更新
+			// 更新した動く床のインスタンスデータをDirty化
+			MarkDirty(instance.object);
 		}
 	}
-
-	// 全てのメインオブジェクトに対して、更新処理を呼び出す
-	for (const auto& obj : objects_) {
-		if (obj) {
-			obj->Update(lightVP);
-		}
-	}
-
-	// 全てのプレビューオブジェクトに対して、更新処理を呼び出す
-	/*for (const auto& obj : previewObjects_) {
-		if (obj) {
-			obj->Update(lightVP);
-		}
-	}*/
 }
 
 // 全てのオブジェクトの影描画処理を呼び出す
 void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
-	for (const auto& obj : objects_) {
-		if (obj) {
-			obj->DrawShadow(lightVP);
-		}
+	auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
+	if (!commandList) return;
+
+	// インスタンシング用PSOの設定（影パス用）
+	commandList->SetPipelineState(object3dCommon_->GetInstancedShadowPipelineState());
+	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// 定数バッファの更新 (最初のグループからビュー、プロジェクション行列を取得)
+	RenderGroup* firstGroup = nullptr;
+	if (!renderGroups_.empty()) {
+		firstGroup = &renderGroups_.front();
+	} else if (!previewRenderGroups_.empty()) {
+		firstGroup = &previewRenderGroups_.front();
 	}
+
+	if (firstGroup && !firstGroup->instances.empty() && viewProjectionData_) {
+		Object3d* firstObj = firstGroup->instances.front().object;
+		viewProjectionData_->viewProjection = Math::Multiply(firstObj->GetViewMatrix(), firstObj->GetProjectionMatrix());
+		viewProjectionData_->lightViewProjection = lightVP;
+	}
+
+	// 1: ViewProjection
+	commandList->SetGraphicsRootConstantBufferView(1, viewProjectionResource_->GetGPUVirtualAddress());
+
+	// 描画処理を実行するラムダ関数 (Dirtyフラグ制御によるメモリ転送の最小化)
+	auto drawGroups = [commandList, this](std::vector<RenderGroup>& groups) {
+		for (auto& group : groups) {
+			UINT numInstances = static_cast<UINT>(group.instances.size());
+			if (numInstances == 0) continue;
+
+			// Dirtyならキャッシュ内容をGPUバッファに転送する
+			if (group.isDirty) {
+				InstanceData* dataBegin = nullptr;
+				HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+				if (SUCCEEDED(hr)) {
+					std::memcpy(dataBegin, group.instanceData.data(), sizeof(InstanceData) * numInstances);
+					group.buffer->Unmap(0, nullptr);
+				}
+				group.isDirty = false; // 転送完了
+			}
+
+			// 5: InstanceBuffer (VS t2)
+			commandList->SetGraphicsRootShaderResourceView(5, group.buffer->GetGPUVirtualAddress());
+
+			// 頂点バッファをバインドして一括描画
+			group.model->DrawInstanced(commandList, numInstances);
+		}
+	};
+
+	drawGroups(renderGroups_);
+	drawGroups(previewRenderGroups_);
+
+	// 元の非インスタンシング影PSOに戻す
+	commandList->SetPipelineState(object3dCommon_->GetShadowPipelineState());
 }
 
 // 全てのオブジェクトの描画処理を呼び出す
 void StageRenderer::Draw() {
-	for (const auto& obj : objects_) {
-		obj->Draw();
+	auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
+	if (!commandList) return;
+
+	// インスタンシング用のテクスチャ記述子ヒープの設定
+	if (object3dCommon_->GetTextureManager()) {
+		ID3D12DescriptorHeap* heaps[] = { object3dCommon_->GetTextureManager()->GetSrvHeap() };
+		commandList->SetDescriptorHeaps(1, heaps);
 	}
-	// 🌟 半透明プレビューを描画
-	for (const auto& obj : previewObjects_) {
-		obj->Draw();
+
+	commandList->SetPipelineState(object3dCommon_->GetInstancedPipelineState());
+	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// 定数バッファの更新 (最初のグループからビュー、プロジェクション行列を取得)
+	RenderGroup* firstGroup = nullptr;
+	if (!renderGroups_.empty()) {
+		firstGroup = &renderGroups_.front();
+	} else if (!previewRenderGroups_.empty()) {
+		firstGroup = &previewRenderGroups_.front();
 	}
+
+	if (firstGroup && !firstGroup->instances.empty() && viewProjectionData_) {
+		Object3d* firstObj = firstGroup->instances.front().object;
+		viewProjectionData_->viewProjection = Math::Multiply(firstObj->GetViewMatrix(), firstObj->GetProjectionMatrix());
+		viewProjectionData_->lightViewProjection = lastLightVP_;
+	}
+
+	// 1: ViewProjection (VS b0 にバインド)
+	commandList->SetGraphicsRootConstantBufferView(1, viewProjectionResource_->GetGPUVirtualAddress());
+	// 2: Light (PS b1 にバインド)
+	commandList->SetGraphicsRootConstantBufferView(2, object3dCommon_->GetLightGPUVirtualAddress());
+
+	// 描画処理を実行するラムダ関数 (Dirtyフラグ制御によるメモリ転送の最小化)
+	auto drawGroups = [commandList, this](std::vector<RenderGroup>& groups) {
+		for (auto& group : groups) {
+			UINT numInstances = static_cast<UINT>(group.instances.size());
+			if (numInstances == 0) continue;
+
+			// Dirtyならキャッシュ内容をGPUバッファに転送する
+			if (group.isDirty) {
+				InstanceData* dataBegin = nullptr;
+				HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+				if (SUCCEEDED(hr)) {
+					std::memcpy(dataBegin, group.instanceData.data(), sizeof(InstanceData) * numInstances);
+					group.buffer->Unmap(0, nullptr);
+				}
+				group.isDirty = false; // 転送完了
+			}
+
+			// 3: Texture (PS t0)
+			if (object3dCommon_->GetTextureManager()) {
+				auto gpuHandle = object3dCommon_->GetTextureManager()->GetSrvHandleGPU(group.model->GetTextureHandle());
+				commandList->SetGraphicsRootDescriptorTable(3, gpuHandle);
+			}
+
+			// 5: InstanceBuffer (VS t2)
+			commandList->SetGraphicsRootShaderResourceView(5, group.buffer->GetGPUVirtualAddress());
+
+			// 頂点バッファをバインドして一括描画
+			group.model->DrawInstanced(commandList, numInstances);
+		}
+	};
+
+	drawGroups(renderGroups_);
+	drawGroups(previewRenderGroups_);
+
+	// 元の非インスタンシングPSOに戻す
+	commandList->SetPipelineState(object3dCommon_->GetPipelineState());
+}
+
+ID3D12Resource* StageRenderer::GetOrCreateInstancedBuffer(Model* model, UINT numInstances) {
+	auto& info = instancedBuffers_[model];
+	if (!info.buffer || info.maxInstances < numInstances) {
+		info.maxInstances = numInstances + 64;
+
+		D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+		D3D12_RESOURCE_DESC resDesc = {};
+		resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		resDesc.Width = sizeof(InstanceData) * info.maxInstances;
+		resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
+		resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+
+		HRESULT hr = object3dCommon_->GetDxCommon()->GetDevice()->CreateCommittedResource(
+			&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+			IID_PPV_ARGS(&info.buffer)
+		);
+		assert(SUCCEEDED(hr));
+	}
+	return info.buffer.Get();
 }
 
 // 既存のオブジェクトを全て削除してリストをクリアする
@@ -497,6 +633,11 @@ void StageRenderer::Clear() {
 	//5/19佐倉
 	pSwitchObjects_.clear();
 	pBlockObjects_.clear();
+
+	// グループ管理データもクリア
+	renderGroups_.clear();
+	previewRenderGroups_.clear();
+	objectToInstanceMap_.clear();
 }
 
 // 🌟 配置プレビュー表示機能の実装
@@ -574,6 +715,8 @@ void StageRenderer::SetPlacementPreview(
 					}
 				}
 			}
+			// プレビュー表示データの再構築
+			BuildPreviewRenderGroups();
 			return;
 		}
 	}
@@ -591,12 +734,18 @@ void StageRenderer::SetPlacementPreview(
 	obj->SetScale(blockScale_);
 	obj->SetColor({ colorR, colorG, colorB, 0.4f }); // 40%の美しい半透明
 	previewObjects_.push_back(std::move(obj));
+
+	// プレビュー表示データの再構築
+	BuildPreviewRenderGroups();
 }
 
 void StageRenderer::ClearPlacementPreview() {
 	previewObjects_.clear();
 	// ▼ 追加：動く足場の管理リストをクリア (Object3d自体は objects_ 側で解放されるため clear だけでOK)
 	movingFloorInstances_.clear();
+
+	// プレビューグループもクリア
+	previewRenderGroups_.clear();
 }
 
 // 指定したモデルと位置・スケール・回転を使ってオブジェクトを生成し、リストに追加して返す
@@ -669,6 +818,7 @@ Object3d* StageRenderer::CreateStageObject(
 	}
 
 	Object3d* ptr = obj.get();
+	obj->Update(Math::MakeIdentity4x4());
 	objects_.push_back(std::move(obj));
 	return ptr;
 }
@@ -686,6 +836,8 @@ void StageRenderer::ApplyPSwitchVisualState(const StageMap& stageMap)
 		} else {
 			item.object->SetScale(item.normalScale);
 		}
+		// スケール変更に伴いDirty化
+		MarkDirty(item.object);
 	}
 
 	for (auto& item : pBlockObjects_) {
@@ -695,6 +847,152 @@ void StageRenderer::ApplyPSwitchVisualState(const StageMap& stageMap)
 			item.object->SetScale({ 0.0f, 0.0f, 0.0f });
 		} else {
 			item.object->SetScale(item.normalScale);
+		}
+		// スケール変更に伴いDirty化
+		MarkDirty(item.object);
+	}
+}
+
+// --- 高速インスタンシング用：レンダーグループの構築 ---
+void StageRenderer::BuildRenderGroups() {
+	renderGroups_.clear();
+	objectToInstanceMap_.clear();
+	std::unordered_map<Model*, size_t> modelToGroupIndex;
+
+	for (size_t i = 0; i < objects_.size(); ++i) {
+		Object3d* obj = objects_[i].get();
+		if (!obj || !obj->GetModel()) continue;
+
+		Model* model = obj->GetModel();
+		auto it = modelToGroupIndex.find(model);
+		size_t groupIndex = 0;
+		if (it == modelToGroupIndex.end()) {
+			groupIndex = renderGroups_.size();
+			modelToGroupIndex[model] = groupIndex;
+			RenderGroup group;
+			group.model = model;
+			renderGroups_.push_back(std::move(group));
+		} else {
+			groupIndex = it->second;
+		}
+
+		RenderInstance inst;
+		inst.object = obj;
+		inst.index = i;
+		renderGroups_[groupIndex].instances.push_back(inst);
+		
+		// オブジェクトの生ポインタから逆引きマップへの登録
+		objectToInstanceMap_[obj] = { groupIndex, renderGroups_[groupIndex].instances.size() - 1 };
+	}
+
+	// 各グループのデータをキャッシュに書き込み、初期バッファを作成
+	for (auto& group : renderGroups_) {
+		UINT numInstances = static_cast<UINT>(group.instances.size());
+		group.instanceData.resize(numInstances);
+		group.buffer = GetOrCreateInstancedBuffer(group.model, numInstances);
+		group.maxInstances = numInstances;
+		group.isDirty = true; // 初回は転送が必要
+
+		InstanceData* dataBegin = nullptr;
+		HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+		if (SUCCEEDED(hr)) {
+			for (UINT i = 0; i < numInstances; ++i) {
+				Object3d* obj = group.instances[i].object;
+				const auto& tf = obj->GetTransform();
+				group.instanceData[i].world = Math::MakeAffineMatrix(tf.scale, tf.rotate, tf.translate);
+
+				const auto& mat = obj->GetMaterial();
+				group.instanceData[i].color = mat.color;
+				group.instanceData[i].shininess = mat.shininess;
+				group.instanceData[i].metallic = mat.metallic;
+				group.instanceData[i].emissive = mat.emissive;
+
+				dataBegin[i] = group.instanceData[i];
+			}
+			group.buffer->Unmap(0, nullptr);
+		}
+		group.isDirty = false; // 初回データ転送完了
+	}
+}
+
+// --- 高速インスタンシング用：プレビュー用レンダーグループの構築 ---
+void StageRenderer::BuildPreviewRenderGroups() {
+	previewRenderGroups_.clear();
+	std::unordered_map<Model*, size_t> modelToGroupIndex;
+
+	for (size_t i = 0; i < previewObjects_.size(); ++i) {
+		Object3d* obj = previewObjects_[i].get();
+		if (!obj || !obj->GetModel()) continue;
+
+		Model* model = obj->GetModel();
+		auto it = modelToGroupIndex.find(model);
+		size_t groupIndex = 0;
+		if (it == modelToGroupIndex.end()) {
+			groupIndex = previewRenderGroups_.size();
+			modelToGroupIndex[model] = groupIndex;
+			RenderGroup group;
+			group.model = model;
+			previewRenderGroups_.push_back(std::move(group));
+		} else {
+			groupIndex = it->second;
+		}
+
+		RenderInstance inst;
+		inst.object = obj;
+		inst.index = i;
+		previewRenderGroups_[groupIndex].instances.push_back(inst);
+	}
+
+	// プレビューオブジェクト用のバッファ更新
+	for (auto& group : previewRenderGroups_) {
+		UINT numInstances = static_cast<UINT>(group.instances.size());
+		group.instanceData.resize(numInstances);
+		group.buffer = GetOrCreateInstancedBuffer(group.model, numInstances);
+		group.maxInstances = numInstances;
+		group.isDirty = true; // 初回は転送が必要
+
+		InstanceData* dataBegin = nullptr;
+		HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+		if (SUCCEEDED(hr)) {
+			for (UINT i = 0; i < numInstances; ++i) {
+				Object3d* obj = group.instances[i].object;
+				const auto& tf = obj->GetTransform();
+				group.instanceData[i].world = Math::MakeAffineMatrix(tf.scale, tf.rotate, tf.translate);
+
+				const auto& mat = obj->GetMaterial();
+				group.instanceData[i].color = mat.color;
+				group.instanceData[i].shininess = mat.shininess;
+				group.instanceData[i].metallic = mat.metallic;
+				group.instanceData[i].emissive = mat.emissive;
+
+				dataBegin[i] = group.instanceData[i];
+			}
+			group.buffer->Unmap(0, nullptr);
+		}
+		group.isDirty = false; // 転送完了
+	}
+}
+
+// --- 高速インスタンシング用：変更されたオブジェクトのキャッシュ更新とDirty化 ---
+void StageRenderer::MarkDirty(Object3d* obj) {
+	auto it = objectToInstanceMap_.find(obj);
+	if (it != objectToInstanceMap_.end()) {
+		size_t groupIdx = it->second.first;
+		size_t instIdx = it->second.second;
+		auto& group = renderGroups_[groupIdx];
+
+		// 範囲チェックをしてからキャッシュデータを更新
+		if (instIdx < group.instanceData.size()) {
+			const auto& tf = obj->GetTransform();
+			group.instanceData[instIdx].world = Math::MakeAffineMatrix(tf.scale, tf.rotate, tf.translate);
+
+			const auto& mat = obj->GetMaterial();
+			group.instanceData[instIdx].color = mat.color;
+			group.instanceData[instIdx].shininess = mat.shininess;
+			group.instanceData[instIdx].metallic = mat.metallic;
+			group.instanceData[instIdx].emissive = mat.emissive;
+
+			group.isDirty = true; // 次回の描画/影描画時にGPUへ再転送する
 		}
 	}
 }

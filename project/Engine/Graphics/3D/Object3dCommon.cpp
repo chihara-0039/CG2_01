@@ -39,6 +39,11 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
 	// 影用のルートシグネチャとパイプラインステートも作成
     CreateShadowPipeline();
 
+    // インスタンシング用
+    CreateInstancedRootSignature();
+    CreateInstancedGraphicsPipeline();
+    CreateInstancedShadowPipeline();
+
     OutputDebugStringA("Object3dCommon::Initialize Finish\n");
 }
 
@@ -102,8 +107,9 @@ void Object3dCommon::CreateRootSignature() {
     // 1: TransformationMatrix (VS b0)
     // 2: DirectionalLight (PS b1)
     // 3: Texture (PS t0)
-	// 4: Static Sampler (PS s0)
-    D3D12_ROOT_PARAMETER rootParameters[5] = {};
+    // 4: ShadowMap (PS t1)
+    // 5: InstanceBuffer (VS t2) - SRV (StructuredBuffer 用)
+    D3D12_ROOT_PARAMETER rootParameters[6] = {};
 
     // 0. Material
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -143,6 +149,11 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[4].DescriptorTable.pDescriptorRanges = shadowRange;
     rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(shadowRange);
     rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで影判定するため
+
+    // 5. InstanceBuffer (VS t2)
+    rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameters[5].Descriptor.ShaderRegister = 2;
+    rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
     // Sampler
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
@@ -353,5 +364,84 @@ void Object3dCommon::CreatePlayerHighlightPipeline() {
     } else {
         OutputDebugStringA("CreatePlayerHighlightPipeline Success!\n");
     }
+}
+
+void Object3dCommon::CreateInstancedRootSignature() {
+    instancedRootSignature_ = rootSignature_;
+}
+
+void Object3dCommon::CreateInstancedGraphicsPipeline() {
+    auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.VS.hlsl", L"vs_6_0");
+    assert(vsBlob);
+
+    auto psBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.PS.hlsl", L"ps_6_0");
+    assert(psBlob);
+
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = instancedRootSignature_.Get();
+    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    psoDesc.RasterizerState.FrontCounterClockwise = TRUE;
+
+    psoDesc.DepthStencilState.DepthEnable = TRUE;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+    auto& target = psoDesc.BlendState.RenderTarget[0];
+    target.BlendEnable = FALSE;
+    target.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+    HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&instancedPipelineState_));
+    assert(SUCCEEDED(hr));
+}
+
+void Object3dCommon::CreateInstancedShadowPipeline() {
+    auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/ShadowMapInstanced.VS.hlsl", L"vs_6_0");
+    assert(vsBlob);
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = instancedRootSignature_.Get();
+
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+
+    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+    psoDesc.PS = { nullptr, 0 };
+
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+
+    psoDesc.DepthStencilState.DepthEnable = TRUE;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+
+    psoDesc.NumRenderTargets = 0;
+
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+    HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&instancedShadowPipelineState_));
+    assert(SUCCEEDED(hr));
 }
 

@@ -316,6 +316,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
         }
     }
     ifs.close();
+    RebuildMovingFloorList();
 }
 
 void StageMap::Clear() {
@@ -365,6 +366,7 @@ bool StageMap::SetBlock(int x, int y, int z, BlockType type, int variant) {
     }
 
     cells_[ToIndex(x, y, z)] = MakeCell(type, variant);
+    RebuildMovingFloorList();
     return true;
 }
 
@@ -378,6 +380,8 @@ bool StageMap::RemoveBlock(int x, int y, int z) {
     }
 
     cells_[ToIndex(x, y, z)] = MakeCell(BlockType::None, 0);
+    RebuildMovingFloorList();
+
     return true;
 }
 
@@ -399,34 +403,33 @@ void StageMap::DrawImGui() {
 }
 
 // ★ 追加：動く足場とのワールド座標（AABBボックス型）当たり判定の実装
-const MapCell* StageMap::GetIntersectingMovingFloor(float pX, float pY, float pZ, float rX, float rY, float rZ) const {
-    for (int y = 0; y < height_; ++y) {
-        for (int z = 0; z < depth_; ++z) {
-            for (int x = 0; x < width_; ++x) {
-                const MapCell* cell = GetCell(x, y, z);
-                if (cell && cell->type == BlockType::MovingFloor) {
-                    // 足場の現在のワールド中心座標（グリッド位置 + 滑らかな移動オフセット）
-                    float floorCenterX = static_cast<float>(x) + cell->currentOffsetX;
-                    float floorCenterY = static_cast<float>(y) + 0.5f + cell->currentOffsetY;
-                    float floorCenterZ = static_cast<float>(z) + cell->currentOffsetZ;
+const MapCell* StageMap::GetIntersectingMovingFloor(
+    float pX, float pY, float pZ,
+    float rX, float rY, float rZ
+) const {
+    for (const auto& ref : movingFloors_) {
+        const MapCell* cell = GetCell(ref.x, ref.y, ref.z);
+        if (!cell || cell->type != BlockType::MovingFloor) {
+            continue;
+        }
 
-                    // プレイヤーの中心（pYは足元なので、高さの半分 rY を足して中心にする）
-                    float playerCenterX = pX;
-                    float playerCenterY = pY + rY;
-                    float playerCenterZ = pZ;
+        float floorCenterX = static_cast<float>(ref.x) + cell->currentOffsetX;
+        float floorCenterY = static_cast<float>(ref.y) + 0.5f + cell->currentOffsetY;
+        float floorCenterZ = static_cast<float>(ref.z) + cell->currentOffsetZ;
 
-                    float blockSize = 0.5f; // 1マスの半径
+        float playerCenterX = pX;
+        float playerCenterY = pY + rY;
+        float playerCenterZ = pZ;
 
-                    // AABB（ボックス同士の重なり）判定
-                    if (std::abs(playerCenterX - floorCenterX) < (rX + blockSize) &&
-                        std::abs(playerCenterY - floorCenterY) < (rY + blockSize) &&
-                        std::abs(playerCenterZ - floorCenterZ) < (rZ + blockSize)) {
-                        return cell;
-                    }
-                }
-            }
+        float blockSize = 0.5f;
+
+        if (std::abs(playerCenterX - floorCenterX) < (rX + blockSize) &&
+            std::abs(playerCenterY - floorCenterY) < (rY + blockSize) &&
+            std::abs(playerCenterZ - floorCenterZ) < (rZ + blockSize)) {
+            return cell;
         }
     }
+
     return nullptr;
 }
 
@@ -535,4 +538,19 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
 void StageMap::ResetPSwitchState()
 {
     isPSwitchActive_ = false;
+}
+
+void StageMap::RebuildMovingFloorList() {
+    movingFloors_.clear();
+
+    for (int y = 0; y < height_; ++y) {
+        for (int z = 0; z < depth_; ++z) {
+            for (int x = 0; x < width_; ++x) {
+                const MapCell* cell = GetCell(x, y, z);
+                if (cell && cell->type == BlockType::MovingFloor) {
+                    movingFloors_.push_back({ x, y, z });
+                }
+            }
+        }
+    }
 }
