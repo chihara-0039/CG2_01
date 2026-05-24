@@ -208,6 +208,13 @@ void MyGame::Initialize() {
     blockInventoryUI_ = std::make_unique<BlockInventoryUI>();
     blockInventoryUI_->Initialize(dxCommon.get(), spriteCommon.get(), textureManager.get(), &blockInventory_);
 
+    //チュートリアル説明の初期化
+    uint32_t tutorialTex = textureManager->LoadTexture("Resources/UI/tutorial/tutorial.png");
+    tutorialSprite_ = std::make_unique<Sprite>();
+    tutorialSprite_->Initialize(spriteCommon.get(), tutorialTex);
+    tutorialSprite_->SetPosition({20,20});
+    tutorialSprite_->SetSize({554,128});
+
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
 
@@ -684,6 +691,16 @@ void MyGame::UpdateGamePlay() {
             input.get(),
             winApp.get()
         );
+    }
+
+    //チュートリアルUI　05/21 小林
+    if (stageSelect_)
+    {
+        std::string currentStage = stageSelect_->GetSelectedFileName();
+        if (currentStage == "tutorial.txt" && tutorialSprite_)
+        {
+            tutorialSprite_->Update();
+        }
     }
 
     float deltaTime = 1.0f / 60.0f;
@@ -1533,6 +1550,17 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
     // インベントリUIの描画
     if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
         blockInventoryUI_->Draw();
+    }
+
+    // チュートリアルUIの描画
+    if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)
+    {
+        std::string currentStage = stageSelect_->GetSelectedFileName();
+        if (currentStage == "tutorial.txt")
+        {
+            spriteCommon->PreDraw();
+            tutorialSprite_->Draw();
+        }
     }
 }
 
