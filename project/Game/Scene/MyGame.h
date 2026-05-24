@@ -114,6 +114,7 @@ private:
     // ゲームプレイ中のUI・プロンプト管理
     std::unique_ptr<GameplayUIManager> gameplayUIManager_;
     std::unique_ptr<BlockInventoryUI> blockInventoryUI_;
+    std::unique_ptr<Sprite> tutorialSprite_;
 
     // ==========================================================
     // メンバ変数（値や状態）
