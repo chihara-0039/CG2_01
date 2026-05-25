@@ -177,19 +177,24 @@ public:
     int GetHeight() const { return height_; }
     int GetDepth() const { return depth_; }
 
-    // スイッチ取得
-    void SetPSwitchActive(bool active) {
-        if (isPSwitchActive_ == active) {
-            return;
-        }
+    //5/21佐倉変更
 
-        isPSwitchActive_ = active;
+    void SetPSwitchActive(int switchId) {
+        isPSwitchActive_ = true;
         needsRebuild_ = true;
 
         for (auto& cell : cells_) {
-            if (cell.type == BlockType::PBlock) {
-                cell.isSolid = !active;
-                cell.isHidden = active;
+
+            // 同じIDのPスイッチも消す
+            if (cell.type == BlockType::PSwitch && cell.variant == switchId) {
+                cell.isSolid = false;
+                cell.isHidden = true;
+            }
+
+
+            if (cell.type == BlockType::PBlock && cell.variant == switchId) {
+                cell.isSolid = false;
+                cell.isHidden = true;
             }
         }
     }
@@ -198,11 +203,19 @@ public:
         isPSwitchActive_ = false;
 
         for (auto& cell : cells_) {
+
+            if (cell.type == BlockType::PSwitch) {
+                cell.isSolid = false;
+                cell.isHidden = false;
+            }
+
             if (cell.type == BlockType::PBlock) {
                 cell.isSolid = true;
                 cell.isHidden = false;
             }
         }
+        // ここでは true にしない
+        needsRebuild_ = false;
     }
 
 

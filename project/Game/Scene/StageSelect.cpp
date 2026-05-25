@@ -7,6 +7,7 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input)
 	input_ = input;
 
 	stageFiles_.clear();
+	stageFiles_.push_back("tutorial.txt");
 	std::string stageDir = "Resources/Stages/";
 	if (std::filesystem::exists(stageDir))
 	{

@@ -15,14 +15,24 @@ void StageRespawnController::Update(
     }
 
     if (player->GetPosition().y >= kFallY) {
+        isRespawning_ = false;
         return;
     }
+
+    // 既にリスポーン中なら何もしない
+    if (isRespawning_) {
+        return;
+    }
+
+    // ここに来るのは1回だけ
+    isRespawning_ = true;
 
     // Pスイッチ状態だけ戻す
     if (stageMap.IsPSwitchActive()) {
         stageMap.ResetPSwitchStateNoRebuild();
+
         if (stageRenderer) {
-            stageRenderer->ApplyPSwitchVisualState(stageMap);
+            stageRenderer->BuildFromStageMap(stageMap);
         }
     }
 
@@ -31,7 +41,10 @@ void StageRespawnController::Update(
     }
 
     if (bubblePickupController && stageRenderer && blockInventory) {
-        bubblePickupController->Initialize(&stageMap, stageRenderer, blockInventory);
+        bubblePickupController->Initialize(
+            &stageMap, 
+            stageRenderer, 
+            blockInventory);
     }
 
     if (blockPlacementController && stageRenderer && blockInventory) {

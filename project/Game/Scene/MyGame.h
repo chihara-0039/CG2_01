@@ -114,6 +114,7 @@ private:
     // ゲームプレイ中のUI・プロンプト管理
     std::unique_ptr<GameplayUIManager> gameplayUIManager_;
     std::unique_ptr<BlockInventoryUI> blockInventoryUI_;
+    std::unique_ptr<Sprite> tutorialSprite_;
 
     // ==========================================================
     // メンバ変数（値や状態）
@@ -201,4 +202,6 @@ private:
         uint32_t height,
         DXGI_FORMAT format,
         const Vector4& clearColor);
+
+    
 };
