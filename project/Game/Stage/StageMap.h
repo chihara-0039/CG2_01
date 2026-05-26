@@ -26,6 +26,7 @@ enum class BlockType : uint32_t {
     EnemyWalker, // 敵（歩行）
     EnemyFlyer,  // 敵（飛行）
     EnemyChaser  // 敵（追尾）
+    PBlockAppears // 🌟 追加：押すと出現するPブロック
 };
 
 struct MovingFloorRef {
@@ -62,6 +63,7 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::EnemyWalker:    return "EnemyWalker";
     case BlockType::EnemyFlyer:     return "EnemyFlyer";
     case BlockType::EnemyChaser:    return "EnemyChaser";
+    case BlockType::PBlockAppears:  return "PBlock (On)"; // 🌟 追加
     default:                        return "Unknown";
     }
 }
@@ -211,6 +213,11 @@ public:
                 cell.isSolid = false;
                 cell.isHidden = true;
             }
+
+            // ▼ 🌟 追加：出現するPブロック：押すと出てくる（実体化する）
+            if (cell.type == BlockType::PBlockAppears && cell.variant == switchId) {
+                cell.isSolid = true;
+            }
         }
     }
 
@@ -227,6 +234,10 @@ public:
             if (cell.type == BlockType::PBlock) {
                 cell.isSolid = true;
                 cell.isHidden = false;
+            }
+            // ▼ 🌟 追加：出現するPブロック：元に戻る（すり抜けるようになる）
+            if (cell.type == BlockType::PBlockAppears) {
+                cell.isSolid = false;
             }
         }
         // ここでは true にしない
