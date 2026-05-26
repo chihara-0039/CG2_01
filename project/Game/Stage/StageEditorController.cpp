@@ -470,7 +470,8 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
 
     // ▼ ここから追加
     if (selectedBlockType_ == BlockType::PSwitch ||
-        selectedBlockType_ == BlockType::PBlock)
+        selectedBlockType_ == BlockType::PBlock ||
+        selectedBlockType_ == BlockType::PBlockAppears)
     {
         if (ImGui::CollapsingHeader("P Switch Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::SliderInt("P Switch ID Number", &selectedPSwitchId_, 1, 9, "ID: %d");
@@ -507,6 +508,7 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::Ground,
                 BlockType::Wall,
                 BlockType::PBlock,
+                BlockType::PBlockAppears, // 🌟 追加
                 BlockType::CrumblingFloor,
                 BlockType::IceBlock,
                 BlockType::MovingFloor,
@@ -674,7 +676,8 @@ void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* st
     // ▼ 追加：Pスイッチ / Pブロック配置時の特殊処理
     // ==========================================================
     else if (selectedBlockType_ == BlockType::PSwitch ||
-        selectedBlockType_ == BlockType::PBlock)
+        selectedBlockType_ == BlockType::PBlock ||
+        selectedBlockType_ == BlockType::PBlockAppears)
     {
         stageMap.SetBlock(cursor, selectedBlockType_, selectedPSwitchId_);
 
@@ -683,7 +686,13 @@ void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* st
             cell->isSolid = true;
             cell->isHidden = false;
         }
-    }else {
+        else if (cell && selectedBlockType_ == BlockType::PBlockAppears) {
+            cell->isSolid = false;  // 最初はすり抜ける状態
+            cell->isHidden = false; // エディタで見えるようにする
+        }
+    }
+    else 
+    {
         // 通常のブロック配置
         int variant = 0;
         if (selectedBlockType_ == BlockType::BubblePickup) {

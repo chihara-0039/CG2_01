@@ -350,17 +350,31 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				break;
 
 				case BlockType::PBlock:
+				case BlockType::PBlockAppears:
 				{
 					Object3d* obj = CreateStageObject(
 						pBlockOnModel_.get(),
 						position,
 						blockScale_,
 						{ 0.0f, 0.0f, 0.0f },
-						BlockType::PBlock
+						cell->type
 					);
 
 					if (obj) {
-						pBlockObjects_.push_back({ obj, blockScale_ });
+						if (!cell->isSolid) {
+							// 押されて消えている状態（すり抜ける状態）は青色で半透明にする
+							// ※マテリアルのアルファブレンドが有効になっている必要があります
+							obj->SetColor({ 0.3f, 0.3f, 0.8f, 0.4f });
+						}
+						else {
+							// 実体化している状態は元の色
+							obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+						}
+
+						// リストで管理している場合は追加
+						if (cell->type == BlockType::PBlock) {
+							pBlockObjects_.push_back({ obj, blockScale_ });
+						}
 					}
 				}
 				break;
