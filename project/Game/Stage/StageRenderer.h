@@ -76,6 +76,13 @@ private:
     // ▼ 追加：ステージ内のすべての動く足場を管理するリスト
     std::vector<MovingFloorInstance> movingFloorInstances_;
 
+    // 動く足場の管理リストの近くに追加
+    struct CrumblingFloorInstance {
+        Object3d* object = nullptr; // 3Dオブジェクトへのポインタ
+        Int3 cellIndex;             // StageMap上での [x, y, z] 位置
+    };
+    std::vector<CrumblingFloorInstance> crumblingFloorInstances_; // ★追加：崩れる足場の管理リスト
+
     struct PSwitchVisualObject {
         Object3d* object = nullptr;
         Vector3 normalScale{ 1.0f, 1.0f, 1.0f };

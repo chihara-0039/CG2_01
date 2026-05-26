@@ -90,21 +90,13 @@ void StageMap::Update(float deltaTime, float totalTime)
         if (cell.type == BlockType::CrumblingFloor) {
             // --- 崩れる処理 ---
             if (!cell.isHidden) {
-                if (cell.isCrumbling) {
-                    // プレイヤーが乗っているならタイマーを進める
+                if (cell.crumbleTimer > 0.0f || cell.isCrumbling) {
                     cell.crumbleTimer += deltaTime;
-
+                    // ここが崩れるタイマー
                     if (cell.crumbleTimer >= 1.0f) {
                         cell.isHidden = true;
                         cell.isSolid = false;
-                        cell.isCrumbling = false;
                     }
-                }
-                else {
-                    // ★ここが重要：プレイヤーが降りたらタイマーを 0 に戻す
-                    // これで「一瞬かすめただけ」なら赤くならずに済みます
-                    cell.crumbleTimer -= deltaTime * 2.0f; // 徐々に回復させる（または 0.0f で即リセット）
-                    if (cell.crumbleTimer < 0.0f) cell.crumbleTimer = 0.0f;
                 }
             }
 
@@ -115,17 +107,20 @@ void StageMap::Update(float deltaTime, float totalTime)
                     cell.isHidden = false;
                     cell.isSolid = true; // 判定復活
                     cell.respawnTimer = 0.0f;
-                    // ★ changed = true; もここでは呼ばない！
+                    cell.crumbleTimer = 0.0f;
                 }
             }
 
             // --- 演出用の色・透明度計算 ---
-            // 乗っている間は赤くする
             if (!cell.isHidden) {
                 // crumbleTimerが0なら白、1.0に近づくほど赤くなる
                 float r = cell.crumbleTimer / 1.0f;
                 cell.colorG = 1.0f - r;
                 cell.colorB = 1.0f - r;
+                cell.opacity = 1.0f - r; // ★追加：乗っている間は徐々に透明（フェードアウト）にする
+            }
+            else {
+                cell.opacity = 0.0f;     // ★追加：完全に消えている間は透明度 0
             }
             cell.isCrumbling = false;
         }
