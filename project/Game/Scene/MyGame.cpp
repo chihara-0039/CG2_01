@@ -589,11 +589,16 @@ void MyGame::Update() {
 
     // ★ ライトカメラの更新
     // プレイヤーの位置に合わせて影の範囲を動かすことで、常に綺麗な影を出します
-    Vector3 lightDir = { 0.5f, -1.0f, 0.5f }; // ライトの向き（Object3dCommonの設定に合わせる）
+    Vector3 lightDir = stageMap_.GetLightDirection();
     lightCamera_->Update(lightDir, player_->GetPosition());
 
     object3dCommon->SetLightDirection(lightDir);
+    object3dCommon->SetLightColor(Vector4(stageMap_.GetLightColor().x, stageMap_.GetLightColor().y, stageMap_.GetLightColor().z, 1.0f));
+    object3dCommon->SetLightIntensity(stageMap_.GetLightIntensity());
     object3dCommon->SetCameraPosition(camera->GetPosition());
+
+    // クリアカラー（背景色）をステージ設定と同期
+    offscreenClearColor_ = stageMap_.GetClearColor();
 
     // UI・プロンプト更新
     if (gameplayUIManager_) {

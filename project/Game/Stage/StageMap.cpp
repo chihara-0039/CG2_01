@@ -235,6 +235,14 @@ void StageMap::SaveToFile(const std::string& filename) {
     // ヘッダー: サイズ
     ofs << width_ << " " << height_ << " " << depth_ << "\n";
 
+    // 環境・ライティング設定を書き出す
+    ofs << "ENVIRONMENT "
+        << clearColor_.x << " " << clearColor_.y << " " << clearColor_.z << " " << clearColor_.w << " "
+        << lightIntensity_ << " "
+        << lightColor_.x << " " << lightColor_.y << " " << lightColor_.z << " "
+        << lightDirection_.x << " " << lightDirection_.y << " " << lightDirection_.z << "\n";
+
+
     // カスタムブロック定義を書き出す
     for (const auto& part : customParts_) {
         ofs << "PART " << part.id << " "
@@ -298,6 +306,12 @@ void StageMap::LoadFromFile(const std::string& filename) {
     if (!(ss >> w >> h >> d)) return;
     Initialize(w, h, d);
 
+    // 環境設定をデフォルト値に初期化（ファイルに記述がない場合用）
+    clearColor_ = { 0.1f, 0.25f, 0.5f, 1.0f };
+    lightIntensity_ = 1.0f;
+    lightColor_ = { 0.9f, 0.9f, 0.9f };
+    lightDirection_ = { 0.5f, -1.0f, 0.5f };
+
     // 各スロットがファイルロードによってクリアされたかを追跡するフラグ
     bool partCleared[5] = { false, false, false, false, false };
 
@@ -352,6 +366,11 @@ void StageMap::LoadFromFile(const std::string& filename) {
                     }
                 }
             }
+        } else if (token == "ENVIRONMENT") {
+            lineSS >> clearColor_.x >> clearColor_.y >> clearColor_.z >> clearColor_.w
+                   >> lightIntensity_
+                   >> lightColor_.x >> lightColor_.y >> lightColor_.z
+                   >> lightDirection_.x >> lightDirection_.y >> lightDirection_.z;
         } else {
             // 通常のブロック配置行（token は x 座標）
             int x = std::stoi(token);

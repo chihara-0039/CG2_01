@@ -113,6 +113,15 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetTextureManager()
 	);
 
+	// ▼ 追加：トゲモデル設定
+	spikeModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/spike",
+		"spike.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
+
 	// インスタンシング用の ViewProjection 定数バッファを作成
 	D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
 	D3D12_RESOURCE_DESC resDesc = {};
@@ -169,6 +178,73 @@ void StageRenderer::UpdateEffect(const StageMap& stageMap) {
 void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 	// 既存のオブジェクトがあれば全て削除してから新しいオブジェクトを生成する
 	Clear();
+
+	// 雲の生成
+	int mapWidth = stageMap.GetWidth();
+	int mapHeight = stageMap.GetHeight();
+	int mapDepth = stageMap.GetDepth();
+	float scaleX = blockScale_.x;
+	float scaleY = blockScale_.y;
+	float scaleZ = blockScale_.z;
+
+	int cloudCount = 12; // 12個浮かべる
+	for (int i = 0; i < cloudCount; ++i) {
+		CloudInstance cloud;
+		// ランダムな位置 (ステージの少し上空、周囲)
+		float rx = (static_cast<float>(rand()) / RAND_MAX) * (mapWidth * scaleX + 80.0f) - 40.0f;
+		float ry = (static_cast<float>(rand()) / RAND_MAX) * 6.0f + 3.0f; // 3.0f 〜 9.0f の高さ
+		float rz = (static_cast<float>(rand()) / RAND_MAX) * (mapDepth * scaleZ + 80.0f) - 40.0f;
+		cloud.basePosition = { rx, ry, rz };
+
+		// 流れる速度 (X軸方向へゆっくり流れる)
+		float speedX = (static_cast<float>(rand()) / RAND_MAX) * 0.4f + 0.1f;
+		cloud.speed = { speedX, 0.0f, 0.0f };
+
+		// フワフワパラメータ
+		cloud.floatTimer = (static_cast<float>(rand()) / RAND_MAX) * 6.28f;
+		cloud.floatSpeed = (static_cast<float>(rand()) / RAND_MAX) * 0.3f + 0.1f;
+
+		// 1つの雲を構成する球体数 (3〜5個)
+		int partCount = rand() % 3 + 3;
+		for (int j = 0; j < partCount; ++j) {
+			// 中心からのオフセット
+			float ox = (static_cast<float>(rand()) / RAND_MAX) * 4.0f - 2.0f;
+			float oy = (static_cast<float>(rand()) / RAND_MAX) * 1.5f - 0.75f;
+			float oz = (static_cast<float>(rand()) / RAND_MAX) * 4.0f - 2.0f;
+			cloud.localOffsets.push_back({ ox, oy, oz });
+
+			// ランダムスケール
+			float s = (static_cast<float>(rand()) / RAND_MAX) * 2.0f + 1.5f;
+			cloud.localScales.push_back({ s, s * 0.5f, s }); // 雲らしく少し平べったくする
+		}
+
+		// 3Dオブジェクトの作成
+		for (int j = 0; j < partCount; ++j) {
+			std::unique_ptr<Object3d> obj = std::make_unique<Object3d>();
+			obj->Initialize(object3dCommon_);
+			obj->SetModel(bubbleModel_.get()); // 球体モデルを雲のパーツとして使用
+			obj->SetEnableLighting(true);       // ライティングで立体感（ローポリ雲の綺麗な陰影）を出す
+			obj->SetShininess(0.0f);            // テカらせない
+			obj->SetMetallic(0.0f);             // テカらせない
+			
+			// 初期位置とスケール
+			Vector3 pos = {
+				cloud.basePosition.x + cloud.localOffsets[j].x,
+				cloud.basePosition.y + cloud.localOffsets[j].y,
+				cloud.basePosition.z + cloud.localOffsets[j].z
+			};
+			obj->SetPosition(pos);
+			obj->SetScale(cloud.localScales[j]);
+			
+			// 色を完全な白に設定
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+			cloud.objects.push_back(std::move(obj));
+		}
+
+		clouds_.push_back(std::move(cloud));
+	}
+
 
 	// ステージマップの全セルを走査して、ブロックがある場所に対応するモデルのオブジェクトを生成していく
 	for (int y = 0; y < stageMap.GetHeight(); y++) {
@@ -441,18 +517,16 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
 				case BlockType::Spike:
 					{
-						Object3d* obj = CreateStageObject(
-							wallModel_.get(),
+						CreateStageObject(
+							spikeModel_.get(),
 							position,
-							{ blockScale_.x, blockScale_.y * 0.2f, blockScale_.z }, // Y軸に潰す
+							blockScale_,
 							{ 0.0f, 0.0f, 0.0f },
 							BlockType::Spike
 						);
-						if (obj) {
-							obj->SetColor({ 0.8f, 0.1f, 0.1f, 1.0f }); // 赤色トゲ
-						}
 					}
 					break;
+
 
 				case BlockType::EnemyWalker:
 					{
@@ -530,6 +604,11 @@ void StageRenderer::SetCamera(const Matrix4x4& view, const Matrix4x4& projection
 	for (const auto& obj : previewObjects_) {
 		obj->SetCamera(view, projection);
 	}
+	for (const auto& cloud : clouds_) {
+		for (const auto& obj : cloud.objects) {
+			obj->SetCamera(view, projection);
+		}
+	}
 }
 
 // 全てのオブジェクトの更新処理を呼び出す
@@ -576,6 +655,40 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 			instance.object->SetPosition(newPosition);
 			instance.object->Update(lightVP);
 			MarkDirty(instance.object);
+		}
+	}
+
+	// 雲の更新
+	float dt = 1.0f / 60.0f;
+	int mapWidth = stageMap.GetWidth();
+	float scaleX = blockScale_.x;
+	float rightLimit = mapWidth * scaleX + 50.0f;
+	float leftLimit = -50.0f;
+
+	for (auto& cloud : clouds_) {
+		// X方向への移動
+		cloud.basePosition.x += cloud.speed.x * dt;
+		if (cloud.basePosition.x > rightLimit) {
+			cloud.basePosition.x = leftLimit;
+		}
+
+		// Y方向のフワフワ運動
+		cloud.floatTimer += cloud.floatSpeed * dt;
+		float offsetY = std::sin(cloud.floatTimer) * 0.4f;
+
+		// 各パーツ（球体）の位置を更新
+		for (size_t i = 0; i < cloud.objects.size(); ++i) {
+			Vector3 partPos = {
+				cloud.basePosition.x + cloud.localOffsets[i].x,
+				cloud.basePosition.y + cloud.localOffsets[i].y + offsetY,
+				cloud.basePosition.z + cloud.localOffsets[i].z
+			};
+			cloud.objects[i]->SetPosition(partPos);
+			
+			// 雲の色を完全に白に設定 (陰影のみライティングで反映される)
+			cloud.objects[i]->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+			cloud.objects[i]->Update(lightVP);
 		}
 	}
 }
@@ -707,6 +820,13 @@ void StageRenderer::Draw() {
 
 	// 元の非インスタンシングPSOに戻す
 	commandList->SetPipelineState(object3dCommon_->GetPipelineState());
+
+	// 雲の描画
+	for (const auto& cloud : clouds_) {
+		for (const auto& obj : cloud.objects) {
+			obj->Draw();
+		}
+	}
 }
 
 ID3D12Resource* StageRenderer::GetOrCreateInstancedBuffer(Model* model, UINT numInstances) {
@@ -737,6 +857,8 @@ void StageRenderer::Clear() {
 	previewObjects_.clear(); // 🌟 プレビューも一緒にクリア
 	movingFloorInstances_.clear(); // ★追加：動く足場の管理リストもクリアしてダングリングポインタを防ぐ
 	enemyInstances_.clear(); // ★追加：敵の管理リストもクリア
+	clouds_.clear(); // ★追加：背景雲のリストもクリア
+
 
 	//5/19佐倉
 	pSwitchObjects_.clear();

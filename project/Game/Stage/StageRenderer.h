@@ -57,6 +57,20 @@ private:
     // ▼ 追加 ▼
     std::unique_ptr<Model> keyModel_;
     std::unique_ptr<Model> keyBlockModel_;
+    std::unique_ptr<Model> spikeModel_;
+
+    struct CloudInstance {
+        std::vector<std::unique_ptr<Object3d>> objects; // 雲を構成する球体オブジェクトのリスト
+        Vector3 basePosition;  // 基準位置
+        Vector3 speed;         // 流れる速度
+        float floatTimer;      // フワフワ動くための個別タイマー
+        float floatSpeed;      // フワフワ速度
+        std::vector<Vector3> localOffsets; // 基準位置からの相対座標
+        std::vector<Vector3> localScales;  // 各球体のスケール
+    };
+    std::vector<CloudInstance> clouds_;
+
+
 
     std::vector<std::unique_ptr<Object3d>> objects_;
     std::vector<std::unique_ptr<Object3d>> previewObjects_; // 🌟 半透明プレビュー用オブジェクト
