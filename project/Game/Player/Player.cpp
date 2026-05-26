@@ -131,10 +131,6 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 			// カメラのY軸回転に合わせて移動ベクトルを計算
 			move.x = inputDir.x * std::cos(cameraRotY) + inputDir.z * std::sin(cameraRotY);
 			move.z = -inputDir.x * std::sin(cameraRotY) + inputDir.z * std::cos(cameraRotY);
-
-			//// 速度と向きを更新
-			//move.x *= walkSpeed_;
-			//move.z *= walkSpeed_;
 			rotation_.y = std::atan2f(move.x, move.z);
 		}
 
@@ -186,6 +182,31 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 			velocity_.y = 0.0f;
 		}
 		// ▲ ▲ ここまで ▲ ▲
+
+#pragma endregion
+
+#pragma region 中間地点
+
+		// 🌟 追加：中間地点の判定
+		// プレイヤーの現在位置のブロック座標を計算
+		int px = static_cast<int>(std::floor(position_.x + 0.5f));
+		int py = static_cast<int>(std::floor(position_.y + 0.5f)); // キャラクターの中心あたりの高さ
+		int pz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+		MapCell* cell = map.GetCell(px, py, pz);
+		if (cell && cell->type == BlockType::Checkpoint) {
+			// 中間地点に触れたらリスポーン地点を更新する
+			Vector3 checkpointPos = {
+				static_cast<float>(px),
+				static_cast<float>(py) + 1.1f, // 地面にめり込まないよう高さを調整
+				static_cast<float>(pz)
+			};
+			SetRespawnPosition(checkpointPos);
+
+			// ※必要に応じて「触れた瞬間に旗が上がる」ような演出を入れたり、
+			// 何度も判定されないように cell->variant = 1; のようにして
+			// 状態をフラグ管理するとより本格的になります！
+		}
 
 #pragma endregion
 
@@ -432,21 +453,10 @@ bool Player::CheckCollision(const Vector3& pos, StageMap& map) {
 				}
 				// ▲ ここまで ▲
 
-				//// Pブロック判定
-				//if (cell && cell->type == BlockType::PBlock) {
-				//	if (cell->isHidden || !cell->isSolid) {
-				//		continue;
-				//	}
-
-				//	return true;
-				//}
-
 				// ★ 変更：動く足場は固定グリッド判定から除外する
 				if (cell && cell->isSolid && cell->type != BlockType::MovingFloor) {
 					return true;
 				}
-
-
 
 				// 秋元追加 04/03
 				if (cell && cell->type == BlockType::PBlock) {

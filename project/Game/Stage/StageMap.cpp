@@ -83,49 +83,48 @@ void StageMap::Initialize(int width, int height, int depth) {
 
 void StageMap::Update(float deltaTime, float totalTime, const Vector3& playerPos) 
 {
-    for (int y = 0; y < height_; ++y) {
-        for (int z = 0; z < depth_; ++z) {
-            for (int x = 0; x < width_; ++x) {
-                MapCell& cell = cells_[ToIndex(x, y, z)];
+    for (auto& cell : cells_)
+    {
+#pragma region 崩れる足場
 
-                if (cell.type == BlockType::CrumblingFloor) {
-                    // --- 崩れる処理 ---
-                    if (!cell.isHidden) {
-                        if (cell.isCrumbling) {
-                            // プレイヤーが乗っているならタイマーを進める
-                            cell.crumbleTimer += deltaTime;
-
-                            if (cell.crumbleTimer >= 1.0f) {
-                                cell.isHidden = true;
-                                cell.isSolid = false;
-                                cell.isCrumbling = false;
-                            }
-                        }
-                        else {
-                            // プレイヤーが降りたらタイマーを回復させる
-                            cell.crumbleTimer -= deltaTime * 2.0f;
-                            if (cell.crumbleTimer < 0.0f) cell.crumbleTimer = 0.0f;
-                        }
+        if (cell.type == BlockType::CrumblingFloor) {
+            // --- 崩れる処理 ---
+            if (!cell.isHidden) {
+                if (cell.crumbleTimer > 0.0f || cell.isCrumbling) {
+                    cell.crumbleTimer += deltaTime;
+                    // ここが崩れるタイマー
+                    if (cell.crumbleTimer >= 1.0f) {
+                        cell.isHidden = true;
+                        cell.isSolid = false;
                     }
-
-                    // --- 復活処理 ---
-                    if (cell.isHidden) {
-                        cell.respawnTimer += deltaTime;
-                        if (cell.respawnTimer >= 3.0f) { // 3秒で復活
-                            cell.isHidden = false;
-                            cell.isSolid = true; // 判定復活
-                            cell.respawnTimer = 0.0f;
-                        }
-                    }
-
-                    // --- 演出用の色・透明度計算 ---
-                    if (!cell.isHidden) {
-                        float r = cell.crumbleTimer / 1.0f;
-                        cell.colorG = 1.0f - r;
-                        cell.colorB = 1.0f - r;
-                    }
-                    cell.isCrumbling = false;
                 }
+            }
+
+            // --- 復活処理 ---
+            if (cell.isHidden) {
+                cell.respawnTimer += deltaTime;
+                if (cell.respawnTimer >= 3.0f) { // 3秒で復活
+                    cell.isHidden = false;
+                    cell.isSolid = true; // 判定復活
+                    cell.respawnTimer = 0.0f;
+                    cell.crumbleTimer = 0.0f;
+                }
+            }
+
+            // --- 演出用の色・透明度計算 ---
+            if (!cell.isHidden) {
+                // crumbleTimerが0なら白、1.0に近づくほど赤くなる
+                float r = cell.crumbleTimer / 1.0f;
+                cell.colorG = 1.0f - r;
+                cell.colorB = 1.0f - r;
+                cell.opacity = 1.0f - r; // ★追加：乗っている間は徐々に透明（フェードアウト）にする
+            }
+            else {
+                cell.opacity = 0.0f;     // ★追加：完全に消えている間は透明度 0
+            }
+            cell.isCrumbling = false;
+        }
+#pragma endregion
 
                 if (cell.type == BlockType::MovingFloor) {
                     float moveSpeed = 1.0f;
@@ -632,6 +631,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::PSwitch:
     case BlockType::PBlock:
     case BlockType::Key:         // 鍵は通り抜けられる
+    case BlockType::Checkpoint:  // 🌟 追加：中間地点は通り抜けられる
     cell.isSolid = false;
     break;
 

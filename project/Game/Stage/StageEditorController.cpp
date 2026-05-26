@@ -564,7 +564,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
         {
             "System", //  その他
             {
-                BlockType::PlayerStart
+                BlockType::PlayerStart,
+                BlockType::Checkpoint
             }
         }
     };

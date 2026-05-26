@@ -58,6 +58,8 @@ private:
     // ▼ 追加 ▼
     std::unique_ptr<Model> keyModel_;
     std::unique_ptr<Model> keyBlockModel_;
+    // 中間地点
+    std::unique_ptr<Model> checkpointModel_;
     std::unique_ptr<Model> spikeModel_;
 
     struct CloudInstance {
@@ -70,9 +72,6 @@ private:
         std::vector<Vector3> localScales;  // 各球体のスケール
     };
     std::vector<CloudInstance> clouds_;
-
-
-
     std::vector<std::unique_ptr<Object3d>> objects_;
     std::vector<std::unique_ptr<Object3d>> previewObjects_; // 🌟 半透明プレビュー用オブジェクト
     Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };
@@ -90,6 +89,12 @@ private:
     // ▼ 追加：ステージ内のすべての動く足場を管理するリスト
     std::vector<MovingFloorInstance> movingFloorInstances_;
 
+    // 動く足場の管理リストの近くに追加
+    struct CrumblingFloorInstance {
+        Object3d* object = nullptr; // 3Dオブジェクトへのポインタ
+        Int3 cellIndex;             // StageMap上での [x, y, z] 位置
+    };
+    std::vector<CrumblingFloorInstance> crumblingFloorInstances_; // ★追加：崩れる足場の管理リスト
     // ▼ 追加：ステージ内のすべての敵キャラクターを管理するリスト
     struct EnemyInstance 
     {

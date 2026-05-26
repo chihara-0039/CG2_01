@@ -113,6 +113,14 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetTextureManager()
 	);
 
+	// ▼ 追加：中間地点モデル設定
+	checkpointModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/star",
+		"star.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
 	// ▼ 追加：トゲモデル設定
 	spikeModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
@@ -120,7 +128,6 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		"spike.obj",
 		object3dCommon_->GetTextureManager()
 	);
-
 
 	// インスタンシング用の ViewProjection 定数バッファを作成
 	D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
@@ -261,7 +268,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				}
 
 				// セルのタイプが None（空）ならスキップ
-				if (cell->type == BlockType::None || cell->isHidden) {
+				if (cell->type == BlockType::None ) {
 					// 空のセルは描画しない
 					continue;
 				}
@@ -456,14 +463,24 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				break;
 
 				case BlockType::CrumblingFloor:
-					CreateStageObject(
-						crumbleModel_.get(), 
+				{
+					Object3d* newObj = CreateStageObject(
+						crumbleModel_.get(),
 						position,
-						blockScale_, 
+						blockScale_,
 						{ 0.0f, 0.0f, 0.0f },
 						BlockType::CrumblingFloor
 					);
-					break;
+
+					// ★追加：生成に成功したら専用の管理リストに記録する
+					if (newObj) {
+						CrumblingFloorInstance instance;
+						instance.object = newObj;
+						instance.cellIndex = { x, y, z };
+						crumblingFloorInstances_.push_back(instance);
+					}
+				}
+				break;
 					// ブロックの種類が IceBlock（滑る足場）の場合
 				case BlockType::IceBlock:
 					CreateStageObject(
@@ -514,6 +531,14 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f }
 					);
 					break;
+
+				case BlockType::Checkpoint:
+					CreateStageObject(
+						checkpointModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f }
+					);
 
 				case BlockType::Spike:
 					{
@@ -614,6 +639,36 @@ void StageRenderer::SetCamera(const Matrix4x4& view, const Matrix4x4& projection
 // 全てのオブジェクトの更新処理を呼び出す
 void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 	lastLightVP_ = lightVP;
+
+	// -------------------------------------------------------------
+	// ★追加：崩れる足場の毎フレーム演出更新（色・透明度・消去）
+	// -------------------------------------------------------------
+	for (auto& instance : crumblingFloorInstances_) {
+		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
+		if (cell && cell->type == BlockType::CrumblingFloor) {
+
+			if (cell->isHidden) {
+				// 【完全に消えている時】
+				// アルファブレンド（半透明設定）が効かない環境でも、
+				// スケールを 0 にすることで確実に画面から「消去」できます！
+				instance.object->SetScale({ 0.0f, 0.0f, 0.0f });
+			}
+			else {
+				// 【通常表示の時】元のサイズに戻し、タイマーに応じた色と透明度を設定
+				instance.object->SetScale(blockScale_);
+				instance.object->SetColor({
+					1.0f,
+					cell->colorG,
+					cell->colorB,
+					cell->opacity // ステージマップ側で計算した透明度
+					});
+			}
+
+			// インスタンシング用の行列更新とDirtyフラグ立て
+			instance.object->Update(lightVP);
+			MarkDirty(instance.object);
+		}
+	}
 
 	for (auto& instance : movingFloorInstances_) {
 		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
@@ -930,6 +985,7 @@ ID3D12Resource* StageRenderer::GetOrCreateInstancedBuffer(Model* model, UINT num
 void StageRenderer::Clear() {
 	objects_.clear();
 	previewObjects_.clear(); // 🌟 プレビューも一緒にクリア
+	crumblingFloorInstances_.clear();
 	movingFloorInstances_.clear(); // ★追加：動く足場の管理リストもクリアしてダングリングポインタを防ぐ
 	enemyInstances_.clear(); // ★追加：敵の管理リストもクリア
 	clouds_.clear(); // ★追加：背景雲のリストもクリア

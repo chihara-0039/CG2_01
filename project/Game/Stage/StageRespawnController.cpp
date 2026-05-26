@@ -51,9 +51,9 @@ void StageRespawnController::Update(
         blockPlacementController->Initialize(&stageMap, stageRenderer, blockInventory);
     }
 
-    if (stageEditorController) {
+    /*if (stageEditorController) {
         stageEditorController->ResetPlayerToStartCell(stageMap, player);
-    }
+    }*/
 
     player->Respawn();
 }
