@@ -114,6 +114,8 @@ private:
     std::vector<PSwitchVisualObject> pSwitchObjects_;
     std::vector<PSwitchVisualObject> pBlockObjects_;
 
+    //5/26佐倉
+    std::vector<Object3d*> wallObjects_;
     struct TimedBlockInstance {
         Object3d* object = nullptr;
         Int3 cellIndex;

@@ -9,7 +9,7 @@
 void GameplayCameraController::Initialize() {
     cameraAngle_ = 6.267f;
     cameraPitch_ = 0.400f;
-    cameraFov_ = 0.45f;
+    cameraFov_ = 0.55f;
 
     cameraPivot_ = { 4.0f, 9.0f, 4.5f };
     cameraDistance_ = 35.0f;
@@ -32,50 +32,18 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 
     bool changed = false;
 
-    //// --- プレイヤー追従デッドゾーン処理 ---
-    //Vector3 playerPos = player->GetPosition();
-    //float deadZoneX = 5.0f;
-    //float deadZoneZ = 5.0f;
-
-    //float diffX = playerPos.x - cameraPivot_.x;
-    //if (diffX > deadZoneX) {
-    //    cameraPivot_.x = playerPos.x - deadZoneX;
-    //    changed = true;
-    //} else if (diffX < -deadZoneX) {
-    //    cameraPivot_.x = playerPos.x + deadZoneX;
-    //    changed = true;
-    //}
-
-    //float diffZ = playerPos.z - cameraPivot_.z;
-    //if (diffZ > deadZoneZ) {
-    //    cameraPivot_.z = playerPos.z - deadZoneZ;
-    //    changed = true;
-    //} else if (diffZ < -deadZoneZ) {
-    //    cameraPivot_.z = playerPos.z + deadZoneZ;
-    //    changed = true;
-    //}
-
-    //float targetPivotY = playerPos.y + initialPivotYOffset_;
-    //float diffPivotY = targetPivotY - cameraPivot_.y;
-    //if (std::abs(diffPivotY) > 2.0f) {
-    //    cameraPivot_.y += diffPivotY * 0.1f; // ゆるやかにY軸追従
-    //    changed = true;
-    //}
-
-    // ==========================================================
-    // ズーム：ホイールが動いた時だけ処理
-    // ==========================================================
+    
     if (!isGuiCaptured && mouse.wheel != 0) {
 
         float minFov = minFov_;
         float maxFov = maxFov_;
 
         if (currentStageIndex_ == 3) {
-            minFov = 0.25f; // もっとズームインできる
-            maxFov = 0.80f; // もっとズームアウトできる
+            minFov = 0.25f;
+            maxFov = 0.80f;
         }
 
-        const float zoomStep = (maxFov_ - minFov_) / 5.0f;
+        const float zoomStep = (maxFov - minFov) / 5.0f;
 
         if (mouse.wheel > 0) {
             cameraFov_ -= zoomStep;
@@ -83,7 +51,7 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
             cameraFov_ += zoomStep;
         }
 
-        cameraFov_ = std::clamp(cameraFov_, minFov_, maxFov_);
+        cameraFov_ = std::clamp(cameraFov_, minFov, maxFov);
         camera->SetFov(cameraFov_);
         changed = true;
     }
@@ -203,13 +171,26 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 void GameplayCameraController::ApplyCamera(Camera* camera) {
     if (!camera) return;
 
+    Vector3 target = cameraPivot_;
+
     Vector3 pos;
-    pos.x = cameraPivot_.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * cameraDistance_;
-    pos.y = cameraPivot_.y + std::sin(cameraPitch_) * cameraHeight_;
-    pos.z = cameraPivot_.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * cameraDistance_;
+    pos.x = target.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * cameraDistance_;
+    pos.y = target.y + std::sin(cameraPitch_) * cameraHeight_;
+    pos.z = target.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * cameraDistance_;
 
     camera->SetPosition(pos);
-    camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
+
+    Vector3 diff = {
+        target.x - pos.x,
+        target.y - pos.y,
+        target.z - pos.z
+    };
+
+    float yaw = std::atan2(diff.x, diff.z);
+    float horizontal = std::sqrt(diff.x * diff.x + diff.z * diff.z);
+    float pitch = -std::atan2(diff.y, horizontal);
+
+    camera->SetRotation({ pitch, yaw, 0.0f });
 }
 
 void GameplayCameraController::ResetCamera(
@@ -226,31 +207,79 @@ void GameplayCameraController::ResetCamera(
     float height = static_cast<float>(stageMap.GetHeight());
     float depth = static_cast<float>(stageMap.GetDepth());
 
-    // ステージサイズから中心を自動計算
+    float maxSize = (std::max)(width, depth);
+
+    // ==============================
+    // ステージごとのカメラ設定
+    // ==============================
+    CameraPreset preset{};
+
+    switch (stageIndex) {
+    case 0:
+        // 操作説明ステージ
+        preset.angle = 5.55f;
+        preset.pitch = 0.78f;
+        preset.distanceRate = 1.55f;
+        preset.heightRate = 0.90f;
+        preset.fov = 0.55f;
+        preset.pivotYRate = 0.45f;
+        break;
+
+    case 1:
+        // 通常ステージ
+        preset.angle = 0.78f;
+        preset.pitch = 0.72f;
+        preset.distanceRate = 1.85f;
+        preset.heightRate = 1.10f;
+
+        preset.fov = 1.0f;
+
+        preset.pivotYRate = 0.38f;
+        break;
+
+    case 2:
+        // 少し広めに見たいステージ
+        preset.angle = 0.785f;
+        preset.pitch = 0.68f;
+        preset.distanceRate = 2.25f;
+        preset.heightRate = 1.35f;
+        preset.fov = 0.55f;
+        preset.pivotYRate = 0.40f;
+        break;
+
+    case 3:
+        // 高低差・複雑なステージ
+        preset.angle = 0.785f;
+        preset.pitch = 0.75f;
+        preset.distanceRate = 2.40f;
+        preset.heightRate = 1.45f;
+        preset.fov = 0.60f;
+        preset.pivotYRate = 0.45f;
+        break;
+
+    default:
+        // 予備
+        preset.angle = 0.785f;
+        preset.pitch = 0.60f;
+        preset.distanceRate = 2.00f;
+        preset.heightRate = 1.20f;
+        preset.fov = 0.50f;
+        preset.pivotYRate = 0.35f;
+        break;
+    }
+
+    // ステージ中心を見る
     cameraPivot_ = {
         (width - 1.0f) * 0.5f,
-        height * 0.35f,
+        height * preset.pivotYRate,
         (depth - 1.0f) * 0.5f
     };
 
-    // ステージサイズから距離を自動計算
-    float maxSize = (std::max)(width, depth);
-
-    cameraAngle_ = 0.785f;//45度
-    cameraPitch_ = 0.55f;//見下ろし角度
-
-    cameraDistance_ = maxSize * 2.2f;
-    cameraHeight_ = maxSize * 1.3f;
-
-    cameraFov_ = 0.55f;
-
-    // ステージ3だけ少し広めに見る
-    if (stageIndex == 3) {
-        cameraPitch_ = 0.7f;
-        cameraDistance_ = maxSize * 2.4f;
-        cameraHeight_ = maxSize * 1.4f;
-        cameraFov_ = 0.60f;
-    }
+    cameraAngle_ = preset.angle;
+    cameraPitch_ = preset.pitch;
+    cameraDistance_ = maxSize * preset.distanceRate;
+    cameraHeight_ = maxSize * preset.heightRate;
+    cameraFov_ = preset.fov;
 
     initialPivotYOffset_ = cameraPivot_.y - player->GetPosition().y;
 

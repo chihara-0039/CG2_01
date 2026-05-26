@@ -76,9 +76,9 @@ private:
     //高さ倍率
     float heightRate_ = 0.55f;
 
-    float cameraFov_ = 0.45f;
+    float cameraFov_ = 0.55f;
     float minFov_ = 0.25f;
-    float maxFov_ = 0.75f;
+    float maxFov_ = 1.0f;
 
     Vector3 cameraPivot_ = { 4.0f, 9.0f, 4.5f };
     float cameraDistance_ = 35.0f;
@@ -88,5 +88,15 @@ private:
 
     int currentStageIndex_ = 0;
     float initialPivotYOffset_ = 8.0f;
+
+    struct CameraPreset {
+        float angle;
+        float pitch;
+        float distanceRate;
+        float heightRate;
+        float fov;
+        float pivotYRate;
+    };
+
 };
 
