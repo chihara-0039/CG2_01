@@ -610,6 +610,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::CrumblingFloor:
     case BlockType::IceBlock:
     case BlockType::KeyBlock:    // 鍵ブロックは通り抜けられない
+    case BlockType::PBlock:
     cell.isSolid = true;
     break;
 
@@ -634,7 +635,6 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::PlayerStart:
     case BlockType::Door:
     case BlockType::PSwitch:
-    case BlockType::PBlock:
     case BlockType::Key:         // 鍵は通り抜けられる
     case BlockType::Checkpoint:  // 🌟 追加：中間地点は通り抜けられる
     cell.isSolid = false;
