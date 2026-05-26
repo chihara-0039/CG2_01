@@ -116,8 +116,8 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// ▼ 追加：中間地点モデル設定
 	checkpointModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources/Models/star",
-		"star.obj",
+		"Resources/Models/midpoint",
+		"midpoint.obj",
 		object3dCommon_->GetTextureManager()
 	);
 
@@ -521,7 +521,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f } // 必要に応じて回転
 					);
 					break;
-
 					// ▼ 追加：鍵ブロックの場合
 				case BlockType::KeyBlock:
 					CreateStageObject(
@@ -531,7 +530,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f }
 					);
 					break;
-
 				case BlockType::Checkpoint:
 					CreateStageObject(
 						checkpointModel_.get(),
@@ -539,7 +537,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						blockScale_,
 						{ 0.0f, 0.0f, 0.0f }
 					);
-
+					break;
 				case BlockType::Spike:
 					{
 						CreateStageObject(
@@ -551,8 +549,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						);
 					}
 					break;
-
-
 				case BlockType::EnemyWalker:
 					{
 						Object3d* obj = CreateStageObject(
@@ -571,7 +567,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						}
 					}
 					break;
-
 				case BlockType::EnemyFlyer:
 					{
 						Object3d* obj = CreateStageObject(
@@ -590,7 +585,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						}
 					}
 					break;
-
 				case BlockType::EnemyChaser:
 					{
 						Object3d* obj = CreateStageObject(
