@@ -21,6 +21,7 @@ public:
 
     void Update(const StageMap& stageMap, const Matrix4x4& lightVP);
     void DrawShadow(const Matrix4x4& lightVP);
+    void DrawTransparent();
     void Draw();
 
     void UpdateEffect(const StageMap& stageMap);
@@ -32,7 +33,8 @@ public:
         const StageMap& stageMap,
         const Int3& cursorIndex,
         BlockType type,
-        int customId
+        int customId,
+        float rotationY
     );
     void ClearPlacementPreview();
 
@@ -58,7 +60,18 @@ private:
     std::unique_ptr<Model> keyBlockModel_;
     // 中間地点
     std::unique_ptr<Model> checkpointModel_;
+    std::unique_ptr<Model> spikeModel_;
 
+    struct CloudInstance {
+        std::vector<std::unique_ptr<Object3d>> objects; // 雲を構成する球体オブジェクトのリスト
+        Vector3 basePosition;  // 基準位置
+        Vector3 speed;         // 流れる速度
+        float floatTimer;      // フワフワ動くための個別タイマー
+        float floatSpeed;      // フワフワ速度
+        std::vector<Vector3> localOffsets; // 基準位置からの相対座標
+        std::vector<Vector3> localScales;  // 各球体のスケール
+    };
+    std::vector<CloudInstance> clouds_;
     std::vector<std::unique_ptr<Object3d>> objects_;
     std::vector<std::unique_ptr<Object3d>> previewObjects_; // 🌟 半透明プレビュー用オブジェクト
     Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };
@@ -82,6 +95,13 @@ private:
         Int3 cellIndex;             // StageMap上での [x, y, z] 位置
     };
     std::vector<CrumblingFloorInstance> crumblingFloorInstances_; // ★追加：崩れる足場の管理リスト
+    // ▼ 追加：ステージ内のすべての敵キャラクターを管理するリスト
+    struct EnemyInstance 
+    {
+        Object3d* object = nullptr; // 3Dオブジェクトへのポインタ
+        Int3 cellIndex;            // StageMap上での [x, y, z] の位置
+    };
+    std::vector<EnemyInstance> enemyInstances_;
 
     struct PSwitchVisualObject {
         Object3d* object = nullptr;
@@ -149,4 +169,17 @@ private:
     void BuildRenderGroups();
     void BuildPreviewRenderGroups();
     void MarkDirty(Object3d* obj);
+
+    std::vector<RenderGroup> transparentRenderGroups_;
+
+    void RebuildTransparencyGroups();
+
+public:
+
+    void UpdateWallTransparency(
+        const Vector3& cameraPos,
+        const Vector3& playerPos
+    );
+
+   
 };

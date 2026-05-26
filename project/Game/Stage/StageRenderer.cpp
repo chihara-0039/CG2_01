@@ -121,6 +121,14 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetTextureManager()
 	);
 
+	// ▼ 追加：トゲモデル設定
+	spikeModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/spike",
+		"spike.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
 	// インスタンシング用の ViewProjection 定数バッファを作成
 	D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
 	D3D12_RESOURCE_DESC resDesc = {};
@@ -177,6 +185,73 @@ void StageRenderer::UpdateEffect(const StageMap& stageMap) {
 void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 	// 既存のオブジェクトがあれば全て削除してから新しいオブジェクトを生成する
 	Clear();
+
+	// 雲の生成
+	int mapWidth = stageMap.GetWidth();
+	int mapHeight = stageMap.GetHeight();
+	int mapDepth = stageMap.GetDepth();
+	float scaleX = blockScale_.x;
+	float scaleY = blockScale_.y;
+	float scaleZ = blockScale_.z;
+
+	int cloudCount = 12; // 12個浮かべる
+	for (int i = 0; i < cloudCount; ++i) {
+		CloudInstance cloud;
+		// ランダムな位置 (ステージの少し上空、周囲)
+		float rx = (static_cast<float>(rand()) / RAND_MAX) * (mapWidth * scaleX + 80.0f) - 40.0f;
+		float ry = (static_cast<float>(rand()) / RAND_MAX) * 6.0f + 3.0f; // 3.0f 〜 9.0f の高さ
+		float rz = (static_cast<float>(rand()) / RAND_MAX) * (mapDepth * scaleZ + 80.0f) - 40.0f;
+		cloud.basePosition = { rx, ry, rz };
+
+		// 流れる速度 (X軸方向へゆっくり流れる)
+		float speedX = (static_cast<float>(rand()) / RAND_MAX) * 0.4f + 0.1f;
+		cloud.speed = { speedX, 0.0f, 0.0f };
+
+		// フワフワパラメータ
+		cloud.floatTimer = (static_cast<float>(rand()) / RAND_MAX) * 6.28f;
+		cloud.floatSpeed = (static_cast<float>(rand()) / RAND_MAX) * 0.3f + 0.1f;
+
+		// 1つの雲を構成する球体数 (3〜5個)
+		int partCount = rand() % 3 + 3;
+		for (int j = 0; j < partCount; ++j) {
+			// 中心からのオフセット
+			float ox = (static_cast<float>(rand()) / RAND_MAX) * 4.0f - 2.0f;
+			float oy = (static_cast<float>(rand()) / RAND_MAX) * 1.5f - 0.75f;
+			float oz = (static_cast<float>(rand()) / RAND_MAX) * 4.0f - 2.0f;
+			cloud.localOffsets.push_back({ ox, oy, oz });
+
+			// ランダムスケール
+			float s = (static_cast<float>(rand()) / RAND_MAX) * 2.0f + 1.5f;
+			cloud.localScales.push_back({ s, s * 0.5f, s }); // 雲らしく少し平べったくする
+		}
+
+		// 3Dオブジェクトの作成
+		for (int j = 0; j < partCount; ++j) {
+			std::unique_ptr<Object3d> obj = std::make_unique<Object3d>();
+			obj->Initialize(object3dCommon_);
+			obj->SetModel(bubbleModel_.get()); // 球体モデルを雲のパーツとして使用
+			obj->SetEnableLighting(true);       // ライティングで立体感（ローポリ雲の綺麗な陰影）を出す
+			obj->SetShininess(0.0f);            // テカらせない
+			obj->SetMetallic(0.0f);             // テカらせない
+			
+			// 初期位置とスケール
+			Vector3 pos = {
+				cloud.basePosition.x + cloud.localOffsets[j].x,
+				cloud.basePosition.y + cloud.localOffsets[j].y,
+				cloud.basePosition.z + cloud.localOffsets[j].z
+			};
+			obj->SetPosition(pos);
+			obj->SetScale(cloud.localScales[j]);
+			
+			// 色を完全な白に設定
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+			cloud.objects.push_back(std::move(obj));
+		}
+
+		clouds_.push_back(std::move(cloud));
+	}
+
 
 	// ステージマップの全セルを走査して、ブロックがある場所に対応するモデルのオブジェクトを生成していく
 	for (int y = 0; y < stageMap.GetHeight(); y++) {
@@ -456,6 +531,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f }
 					);
 					break;
+
 				case BlockType::Checkpoint:
 					CreateStageObject(
 						checkpointModel_.get(),
@@ -463,6 +539,75 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						blockScale_,
 						{ 0.0f, 0.0f, 0.0f }
 					);
+
+				case BlockType::Spike:
+					{
+						CreateStageObject(
+							spikeModel_.get(),
+							position,
+							blockScale_,
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::Spike
+						);
+					}
+					break;
+
+
+				case BlockType::EnemyWalker:
+					{
+						Object3d* obj = CreateStageObject(
+							bubbleModel_.get(), // 球体モデルを流用
+							position,
+							{ blockScale_.x * 0.6f, blockScale_.y * 0.6f, blockScale_.z * 0.6f },
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::EnemyWalker
+						);
+						if (obj) {
+							obj->SetColor({ 0.7f, 0.1f, 0.7f, 1.0f }); // 紫色の敵
+							EnemyInstance inst;
+							inst.object = obj;
+							inst.cellIndex = { x, y, z };
+							enemyInstances_.push_back(inst);
+						}
+					}
+					break;
+
+				case BlockType::EnemyFlyer:
+					{
+						Object3d* obj = CreateStageObject(
+							bubbleModel_.get(),
+							position,
+							{ blockScale_.x * 0.6f, blockScale_.y * 0.6f, blockScale_.z * 0.6f },
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::EnemyFlyer
+						);
+						if (obj) {
+							obj->SetColor({ 0.8f, 0.8f, 0.1f, 1.0f }); // 黄色の敵
+							EnemyInstance inst;
+							inst.object = obj;
+							inst.cellIndex = { x, y, z };
+							enemyInstances_.push_back(inst);
+						}
+					}
+					break;
+
+				case BlockType::EnemyChaser:
+					{
+						Object3d* obj = CreateStageObject(
+							bubbleModel_.get(),
+							position,
+							{ blockScale_.x * 0.6f, blockScale_.y * 0.6f, blockScale_.z * 0.6f },
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::EnemyChaser
+						);
+						if (obj) {
+							obj->SetColor({ 0.1f, 0.8f, 0.8f, 1.0f }); // シアンの敵
+							EnemyInstance inst;
+							inst.object = obj;
+							inst.cellIndex = { x, y, z };
+							enemyInstances_.push_back(inst);
+						}
+					}
 					break;
 				// ブロックの種類が不明な場合は何もしない
 				default:
@@ -483,6 +628,11 @@ void StageRenderer::SetCamera(const Matrix4x4& view, const Matrix4x4& projection
 	}
 	for (const auto& obj : previewObjects_) {
 		obj->SetCamera(view, projection);
+	}
+	for (const auto& cloud : clouds_) {
+		for (const auto& obj : cloud.objects) {
+			obj->SetCamera(view, projection);
+		}
 	}
 }
 
@@ -539,6 +689,61 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 			instance.object->Update(lightVP); // 動く床のみ行列を更新
 			// 更新した動く床のインスタンスデータをDirty化
 			MarkDirty(instance.object);
+		}
+	}
+
+	for (auto& instance : enemyInstances_) {
+		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
+		if (cell && (cell->type == BlockType::EnemyWalker || cell->type == BlockType::EnemyFlyer || cell->type == BlockType::EnemyChaser)) {
+			Vector3 basePosition = {
+				static_cast<float>(instance.cellIndex.x) * blockScale_.x,
+				static_cast<float>(instance.cellIndex.y) * blockScale_.y,
+				static_cast<float>(instance.cellIndex.z) * blockScale_.z
+			};
+
+			Vector3 newPosition = {
+				basePosition.x + (cell->currentOffsetX * blockScale_.x),
+				basePosition.y + (cell->currentOffsetY * blockScale_.y),
+				basePosition.z + (cell->currentOffsetZ * blockScale_.z)
+			};
+
+			instance.object->SetPosition(newPosition);
+			instance.object->Update(lightVP);
+			MarkDirty(instance.object);
+		}
+	}
+
+	// 雲の更新
+	float dt = 1.0f / 60.0f;
+	int mapWidth = stageMap.GetWidth();
+	float scaleX = blockScale_.x;
+	float rightLimit = mapWidth * scaleX + 50.0f;
+	float leftLimit = -50.0f;
+
+	for (auto& cloud : clouds_) {
+		// X方向への移動
+		cloud.basePosition.x += cloud.speed.x * dt;
+		if (cloud.basePosition.x > rightLimit) {
+			cloud.basePosition.x = leftLimit;
+		}
+
+		// Y方向のフワフワ運動
+		cloud.floatTimer += cloud.floatSpeed * dt;
+		float offsetY = std::sin(cloud.floatTimer) * 0.4f;
+
+		// 各パーツ（球体）の位置を更新
+		for (size_t i = 0; i < cloud.objects.size(); ++i) {
+			Vector3 partPos = {
+				cloud.basePosition.x + cloud.localOffsets[i].x,
+				cloud.basePosition.y + cloud.localOffsets[i].y + offsetY,
+				cloud.basePosition.z + cloud.localOffsets[i].z
+			};
+			cloud.objects[i]->SetPosition(partPos);
+			
+			// 雲の色を完全に白に設定 (陰影のみライティングで反映される)
+			cloud.objects[i]->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+			cloud.objects[i]->Update(lightVP);
 		}
 	}
 }
@@ -601,6 +806,79 @@ void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
 	commandList->SetPipelineState(object3dCommon_->GetShadowPipelineState());
 }
 
+void StageRenderer::DrawTransparent()
+{
+	auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
+	if (!commandList) return;
+
+	// インスタンシング用のテクスチャ記述子ヒープの設定
+	if (object3dCommon_->GetTextureManager()) {
+		ID3D12DescriptorHeap* heaps[] = { object3dCommon_->GetTextureManager()->GetSrvHeap() };
+		commandList->SetDescriptorHeaps(1, heaps);
+	}
+
+	commandList->SetPipelineState(object3dCommon_->GetInstancedAlphaPipelineState());
+	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// 定数バッファの更新 (最初のグループからビュー、プロジェクション行列を取得)
+	RenderGroup* firstGroup = nullptr;
+	if (!renderGroups_.empty()) {
+		firstGroup = &renderGroups_.front();
+	} else if (!previewRenderGroups_.empty()) {
+		firstGroup = &previewRenderGroups_.front();
+	}
+
+	if (firstGroup && !firstGroup->instances.empty() && viewProjectionData_) {
+		Object3d* firstObj = firstGroup->instances.front().object;
+		viewProjectionData_->viewProjection = Math::Multiply(firstObj->GetViewMatrix(), firstObj->GetProjectionMatrix());
+		viewProjectionData_->lightViewProjection = lastLightVP_;
+	}
+
+	// 1: ViewProjection (VS b0 にバインド)
+	commandList->SetGraphicsRootConstantBufferView(1, viewProjectionResource_->GetGPUVirtualAddress());
+	// 2: Light (PS b1 にバインド)
+	commandList->SetGraphicsRootConstantBufferView(2, object3dCommon_->GetLightGPUVirtualAddress());
+
+	// 描画処理を実行するラムダ関数 (Dirtyフラグ制御によるメモリ転送の最小化)
+	auto drawGroups = [commandList, this](std::vector<RenderGroup>& groups) {
+		for (auto& group : groups) {
+
+			
+			UINT numInstances = static_cast<UINT>(group.instances.size());
+			if (numInstances == 0) continue;
+
+			// Dirtyならキャッシュ内容をGPUバッファに転送する
+			if (group.isDirty) {
+				InstanceData* dataBegin = nullptr;
+				HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+				if (SUCCEEDED(hr)) {
+					std::memcpy(dataBegin, group.instanceData.data(), sizeof(InstanceData) * numInstances);
+					group.buffer->Unmap(0, nullptr);
+				}
+				group.isDirty = false; // 転送完了
+			}
+
+			// 3: Texture (PS t0)
+			if (object3dCommon_->GetTextureManager()) {
+				auto gpuHandle = object3dCommon_->GetTextureManager()->GetSrvHandleGPU(group.model->GetTextureHandle());
+				commandList->SetGraphicsRootDescriptorTable(3, gpuHandle);
+			}
+
+			// 5: InstanceBuffer (VS t2)
+			commandList->SetGraphicsRootShaderResourceView(5, group.buffer->GetGPUVirtualAddress());
+
+			// 頂点バッファをバインドして一括描画
+			group.model->DrawInstanced(commandList, numInstances);
+		}
+		};
+
+	drawGroups(transparentRenderGroups_);
+	drawGroups(previewRenderGroups_);
+
+	// 元の非インスタンシングPSOに戻す
+	commandList->SetPipelineState(object3dCommon_->GetPipelineState());
+}
+
 // 全てのオブジェクトの描画処理を呼び出す
 void StageRenderer::Draw() {
 	auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
@@ -637,6 +915,8 @@ void StageRenderer::Draw() {
 	// 描画処理を実行するラムダ関数 (Dirtyフラグ制御によるメモリ転送の最小化)
 	auto drawGroups = [commandList, this](std::vector<RenderGroup>& groups) {
 		for (auto& group : groups) {
+
+			
 			UINT numInstances = static_cast<UINT>(group.instances.size());
 			if (numInstances == 0) continue;
 
@@ -670,6 +950,13 @@ void StageRenderer::Draw() {
 
 	// 元の非インスタンシングPSOに戻す
 	commandList->SetPipelineState(object3dCommon_->GetPipelineState());
+
+	// 雲の描画
+	for (const auto& cloud : clouds_) {
+		for (const auto& obj : cloud.objects) {
+			obj->Draw();
+		}
+	}
 }
 
 ID3D12Resource* StageRenderer::GetOrCreateInstancedBuffer(Model* model, UINT numInstances) {
@@ -700,6 +987,9 @@ void StageRenderer::Clear() {
 	previewObjects_.clear(); // 🌟 プレビューも一緒にクリア
 	crumblingFloorInstances_.clear();
 	movingFloorInstances_.clear(); // ★追加：動く足場の管理リストもクリアしてダングリングポインタを防ぐ
+	enemyInstances_.clear(); // ★追加：敵の管理リストもクリア
+	clouds_.clear(); // ★追加：背景雲のリストもクリア
+
 
 	//5/19佐倉
 	pSwitchObjects_.clear();
@@ -716,7 +1006,8 @@ void StageRenderer::SetPlacementPreview(
 	const StageMap& stageMap,
 	const Int3& cursorIndex,
 	BlockType type,
-	int customId
+	int customId,
+	float rotationY
 ) {
 	previewObjects_.clear(); // 既存のプレビューをリセット
 
@@ -762,16 +1053,36 @@ void StageRenderer::SetPlacementPreview(
 	if (customId >= 1 && customId <= 5) {
 		const auto* part = stageMap.GetCustomPart(customId);
 		if (part && !part->IsEmpty()) {
+			int rotIndex = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
+			if (rotIndex < 0) rotIndex += 4;
+
 			for (int ly = 0; ly < 3; ++ly) {
 				for (int lz = 0; lz < 3; ++lz) {
 					for (int lx = 0; lx < 3; ++lx) {
 						const auto& cell = part->cells[ly][lz][lx];
 						if (cell.type == BlockType::None) continue;
 
+						int rx = lx;
+						int rz = lz;
+						float cellRotY = 0.0f;
+						if (rotIndex == 1) {
+							rx = 2 - lz;
+							rz = lx;
+							cellRotY = 1.5707963f;
+						} else if (rotIndex == 2) {
+							rx = 2 - lx;
+							rz = 2 - lz;
+							cellRotY = 3.1415927f;
+						} else if (rotIndex == 3) {
+							rx = lz;
+							rz = 2 - lx;
+							cellRotY = 4.712389f;
+						}
+
 						Vector3 pos = {
-							static_cast<float>(cursorIndex.x + lx),
+							static_cast<float>(cursorIndex.x + rx),
 							static_cast<float>(cursorIndex.y + ly),
-							static_cast<float>(cursorIndex.z + lz)
+							static_cast<float>(cursorIndex.z + rz)
 						};
 						Model* cellModel = (cell.type == BlockType::Ladder) ? ladderModel_.get() : wallModel_.get();
 
@@ -779,6 +1090,7 @@ void StageRenderer::SetPlacementPreview(
 						obj->Initialize(object3dCommon_);
 						obj->SetModel(cellModel);
 						obj->SetPosition(pos);
+						obj->SetRotation({ 1.57f, cellRotY, 0.0f });
 						obj->SetScale(blockScale_);
 						obj->SetColor({ colorR, colorG, colorB, 0.4f }); // 40%の美しい半透明
 
@@ -802,6 +1114,7 @@ void StageRenderer::SetPlacementPreview(
 	obj->Initialize(object3dCommon_);
 	obj->SetModel(targetModel);
 	obj->SetPosition(pos);
+	obj->SetRotation({ 1.57f, rotationY, 0.0f }); // 回転角を適用
 	obj->SetScale(blockScale_);
 	obj->SetColor({ colorR, colorG, colorB, 0.4f }); // 40%の美しい半透明
 	previewObjects_.push_back(std::move(obj));
@@ -846,6 +1159,7 @@ Object3d* StageRenderer::CreateStageObject(
 		obj->SetShininess(0.4f);
 		obj->SetMetallic(0.0f);
 		obj->SetEmissive(0.0f);
+		obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 		break;
 	case BlockType::Ladder:
 		obj->SetShininess(0.5f);
@@ -1066,4 +1380,154 @@ void StageRenderer::MarkDirty(Object3d* obj) {
 			group.isDirty = true; // 次回の描画/影描画時にGPUへ再転送する
 		}
 	}
+}
+
+void StageRenderer::RebuildTransparencyGroups()
+{
+	renderGroups_.clear();
+	transparentRenderGroups_.clear();
+	objectToInstanceMap_.clear();
+
+	auto AddToGroups = [&](std::vector<RenderGroup>& groups, Object3d* obj, size_t index) {
+		Model* model = obj->GetModel();
+
+		RenderGroup* targetGroup = nullptr;
+		for (auto& group : groups) {
+			if (group.model == model) {
+				targetGroup = &group;
+				break;
+			}
+		}
+
+		if (!targetGroup) {
+			RenderGroup group;
+			group.model = model;
+			groups.push_back(std::move(group));
+			targetGroup = &groups.back();
+		}
+
+		RenderInstance inst;
+		inst.object = obj;
+		inst.index = index;
+		targetGroup->instances.push_back(inst);
+		};
+
+	for (size_t i = 0; i < objects_.size(); ++i) {
+		Object3d* obj = objects_[i].get();
+		if (!obj || !obj->GetModel()) continue;
+
+		const auto& mat = obj->GetMaterial();
+
+		if (mat.color.w < 0.99f) {
+			AddToGroups(transparentRenderGroups_, obj, i);
+		} else {
+			AddToGroups(renderGroups_, obj, i);
+		}
+	}
+
+	auto BuildGroupData = [&](std::vector<RenderGroup>& groups) {
+		for (auto& group : groups) {
+			UINT numInstances = static_cast<UINT>(group.instances.size());
+			group.instanceData.resize(numInstances);
+			
+			if (!group.buffer || group.maxInstances < numInstances) {
+				group.maxInstances = numInstances + 64;
+
+				D3D12_HEAP_PROPERTIES heapProps = {
+					D3D12_HEAP_TYPE_UPLOAD,
+					D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+					D3D12_MEMORY_POOL_UNKNOWN,
+					1,
+					1
+				};
+
+				D3D12_RESOURCE_DESC resDesc = {};
+				resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+				resDesc.Width = sizeof(InstanceData) * group.maxInstances;
+				resDesc.Height = 1;
+				resDesc.DepthOrArraySize = 1;
+				resDesc.MipLevels = 1;
+				resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+				resDesc.SampleDesc.Count = 1;
+
+				HRESULT hr = object3dCommon_->GetDxCommon()->GetDevice()->CreateCommittedResource(
+					&heapProps,
+					D3D12_HEAP_FLAG_NONE,
+					&resDesc,
+					D3D12_RESOURCE_STATE_GENERIC_READ,
+					nullptr,
+					IID_PPV_ARGS(&group.buffer)
+				);
+
+				assert(SUCCEEDED(hr));
+			}
+
+			group.isDirty = true;
+
+			InstanceData* dataBegin = nullptr;
+			HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+			if (SUCCEEDED(hr)) {
+				for (UINT i = 0; i < numInstances; ++i) {
+					Object3d* obj = group.instances[i].object;
+					const auto& tf = obj->GetTransform();
+					const auto& mat = obj->GetMaterial();
+
+					group.instanceData[i].world =
+						Math::MakeAffineMatrix(tf.scale, tf.rotate, tf.translate);
+					group.instanceData[i].color = mat.color;
+					group.instanceData[i].shininess = mat.shininess;
+					group.instanceData[i].metallic = mat.metallic;
+					group.instanceData[i].emissive = mat.emissive;
+
+					dataBegin[i] = group.instanceData[i];
+				}
+				group.buffer->Unmap(0, nullptr);
+			}
+
+			group.isDirty = false;
+		}
+		};
+
+	BuildGroupData(renderGroups_);
+	BuildGroupData(transparentRenderGroups_);
+}
+
+//5/26壁半透明
+void StageRenderer::UpdateWallTransparency(
+	const Vector3& cameraPos,
+	const Vector3& playerPos
+)
+{
+	cameraPos; // 未使用警告対策
+
+	for (auto& obj : objects_) {
+		if (!obj || !obj->GetModel()) {
+			continue;
+		}
+
+		if (obj->GetModel() != wallModel_.get()) {
+			continue;
+		}
+
+		
+
+		Vector3 wallPos = obj->GetPosition();
+
+		float dx = wallPos.x - playerPos.x;
+		float dy = wallPos.y - (playerPos.y + 0.8f);
+		float dz = wallPos.z - playerPos.z;
+
+		float distSqToPlayer = dx * dx + dy * dy + dz * dz;
+
+		if (distSqToPlayer < 12.0f) {
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.60f });
+		} else {
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		}
+
+		//MarkDirty(obj.get());
+	}
+
+	RebuildTransparencyGroups();
+
 }

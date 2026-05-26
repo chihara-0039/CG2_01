@@ -18,7 +18,7 @@ void BlockPlacementController::Initialize(
     placeCustomId_ = 0;
 }
 
-bool BlockPlacementController::TryPlace(const Int3& index) {
+bool BlockPlacementController::TryPlace(const Int3& index, float rotationY) {
     if (!stageMap_ || !stageRenderer_ || !inventory_) {
         return false;
     }
@@ -32,6 +32,9 @@ bool BlockPlacementController::TryPlace(const Int3& index) {
                 return false;
             }
 
+            int rotIndex = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
+            if (rotIndex < 0) rotIndex += 4;
+
             // 1. 配置処理（既存ブロックがあるマスは自動スキップし、空いているマスにのみ一括配置）
             bool placedAny = false;
             for (int ly = 0; ly < 3; ++ly) {
@@ -40,11 +43,32 @@ bool BlockPlacementController::TryPlace(const Int3& index) {
                         const auto& cell = part->cells[ly][lz][lx];
                         if (cell.type == BlockType::None) continue;
 
-                        Int3 targetPos = { index.x + lx, index.y + ly, index.z + lz };
+                        int rx = lx;
+                        int rz = lz;
+                        float cellRotY = 0.0f;
+                        if (rotIndex == 1) {
+                            rx = 2 - lz;
+                            rz = lx;
+                            cellRotY = 1.5707963f;
+                        } else if (rotIndex == 2) {
+                            rx = 2 - lx;
+                            rz = 2 - lz;
+                            cellRotY = 3.1415927f;
+                        } else if (rotIndex == 3) {
+                            rx = lz;
+                            rz = 2 - lx;
+                            cellRotY = 4.712389f;
+                        }
+
+                        Int3 targetPos = { index.x + rx, index.y + ly, index.z + rz };
                         if (stageMap_->IsInside(targetPos)) {
                             const MapCell* targetCell = stageMap_->GetCell(targetPos);
                             if (targetCell && targetCell->type == BlockType::None) {
                                 stageMap_->SetBlock(targetPos, cell.type, placeCustomId_);
+                                MapCell* newCell = stageMap_->GetCell(targetPos);
+                                if (newCell) {
+                                    newCell->rotationY = cellRotY;
+                                }
                                 placedAny = true;
                             }
                         }
@@ -91,6 +115,11 @@ bool BlockPlacementController::TryPlace(const Int3& index) {
 
     if (!stageMap_->SetBlock(index, placeBlockType_, finalVariant)) {
         return false;
+    }
+
+    MapCell* cell = stageMap_->GetCell(index);
+    if (cell) {
+        cell->rotationY = rotationY;
     }
 
     // Ground 以外なら所持数を1個消費

@@ -31,6 +31,8 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
         // ここで落ちる可能性が高い
     }
 
+   
+
     CreatePlayerHighlightPipeline(); // 追加5/7佐倉
 
     CreateLightBuffer();
@@ -43,6 +45,9 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
     CreateInstancedRootSignature();
     CreateInstancedGraphicsPipeline();
     CreateInstancedShadowPipeline();
+
+    //半透明パイプライン
+    CreateInstancedAlphaPipeline();
 
     OutputDebugStringA("Object3dCommon::Initialize Finish\n");
 }
@@ -66,6 +71,7 @@ void Object3dCommon::PreDraw() {
     commandList->SetPipelineState(pipelineState_.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
+
 
 void Object3dCommon::PreDrawPlayerHighlight() {
     auto commandList = dxCommon_->GetCommandList();
@@ -340,7 +346,7 @@ void Object3dCommon::CreatePlayerHighlightPipeline() {
     auto& target = psoDesc.BlendState.RenderTarget[0];
     target.BlendEnable = TRUE;
     target.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    target.DestBlend = D3D12_BLEND_ONE;
+    target.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
     target.BlendOp = D3D12_BLEND_OP_ADD;
     target.SrcBlendAlpha = D3D12_BLEND_ONE;
     target.DestBlendAlpha = D3D12_BLEND_ZERO;
@@ -364,6 +370,59 @@ void Object3dCommon::CreatePlayerHighlightPipeline() {
     } else {
         OutputDebugStringA("CreatePlayerHighlightPipeline Success!\n");
     }
+}
+
+void Object3dCommon::CreateInstancedAlphaPipeline()
+{
+    auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.VS.hlsl", L"vs_6_0");
+    assert(vsBlob);
+
+    auto psBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.PS.hlsl", L"ps_6_0");
+    assert(psBlob);
+
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = instancedRootSignature_.Get();
+    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    psoDesc.RasterizerState.FrontCounterClockwise = TRUE;
+
+    // 半透明用
+    psoDesc.DepthStencilState.DepthEnable = TRUE;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+    auto& target = psoDesc.BlendState.RenderTarget[0];
+    target.BlendEnable = TRUE;
+    target.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    target.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    target.BlendOp = D3D12_BLEND_OP_ADD;
+    target.SrcBlendAlpha = D3D12_BLEND_ONE;
+    target.DestBlendAlpha = D3D12_BLEND_ZERO;
+    target.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    target.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+    HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+        &psoDesc,
+        IID_PPV_ARGS(&instancedAlphaPipelineState_)
+    );
+    assert(SUCCEEDED(hr));
 }
 
 void Object3dCommon::CreateInstancedRootSignature() {

@@ -25,6 +25,8 @@ public:
         Vector2 size;
         bool isAvailable = false;
         int customId = 0; // 0: 通常, 1〜5: カスタム
+        std::vector<std::unique_ptr<Sprite>> silhouetteSprites; // 3x3上面図シルエット用スプライト群
+        std::vector<std::unique_ptr<Sprite>> countSprites; // 所持数ドットインジケータ用スプライト群
     };
 
 public:

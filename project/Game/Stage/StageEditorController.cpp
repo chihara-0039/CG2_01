@@ -286,6 +286,32 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
         if (ImGui::Button("Refresh List")) { RefreshStageList(); }
     }
 
+    if (ImGui::CollapsingHeader("Environment & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
+        Vector4 clearColor = stageMap.GetClearColor();
+        if (ImGui::ColorEdit4("Sky/Clear Color", &clearColor.x)) {
+            stageMap.SetClearColor(clearColor);
+        }
+
+        Vector3 lightColor = stageMap.GetLightColor();
+        if (ImGui::ColorEdit3("Light Color", &lightColor.x)) {
+            stageMap.SetLightColor(lightColor);
+        }
+
+        float lightIntensity = stageMap.GetLightIntensity();
+        if (ImGui::SliderFloat("Light Intensity", &lightIntensity, 0.0f, 3.0f)) {
+            stageMap.SetLightIntensity(lightIntensity);
+        }
+
+        Vector3 lightDir = stageMap.GetLightDirection();
+        bool dirChanged = false;
+        dirChanged |= ImGui::SliderFloat("Light Dir X", &lightDir.x, -1.0f, 1.0f);
+        dirChanged |= ImGui::SliderFloat("Light Dir Y", &lightDir.y, -1.0f, 1.0f);
+        dirChanged |= ImGui::SliderFloat("Light Dir Z", &lightDir.z, -1.0f, 1.0f);
+        if (dirChanged) {
+            stageMap.SetLightDirection(lightDir);
+        }
+    }
+
     if (ImGui::CollapsingHeader("Stage Editor Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         // ブロック全体の均等スケール調整用スライダー
         if (ImGui::SliderFloat("Uniform Block Scale", &editorUniformBlockScale_, 0.1f, 3.0f)) {
@@ -525,6 +551,14 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::Door,
                 BlockType::PSwitch,
                 BlockType::Key
+            }
+        },
+        {
+            "Enemies", // 敵キャラクター
+            {
+                BlockType::EnemyWalker,
+                BlockType::EnemyFlyer,
+                BlockType::EnemyChaser
             }
         },
         {
