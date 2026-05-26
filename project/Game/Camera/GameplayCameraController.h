@@ -35,6 +35,16 @@ public:
     float GetPitch() const { return cameraPitch_; }
 
     /// <summary>
+    /// 現在のカメラFOVを取得します。
+    /// </summary>
+    float GetFov() const { return cameraFov_; }
+
+    /// <summary>
+    /// カメラFOVを強制的に設定します（ImGuiデバッグ用）。
+    /// </summary>
+    void SetFov(float fov) { cameraFov_ = fov; }
+
+    /// <summary>
     /// カメラの横回転角度を強制的に設定します。
     /// </summary>
     void SetAngle(float angle) { cameraAngle_ = angle; }
@@ -76,5 +86,6 @@ private:
     bool cameraDirty_ = true;
 
     int currentStageIndex_ = 0;
+    float initialPivotYOffset_ = 8.0f;
 };
 

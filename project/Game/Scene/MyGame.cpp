@@ -204,6 +204,9 @@ void MyGame::Initialize() {
     gameplayUIManager_ = std::make_unique<GameplayUIManager>();
     gameplayUIManager_->Initialize(dxCommon.get(), textureManager.get(), spriteCommon.get(), object3dCommon.get());
 
+    // インベントリの初期化
+    blockInventory_.Initialize(0);
+
     // インベントリUIの初期化
     blockInventoryUI_ = std::make_unique<BlockInventoryUI>();
     blockInventoryUI_->Initialize(dxCommon.get(), spriteCommon.get(), textureManager.get(), &blockInventory_);
@@ -212,8 +215,17 @@ void MyGame::Initialize() {
     uint32_t tutorialTex = textureManager->LoadTexture("Resources/UI/tutorial/tutorial.png");
     tutorialSprite_ = std::make_unique<Sprite>();
     tutorialSprite_->Initialize(spriteCommon.get(), tutorialTex);
-    tutorialSprite_->SetPosition({20,20});
-    tutorialSprite_->SetSize({554,128});
+    tutorialSprite_->SetPosition({20, 20});
+    // tutorial.png は 832x192px → 縮小率 0.666 で 554x128 に表示
+    tutorialSprite_->SetSize({554, 128});
+
+    //配置チュートリアル説明の初期化
+    uint32_t placementTutorialTex = textureManager->LoadTexture("Resources/UI/tutorial/placement_tutorial.png");
+    placementTutorialSprite_ = std::make_unique<Sprite>();
+    placementTutorialSprite_->Initialize(spriteCommon.get(), placementTutorialTex);
+    placementTutorialSprite_->SetPosition({20, 20});
+    // placement_tutorial.png は 1024x278px → 縮小率 0.666 で 682x185 に表示
+    placementTutorialSprite_->SetSize({682, 185});
 
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
@@ -592,26 +604,24 @@ void MyGame::Update() {
         bool isPlayOrPlace = (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
         blockInventoryUI_->Update(input.get(), winApp.get(), isPlayOrPlace, &stageMap_);
 
-        // ダブルクリックによる即時設置要求を処理
+        // ダブルクリックによる配置モード移行要求を処理
+        // （即時配置はせず、配置モードに移行してプレイヤーがカーソル操作して置く）
         if (blockInventoryUI_->ConsumeUseRequest()) {
-            // 即座に配置モードに移行
+            // 配置モードに移行（インベントリはダブルクリック時にToggleOpenで閉じている）
             currentMode_ = AppMode::GamePlay_BlockPlace;
+
+            // カーソルをプレイヤー位置に初期化
+            Vector3 pPosNow = player_ ? player_->GetPosition() : Vector3{0,0,0};
+            int igx = static_cast<int>(std::floor(pPosNow.x + 0.5f));
+            int igy = static_cast<int>(std::floor(pPosNow.y));
+            int igz = static_cast<int>(std::floor(pPosNow.z + 0.5f));
+            mapCursor_->SetIndex({ igx, igy, igz }, stageMap_);
 
             // 選択されたブロックタイプとカスタムIDをコントローラーに同期
             BlockType doubleClickedType = blockInventoryUI_->GetSelectedBlockType();
             int selectedCustomId = blockInventoryUI_->GetSelectedCustomId();
             blockPlacementController_.SetPlaceBlockType(doubleClickedType);
             blockPlacementController_.SetPlaceCustomId(selectedCustomId);
-
-            // 現在のカーソル位置に即時配置を試みる
-            Int3 cursorPos = mapCursor_->GetIndex();
-            if (blockPlacementController_.TryPlace(cursorPos)) {
-                // 設置成功後、もしそのブロックの所持数が 0 になったら自動的に通常プレイに戻る
-                bool hasRest = (doubleClickedType == BlockType::Ground) || blockInventory_.HasBlock(doubleClickedType, selectedCustomId);
-                if (!hasRest) {
-                    currentMode_ = AppMode::GamePlay;
-                }
-            }
         }
     }
 }
@@ -637,8 +647,11 @@ void MyGame::UpdateGamePlay() {
     }
 
     if (!useFirstPersonCamera_) {
+        camera->SetFov(gameplayCameraController_.GetFov()); // 三人称は元のFOVに戻す
         gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
     } else {
+        camera->SetFov(0.9f); // 一人称視点は高FOV(広角)にする！
+
         // 一人称カメラ (FPS Camera) の更新
         const auto& mouse = input->GetMouseState();
         bool isGuiCaptured = false;
@@ -668,10 +681,17 @@ void MyGame::UpdateGamePlay() {
                 else if (mouseX > rightEdge) fpsCameraYaw_ -= rotateSpeed;
                 if (mouseY < topEdge) fpsCameraPitch_ += rotateSpeed;
                 else if (mouseY > bottomEdge) fpsCameraPitch_ -= rotateSpeed;
-
-                fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
             }
         }
+
+        // 矢印キーによるカメラ回転操作
+        const float keyRotateSpeed = 0.03f;
+        if (input->PushKey(DIK_LEFT))  fpsCameraYaw_ += keyRotateSpeed;
+        if (input->PushKey(DIK_RIGHT)) fpsCameraYaw_ -= keyRotateSpeed;
+        if (input->PushKey(DIK_UP))    fpsCameraPitch_ += keyRotateSpeed;
+        if (input->PushKey(DIK_DOWN))  fpsCameraPitch_ -= keyRotateSpeed;
+
+        fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
 
         if (player_) {
             Vector3 playerPos = player_->GetPosition();
@@ -694,18 +714,27 @@ void MyGame::UpdateGamePlay() {
     }
 
     //チュートリアルUI　05/21 小林
+    bool inventoryOpenForUpdate = blockInventoryUI_ && blockInventoryUI_->IsActive();
+
     if (stageSelect_)
     {
         std::string currentStage = stageSelect_->GetSelectedFileName();
-        if (currentStage == "tutorial.txt" && tutorialSprite_)
+        // 通常プレイ中のみ操作チュートリアルをUpdate
+        if (currentStage == "tutorial.txt" && tutorialSprite_ && !inventoryOpenForUpdate)
         {
             tutorialSprite_->Update();
         }
     }
 
+    // 配置チュートリアルはインベントリが開いている時にUpdate
+    if ((currentMode_ == AppMode::GamePlay_BlockPlace || inventoryOpenForUpdate) && placementTutorialSprite_)
+    {
+        placementTutorialSprite_->Update();
+    }
+
     float deltaTime = 1.0f / 60.0f;
     totalTime_ += deltaTime;
-    stageMap_.Update(deltaTime, totalTime_);
+    stageMap_.Update(deltaTime, totalTime_, player_ ? player_->GetPosition() : Vector3{0.0f, 0.0f, 0.0f});
 
     stageRenderer_->UpdateEffect(stageMap_);
 
@@ -761,17 +790,12 @@ void MyGame::UpdateGamePlay() {
     }
 
     /*==================================================
-        ▼ 配置モード切り替え
-        インベントリUIがアクティブになった場合、またはBキーで配置モードへ
+        ▼ インベントリを開く
+        Bキーでインベントリを開く。配置モードへの移行はダブルクリック時のみ。
     ==================================================*/
-    if (blockInventoryUI_ && blockInventoryUI_->IsActive()) {
-        currentMode_ = AppMode::GamePlay_BlockPlace;
-        mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
-    } else if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
-        currentMode_ = AppMode::GamePlay_BlockPlace;
-        mapCursor_->SetIndex({ gx, gy, gz }, stageMap_);
+    if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
         if (blockInventoryUI_) {
-            blockInventoryUI_->ToggleOpen(); // Bキーでもインベントリを開く
+            blockInventoryUI_->ToggleOpen(); // Bキーでインベントリを開閉
         }
     }
 
@@ -851,6 +875,10 @@ void MyGame::UpdateImGui() {
             ImGui::SliderFloat("FPS Camera Pitch", &fpsCameraPitch_, -1.4f, 1.4f);
         }
         camera->DrawImGui();
+        // ゲームプレイモード時はImGuiで変更されたFOVをコントローラに書き戻す
+        if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
+            gameplayCameraController_.SetFov(*camera->GetFovPtr());
+        }
     }
     if (ImGui::CollapsingHeader("StageMap Info")) {
         stageMap_.DrawImGui();
@@ -1553,14 +1581,28 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
     }
 
     // チュートリアルUIの描画
-    if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)
+    // インベントリが開いているとき（GamePlay_BlockPlace）は配置チュートリアルを優先表示し、
+    // 通常ゲームプレイ時のみ操作チュートリアルを表示する（被り防止）
+    bool inventoryIsOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+
+    if (currentMode_ == AppMode::GamePlay && !inventoryIsOpen)
     {
-        std::string currentStage = stageSelect_->GetSelectedFileName();
-        if (currentStage == "tutorial.txt")
-        {
-            spriteCommon->PreDraw();
-            tutorialSprite_->Draw();
+        // 通常プレイ中のみ操作チュートリアルを表示
+        if (stageSelect_) {
+            std::string currentStage = stageSelect_->GetSelectedFileName();
+            if (currentStage == "tutorial.txt" && tutorialSprite_)
+            {
+                spriteCommon->PreDraw();
+                tutorialSprite_->Draw();
+            }
         }
+    }
+
+    // 配置チュートリアルUIの描画（インベントリが開いている時に表示）
+    if ((currentMode_ == AppMode::GamePlay_BlockPlace || inventoryIsOpen) && placementTutorialSprite_)
+    {
+        spriteCommon->PreDraw();
+        placementTutorialSprite_->Draw();
     }
 }
 
@@ -1631,6 +1673,14 @@ void MyGame::UpdateGamePlayBlockPlace()
     // 現在カーソル位置
     const Int3& cursor = mapCursor_->GetIndex();
 
+    // Rキーで配置回転角を90度ずつ更新 (反時計回りに1.57rad=90度)
+    if (input->TriggerKey(DIK_R)) {
+        placeRotationY_ += 1.5707963f;
+        if (placeRotationY_ >= 6.0f) { // 360度に達したらリセット
+            placeRotationY_ = 0.0f;
+        }
+    }
+
     // カーソル移動処理
     stageEditorController_.HandleCursorInput(input.get(), stageMap_, mapCursor_.get(), lightCamera_.get(), camera.get());
 
@@ -1649,61 +1699,58 @@ void MyGame::UpdateGamePlayBlockPlace()
 
     // 🌟 半透明リアルタイムプレビューを毎フレーム更新！！！
     if (stageRenderer_) {
-        stageRenderer_->SetPlacementPreview(stageMap_, cursor, selectedType, selectedCustomId);
+        stageRenderer_->SetPlacementPreview(stageMap_, cursor, selectedType, selectedCustomId, placeRotationY_);
     }
 
     // ② ブロックを置く決定処理 (Enterキー または ゲーム画面上の左クリック)
-    bool clickOnGameScreen = false;
-    if (input->GetMouseState().buttons[0] && blockInventoryUI_) {
-        // マウス座標がインベントリパネル外のときのみゲーム画面のクリックと判定
-        float screenWidth = static_cast<float>(WinApp::kClientWidth);
-        RECT rect;
-        GetClientRect(winApp->GetHwnd(), &rect);
-        float currentClientW = static_cast<float>(rect.right - rect.left);
-        float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
-        float swapMouseX = static_cast<float>(input->GetMouseState().posX) * scaleX;
-        float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
-        float mouseX = swapMouseX - offsetX;
+    // 配置モード時はインベントリが閉じた状態のため、常にゲーム画面のクリックで配置
+    static bool prevMouse0 = false;
+    bool mouseJustPressed = input->GetMouseState().buttons[0] && !prevMouse0;
+    prevMouse0 = input->GetMouseState().buttons[0];
 
-        if (mouseX < blockInventoryUI_->GetPanelLeftX()) {
-            clickOnGameScreen = true;
+    bool mouseTrigger = false;
+    if (mouseJustPressed) {
+        // インベントリが閉じている（または完全に閉まっている）場合のみゲーム画面クリックで配置
+        bool inventoryClosed = !blockInventoryUI_ || !blockInventoryUI_->IsActive();
+        if (inventoryClosed) {
+            mouseTrigger = true;
         }
     }
-
-    // 前フレームからのマウスクリックトリガーを自前で管理する
-    static bool prevLeftClick = false;
-    bool mouseTrigger = clickOnGameScreen && !prevLeftClick;
-    prevLeftClick = (input->GetMouseState().buttons[0] && clickOnGameScreen);
 
     if (input->TriggerKey(DIK_RETURN) || mouseTrigger) {
         Int3 cursorPos = mapCursor_->GetIndex();
 
         // コントローラーを使ってブロックを配置
-        if (blockPlacementController_.TryPlace(cursorPos)) {
+        if (blockPlacementController_.TryPlace(cursorPos, placeRotationY_)) {
             // 設置完了後、所持数が 0 になったら自動的に通常プレイに戻る
             BlockType currentType = blockInventoryUI_ ? blockInventoryUI_->GetSelectedBlockType() : BlockType::Ground;
             int currentCustomId = blockInventoryUI_ ? blockInventoryUI_->GetSelectedCustomId() : 0;
             bool hasRest = (currentType == BlockType::Ground) || blockInventory_.HasBlock(currentType, currentCustomId);
             if (!hasRest) {
                 currentMode_ = AppMode::GamePlay;
+                placeRotationY_ = 0.0f;
                 if (stageRenderer_) {
-                    stageRenderer_->ClearPlacementPreview(); // 🌟 プレビューをクリア！
-                }
-                if (blockInventoryUI_) {
-                    blockInventoryUI_->ToggleOpen(); // インベントリを閉じる
+                    stageRenderer_->ClearPlacementPreview();
                 }
             }
         }
     }
 
-    // ③ キャンセルして戻る処理 (Escapeキー または インベントリUIが閉じられたとき)
-    if (input->TriggerKey(DIK_ESCAPE) || (blockInventoryUI_ && !blockInventoryUI_->IsActive())) {
+    // ③ キャンセルして戻る処理
+    // ESCキー → キャンセル
+    // Bキー → インベントリを開いてキャンセル（インベントリで別ブロックを選べる）
+    if (input->TriggerKey(DIK_ESCAPE)) {
         currentMode_ = AppMode::GamePlay;
+        placeRotationY_ = 0.0f;
         if (stageRenderer_) {
-            stageRenderer_->ClearPlacementPreview(); // 🌟 プレビューをクリア！
+            stageRenderer_->ClearPlacementPreview();
         }
-        if (blockInventoryUI_ && blockInventoryUI_->IsActive()) {
-            blockInventoryUI_->ToggleOpen(); // キーキャンセル時はインベントリも閉じる
+    } else if (input->TriggerKey(DIK_B)) {
+        // Bキーで配置モードをキャンセルして通常プレイに戻る（インベントリは開かない）
+        currentMode_ = AppMode::GamePlay;
+        placeRotationY_ = 0.0f;
+        if (stageRenderer_) {
+            stageRenderer_->ClearPlacementPreview();
         }
     }
 
@@ -1747,6 +1794,9 @@ void MyGame::UpdateStageSelect()
 
             int stageIndex = stageSelect_->GetSelectedIndex();
             gameplayCameraController_.ResetCamera(camera.get(), player_.get(), stageIndex);
+
+            // インベントリを0個に初期化
+            blockInventory_.Initialize(0);
         }
         // ゲームプレイモードへ切り替え
         currentMode_ = AppMode::GamePlay;

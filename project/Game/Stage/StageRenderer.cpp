@@ -438,6 +438,78 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f }
 					);
 					break;
+
+				case BlockType::Spike:
+					{
+						Object3d* obj = CreateStageObject(
+							wallModel_.get(),
+							position,
+							{ blockScale_.x, blockScale_.y * 0.2f, blockScale_.z }, // Y軸に潰す
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::Spike
+						);
+						if (obj) {
+							obj->SetColor({ 0.8f, 0.1f, 0.1f, 1.0f }); // 赤色トゲ
+						}
+					}
+					break;
+
+				case BlockType::EnemyWalker:
+					{
+						Object3d* obj = CreateStageObject(
+							bubbleModel_.get(), // 球体モデルを流用
+							position,
+							{ blockScale_.x * 0.6f, blockScale_.y * 0.6f, blockScale_.z * 0.6f },
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::EnemyWalker
+						);
+						if (obj) {
+							obj->SetColor({ 0.7f, 0.1f, 0.7f, 1.0f }); // 紫色の敵
+							EnemyInstance inst;
+							inst.object = obj;
+							inst.cellIndex = { x, y, z };
+							enemyInstances_.push_back(inst);
+						}
+					}
+					break;
+
+				case BlockType::EnemyFlyer:
+					{
+						Object3d* obj = CreateStageObject(
+							bubbleModel_.get(),
+							position,
+							{ blockScale_.x * 0.6f, blockScale_.y * 0.6f, blockScale_.z * 0.6f },
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::EnemyFlyer
+						);
+						if (obj) {
+							obj->SetColor({ 0.8f, 0.8f, 0.1f, 1.0f }); // 黄色の敵
+							EnemyInstance inst;
+							inst.object = obj;
+							inst.cellIndex = { x, y, z };
+							enemyInstances_.push_back(inst);
+						}
+					}
+					break;
+
+				case BlockType::EnemyChaser:
+					{
+						Object3d* obj = CreateStageObject(
+							bubbleModel_.get(),
+							position,
+							{ blockScale_.x * 0.6f, blockScale_.y * 0.6f, blockScale_.z * 0.6f },
+							{ 0.0f, 0.0f, 0.0f },
+							BlockType::EnemyChaser
+						);
+						if (obj) {
+							obj->SetColor({ 0.1f, 0.8f, 0.8f, 1.0f }); // シアンの敵
+							EnemyInstance inst;
+							inst.object = obj;
+							inst.cellIndex = { x, y, z };
+							enemyInstances_.push_back(inst);
+						}
+					}
+					break;
 				// ブロックの種類が不明な場合は何もしない
 				default:
 				break;
@@ -482,6 +554,27 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 			instance.object->SetPosition(newPosition);
 			instance.object->Update(lightVP); // 動く床のみ行列を更新
 			// 更新した動く床のインスタンスデータをDirty化
+			MarkDirty(instance.object);
+		}
+	}
+
+	for (auto& instance : enemyInstances_) {
+		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
+		if (cell && (cell->type == BlockType::EnemyWalker || cell->type == BlockType::EnemyFlyer || cell->type == BlockType::EnemyChaser)) {
+			Vector3 basePosition = {
+				static_cast<float>(instance.cellIndex.x) * blockScale_.x,
+				static_cast<float>(instance.cellIndex.y) * blockScale_.y,
+				static_cast<float>(instance.cellIndex.z) * blockScale_.z
+			};
+
+			Vector3 newPosition = {
+				basePosition.x + (cell->currentOffsetX * blockScale_.x),
+				basePosition.y + (cell->currentOffsetY * blockScale_.y),
+				basePosition.z + (cell->currentOffsetZ * blockScale_.z)
+			};
+
+			instance.object->SetPosition(newPosition);
+			instance.object->Update(lightVP);
 			MarkDirty(instance.object);
 		}
 	}
@@ -643,6 +736,7 @@ void StageRenderer::Clear() {
 	objects_.clear();
 	previewObjects_.clear(); // 🌟 プレビューも一緒にクリア
 	movingFloorInstances_.clear(); // ★追加：動く足場の管理リストもクリアしてダングリングポインタを防ぐ
+	enemyInstances_.clear(); // ★追加：敵の管理リストもクリア
 
 	//5/19佐倉
 	pSwitchObjects_.clear();
@@ -659,7 +753,8 @@ void StageRenderer::SetPlacementPreview(
 	const StageMap& stageMap,
 	const Int3& cursorIndex,
 	BlockType type,
-	int customId
+	int customId,
+	float rotationY
 ) {
 	previewObjects_.clear(); // 既存のプレビューをリセット
 
@@ -705,16 +800,36 @@ void StageRenderer::SetPlacementPreview(
 	if (customId >= 1 && customId <= 5) {
 		const auto* part = stageMap.GetCustomPart(customId);
 		if (part && !part->IsEmpty()) {
+			int rotIndex = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
+			if (rotIndex < 0) rotIndex += 4;
+
 			for (int ly = 0; ly < 3; ++ly) {
 				for (int lz = 0; lz < 3; ++lz) {
 					for (int lx = 0; lx < 3; ++lx) {
 						const auto& cell = part->cells[ly][lz][lx];
 						if (cell.type == BlockType::None) continue;
 
+						int rx = lx;
+						int rz = lz;
+						float cellRotY = 0.0f;
+						if (rotIndex == 1) {
+							rx = 2 - lz;
+							rz = lx;
+							cellRotY = 1.5707963f;
+						} else if (rotIndex == 2) {
+							rx = 2 - lx;
+							rz = 2 - lz;
+							cellRotY = 3.1415927f;
+						} else if (rotIndex == 3) {
+							rx = lz;
+							rz = 2 - lx;
+							cellRotY = 4.712389f;
+						}
+
 						Vector3 pos = {
-							static_cast<float>(cursorIndex.x + lx),
+							static_cast<float>(cursorIndex.x + rx),
 							static_cast<float>(cursorIndex.y + ly),
-							static_cast<float>(cursorIndex.z + lz)
+							static_cast<float>(cursorIndex.z + rz)
 						};
 						Model* cellModel = (cell.type == BlockType::Ladder) ? ladderModel_.get() : wallModel_.get();
 
@@ -722,6 +837,7 @@ void StageRenderer::SetPlacementPreview(
 						obj->Initialize(object3dCommon_);
 						obj->SetModel(cellModel);
 						obj->SetPosition(pos);
+						obj->SetRotation({ 1.57f, cellRotY, 0.0f });
 						obj->SetScale(blockScale_);
 						obj->SetColor({ colorR, colorG, colorB, 0.4f }); // 40%の美しい半透明
 
@@ -745,6 +861,7 @@ void StageRenderer::SetPlacementPreview(
 	obj->Initialize(object3dCommon_);
 	obj->SetModel(targetModel);
 	obj->SetPosition(pos);
+	obj->SetRotation({ 1.57f, rotationY, 0.0f }); // 回転角を適用
 	obj->SetScale(blockScale_);
 	obj->SetColor({ colorR, colorG, colorB, 0.4f }); // 40%の美しい半透明
 	previewObjects_.push_back(std::move(obj));

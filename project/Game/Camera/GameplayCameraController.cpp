@@ -32,6 +32,36 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 
     bool changed = false;
 
+    // --- プレイヤー追従デッドゾーン処理 ---
+    Vector3 playerPos = player->GetPosition();
+    float deadZoneX = 5.0f;
+    float deadZoneZ = 5.0f;
+
+    float diffX = playerPos.x - cameraPivot_.x;
+    if (diffX > deadZoneX) {
+        cameraPivot_.x = playerPos.x - deadZoneX;
+        changed = true;
+    } else if (diffX < -deadZoneX) {
+        cameraPivot_.x = playerPos.x + deadZoneX;
+        changed = true;
+    }
+
+    float diffZ = playerPos.z - cameraPivot_.z;
+    if (diffZ > deadZoneZ) {
+        cameraPivot_.z = playerPos.z - deadZoneZ;
+        changed = true;
+    } else if (diffZ < -deadZoneZ) {
+        cameraPivot_.z = playerPos.z + deadZoneZ;
+        changed = true;
+    }
+
+    float targetPivotY = playerPos.y + initialPivotYOffset_;
+    float diffPivotY = targetPivotY - cameraPivot_.y;
+    if (std::abs(diffPivotY) > 2.0f) {
+        cameraPivot_.y += diffPivotY * 0.1f; // ゆるやかにY軸追従
+        changed = true;
+    }
+
     // ==========================================================
     // ズーム：ホイールが動いた時だけ処理
     // ==========================================================
@@ -250,6 +280,8 @@ void GameplayCameraController::ResetCamera(Camera* camera, Player* player, int s
         cameraFov_ = 0.450f;
         break;
     }
+
+    initialPivotYOffset_ = cameraPivot_.y - player->GetPosition().y;
 
     camera->SetFov(cameraFov_);
     ApplyCamera(camera);

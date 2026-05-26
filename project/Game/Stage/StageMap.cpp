@@ -81,85 +81,150 @@ void StageMap::Initialize(int width, int height, int depth) {
     customParts_[4].cells[0][0][0].type = BlockType::Ladder; // 1マスだけ
 }
 
-void StageMap::Update(float deltaTime, float totalTime) 
+void StageMap::Update(float deltaTime, float totalTime, const Vector3& playerPos) 
 {
-    for (auto& cell : cells_)
-    {
-#pragma region 崩れる足場
+    for (int y = 0; y < height_; ++y) {
+        for (int z = 0; z < depth_; ++z) {
+            for (int x = 0; x < width_; ++x) {
+                MapCell& cell = cells_[ToIndex(x, y, z)];
 
-        if (cell.type == BlockType::CrumblingFloor) {
-            // --- 崩れる処理 ---
-            if (!cell.isHidden) {
-                if (cell.isCrumbling) {
-                    // プレイヤーが乗っているならタイマーを進める
-                    cell.crumbleTimer += deltaTime;
+                if (cell.type == BlockType::CrumblingFloor) {
+                    // --- 崩れる処理 ---
+                    if (!cell.isHidden) {
+                        if (cell.isCrumbling) {
+                            // プレイヤーが乗っているならタイマーを進める
+                            cell.crumbleTimer += deltaTime;
 
-                    if (cell.crumbleTimer >= 1.0f) {
-                        cell.isHidden = true;
-                        cell.isSolid = false;
-                        cell.isCrumbling = false;
+                            if (cell.crumbleTimer >= 1.0f) {
+                                cell.isHidden = true;
+                                cell.isSolid = false;
+                                cell.isCrumbling = false;
+                            }
+                        }
+                        else {
+                            // プレイヤーが降りたらタイマーを回復させる
+                            cell.crumbleTimer -= deltaTime * 2.0f;
+                            if (cell.crumbleTimer < 0.0f) cell.crumbleTimer = 0.0f;
+                        }
+                    }
+
+                    // --- 復活処理 ---
+                    if (cell.isHidden) {
+                        cell.respawnTimer += deltaTime;
+                        if (cell.respawnTimer >= 3.0f) { // 3秒で復活
+                            cell.isHidden = false;
+                            cell.isSolid = true; // 判定復活
+                            cell.respawnTimer = 0.0f;
+                        }
+                    }
+
+                    // --- 演出用の色・透明度計算 ---
+                    if (!cell.isHidden) {
+                        float r = cell.crumbleTimer / 1.0f;
+                        cell.colorG = 1.0f - r;
+                        cell.colorB = 1.0f - r;
+                    }
+                    cell.isCrumbling = false;
+                }
+
+                if (cell.type == BlockType::MovingFloor) {
+                    float moveSpeed = 1.0f;
+                    cell.moveTimer += deltaTime * moveSpeed;
+
+                    float t = (std::sin(cell.moveTimer) + 1.0f) / 2.0f;
+
+                    // 前フレームのオフセットを記憶
+                    float oldX = cell.currentOffsetX;
+                    float oldY = cell.currentOffsetY;
+                    float oldZ = cell.currentOffsetZ;
+
+                    // 新しいオフセットを計算
+                    cell.currentOffsetX = static_cast<float>(cell.moveOffset.x) * t;
+                    cell.currentOffsetY = static_cast<float>(cell.moveOffset.y) * t;
+                    cell.currentOffsetZ = static_cast<float>(cell.moveOffset.z) * t;
+
+                    // 1フレーム分の移動量を記録
+                    cell.deltaOffsetX = cell.currentOffsetX - oldX;
+                    cell.deltaOffsetY = cell.currentOffsetY - oldY;
+                    cell.deltaOffsetZ = cell.currentOffsetZ - oldZ;
+                }
+
+                // --- 敵1 (EnemyWalker): 左右往復 (X軸) ---
+                if (cell.type == BlockType::EnemyWalker) {
+                    cell.moveTimer += deltaTime * 2.0f;
+                    cell.currentOffsetX = std::sin(cell.moveTimer) * 2.0f;
+                    cell.currentOffsetY = 0.0f;
+                    cell.currentOffsetZ = 0.0f;
+                }
+
+                // --- 敵2 (EnemyFlyer): 上下往復 (Y軸) ---
+                if (cell.type == BlockType::EnemyFlyer) {
+                    cell.moveTimer += deltaTime * 1.5f;
+                    cell.currentOffsetY = std::sin(cell.moveTimer) * 2.5f;
+                    cell.currentOffsetX = 0.0f;
+                    cell.currentOffsetZ = 0.0f;
+                }
+
+                // --- 敵3 (EnemyChaser): プレイヤー追尾 (一定範囲内のみ) ---
+                if (cell.type == BlockType::EnemyChaser) {
+                    Vector3 spawnPos = { static_cast<float>(x), static_cast<float>(y), static_cast<float>(z) };
+                    Vector3 currentPos = {
+                        spawnPos.x + cell.currentOffsetX,
+                        spawnPos.y + cell.currentOffsetY,
+                        spawnPos.z + cell.currentOffsetZ
+                    };
+                    Vector3 toPlayer = {
+                        playerPos.x - currentPos.x,
+                        playerPos.y - currentPos.y,
+                        playerPos.z - currentPos.z
+                    };
+                    float dist = std::sqrt(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y + toPlayer.z * toPlayer.z);
+
+                    float spawnDist = std::sqrt(
+                        (playerPos.x - spawnPos.x) * (playerPos.x - spawnPos.x) +
+                        (playerPos.y - spawnPos.y) * (playerPos.y - spawnPos.y) +
+                        (playerPos.z - spawnPos.z) * (playerPos.z - spawnPos.z)
+                    );
+
+                    if (spawnDist < 8.0f && dist > 0.05f) {
+                        float speed = 1.2f; // 秒速 1.2 マス
+                        Vector3 dir = { toPlayer.x / dist, toPlayer.y / dist, toPlayer.z / dist };
+                        Vector3 nextPos = {
+                            currentPos.x + dir.x * (speed * deltaTime),
+                            currentPos.y + dir.y * (speed * deltaTime),
+                            currentPos.z + dir.z * (speed * deltaTime)
+                        };
+
+                        // スポーン位置からの最大追尾距離を 8 マスに制限
+                        Vector3 nextOffset = {
+                            nextPos.x - spawnPos.x,
+                            nextPos.y - spawnPos.y,
+                            nextPos.z - spawnPos.z
+                        };
+                        float offsetDist = std::sqrt(nextOffset.x * nextOffset.x + nextOffset.y * nextOffset.y + nextOffset.z * nextOffset.z);
+                        if (offsetDist > 8.0f) {
+                            nextOffset = { nextOffset.x / offsetDist * 8.0f, nextOffset.y / offsetDist * 8.0f, nextOffset.z / offsetDist * 8.0f };
+                        }
+                        cell.currentOffsetX = nextOffset.x;
+                        cell.currentOffsetY = nextOffset.y;
+                        cell.currentOffsetZ = nextOffset.z;
+                    } else {
+                        // プレイヤーが遠い場合は、ゆっくり初期位置に戻る
+                        float returnSpeed = 1.0f;
+                        float curDist = std::sqrt(cell.currentOffsetX * cell.currentOffsetX + cell.currentOffsetY * cell.currentOffsetY + cell.currentOffsetZ * cell.currentOffsetZ);
+                        if (curDist > 0.05f) {
+                            cell.currentOffsetX -= (cell.currentOffsetX / curDist) * returnSpeed * deltaTime;
+                            cell.currentOffsetY -= (cell.currentOffsetY / curDist) * returnSpeed * deltaTime;
+                            cell.currentOffsetZ -= (cell.currentOffsetZ / curDist) * returnSpeed * deltaTime;
+                        } else {
+                            cell.currentOffsetX = 0.0f;
+                            cell.currentOffsetY = 0.0f;
+                            cell.currentOffsetZ = 0.0f;
+                        }
                     }
                 }
-                else {
-                    // ★ここが重要：プレイヤーが降りたらタイマーを 0 に戻す
-                    // これで「一瞬かすめただけ」なら赤くならずに済みます
-                    cell.crumbleTimer -= deltaTime * 2.0f; // 徐々に回復させる（または 0.0f で即リセット）
-                    if (cell.crumbleTimer < 0.0f) cell.crumbleTimer = 0.0f;
-                }
             }
-
-            // --- 復活処理 ---
-            if (cell.isHidden) {
-                cell.respawnTimer += deltaTime;
-                if (cell.respawnTimer >= 3.0f) { // 3秒で復活
-                    cell.isHidden = false;
-                    cell.isSolid = true; // 判定復活
-                    cell.respawnTimer = 0.0f;
-                    // ★ changed = true; もここでは呼ばない！
-                }
-            }
-
-            // --- 演出用の色・透明度計算 ---
-            // 乗っている間は赤くする
-            if (!cell.isHidden) {
-                // crumbleTimerが0なら白、1.0に近づくほど赤くなる
-                float r = cell.crumbleTimer / 1.0f;
-                cell.colorG = 1.0f - r;
-                cell.colorB = 1.0f - r;
-            }
-            cell.isCrumbling = false;
         }
-#pragma endregion
-
-#pragma region 動く足場
-
-        if (cell.type == BlockType::MovingFloor) {
-            // 1. タイマーを進める（速度を調整したい場合は deltaTime * 1.5f のように倍率をかけます）
-            float moveSpeed = 1.0f;
-            cell.moveTimer += deltaTime * moveSpeed;
-
-            // 2. sin波を使って 0.0 〜 1.0 の間を滑らかに往復する割合(t)を作る
-            // std::sin は -1.0 〜 1.0 を返すので、+1.0 して 0.0 〜 2.0 にし、2.0 で割って 0.0 〜 1.0 に変換します
-            float t = (std::sin(cell.moveTimer) + 1.0f) / 2.0f;
-
-            // 前フレームのオフセットを記憶
-            float oldX = cell.currentOffsetX;
-            float oldY = cell.currentOffsetY;
-            float oldZ = cell.currentOffsetZ;
-
-            // 新しいオフセットを float で滑らかに計算
-            cell.currentOffsetX = static_cast<float>(cell.moveOffset.x) * t;
-            cell.currentOffsetY = static_cast<float>(cell.moveOffset.y) * t;
-            cell.currentOffsetZ = static_cast<float>(cell.moveOffset.z) * t;
-
-            // 1フレーム分の移動量（差分）を記録
-            cell.deltaOffsetX = cell.currentOffsetX - oldX;
-            cell.deltaOffsetY = cell.currentOffsetY - oldY;
-            cell.deltaOffsetZ = cell.currentOffsetZ - oldZ;
-        }
-
-#pragma endregion
-
     }
 }
 
@@ -200,15 +265,20 @@ void StageMap::SaveToFile(const std::string& filename) {
                 const MapCell* cell = GetCell(x, y, z);
                 if (cell->type == BlockType::None) continue; // 空ブロックは保存しない
 
+                int saveVariant = cell->variant;
+                if (cell->type == BlockType::MovingFloor) {
+                    saveVariant = (cell->moveOffset.x + 10) | ((cell->moveOffset.y + 10) << 8) | ((cell->moveOffset.z + 10) << 16);
+                }
+
                 ofs << x << " " << y << " " << z << " "
                     << static_cast<int>(cell->type) << " "
                     << cell->rotationX << " " << cell->rotationY << " "
-                    << cell->variant << "\n";
+                    << saveVariant << "\n";
 
                 if (cell->type == BlockType::Door) {
                     ofs << cell->doorTargetIndex.x << " "
                         << cell->doorTargetIndex.y << " "
-                        << cell->doorTargetIndex.z << " ";
+                        << cell->doorTargetIndex.z << "\n"; // ドア先座標の後に改行を出力して安全に読み込めるようにする
                 }
             }
         }
@@ -317,6 +387,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
     }
     ifs.close();
     RebuildMovingFloorList();
+    RebuildEnemyList();
 }
 
 void StageMap::Clear() {
@@ -325,6 +396,7 @@ void StageMap::Clear() {
         cell.variant = 0;
         cell.isSolid = false;
     }
+    enemies_.clear();
 }
 
 bool StageMap::IsInside(int x, int y, int z) const {
@@ -367,6 +439,7 @@ bool StageMap::SetBlock(int x, int y, int z, BlockType type, int variant) {
 
     cells_[ToIndex(x, y, z)] = MakeCell(type, variant);
     RebuildMovingFloorList();
+    RebuildEnemyList();
     return true;
 }
 
@@ -381,6 +454,7 @@ bool StageMap::RemoveBlock(int x, int y, int z) {
 
     cells_[ToIndex(x, y, z)] = MakeCell(BlockType::None, 0);
     RebuildMovingFloorList();
+    RebuildEnemyList();
 
     return true;
 }
@@ -512,9 +586,24 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::Star:
     case BlockType::CrumblingFloor:
     case BlockType::IceBlock:
-    case BlockType::MovingFloor:
     case BlockType::KeyBlock:    // 鍵ブロックは通り抜けられない
     cell.isSolid = true;
+    break;
+
+    case BlockType::MovingFloor:
+    cell.isSolid = true;
+    if (variant == 0) {
+        cell.moveOffset = { 0, 0, 3 }; // デフォルト Z 軸に 3 マス
+    } else {
+        int dx = (variant & 0xFF) - 10;
+        int dy = ((variant >> 8) & 0xFF) - 10;
+        int dz = ((variant >> 16) & 0xFF) - 10;
+        if (dx >= -10 && dx <= 10 && dy >= -10 && dy <= 10 && dz >= -10 && dz <= 10) {
+            cell.moveOffset = { dx, dy, dz };
+        } else {
+            cell.moveOffset = { 0, 0, 3 };
+        }
+    }
     break;
 
     case BlockType::BubblePickup:
@@ -549,6 +638,23 @@ void StageMap::RebuildMovingFloorList() {
                 const MapCell* cell = GetCell(x, y, z);
                 if (cell && cell->type == BlockType::MovingFloor) {
                     movingFloors_.push_back({ x, y, z });
+                }
+            }
+        }
+    }
+}
+
+void StageMap::RebuildEnemyList() {
+    enemies_.clear();
+
+    for (int y = 0; y < height_; ++y) {
+        for (int z = 0; z < depth_; ++z) {
+            for (int x = 0; x < width_; ++x) {
+                const MapCell* cell = GetCell(x, y, z);
+                if (cell && (cell->type == BlockType::EnemyWalker || 
+                             cell->type == BlockType::EnemyFlyer || 
+                             cell->type == BlockType::EnemyChaser)) {
+                    enemies_.push_back({ x, y, z });
                 }
             }
         }

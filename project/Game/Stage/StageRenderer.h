@@ -32,7 +32,8 @@ public:
         const StageMap& stageMap,
         const Int3& cursorIndex,
         BlockType type,
-        int customId
+        int customId,
+        float rotationY
     );
     void ClearPlacementPreview();
 
@@ -73,6 +74,14 @@ private:
 
     // ▼ 追加：ステージ内のすべての動く足場を管理するリスト
     std::vector<MovingFloorInstance> movingFloorInstances_;
+
+    // ▼ 追加：ステージ内のすべての敵キャラクターを管理するリスト
+    struct EnemyInstance 
+    {
+        Object3d* object = nullptr; // 3Dオブジェクトへのポインタ
+        Int3 cellIndex;            // StageMap上での [x, y, z] の位置
+    };
+    std::vector<EnemyInstance> enemyInstances_;
 
     struct PSwitchVisualObject {
         Object3d* object = nullptr;

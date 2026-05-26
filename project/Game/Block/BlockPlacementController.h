@@ -14,7 +14,7 @@ public:
     );
 
     // 指定マスにブロックを置く
-    bool TryPlace(const Int3& index);
+    bool TryPlace(const Int3& index, float rotationY = 0.0f);
 
     // 配置するブロック種類を変えたい時用
     void SetPlaceBlockType(BlockType type) { placeBlockType_ = type; }

@@ -227,6 +227,82 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	// ▼ 追加：鍵の取得チェック
 	KeyUpdate(map);
 
+	// --- 敵やトゲとの接触判定 ---
+	{
+		int px = static_cast<int>(std::floor(position_.x + 0.5f));
+		int py = static_cast<int>(std::floor(position_.y + 0.5f));
+		int pz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+		float pMinX = position_.x - radius_.x;
+		float pMaxX = position_.x + radius_.x;
+		float pMinY = position_.y;
+		float pMaxY = position_.y + radius_.y * 2.0f;
+		float pMinZ = position_.z - radius_.z;
+		float pMaxZ = position_.z + radius_.z;
+
+		// ① トゲとの接触判定（静的ブロックのためプレイヤーの周囲のみを高速探索）
+		for (int dy = -1; dy <= 2; ++dy) {
+			for (int dz = -1; dz <= 1; ++dz) {
+				for (int dx = -1; dx <= 1; ++dx) {
+					int cx = px + dx;
+					int cy = py + dy;
+					int cz = pz + dz;
+
+					const MapCell* cell = map.GetCell(cx, cy, cz);
+					if (cell && !cell->isHidden) {
+						if (cell->type == BlockType::Spike) 
+						{
+							float eX = static_cast<float>(cx) + cell->currentOffsetX;
+							float eY = static_cast<float>(cy) + cell->currentOffsetY;
+							float eZ = static_cast<float>(cz) + cell->currentOffsetZ;
+
+							float eMinX = eX - 0.4f;
+							float eMaxX = eX + 0.4f;
+							float eMinY = eY - 0.5f;
+							float eMaxY = eY - 0.2f; // トゲ床は低い
+							float eMinZ = eZ - 0.4f;
+							float eMaxZ = eZ + 0.4f;
+
+							if (pMinX <= eMaxX && pMaxX >= eMinX &&
+								pMinY <= eMaxY && pMaxY >= eMinY &&
+								pMinZ <= eMaxZ && pMaxZ >= eMinZ) 
+							{
+								Respawn();
+								goto collision_end;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// ② 敵キャラクターとの接触判定（動いている敵の現在座標との正確な判定）
+		for (const auto& enemyRef : map.GetEnemies()) {
+			const MapCell* cell = map.GetCell(enemyRef.x, enemyRef.y, enemyRef.z);
+			if (cell && !cell->isHidden) {
+				float eX = static_cast<float>(enemyRef.x) + cell->currentOffsetX;
+				float eY = static_cast<float>(enemyRef.y) + cell->currentOffsetY;
+				float eZ = static_cast<float>(enemyRef.z) + cell->currentOffsetZ;
+
+				float eMinX = eX - 0.4f;
+				float eMaxX = eX + 0.4f;
+				float eMinY = eY - 0.4f;
+				float eMaxY = eY + 0.4f;
+				float eMinZ = eZ - 0.4f;
+				float eMaxZ = eZ + 0.4f;
+
+				if (pMinX <= eMaxX && pMaxX >= eMinX &&
+					pMinY <= eMaxY && pMaxY >= eMinY &&
+					pMinZ <= eMaxZ && pMaxZ >= eMinZ) 
+				{
+					Respawn();
+					goto collision_end;
+				}
+			}
+		}
+	}
+collision_end:
+
 	// --- 表示更新 ---
 	object_->SetPosition(position_);
 	object_->SetRotation(rotation_);
