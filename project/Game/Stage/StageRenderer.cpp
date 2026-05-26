@@ -117,8 +117,8 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	// ▼ 追加：中間地点モデル設定
 	checkpointModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
-		"Resources/Models/star",
-		"star.obj",
+		"Resources/Models/midpoint",
+		"midpoint.obj",
 		object3dCommon_->GetTextureManager()
 	);
 
@@ -476,6 +476,25 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				}
 				break;
 
+				case BlockType::TimedBlock:
+				{
+					Object3d* newObj = CreateStageObject(
+						wallModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::TimedBlock
+					);
+
+					if (newObj) {
+						TimedBlockInstance instance;
+						instance.object = newObj;
+						instance.cellIndex = { x, y, z };
+						timedBlockInstances_.push_back(instance);
+					}
+				}
+				break;
+
 				case BlockType::CrumblingFloor:
 				{
 					Object3d* newObj = CreateStageObject(
@@ -535,7 +554,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f } // 必要に応じて回転
 					);
 					break;
-
 					// ▼ 追加：鍵ブロックの場合
 				case BlockType::KeyBlock:
 					CreateStageObject(
@@ -545,7 +563,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f }
 					);
 					break;
-
 				case BlockType::Checkpoint:
 					CreateStageObject(
 						checkpointModel_.get(),
@@ -553,7 +570,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						blockScale_,
 						{ 0.0f, 0.0f, 0.0f }
 					);
-
+					break;
 				case BlockType::Spike:
 					{
 						CreateStageObject(
@@ -565,8 +582,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						);
 					}
 					break;
-
-
 				case BlockType::EnemyWalker:
 					{
 						Object3d* obj = CreateStageObject(
@@ -585,7 +600,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						}
 					}
 					break;
-
 				case BlockType::EnemyFlyer:
 					{
 						Object3d* obj = CreateStageObject(
@@ -604,7 +618,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						}
 					}
 					break;
-
 				case BlockType::EnemyChaser:
 					{
 						Object3d* obj = CreateStageObject(
@@ -722,6 +735,29 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 			};
 
 			instance.object->SetPosition(newPosition);
+			instance.object->Update(lightVP);
+			MarkDirty(instance.object);
+		}
+	}
+
+	for (auto& instance : timedBlockInstances_) {
+		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
+		if (cell && cell->type == BlockType::TimedBlock) {
+			if (cell->isSolid) {
+				// アクティブ状態：通常サイズで表示、鮮やかなオレンジ色
+				instance.object->SetScale(blockScale_);
+				instance.object->SetColor({ 1.0f, 0.6f, 0.1f, 1.0f });
+			} else {
+				// 非アクティブ状態：
+				if (isEditorMode_) {
+					// エディタモードなら半透明オレンジで表示
+					instance.object->SetScale(blockScale_);
+					instance.object->SetColor({ 1.0f, 0.6f, 0.1f, 0.3f });
+				} else {
+					// プレイモードなら非表示（スケール0）
+					instance.object->SetScale({ 0.0f, 0.0f, 0.0f });
+				}
+			}
 			instance.object->Update(lightVP);
 			MarkDirty(instance.object);
 		}
@@ -1003,6 +1039,7 @@ void StageRenderer::Clear() {
 	movingFloorInstances_.clear(); // ★追加：動く足場の管理リストもクリアしてダングリングポインタを防ぐ
 	enemyInstances_.clear(); // ★追加：敵の管理リストもクリア
 	clouds_.clear(); // ★追加：背景雲のリストもクリア
+	timedBlockInstances_.clear(); // ★追加：時間差ブロックリストをクリア
 
 
 	//5/19佐倉

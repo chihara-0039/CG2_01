@@ -16,6 +16,8 @@ void StageEditorController::Initialize() {
     bubbleInsideBlockType_ = BlockType::Wall;
     selectedCustomPartSlot_ = 1;
     bubbleInsideCustomSlot_ = 0;
+    selectedTimedGroupId_ = 1;
+    selectedTimedOrderId_ = 0;
     
     // ドアのペアリング状態の初期化
     isWaitingForSecondDoor_ = false;
@@ -505,6 +507,15 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
         }
     }
 
+    if (selectedBlockType_ == BlockType::TimedBlock)
+    {
+        if (ImGui::CollapsingHeader("Timed Block Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::SliderInt("Group ID", &selectedTimedGroupId_, 1, 9, "Group: %d");
+            ImGui::SliderInt("Order ID", &selectedTimedOrderId_, 0, 9, "Order: %d");
+            ImGui::Text("Blocks in the same group appear sequentially.");
+        }
+    }
+
     // ツールバー（配置ブロックやアクション）の描画
     DrawEditorToolbar(stageMap, stageRenderer, mapCursor, player);
     ImGui::End();
@@ -538,7 +549,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::CrumblingFloor,
                 BlockType::IceBlock,
                 BlockType::MovingFloor,
-                BlockType::KeyBlock
+                BlockType::KeyBlock,
+                BlockType::TimedBlock      // 🌟 追加
             }
         },
         {
@@ -725,6 +737,11 @@ void StageEditorController::ApplyPlacement(StageMap& stageMap, StageRenderer* st
             cell->isSolid = false;  // 最初はすり抜ける状態
             cell->isHidden = false; // エディタで見えるようにする
         }
+    }
+    else if (selectedBlockType_ == BlockType::TimedBlock)
+    {
+        int variant = selectedTimedGroupId_ * 10 + selectedTimedOrderId_;
+        stageMap.SetBlock(cursor, selectedBlockType_, variant);
     }
     else 
     {
