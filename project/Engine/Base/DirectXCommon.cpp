@@ -371,6 +371,7 @@ void DirectXCommon::PreDraw() {
 #endif
 }
 
+// 描画の終了
 void DirectXCommon::PostDraw() {
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
 
@@ -388,6 +389,7 @@ void DirectXCommon::PostDraw() {
     HRESULT hr = commandList_->Close();
     assert(SUCCEEDED(hr));
 
+	// コマンドリストをGPUに渡す
     ID3D12CommandList* commandLists[] = { commandList_.Get() };
     commandQueue_->ExecuteCommandLists(1, commandLists);
 
