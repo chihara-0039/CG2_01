@@ -1,15 +1,26 @@
 #include "BlockInventory.h"
 
 void BlockInventory::Initialize(int initialCount) {
-    // 互換性のため、初期カウントは Wall に割り当てる
-    // プレイヤーが十分に遊べるよう、各ブロック種別のデフォルト所持数を99個にする
-    wallCount_ = (initialCount > 0) ? initialCount : 99;
-    ladderCount_ = 99;
-    iceCount_ = 99;
-    movingCount_ = 99;
-    crumbleCount_ = 99;
-    for (int i = 0; i < 5; ++i) {
-        customCounts_[i] = 99;
+    // プレイヤーが十分に遊べるよう、各ブロック種別のデフォルト所持数を99個にする（互換性維持のため）
+    // ただし、0 が指定された場合は全てのブロックの所持数を 0 個にする（仕様対応）
+    if (initialCount == 0) {
+        wallCount_ = 0;
+        ladderCount_ = 0;
+        iceCount_ = 0;
+        movingCount_ = 0;
+        crumbleCount_ = 0;
+        for (int i = 0; i < 5; ++i) {
+            customCounts_[i] = 0;
+        }
+    } else {
+        wallCount_ = (initialCount > 0) ? initialCount : 99;
+        ladderCount_ = 99;
+        iceCount_ = 99;
+        movingCount_ = 99;
+        crumbleCount_ = 99;
+        for (int i = 0; i < 5; ++i) {
+            customCounts_[i] = 99;
+        }
     }
 }
 

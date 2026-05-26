@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstdint>
 #include <string>
+#include "MyMath.h"
 
 // ブロック種類
 enum class BlockType : uint32_t {
@@ -20,10 +21,20 @@ enum class BlockType : uint32_t {
     IceBlock,
     MovingFloor,
     Key,        // 拾える鍵
-    KeyBlock    // 鍵で開くブロック
+    KeyBlock,   // 鍵で開くブロック
+    Spike,       // トゲ
+    EnemyWalker, // 敵（歩行）
+    EnemyFlyer,  // 敵（飛行）
+    EnemyChaser  // 敵（追尾）
 };
 
 struct MovingFloorRef {
+    int x = 0;
+    int y = 0;
+    int z = 0;
+};
+
+struct EnemyRef {
     int x = 0;
     int y = 0;
     int z = 0;
@@ -47,6 +58,10 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::MovingFloor:    return "MovingFloor";
     case BlockType::Key:            return "Key";
     case BlockType::KeyBlock:       return "KeyBlock";
+    case BlockType::Spike:          return "Spike";
+    case BlockType::EnemyWalker:    return "EnemyWalker";
+    case BlockType::EnemyFlyer:     return "EnemyFlyer";
+    case BlockType::EnemyChaser:    return "EnemyChaser";
     default:                        return "Unknown";
     }
 }
@@ -143,7 +158,7 @@ public:
     void Initialize(int width, int height, int depth);
 
     // 追加
-    void Update(float deltaTime, float totalTime);
+    void Update(float deltaTime, float totalTime, const Vector3& playerPos);
 
     // ステージデータをファイルに保存する
     void SaveToFile(const std::string& filename);
@@ -264,6 +279,10 @@ public:
 
 	// ★ 追加：動く足場のリストを再構築する関数（ロード後やサイズ変更後に呼ぶ）
     void RebuildMovingFloorList();
+    // ★ 追加：敵キャラクターのリストを再構築する関数
+    void RebuildEnemyList();
+    const std::vector<EnemyRef>& GetEnemies() const { return enemies_; }
+
     /// <summary>
     /// 指定した座標のドアと同じID（variant）を持つ、相方のドアの座標を検索する
     /// </summary>
@@ -278,6 +297,8 @@ private:
     std::vector<MapCell> cells_;
     std::vector<CustomBlockPart> customParts_; // カスタムブロックパーツ定義リスト (スロット1〜5)
     std::vector<MovingFloorRef> movingFloors_;
+    std::vector<EnemyRef> enemies_;
+
 
 private:
     int ToIndex(int x, int y, int z) const;

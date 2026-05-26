@@ -115,6 +115,8 @@ private:
     std::unique_ptr<GameplayUIManager> gameplayUIManager_;
     std::unique_ptr<BlockInventoryUI> blockInventoryUI_;
     std::unique_ptr<Sprite> tutorialSprite_;
+    std::unique_ptr<Sprite> placementTutorialSprite_;
+    float placeRotationY_ = 0.0f;
 
     // ==========================================================
     // メンバ変数（値や状態）

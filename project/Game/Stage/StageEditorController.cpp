@@ -526,6 +526,14 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
             }
         },
         {
+            "Enemies", // 敵キャラクター
+            {
+                BlockType::EnemyWalker,
+                BlockType::EnemyFlyer,
+                BlockType::EnemyChaser
+            }
+        },
+        {
             "System", //  その他
             {
                 BlockType::PlayerStart
