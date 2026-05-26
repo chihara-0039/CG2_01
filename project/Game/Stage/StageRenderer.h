@@ -56,6 +56,8 @@ private:
     // ▼ 追加 ▼
     std::unique_ptr<Model> keyModel_;
     std::unique_ptr<Model> keyBlockModel_;
+    // 中間地点
+    std::unique_ptr<Model> checkpointModel_;
 
     std::vector<std::unique_ptr<Object3d>> objects_;
     std::vector<std::unique_ptr<Object3d>> previewObjects_; // 🌟 半透明プレビュー用オブジェクト

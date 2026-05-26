@@ -113,6 +113,14 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetTextureManager()
 	);
 
+	// ▼ 追加：中間地点モデル設定
+	checkpointModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/star",
+		"star.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
 	// インスタンシング用の ViewProjection 定数バッファを作成
 	D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
 	D3D12_RESOURCE_DESC resDesc = {};
@@ -433,6 +441,14 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				case BlockType::KeyBlock:
 					CreateStageObject(
 						keyBlockModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f }
+					);
+					break;
+				case BlockType::Checkpoint:
+					CreateStageObject(
+						checkpointModel_.get(),
 						position,
 						blockScale_,
 						{ 0.0f, 0.0f, 0.0f }

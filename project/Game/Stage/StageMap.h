@@ -19,9 +19,10 @@ enum class BlockType : uint32_t {
     CrumblingFloor,
     IceBlock,
     MovingFloor,
-    Key,        // 拾える鍵
-    KeyBlock,   // 鍵で開くブロック
-    PBlockAppears // 🌟 追加：押すと出現するPブロック
+    Key,            // 拾える鍵
+    KeyBlock,       // 鍵で開くブロック
+    PBlockAppears,  // 押すと出現するPブロック
+    Checkpoint      // 🌟 追加：中間地点
 };
 
 struct MovingFloorRef {
@@ -48,7 +49,8 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::MovingFloor:    return "MovingFloor";
     case BlockType::Key:            return "Key";
     case BlockType::KeyBlock:       return "KeyBlock";
-    case BlockType::PBlockAppears:  return "PBlock (On)"; // 🌟 追加
+    case BlockType::PBlockAppears:  return "PBlock (On)";
+    case BlockType::Checkpoint:     return "Checkpoint";
     default:                        return "Unknown";
     }
 }

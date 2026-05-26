@@ -524,6 +524,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::PSwitch:
     case BlockType::PBlock:
     case BlockType::Key:         // 鍵は通り抜けられる
+    case BlockType::Checkpoint:  // 🌟 追加：中間地点は通り抜けられる
     cell.isSolid = false;
     break;
 
