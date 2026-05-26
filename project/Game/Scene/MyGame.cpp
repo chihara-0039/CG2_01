@@ -559,6 +559,13 @@ void MyGame::Update() {
         stageRenderer_->Update(stageMap_, lightVP);
     }
 
+    if (stageRenderer_ && player_ && camera) {
+        stageRenderer_->UpdateWallTransparency(
+            camera->GetPosition(),
+            player_->GetPosition()
+        );
+    }
+
 	// マップカーソルの更新 (エディタモードまたは配置モードの時のみ更新)
     if (mapCursor_ && (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace)) {
         mapCursor_->SetCamera(view, proj);
@@ -1501,7 +1508,16 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
                 currentMode_ == AppMode::GamePlay ||
                 currentMode_ == AppMode::GamePlay_BlockPlace) {
 
-                if (stageRenderer_) { stageRenderer_->Draw(); }
+                if (stageRenderer_) {
+                    stageRenderer_->Draw(); 
+
+                    // 半透明ブロックを最後に描画
+                    stageRenderer_->DrawTransparent();
+
+                    // 通常描画に戻す
+                    object3dCommon->PreDraw();
+                    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                }
                 if (currentMode_ == AppMode::GamePlay) {
                     if (player_ && !useFirstPersonCamera_) {
                         player_->Draw();

@@ -36,6 +36,8 @@ public:
     ID3D12PipelineState* GetInstancedPipelineState() const { return instancedPipelineState_.Get(); }
     ID3D12PipelineState* GetInstancedShadowPipelineState() const { return instancedShadowPipelineState_.Get(); }
 
+    ID3D12PipelineState* GetInstancedAlphaPipelineState() const { return instancedAlphaPipelineState_.Get(); }
+
     // ライト制御
     void SetDefaultLight();
     void SetLightDirection(const Vector3& direction) { if (lightData_) lightData_->direction = Math::Normalize(direction); }
@@ -71,6 +73,9 @@ private:
     //自機影用パイプラインステート作成関数
     void CreatePlayerHighlightPipeline();
 
+    //5/26佐倉
+    //半透明
+    void CreateInstancedAlphaPipeline();
 private:
     // 
     DirectXCommon* dxCommon_ = nullptr;
@@ -93,4 +98,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> instancedRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> instancedPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> instancedShadowPipelineState_;
+
+    //半透明用メンバ
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> instancedAlphaPipelineState_;
 };
