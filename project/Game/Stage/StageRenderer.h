@@ -19,6 +19,9 @@ public:
     const Vector3& GetBlockScale() const { return blockScale_; }
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection);
 
+    void SetIsEditorMode(bool isEditor) { isEditorMode_ = isEditor; }
+    bool GetIsEditorMode() const { return isEditorMode_; }
+
     void Update(const StageMap& stageMap, const Matrix4x4& lightVP);
     void DrawShadow(const Matrix4x4& lightVP);
     void DrawTransparent();
@@ -110,6 +113,14 @@ private:
 
     std::vector<PSwitchVisualObject> pSwitchObjects_;
     std::vector<PSwitchVisualObject> pBlockObjects_;
+
+    struct TimedBlockInstance {
+        Object3d* object = nullptr;
+        Int3 cellIndex;
+    };
+    std::vector<TimedBlockInstance> timedBlockInstances_;
+
+    bool isEditorMode_ = false;
 
 private:
     // インスタンシング描画用のデータ構造

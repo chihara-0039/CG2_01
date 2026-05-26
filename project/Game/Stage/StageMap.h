@@ -27,7 +27,8 @@ enum class BlockType : uint32_t {
     EnemyFlyer,  // 敵（飛行）
     EnemyChaser,  // 敵（追尾）
     PBlockAppears, // 🌟 追加：押すと出現するPブロック
-	Checkpoint      // 🌟 追加：中間地点
+	Checkpoint,      // 🌟 追加：中間地点
+	TimedBlock      // 🌟 追加：時間差ブロック
 };
 
 struct MovingFloorRef {
@@ -66,6 +67,7 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::EnemyChaser:    return "EnemyChaser";
     case BlockType::PBlockAppears:  return "PBlock (On)"; // 🌟 追加
 	case BlockType::Checkpoint:      return "Checkpoint";
+	case BlockType::TimedBlock:      return "TimedBlock"; // 🌟 追加
     default:                        return "Unknown";
     }
 }
