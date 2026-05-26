@@ -1,5 +1,6 @@
 #include "StageRenderer.h"
 #include <cassert>
+#include <random>
 
 // 解放
 StageRenderer::~StageRenderer() {
@@ -194,34 +195,41 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 	float scaleY = blockScale_.y;
 	float scaleZ = blockScale_.z;
 
+	// 雲の生成を決定論的（再現可能）にするために固定シードの乱数生成器を使用する
+	std::mt19937 randomEngine(12345);
+	std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+	auto randomFloat = [&randomEngine, &dist01]() {
+		return dist01(randomEngine);
+	};
+
 	int cloudCount = 12; // 12個浮かべる
 	for (int i = 0; i < cloudCount; ++i) {
 		CloudInstance cloud;
 		// ランダムな位置 (ステージの少し上空、周囲)
-		float rx = (static_cast<float>(rand()) / RAND_MAX) * (mapWidth * scaleX + 80.0f) - 40.0f;
-		float ry = (static_cast<float>(rand()) / RAND_MAX) * 6.0f + 3.0f; // 3.0f 〜 9.0f の高さ
-		float rz = (static_cast<float>(rand()) / RAND_MAX) * (mapDepth * scaleZ + 80.0f) - 40.0f;
+		float rx = randomFloat() * (mapWidth * scaleX + 80.0f) - 40.0f;
+		float ry = randomFloat() * 6.0f + 3.0f; // 3.0f 〜 9.0f の高さ
+		float rz = randomFloat() * (mapDepth * scaleZ + 80.0f) - 40.0f;
 		cloud.basePosition = { rx, ry, rz };
 
 		// 流れる速度 (X軸方向へゆっくり流れる)
-		float speedX = (static_cast<float>(rand()) / RAND_MAX) * 0.4f + 0.1f;
+		float speedX = randomFloat() * 0.4f + 0.1f;
 		cloud.speed = { speedX, 0.0f, 0.0f };
 
 		// フワフワパラメータ
-		cloud.floatTimer = (static_cast<float>(rand()) / RAND_MAX) * 6.28f;
-		cloud.floatSpeed = (static_cast<float>(rand()) / RAND_MAX) * 0.3f + 0.1f;
+		cloud.floatTimer = randomFloat() * 6.28f;
+		cloud.floatSpeed = randomFloat() * 0.3f + 0.1f;
 
 		// 1つの雲を構成する球体数 (3〜5個)
-		int partCount = rand() % 3 + 3;
+		int partCount = static_cast<int>(randomEngine() % 3) + 3;
 		for (int j = 0; j < partCount; ++j) {
 			// 中心からのオフセット
-			float ox = (static_cast<float>(rand()) / RAND_MAX) * 4.0f - 2.0f;
-			float oy = (static_cast<float>(rand()) / RAND_MAX) * 1.5f - 0.75f;
-			float oz = (static_cast<float>(rand()) / RAND_MAX) * 4.0f - 2.0f;
+			float ox = randomFloat() * 4.0f - 2.0f;
+			float oy = randomFloat() * 1.5f - 0.75f;
+			float oz = randomFloat() * 4.0f - 2.0f;
 			cloud.localOffsets.push_back({ ox, oy, oz });
 
 			// ランダムスケール
-			float s = (static_cast<float>(rand()) / RAND_MAX) * 2.0f + 1.5f;
+			float s = randomFloat() * 2.0f + 1.5f;
 			cloud.localScales.push_back({ s, s * 0.5f, s }); // 雲らしく少し平べったくする
 		}
 
