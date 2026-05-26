@@ -20,7 +20,8 @@ enum class BlockType : uint32_t {
     IceBlock,
     MovingFloor,
     Key,        // 拾える鍵
-    KeyBlock    // 鍵で開くブロック
+    KeyBlock,   // 鍵で開くブロック
+    PBlockAppears // 🌟 追加：押すと出現するPブロック
 };
 
 struct MovingFloorRef {
@@ -47,6 +48,7 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::MovingFloor:    return "MovingFloor";
     case BlockType::Key:            return "Key";
     case BlockType::KeyBlock:       return "KeyBlock";
+    case BlockType::PBlockAppears:  return "PBlock (On)"; // 🌟 追加
     default:                        return "Unknown";
     }
 }
@@ -196,6 +198,11 @@ public:
                 cell.isSolid = false;
                 cell.isHidden = true;
             }
+
+            // ▼ 🌟 追加：出現するPブロック：押すと出てくる（実体化する）
+            if (cell.type == BlockType::PBlockAppears && cell.variant == switchId) {
+                cell.isSolid = true;
+            }
         }
     }
 
@@ -212,6 +219,10 @@ public:
             if (cell.type == BlockType::PBlock) {
                 cell.isSolid = true;
                 cell.isHidden = false;
+            }
+            // ▼ 🌟 追加：出現するPブロック：元に戻る（すり抜けるようになる）
+            if (cell.type == BlockType::PBlockAppears) {
+                cell.isSolid = false;
             }
         }
         // ここでは true にしない
