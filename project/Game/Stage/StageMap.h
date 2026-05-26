@@ -333,9 +333,6 @@ private:
     Vector3 lightColor_ = { 0.9f, 0.9f, 0.9f };
     Vector3 lightDirection_ = { 0.5f, -1.0f, 0.5f };
 
-
-
-
 private:
     int ToIndex(int x, int y, int z) const;
     static MapCell MakeCell(BlockType type, int variant);
