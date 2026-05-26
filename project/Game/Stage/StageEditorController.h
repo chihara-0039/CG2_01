@@ -102,6 +102,8 @@ private:
 
     //5/21佐倉追加
     int selectedPSwitchId_ = 1;
+    int selectedTimedGroupId_ = 1;
+    int selectedTimedOrderId_ = 0;
 	int holdFrame_ = 0; // キーを押し続けているフレーム数をカウントする変数（長押し判定用）
 	int placeHoldFrame_ = 0; // ブロック配置の長押しフレーム数
 

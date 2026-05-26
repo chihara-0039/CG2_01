@@ -557,6 +557,7 @@ void MyGame::Update() {
 
 	// ステージ描画オブジェクトの更新 (StageRenderer内部でのDirtyフラグ最適化に対応)
     if (stageRenderer_) {
+        stageRenderer_->SetIsEditorMode(currentMode_ == AppMode::StageEditor);
         stageRenderer_->SetCamera(view, proj);
         stageRenderer_->Update(stageMap_, lightVP);
     }
