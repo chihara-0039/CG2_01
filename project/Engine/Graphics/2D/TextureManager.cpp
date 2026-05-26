@@ -141,14 +141,55 @@ void TextureManager::Initialize(DirectXCommon* dxCommon) {
     // ここでは、テクスチャリソース、アップロード用の中間リソース、
     // SRVのCPUハンドルとGPUハンドル、
     // リソースの説明などを格納するための構造体を定義している。
-#ifdef USE_IMGUI
-    TextureData reserve;
-    reserve.resource = nullptr;
-    reserve.srvHandleCPU = srvHeap_->GetCPUDescriptorHandleForHeapStart();
-    reserve.srvHandleGPU = srvHeap_->GetGPUDescriptorHandleForHeapStart();
-    reserve.resourceDesc = {};
-    textures_.push_back(reserve);
-#endif
+    // 1x1の白テクスチャをデフォルト（インデックス0）として作成し、未初期化アクセスを防ぐ
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width = 1;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    D3D12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_CUSTOM, D3D12_CPU_PAGE_PROPERTY_WRITE_BACK, D3D12_MEMORY_POOL_L0, 1, 1 };
+    
+    Microsoft::WRL::ComPtr<ID3D12Resource> defaultTexture;
+    hr = device->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &desc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&defaultTexture)
+    );
+    assert(SUCCEEDED(hr));
+
+    // データを書き込む (1ピクセル分、白色 0xFFFFFFFF)
+    uint32_t color = 0xFFFFFFFF; // RGBA(255, 255, 255, 255)
+    hr = defaultTexture->WriteToSubresource(0, nullptr, &color, sizeof(uint32_t), sizeof(uint32_t));
+    assert(SUCCEEDED(hr));
+
+    D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = srvHeap_->GetCPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = srvHeap_->GetGPUDescriptorHandleForHeapStart();
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    device->CreateShaderResourceView(defaultTexture.Get(), &srvDesc, handleCPU);
+
+    TextureData defaultData;
+    defaultData.resource = defaultTexture;
+    defaultData.srvHandleCPU = handleCPU;
+    defaultData.srvHandleGPU = handleGPU;
+    defaultData.resourceDesc = desc;
+
+    textures_.push_back(defaultData);
 }
 
 // テクスチャの読み込み関数。指定されたファイルパスからテクスチャを読み込み、SRVを作成して管理する。既に同じファイルパスのテクスチャが読み込まれている場合は、そのテクスチャのハンドルを返す。
@@ -400,15 +441,7 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
 
     return index;
 
-#ifdef USE_IMGUI
-    // SRVの0番はImGuiのフォント用に予約する（Textureは1番から）
-    textures_.resize(1);
 
-    // 念のため、0番のCPU/GPUハンドルだけは埋めておく（resourceはnullptrのままでOK）
-    textures_[0].srvHandleCPU = srvHeap_->GetCPUDescriptorHandleForHeapStart();
-    textures_[0].srvHandleGPU = srvHeap_->GetGPUDescriptorHandleForHeapStart();
-    textures_[0].resourceDesc = {};
-#endif
 }
 
 // SRVヒープのCPUハンドルを取得する関数。

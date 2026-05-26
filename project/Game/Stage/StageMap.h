@@ -20,14 +20,14 @@ enum class BlockType : uint32_t {
     CrumblingFloor,
     IceBlock,
     MovingFloor,
-    Key,            // 拾える鍵
-    KeyBlock,       // 鍵で開くブロック
-    PBlockAppears,  // 押すと出現するPブロック
+    Key,        // 拾える鍵
+    KeyBlock,   // 鍵で開くブロック
     Spike,       // トゲ
     EnemyWalker, // 敵（歩行）
     EnemyFlyer,  // 敵（飛行）
     EnemyChaser,  // 敵（追尾）
-    Checkpoint      // 🌟 追加：中間地点 
+    PBlockAppears, // 🌟 追加：押すと出現するPブロック
+	Checkpoint      // 🌟 追加：中間地点
 };
 
 struct MovingFloorRef {
@@ -60,12 +60,12 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::MovingFloor:    return "MovingFloor";
     case BlockType::Key:            return "Key";
     case BlockType::KeyBlock:       return "KeyBlock";
-    case BlockType::PBlockAppears:  return "PBlock (On)";
-    case BlockType::Checkpoint:     return "Checkpoint";
     case BlockType::Spike:          return "Spike";
     case BlockType::EnemyWalker:    return "EnemyWalker";
     case BlockType::EnemyFlyer:     return "EnemyFlyer";
     case BlockType::EnemyChaser:    return "EnemyChaser";
+    case BlockType::PBlockAppears:  return "PBlock (On)"; // 🌟 追加
+	case BlockType::Checkpoint:      return "Checkpoint";
     default:                        return "Unknown";
     }
 }
@@ -223,21 +223,25 @@ public:
         }
     }
 
+	// ★ Pスイッチを元に戻す関数（再構築はしない）
     void ResetPSwitchStateNoRebuild() {
         isPSwitchActive_ = false;
 
+		// PスイッチとPブロックの状態を元に戻す（すり抜けるようにする）
         for (auto& cell : cells_) {
 
+			// 同じIDのPスイッチを元に戻す
             if (cell.type == BlockType::PSwitch) {
                 cell.isSolid = false;
                 cell.isHidden = false;
             }
 
+			// 同じIDのPブロックを元に戻す
             if (cell.type == BlockType::PBlock) {
                 cell.isSolid = true;
                 cell.isHidden = false;
             }
-            // ▼ 🌟 追加：出現するPブロック：元に戻る（すり抜けるようになる）
+            // ▼ 出現するPブロック：元に戻る（すり抜けるようになる）
             if (cell.type == BlockType::PBlockAppears) {
                 cell.isSolid = false;
             }
@@ -247,22 +251,24 @@ public:
     }
 
 
-
+	// 再構築が必要かどうかのフラグを返す関数
     bool NeedsRebuild() const { return needsRebuild_; }
 
-    // ★ これを追加：フラグを「再構築の必要なし（false）」に戻す
+    // フラグを「再構築の必要なし（false）」に戻す
     void ResetRebuildFlag() {
         needsRebuild_ = false;
     }
 
+	// フラグを「再構築の必要あり（true）」にセットする関数
     void ClearRebuildFlag() { needsRebuild_ = false; }
 
-    //5/18佐倉追加
+	// フラグを「再構築の必要あり（true）」にセットする関数
     void RequestRebuild() { needsRebuild_ = true; }
 
+	// Pスイッチが現在アクティブかどうかを返す関数
     bool IsPSwitchActive() const { return isPSwitchActive_; }
 
-    //5/19佐倉
+	// Pスイッチの状態をリセットする関数（再構築も要求する）
     void ResetPSwitchState();
 
     // --- カスタムブロックパーツ関連 ---
@@ -274,6 +280,7 @@ public:
         }
         return nullptr;
     }
+    // 
     CustomBlockPart* GetCustomPart(int id) {
         if (id >= 1 && id <= (int)customParts_.size()) {
             return &customParts_[id - 1];
@@ -332,6 +339,9 @@ private:
     float lightIntensity_ = 1.0f;
     Vector3 lightColor_ = { 0.9f, 0.9f, 0.9f };
     Vector3 lightDirection_ = { 0.5f, -1.0f, 0.5f };
+
+
+
 
 private:
     int ToIndex(int x, int y, int z) const;
