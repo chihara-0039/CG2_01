@@ -17,18 +17,18 @@ void WinApp::Initialize() {
 
     // --- メンバ変数名 wc_ に統一 ---
     wc_.lpfnWndProc = WindowProc;
-    wc_.lpszClassName = "CG2WindowClass";
+    wc_.lpszClassName = L"CG2WindowClass";
     wc_.hInstance = GetModuleHandle(nullptr);
     wc_.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    RegisterClass(&wc_);
+    RegisterClassW(&wc_);
 
     RECT wrc = { 0, 0, kWindowWidth, kWindowHeight };
     AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
 
     // --- メンバ変数名 hwnd_ に統一 ---
-    hwnd_ = CreateWindow(
+    hwnd_ = CreateWindowW(
         wc_.lpszClassName,
-        "CG2",
+        L"3142_回転の国の探検隊",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -50,9 +50,9 @@ void WinApp::Finalize() {
 
 bool WinApp::ProcessMessage() {
     MSG msg{};
-    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+    if (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
-        DispatchMessage(&msg);
+        DispatchMessageW(&msg);
     }
     if (msg.message == WM_QUIT) {
         return true;
@@ -75,5 +75,5 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
     PostQuitMessage(0);
     return 0;
     }
-    return DefWindowProc(hwnd, msg, wparam, lparam);
+    return DefWindowProcW(hwnd, msg, wparam, lparam);
 }
