@@ -21,6 +21,7 @@ public:
 
     void Update(const StageMap& stageMap, const Matrix4x4& lightVP);
     void DrawShadow(const Matrix4x4& lightVP);
+    void DrawTransparent();
     void Draw();
 
     void UpdateEffect(const StageMap& stageMap);
@@ -163,4 +164,17 @@ private:
     void BuildRenderGroups();
     void BuildPreviewRenderGroups();
     void MarkDirty(Object3d* obj);
+
+    std::vector<RenderGroup> transparentRenderGroups_;
+
+    void RebuildTransparencyGroups();
+
+public:
+
+    void UpdateWallTransparency(
+        const Vector3& cameraPos,
+        const Vector3& playerPos
+    );
+
+   
 };

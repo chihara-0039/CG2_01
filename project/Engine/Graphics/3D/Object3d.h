@@ -59,7 +59,7 @@ public:
     const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }
     const Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }
     const Material& GetMaterial() const { return *materialData_; }
-
+    const Vector3& GetPosition() const { return transform_.translate; }
 
 private:
 	// Object3dCommonのポインタを保持しておく（描画時に必要）

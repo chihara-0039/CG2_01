@@ -751,6 +751,79 @@ void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
 	commandList->SetPipelineState(object3dCommon_->GetShadowPipelineState());
 }
 
+void StageRenderer::DrawTransparent()
+{
+	auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
+	if (!commandList) return;
+
+	// インスタンシング用のテクスチャ記述子ヒープの設定
+	if (object3dCommon_->GetTextureManager()) {
+		ID3D12DescriptorHeap* heaps[] = { object3dCommon_->GetTextureManager()->GetSrvHeap() };
+		commandList->SetDescriptorHeaps(1, heaps);
+	}
+
+	commandList->SetPipelineState(object3dCommon_->GetInstancedAlphaPipelineState());
+	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// 定数バッファの更新 (最初のグループからビュー、プロジェクション行列を取得)
+	RenderGroup* firstGroup = nullptr;
+	if (!renderGroups_.empty()) {
+		firstGroup = &renderGroups_.front();
+	} else if (!previewRenderGroups_.empty()) {
+		firstGroup = &previewRenderGroups_.front();
+	}
+
+	if (firstGroup && !firstGroup->instances.empty() && viewProjectionData_) {
+		Object3d* firstObj = firstGroup->instances.front().object;
+		viewProjectionData_->viewProjection = Math::Multiply(firstObj->GetViewMatrix(), firstObj->GetProjectionMatrix());
+		viewProjectionData_->lightViewProjection = lastLightVP_;
+	}
+
+	// 1: ViewProjection (VS b0 にバインド)
+	commandList->SetGraphicsRootConstantBufferView(1, viewProjectionResource_->GetGPUVirtualAddress());
+	// 2: Light (PS b1 にバインド)
+	commandList->SetGraphicsRootConstantBufferView(2, object3dCommon_->GetLightGPUVirtualAddress());
+
+	// 描画処理を実行するラムダ関数 (Dirtyフラグ制御によるメモリ転送の最小化)
+	auto drawGroups = [commandList, this](std::vector<RenderGroup>& groups) {
+		for (auto& group : groups) {
+
+			
+			UINT numInstances = static_cast<UINT>(group.instances.size());
+			if (numInstances == 0) continue;
+
+			// Dirtyならキャッシュ内容をGPUバッファに転送する
+			if (group.isDirty) {
+				InstanceData* dataBegin = nullptr;
+				HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+				if (SUCCEEDED(hr)) {
+					std::memcpy(dataBegin, group.instanceData.data(), sizeof(InstanceData) * numInstances);
+					group.buffer->Unmap(0, nullptr);
+				}
+				group.isDirty = false; // 転送完了
+			}
+
+			// 3: Texture (PS t0)
+			if (object3dCommon_->GetTextureManager()) {
+				auto gpuHandle = object3dCommon_->GetTextureManager()->GetSrvHandleGPU(group.model->GetTextureHandle());
+				commandList->SetGraphicsRootDescriptorTable(3, gpuHandle);
+			}
+
+			// 5: InstanceBuffer (VS t2)
+			commandList->SetGraphicsRootShaderResourceView(5, group.buffer->GetGPUVirtualAddress());
+
+			// 頂点バッファをバインドして一括描画
+			group.model->DrawInstanced(commandList, numInstances);
+		}
+		};
+
+	drawGroups(transparentRenderGroups_);
+	drawGroups(previewRenderGroups_);
+
+	// 元の非インスタンシングPSOに戻す
+	commandList->SetPipelineState(object3dCommon_->GetPipelineState());
+}
+
 // 全てのオブジェクトの描画処理を呼び出す
 void StageRenderer::Draw() {
 	auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
@@ -787,6 +860,8 @@ void StageRenderer::Draw() {
 	// 描画処理を実行するラムダ関数 (Dirtyフラグ制御によるメモリ転送の最小化)
 	auto drawGroups = [commandList, this](std::vector<RenderGroup>& groups) {
 		for (auto& group : groups) {
+
+			
 			UINT numInstances = static_cast<UINT>(group.instances.size());
 			if (numInstances == 0) continue;
 
@@ -1028,6 +1103,7 @@ Object3d* StageRenderer::CreateStageObject(
 		obj->SetShininess(0.4f);
 		obj->SetMetallic(0.0f);
 		obj->SetEmissive(0.0f);
+		obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 		break;
 	case BlockType::Ladder:
 		obj->SetShininess(0.5f);
@@ -1248,4 +1324,154 @@ void StageRenderer::MarkDirty(Object3d* obj) {
 			group.isDirty = true; // 次回の描画/影描画時にGPUへ再転送する
 		}
 	}
+}
+
+void StageRenderer::RebuildTransparencyGroups()
+{
+	renderGroups_.clear();
+	transparentRenderGroups_.clear();
+	objectToInstanceMap_.clear();
+
+	auto AddToGroups = [&](std::vector<RenderGroup>& groups, Object3d* obj, size_t index) {
+		Model* model = obj->GetModel();
+
+		RenderGroup* targetGroup = nullptr;
+		for (auto& group : groups) {
+			if (group.model == model) {
+				targetGroup = &group;
+				break;
+			}
+		}
+
+		if (!targetGroup) {
+			RenderGroup group;
+			group.model = model;
+			groups.push_back(std::move(group));
+			targetGroup = &groups.back();
+		}
+
+		RenderInstance inst;
+		inst.object = obj;
+		inst.index = index;
+		targetGroup->instances.push_back(inst);
+		};
+
+	for (size_t i = 0; i < objects_.size(); ++i) {
+		Object3d* obj = objects_[i].get();
+		if (!obj || !obj->GetModel()) continue;
+
+		const auto& mat = obj->GetMaterial();
+
+		if (mat.color.w < 0.99f) {
+			AddToGroups(transparentRenderGroups_, obj, i);
+		} else {
+			AddToGroups(renderGroups_, obj, i);
+		}
+	}
+
+	auto BuildGroupData = [&](std::vector<RenderGroup>& groups) {
+		for (auto& group : groups) {
+			UINT numInstances = static_cast<UINT>(group.instances.size());
+			group.instanceData.resize(numInstances);
+			
+			if (!group.buffer || group.maxInstances < numInstances) {
+				group.maxInstances = numInstances + 64;
+
+				D3D12_HEAP_PROPERTIES heapProps = {
+					D3D12_HEAP_TYPE_UPLOAD,
+					D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+					D3D12_MEMORY_POOL_UNKNOWN,
+					1,
+					1
+				};
+
+				D3D12_RESOURCE_DESC resDesc = {};
+				resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+				resDesc.Width = sizeof(InstanceData) * group.maxInstances;
+				resDesc.Height = 1;
+				resDesc.DepthOrArraySize = 1;
+				resDesc.MipLevels = 1;
+				resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+				resDesc.SampleDesc.Count = 1;
+
+				HRESULT hr = object3dCommon_->GetDxCommon()->GetDevice()->CreateCommittedResource(
+					&heapProps,
+					D3D12_HEAP_FLAG_NONE,
+					&resDesc,
+					D3D12_RESOURCE_STATE_GENERIC_READ,
+					nullptr,
+					IID_PPV_ARGS(&group.buffer)
+				);
+
+				assert(SUCCEEDED(hr));
+			}
+
+			group.isDirty = true;
+
+			InstanceData* dataBegin = nullptr;
+			HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+			if (SUCCEEDED(hr)) {
+				for (UINT i = 0; i < numInstances; ++i) {
+					Object3d* obj = group.instances[i].object;
+					const auto& tf = obj->GetTransform();
+					const auto& mat = obj->GetMaterial();
+
+					group.instanceData[i].world =
+						Math::MakeAffineMatrix(tf.scale, tf.rotate, tf.translate);
+					group.instanceData[i].color = mat.color;
+					group.instanceData[i].shininess = mat.shininess;
+					group.instanceData[i].metallic = mat.metallic;
+					group.instanceData[i].emissive = mat.emissive;
+
+					dataBegin[i] = group.instanceData[i];
+				}
+				group.buffer->Unmap(0, nullptr);
+			}
+
+			group.isDirty = false;
+		}
+		};
+
+	BuildGroupData(renderGroups_);
+	BuildGroupData(transparentRenderGroups_);
+}
+
+//5/26壁半透明
+void StageRenderer::UpdateWallTransparency(
+	const Vector3& cameraPos,
+	const Vector3& playerPos
+)
+{
+	cameraPos; // 未使用警告対策
+
+	for (auto& obj : objects_) {
+		if (!obj || !obj->GetModel()) {
+			continue;
+		}
+
+		if (obj->GetModel() != wallModel_.get()) {
+			continue;
+		}
+
+		
+
+		Vector3 wallPos = obj->GetPosition();
+
+		float dx = wallPos.x - playerPos.x;
+		float dy = wallPos.y - (playerPos.y + 0.8f);
+		float dz = wallPos.z - playerPos.z;
+
+		float distSqToPlayer = dx * dx + dy * dy + dz * dz;
+
+		if (distSqToPlayer < 12.0f) {
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.60f });
+		} else {
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		}
+
+		//MarkDirty(obj.get());
+	}
+
+	RebuildTransparencyGroups();
+
 }
