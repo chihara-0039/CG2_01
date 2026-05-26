@@ -3,6 +3,7 @@
 #include "Camera.h"
 #include "WinApp.h"
 #include"Player.h"
+#include "StageMap.h"
 
 /// <summary>
 /// ゲームプレイ中のカメラ操作を管理するコントローラークラス。
@@ -57,7 +58,7 @@ public:
     /// <summary>
     /// カメラ位置と角度をデフォルト状態にリセットし、即座に反映します。
     /// </summary>
-    void ResetCamera(Camera* camera,Player*player,int stageIndex);
+    void ResetCamera(Camera* camera,Player*player, const StageMap& stageMap, int stageIndex);
 
 private:
     void ApplyCamera(Camera* camera);

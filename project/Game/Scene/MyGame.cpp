@@ -172,9 +172,6 @@ void MyGame::Initialize() {
     mapCursor_->SetIndex({ 0, 0, 0 }, stageMap_);
     mapCursor_->SetScale({ 0.9f, 0.9f, 0.9f });
 
-    gameplayCameraController_.SetAngle(1.5708f); // ★ここで開始時の向きを調整！
-    gameplayCameraController_.SetPitch(0.75f);
-
     // ★ 影の初期化
     shadowMap_ = std::make_unique<ShadowMap>();
     shadowMap_->Initialize(dxCommon.get(), textureManager.get());
@@ -560,6 +557,7 @@ void MyGame::Update() {
 
 	// ステージ描画オブジェクトの更新 (StageRenderer内部でのDirtyフラグ最適化に対応)
     if (stageRenderer_) {
+        stageRenderer_->SetIsEditorMode(currentMode_ == AppMode::StageEditor);
         stageRenderer_->SetCamera(view, proj);
         stageRenderer_->Update(stageMap_, lightVP);
     }
@@ -1807,7 +1805,7 @@ void MyGame::UpdateStageSelect()
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
 
             int stageIndex = stageSelect_->GetSelectedIndex();
-            gameplayCameraController_.ResetCamera(camera.get(), player_.get(), stageIndex);
+            gameplayCameraController_.ResetCamera(camera.get(), player_.get(),stageMap_, stageIndex);
 
             // インベントリを0個に初期化
             blockInventory_.Initialize(0);

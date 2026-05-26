@@ -83,10 +83,46 @@ void StageMap::Initialize(int width, int height, int depth) {
 
 void StageMap::Update(float deltaTime, float totalTime, const Vector3& playerPos)
 {
+    // --- 時間差ブロックのグループごとの最大Order IDを算出 ---
+    int maxOrderInGroup[10] = { 0 };
+    for (const auto& cell : cells_) {
+        if (cell.type == BlockType::TimedBlock) {
+            int group = cell.variant / 10;
+            int order = cell.variant % 10;
+            if (group >= 1 && group < 10) {
+                if (order > maxOrderInGroup[group]) {
+                    maxOrderInGroup[group] = order;
+                }
+            }
+        }
+    }
+
     for (int y = 0; y < height_; ++y) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
                 MapCell& cell = cells_[ToIndex(x, y, z)];
+
+                if (cell.type == BlockType::TimedBlock) {
+                    int group = cell.variant / 10;
+                    int order = cell.variant % 10;
+                    if (group >= 1 && group < 10) {
+                        float kAppearDelay = 0.5f;
+                        float kActiveDuration = 1.5f;
+                        float kRestDuration = 1.0f;
+
+                        int maxOrder = maxOrderInGroup[group];
+                        float t_start = static_cast<float>(order) * kAppearDelay;
+                        float t_end = t_start + kActiveDuration;
+                        float T_cycle = static_cast<float>(maxOrder) * kAppearDelay + kActiveDuration + kRestDuration;
+
+                        float t_local = std::fmod(totalTime, T_cycle);
+                        if (t_local >= t_start && t_local < t_end) {
+                            cell.isSolid = true;
+                        } else {
+                            cell.isSolid = false;
+                        }
+                    }
+                }
 
 #pragma region 崩れる足場
 
@@ -610,6 +646,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::CrumblingFloor:
     case BlockType::IceBlock:
     case BlockType::KeyBlock:    // 鍵ブロックは通り抜けられない
+    case BlockType::PBlock:
     cell.isSolid = true;
     break;
 
@@ -634,9 +671,9 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::PlayerStart:
     case BlockType::Door:
     case BlockType::PSwitch:
-    case BlockType::PBlock:
     case BlockType::Key:         // 鍵は通り抜けられる
     case BlockType::Checkpoint:  // 🌟 追加：中間地点は通り抜けられる
+    case BlockType::TimedBlock:  // 🌟 追加：時間差ブロック（最初は消えている）
     cell.isSolid = false;
     break;
 

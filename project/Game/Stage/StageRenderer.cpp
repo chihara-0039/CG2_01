@@ -1,5 +1,6 @@
 #include "StageRenderer.h"
 #include <cassert>
+#include <random>
 
 // 解放
 StageRenderer::~StageRenderer() {
@@ -194,34 +195,41 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 	float scaleY = blockScale_.y;
 	float scaleZ = blockScale_.z;
 
+	// 雲の生成を決定論的（再現可能）にするために固定シードの乱数生成器を使用する
+	std::mt19937 randomEngine(12345);
+	std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+	auto randomFloat = [&randomEngine, &dist01]() {
+		return dist01(randomEngine);
+	};
+
 	int cloudCount = 12; // 12個浮かべる
 	for (int i = 0; i < cloudCount; ++i) {
 		CloudInstance cloud;
 		// ランダムな位置 (ステージの少し上空、周囲)
-		float rx = (static_cast<float>(rand()) / RAND_MAX) * (mapWidth * scaleX + 80.0f) - 40.0f;
-		float ry = (static_cast<float>(rand()) / RAND_MAX) * 6.0f + 3.0f; // 3.0f 〜 9.0f の高さ
-		float rz = (static_cast<float>(rand()) / RAND_MAX) * (mapDepth * scaleZ + 80.0f) - 40.0f;
+		float rx = randomFloat() * (mapWidth * scaleX + 80.0f) - 40.0f;
+		float ry = randomFloat() * 6.0f + 3.0f; // 3.0f 〜 9.0f の高さ
+		float rz = randomFloat() * (mapDepth * scaleZ + 80.0f) - 40.0f;
 		cloud.basePosition = { rx, ry, rz };
 
 		// 流れる速度 (X軸方向へゆっくり流れる)
-		float speedX = (static_cast<float>(rand()) / RAND_MAX) * 0.4f + 0.1f;
+		float speedX = randomFloat() * 0.4f + 0.1f;
 		cloud.speed = { speedX, 0.0f, 0.0f };
 
 		// フワフワパラメータ
-		cloud.floatTimer = (static_cast<float>(rand()) / RAND_MAX) * 6.28f;
-		cloud.floatSpeed = (static_cast<float>(rand()) / RAND_MAX) * 0.3f + 0.1f;
+		cloud.floatTimer = randomFloat() * 6.28f;
+		cloud.floatSpeed = randomFloat() * 0.3f + 0.1f;
 
 		// 1つの雲を構成する球体数 (3〜5個)
-		int partCount = rand() % 3 + 3;
+		int partCount = static_cast<int>(randomEngine() % 3) + 3;
 		for (int j = 0; j < partCount; ++j) {
 			// 中心からのオフセット
-			float ox = (static_cast<float>(rand()) / RAND_MAX) * 4.0f - 2.0f;
-			float oy = (static_cast<float>(rand()) / RAND_MAX) * 1.5f - 0.75f;
-			float oz = (static_cast<float>(rand()) / RAND_MAX) * 4.0f - 2.0f;
+			float ox = randomFloat() * 4.0f - 2.0f;
+			float oy = randomFloat() * 1.5f - 0.75f;
+			float oz = randomFloat() * 4.0f - 2.0f;
 			cloud.localOffsets.push_back({ ox, oy, oz });
 
 			// ランダムスケール
-			float s = (static_cast<float>(rand()) / RAND_MAX) * 2.0f + 1.5f;
+			float s = randomFloat() * 2.0f + 1.5f;
 			cloud.localScales.push_back({ s, s * 0.5f, s }); // 雲らしく少し平べったくする
 		}
 
@@ -458,6 +466,25 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						if (cell->type == BlockType::PBlock) {
 							pBlockObjects_.push_back({ obj, blockScale_ });
 						}
+					}
+				}
+				break;
+
+				case BlockType::TimedBlock:
+				{
+					Object3d* newObj = CreateStageObject(
+						wallModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::TimedBlock
+					);
+
+					if (newObj) {
+						TimedBlockInstance instance;
+						instance.object = newObj;
+						instance.cellIndex = { x, y, z };
+						timedBlockInstances_.push_back(instance);
 					}
 				}
 				break;
@@ -702,6 +729,29 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 			};
 
 			instance.object->SetPosition(newPosition);
+			instance.object->Update(lightVP);
+			MarkDirty(instance.object);
+		}
+	}
+
+	for (auto& instance : timedBlockInstances_) {
+		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
+		if (cell && cell->type == BlockType::TimedBlock) {
+			if (cell->isSolid) {
+				// アクティブ状態：通常サイズで表示、鮮やかなオレンジ色
+				instance.object->SetScale(blockScale_);
+				instance.object->SetColor({ 1.0f, 0.6f, 0.1f, 1.0f });
+			} else {
+				// 非アクティブ状態：
+				if (isEditorMode_) {
+					// エディタモードなら半透明オレンジで表示
+					instance.object->SetScale(blockScale_);
+					instance.object->SetColor({ 1.0f, 0.6f, 0.1f, 0.3f });
+				} else {
+					// プレイモードなら非表示（スケール0）
+					instance.object->SetScale({ 0.0f, 0.0f, 0.0f });
+				}
+			}
 			instance.object->Update(lightVP);
 			MarkDirty(instance.object);
 		}
@@ -983,6 +1033,7 @@ void StageRenderer::Clear() {
 	movingFloorInstances_.clear(); // ★追加：動く足場の管理リストもクリアしてダングリングポインタを防ぐ
 	enemyInstances_.clear(); // ★追加：敵の管理リストもクリア
 	clouds_.clear(); // ★追加：背景雲のリストもクリア
+	timedBlockInstances_.clear(); // ★追加：時間差ブロックリストをクリア
 
 
 	//5/19佐倉
