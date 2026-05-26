@@ -111,6 +111,9 @@ private:
     std::vector<PSwitchVisualObject> pSwitchObjects_;
     std::vector<PSwitchVisualObject> pBlockObjects_;
 
+    //5/26佐倉
+    std::vector<Object3d*> wallObjects_;
+
 private:
     // インスタンシング描画用のデータ構造
     struct InstanceData {

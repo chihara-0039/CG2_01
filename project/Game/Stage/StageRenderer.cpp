@@ -313,6 +313,12 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f },
 						BlockType::Wall
 					);
+
+					// ▼ 追加：Wallだけを透明化対象として保存
+					if (obj) {
+						wallObjects_.push_back(obj);
+					}
+
 					if (cell->variant >= 1 && cell->variant <= 5) {
 						const auto* part = stageMap.GetCustomPart(cell->variant);
 						if (part) {
@@ -1003,6 +1009,8 @@ void StageRenderer::Clear() {
 	pSwitchObjects_.clear();
 	pBlockObjects_.clear();
 
+	wallObjects_.clear();
+
 	// グループ管理データもクリア
 	renderGroups_.clear();
 	previewRenderGroups_.clear();
@@ -1500,42 +1508,47 @@ void StageRenderer::RebuildTransparencyGroups()
 	BuildGroupData(transparentRenderGroups_);
 }
 
-//5/26壁半透明
 void StageRenderer::UpdateWallTransparency(
 	const Vector3& cameraPos,
 	const Vector3& playerPos
 )
 {
-	cameraPos; // 未使用警告対策
+	cameraPos;
 
-	for (auto& obj : objects_) {
-		if (!obj || !obj->GetModel()) {
+	int playerCellX = static_cast<int>(std::floor(playerPos.x + 0.5f));
+	int playerCellY = static_cast<int>(std::floor(playerPos.y + 0.5f));
+	int playerCellZ = static_cast<int>(std::floor(playerPos.z + 0.5f));
+
+	for (auto& obj : wallObjects_) {
+		if (!obj) {
 			continue;
 		}
-
-		if (obj->GetModel() != wallModel_.get()) {
-			continue;
-		}
-
-		
 
 		Vector3 wallPos = obj->GetPosition();
 
-		float dx = wallPos.x - playerPos.x;
-		float dy = wallPos.y - (playerPos.y + 0.8f);
-		float dz = wallPos.z - playerPos.z;
+		int wallCellX = static_cast<int>(std::floor(wallPos.x + 0.5f));
+		int wallCellY = static_cast<int>(std::floor(wallPos.y + 0.5f));
+		int wallCellZ = static_cast<int>(std::floor(wallPos.z + 0.5f));
 
-		float distSqToPlayer = dx * dx + dy * dy + dz * dz;
+		// まず全部不透明
+		obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 
-		if (distSqToPlayer < 12.0f) {
-			obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.60f });
-		} else {
-			obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		// 床を絶対透明化しない
+		// 自機と同じ高さ以下は床扱い
+		if (wallCellY <= playerCellY) {
+			continue;
 		}
 
-		//MarkDirty(obj.get());
+		// 自機中心の見やすい範囲
+		bool insideTransparencyArea =
+			std::abs(wallCellX - playerCellX) <= 4 &&
+			std::abs(wallCellZ - playerCellZ) <= 3 &&
+			wallCellY <= playerCellY + 3;
+
+		if (insideTransparencyArea) {
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.55f });
+		}
 	}
 
 	RebuildTransparencyGroups();
-
 }
