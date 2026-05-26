@@ -115,21 +115,14 @@ void MyGame::Initialize() {
         stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
     }
 #elif defined(NDEBUG)
-    // 【Releaseビルド時】直接ゲームを開始する
-    currentMode_ = AppMode::GamePlay;
+    // 【Releaseビルド時】タイトルから開始する
+    currentMode_ = AppMode::Title;
 
     // 天球はON
     debugFlags_.showSkybox = true;
 
     // Offscreen Rendering は OFF
     offscreenEnabled_ = false;
-
-    // "Stage1.txt" があれば自動ロード
-    std::string startStage = "Resources/Stages/Stage1.txt";
-    if (std::filesystem::exists(startStage)) {
-        stageMap_.LoadFromFile(startStage);
-        stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
-    }
 #else
     // 【Debugビルド時】タイトルから開始
     currentMode_ = AppMode::Title;
