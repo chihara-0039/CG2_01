@@ -32,35 +32,35 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 
     bool changed = false;
 
-    // --- プレイヤー追従デッドゾーン処理 ---
-    Vector3 playerPos = player->GetPosition();
-    float deadZoneX = 5.0f;
-    float deadZoneZ = 5.0f;
+    //// --- プレイヤー追従デッドゾーン処理 ---
+    //Vector3 playerPos = player->GetPosition();
+    //float deadZoneX = 5.0f;
+    //float deadZoneZ = 5.0f;
 
-    float diffX = playerPos.x - cameraPivot_.x;
-    if (diffX > deadZoneX) {
-        cameraPivot_.x = playerPos.x - deadZoneX;
-        changed = true;
-    } else if (diffX < -deadZoneX) {
-        cameraPivot_.x = playerPos.x + deadZoneX;
-        changed = true;
-    }
+    //float diffX = playerPos.x - cameraPivot_.x;
+    //if (diffX > deadZoneX) {
+    //    cameraPivot_.x = playerPos.x - deadZoneX;
+    //    changed = true;
+    //} else if (diffX < -deadZoneX) {
+    //    cameraPivot_.x = playerPos.x + deadZoneX;
+    //    changed = true;
+    //}
 
-    float diffZ = playerPos.z - cameraPivot_.z;
-    if (diffZ > deadZoneZ) {
-        cameraPivot_.z = playerPos.z - deadZoneZ;
-        changed = true;
-    } else if (diffZ < -deadZoneZ) {
-        cameraPivot_.z = playerPos.z + deadZoneZ;
-        changed = true;
-    }
+    //float diffZ = playerPos.z - cameraPivot_.z;
+    //if (diffZ > deadZoneZ) {
+    //    cameraPivot_.z = playerPos.z - deadZoneZ;
+    //    changed = true;
+    //} else if (diffZ < -deadZoneZ) {
+    //    cameraPivot_.z = playerPos.z + deadZoneZ;
+    //    changed = true;
+    //}
 
-    float targetPivotY = playerPos.y + initialPivotYOffset_;
-    float diffPivotY = targetPivotY - cameraPivot_.y;
-    if (std::abs(diffPivotY) > 2.0f) {
-        cameraPivot_.y += diffPivotY * 0.1f; // ゆるやかにY軸追従
-        changed = true;
-    }
+    //float targetPivotY = playerPos.y + initialPivotYOffset_;
+    //float diffPivotY = targetPivotY - cameraPivot_.y;
+    //if (std::abs(diffPivotY) > 2.0f) {
+    //    cameraPivot_.y += diffPivotY * 0.1f; // ゆるやかにY軸追従
+    //    changed = true;
+    //}
 
     // ==========================================================
     // ズーム：ホイールが動いた時だけ処理
@@ -212,73 +212,44 @@ void GameplayCameraController::ApplyCamera(Camera* camera) {
     camera->SetRotation({ cameraPitch_, cameraAngle_, 0.0f });
 }
 
-void GameplayCameraController::ResetCamera(Camera* camera, Player* player, int stageIndex) {
+void GameplayCameraController::ResetCamera(
+    Camera* camera,
+    Player* player,
+    const StageMap& stageMap,
+    int stageIndex
+) {
     if (!camera || !player) return;
 
     currentStageIndex_ = stageIndex;
 
-    cameraPivot_ = { 4.0f, 9.0f, 4.5f };
-    cameraDistance_ = 35.0f;
-    cameraHeight_ = 20.0f;
+    float width = static_cast<float>(stageMap.GetWidth());
+    float height = static_cast<float>(stageMap.GetHeight());
+    float depth = static_cast<float>(stageMap.GetDepth());
 
-    cameraAngle_ = 1.5708f;
-    cameraPitch_ = 0.75f;
-    cameraFov_ = 0.45f;
+    // ステージサイズから中心を自動計算
+    cameraPivot_ = {
+        (width - 1.0f) * 0.5f,
+        height * 0.35f,
+        (depth - 1.0f) * 0.5f
+    };
 
-    switch (stageIndex) {
-    case 0:
-        cameraPivot_ = { 4.014f, 9.0f, 4.5f };
-        cameraAngle_ = 6.267f;
-        cameraPitch_ = 0.400f;
-        cameraDistance_ = 35.0f;
-        cameraHeight_ = 20.0f;
-        cameraFov_ = 0.450f;
-        break;
+    // ステージサイズから距離を自動計算
+    float maxSize = (std::max)(width, depth);
 
-    case 1:
-        cameraPivot_ = { 4.014f, 9.0f, 4.5f };
-        cameraAngle_ = 6.267f;
-        cameraPitch_ = 0.400f;
-        cameraDistance_ = 35.0f;
-        cameraHeight_ = 20.0f;
-        cameraFov_ = 0.450f;
-        break;
+    cameraAngle_ = 0.785f;//45度
+    cameraPitch_ = 0.55f;//見下ろし角度
 
-    case 2:
-        cameraPivot_ = { 4.271f, 9.0f, 4.5f };
-        cameraAngle_ = 3.15f;
-        cameraPitch_ = 0.400f;
-        cameraDistance_ = 32.236f;
-        cameraHeight_ = 20.970f;
-        cameraFov_ = 0.550f;
-        break;
+    cameraDistance_ = maxSize * 2.2f;
+    cameraHeight_ = maxSize * 1.3f;
 
-    case 3:
-        cameraPivot_ = { 5.0f, 7.0f, 10.0f };
-        cameraAngle_ = 1.5708f;
+    cameraFov_ = 0.55f;
+
+    // ステージ3だけ少し広めに見る
+    if (stageIndex == 3) {
         cameraPitch_ = 0.7f;
-        cameraDistance_ = 30.0f;
-        cameraHeight_ = 16.0f;
-        cameraFov_ = 0.450f;
-        break;
-
-    case 4:
-        cameraPivot_ = { 8.0f, 12.0f, 8.0f };
-        cameraAngle_ = 1.5708f;
-        cameraPitch_ = 1.1f;
-        cameraDistance_ = 38.0f;
-        cameraHeight_ = 25.0f;
-        cameraFov_ = 0.450f;
-        break;
-
-    case 5:
-        cameraPivot_ = { 4.0f, 6.0f, 4.0f };
-        cameraAngle_ = 1.5708f;
-        cameraPitch_ = 0.6f;
-        cameraDistance_ = 28.0f;
-        cameraHeight_ = 14.0f;
-        cameraFov_ = 0.450f;
-        break;
+        cameraDistance_ = maxSize * 2.4f;
+        cameraHeight_ = maxSize * 1.4f;
+        cameraFov_ = 0.60f;
     }
 
     initialPivotYOffset_ = cameraPivot_.y - player->GetPosition().y;
