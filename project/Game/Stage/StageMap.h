@@ -25,7 +25,7 @@ enum class BlockType : uint32_t {
     Spike,       // トゲ
     EnemyWalker, // 敵（歩行）
     EnemyFlyer,  // 敵（飛行）
-    EnemyChaser  // 敵（追尾）
+    EnemyChaser,  // 敵（追尾）
     PBlockAppears // 🌟 追加：押すと出現するPブロック
 };
 
@@ -294,6 +294,21 @@ public:
     void RebuildEnemyList();
     const std::vector<EnemyRef>& GetEnemies() const { return enemies_; }
 
+    // 環境設定（背景色、ライト）のゲッター・セッター
+    const Vector4& GetClearColor() const { return clearColor_; }
+    void SetClearColor(const Vector4& color) { clearColor_ = color; }
+
+    float GetLightIntensity() const { return lightIntensity_; }
+    void SetLightIntensity(float intensity) { lightIntensity_ = intensity; }
+
+    const Vector3& GetLightColor() const { return lightColor_; }
+    void SetLightColor(const Vector3& color) { lightColor_ = color; }
+
+    const Vector3& GetLightDirection() const { return lightDirection_; }
+    void SetLightDirection(const Vector3& dir) { lightDirection_ = dir; }
+
+
+
     /// <summary>
     /// 指定した座標のドアと同じID（variant）を持つ、相方のドアの座標を検索する
     /// </summary>
@@ -309,6 +324,14 @@ private:
     std::vector<CustomBlockPart> customParts_; // カスタムブロックパーツ定義リスト (スロット1〜5)
     std::vector<MovingFloorRef> movingFloors_;
     std::vector<EnemyRef> enemies_;
+
+    // 環境・ライティング設定の保存値 (初期値)
+    Vector4 clearColor_ = { 0.1f, 0.25f, 0.5f, 1.0f }; // デフォルトの青背景
+    float lightIntensity_ = 1.0f;
+    Vector3 lightColor_ = { 0.9f, 0.9f, 0.9f };
+    Vector3 lightDirection_ = { 0.5f, -1.0f, 0.5f };
+
+
 
 
 private:
