@@ -66,8 +66,8 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::EnemyFlyer:     return "EnemyFlyer";
     case BlockType::EnemyChaser:    return "EnemyChaser";
     case BlockType::PBlockAppears:  return "PBlock (On)"; // 🌟 追加
-	case BlockType::Checkpoint:      return "Checkpoint";
-	case BlockType::TimedBlock:      return "TimedBlock"; // 🌟 追加
+	  case BlockType::Checkpoint:     return "Checkpoint";
+	  case BlockType::TimedBlock:     return "TimedBlock"; // 🌟 追加
     default:                        return "Unknown";
     }
 }
