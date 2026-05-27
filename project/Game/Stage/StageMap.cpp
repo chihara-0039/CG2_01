@@ -81,19 +81,28 @@ void StageMap::Initialize(int width, int height, int depth) {
     customParts_[4].cells[0][0][0].type = BlockType::Ladder; // 1マスだけ
 }
 
-void StageMap::Update(float deltaTime, float totalTime, const Vector3& playerPos)
+void StageMap::Update(float deltaTime, const Vector3& playerPos)
 {
-    // --- 時間差ブロックのグループごとの最大Order IDを算出 ---
-    int maxOrderInGroup[10] = { 0 };
+    accumulatedTime_ += deltaTime;
+
+    // 1. 各グループの全Order IDを収集する
+    std::vector<int> groupOrders[10];
     for (const auto& cell : cells_) {
         if (cell.type == BlockType::TimedBlock) {
             int group = cell.variant / 10;
             int order = cell.variant % 10;
             if (group >= 1 && group < 10) {
-                if (order > maxOrderInGroup[group]) {
-                    maxOrderInGroup[group] = order;
+                if (std::find(groupOrders[group].begin(), groupOrders[group].end(), order) == groupOrders[group].end()) {
+                    groupOrders[group].push_back(order);
                 }
             }
+        }
+    }
+
+    // 2. 各グループのOrder IDをソートする
+    for (int g = 1; g < 10; ++g) {
+        if (!groupOrders[g].empty()) {
+            std::sort(groupOrders[g].begin(), groupOrders[g].end());
         }
     }
 
@@ -105,18 +114,34 @@ void StageMap::Update(float deltaTime, float totalTime, const Vector3& playerPos
                 if (cell.type == BlockType::TimedBlock) {
                     int group = cell.variant / 10;
                     int order = cell.variant % 10;
-                    if (group >= 1 && group < 10) {
-                        float kAppearDelay = 0.5f;
-                        float kActiveDuration = 1.5f;
-                        float kRestDuration = 1.0f;
+                    if (group >= 1 && group < 10 && !groupOrders[group].empty()) {
+                        const auto& orders = groupOrders[group];
+                        int minOrder = orders.front();
+                        int maxOrder = orders.back();
 
-                        int maxOrder = maxOrderInGroup[group];
-                        float t_start = static_cast<float>(order) * kAppearDelay;
-                        float t_end = t_start + kActiveDuration;
-                        float T_cycle = static_cast<float>(maxOrder) * kAppearDelay + kActiveDuration + kRestDuration;
+                        float kAppearDelay = 0.8f;      // 0.8秒間隔で出現
+                        float kOverlapDuration = 1.5f;  // 次のブロックが出てから消えるまでの猶予
+                        float kLastDuration = 2.0f;     // 最後のブロックの表示時間
+                        float kRestDuration = 1.5f;     // サイクル終了後のインターバル
 
-                        float t_local = std::fmod(totalTime, T_cycle);
-                        if (t_local >= t_start && t_local < t_end) {
+                        // サイクル全体の長さを計算
+                        float T_cycle = static_cast<float>(maxOrder - minOrder) * kAppearDelay + kLastDuration + kRestDuration;
+
+                        // このブロックの出現順インデックスを取得
+                        auto it = std::find(orders.begin(), orders.end(), order);
+                        size_t idx = std::distance(orders.begin(), it);
+
+                        float t_appear = static_cast<float>(order - minOrder) * kAppearDelay;
+                        float t_disappear = 0.0f;
+                        if (idx < orders.size() - 1) {
+                            int nextOrder = orders[idx + 1];
+                            t_disappear = static_cast<float>(nextOrder - minOrder) * kAppearDelay + kOverlapDuration;
+                        } else {
+                            t_disappear = t_appear + kLastDuration;
+                        }
+
+                        float t_local = std::fmod(accumulatedTime_, T_cycle);
+                        if (t_local >= t_appear && t_local < t_disappear) {
                             cell.isSolid = true;
                         } else {
                             cell.isSolid = false;
@@ -456,6 +481,7 @@ void StageMap::Clear() {
         cell.isSolid = false;
     }
     enemies_.clear();
+    ResetTime();
 }
 
 bool StageMap::IsInside(int x, int y, int z) const {
