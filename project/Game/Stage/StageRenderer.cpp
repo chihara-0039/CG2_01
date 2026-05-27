@@ -1583,7 +1583,7 @@ void StageRenderer::UpdateWallTransparency(
 			wallCellY <= playerCellY + 3;
 
 		if (insideTransparencyArea) {
-			obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.55f });
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.22f });
 		}
 	}
 
