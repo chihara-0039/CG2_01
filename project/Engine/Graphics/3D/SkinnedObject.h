@@ -14,6 +14,9 @@ public:
     // 初期化
     void Initialize(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, TextureManager* textureManager);
 
+    // glTFからの初期化
+    void InitializeFromGltf(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager);
+
     // 更新 (行列計算、アニメーション、スキニング適用)
     void Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP);
 

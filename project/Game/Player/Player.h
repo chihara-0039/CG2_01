@@ -2,7 +2,10 @@
 #include "Object3d.h"
 #include "Input.h"
 #include "StageMap.h"
+#include "SkinnedObject.h"
 #include <memory>
+
+class DirectXCommon;
 
 class Player {
 public:
@@ -12,8 +15,12 @@ public:
     // 初期化：描画用コンポーネントとモデルを設定
     void Initialize(Object3dCommon* common, Model* model);
 
+    // スキニング対応初期化
+    void InitializeWithSkinnedGltf(Object3dCommon* common, DirectXCommon* dxCommon, const std::string& gltfPath, TextureManager* textureManager);
+    void InitializeWithDefaultSkinned(Object3dCommon* common, DirectXCommon* dxCommon, TextureManager* textureManager);
+
     // 更新：移動・重力・当たり判定の処理
-    void Update(const Input* input,  StageMap& map, float cameraRotY, const Matrix4x4& lightVP);
+    void Update(const Input* input,  StageMap& map, float cameraRotY, const Matrix4x4& lightVP, DirectXCommon* dxCommon);
 
 	// Object3d の行列を更新する（ライトカメラの行列も渡す）
     void UpdateTransform(const Matrix4x4& lightVP);
@@ -39,6 +46,9 @@ public:
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection) {
         if (object_) {
             object_->SetCamera(view, projection);
+        }
+        if (skinnedObject_) {
+            skinnedObject_->SetCamera(view, projection);
         }
     }
 
@@ -82,6 +92,9 @@ private:
 
 private:
     std::unique_ptr<Object3d> object_;    // プレイヤーの見た目
+    std::unique_ptr<SkinnedObject> skinnedObject_; // スキニング対応プレイヤー
+    bool isSkinned_ = false;              // スキニングモデルを使用中か
+
     Vector3 position_ = { 0, 0, 0 }; // 世界座標
     Vector3 rotation_ = { 0, 0, 0 };
     Vector3 velocity_ = { 0, 0, 0 }; // 速度（落下速度を管理）

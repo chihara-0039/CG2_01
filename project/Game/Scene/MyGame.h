@@ -220,5 +220,14 @@ private:
         DXGI_FORMAT format,
         const Vector4& clearColor);
 
+    // --- モデル選択・反映機能 ---
+    std::vector<std::string> modelPaths_;
+    std::vector<std::string> modelNames_;
+    int selectedModelIndex_ = 0;
+    int activeGameModelIndex_ = 0;
+    void ScanGltfModels();
+    void ChangePreviewModel(int index);
+    void ApplyModelToPlayer();
+
     
 };

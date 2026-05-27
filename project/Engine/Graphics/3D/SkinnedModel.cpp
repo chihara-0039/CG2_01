@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include "SkinnedModel.h"
+#include "GltfLoader.h"
 #include "MyMath.h"
 #include <cassert>
 #include <cmath>
@@ -56,6 +57,50 @@ void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureMa
 
     // 7. 初期ポーズを適用 (腕を下ろした状態にする)
     ResetPose();
+}
+
+void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager) {
+    std::string texturePath;
+    
+    // glTFファイルをロード
+    bool success = GltfLoader::LoadGltfModel(
+        dxCommon,
+        textureManager,
+        filePath,
+        bindPoseVertices_,
+        influences_,
+        joints_,
+        motions_,
+        texturePath
+    );
+
+    if (!success) {
+        OutputDebugStringA("Failed to load glTF model. Falling back to default humanoid mesh.\n");
+        Initialize(dxCommon, textureManager);
+        return;
+    }
+
+    // 再生アニメーションの初期インデックスを設定
+    activeMotionIndex_ = motions_.empty() ? -1 : 0;
+
+    // 変形後頂点配列をバインドポーズ頂点で初期化
+    animatedVertices_ = bindPoseVertices_;
+
+    // テクスチャのロード
+    uint32_t texHandle = 0;
+    if (textureManager && !texturePath.empty()) {
+        texHandle = textureManager->LoadTexture(texturePath);
+    }
+
+    // 描画用モデルの生成とバッファ構築
+    model_ = std::make_unique<Model>();
+    model_->InitializeFromVertices(dxCommon, animatedVertices_, texHandle);
+
+    // ジョイント状態のクォータニオン初期設定
+    for (auto& joint : joints_) {
+        joint.rotationQuat = Math::MakeQuaternionFromEuler(joint.rotation);
+        joint.isQuaternion = true;
+    }
 }
 
 void SkinnedModel::ResetPose() {
@@ -342,7 +387,11 @@ void SkinnedModel::Update(DirectXCommon* dxCommon) {
     // 1. スケルトン行列の更新 (親から順にトラバース)
     for (size_t i = 0; i < joints_.size(); ++i) {
         // local = Affine
-        joints_[i].localMatrix = Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotation, joints_[i].translation);
+        if (joints_[i].isQuaternion) {
+            joints_[i].localMatrix = Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotationQuat, joints_[i].translation);
+        } else {
+            joints_[i].localMatrix = Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotation, joints_[i].translation);
+        }
 
         // global = parent.global * local
         if (joints_[i].parentIndex == -1) {
@@ -446,16 +495,17 @@ void SkinnedModel::ApplyTestAnimation(float time, float speed) {
 
 void SkinnedModel::AddKeyframe(float time) {
     // 1. 各ジョイント用のアニメーションデータの確保
-    if (motionData_.jointAnimations.empty()) {
-        motionData_.jointAnimations.resize(joints_.size());
+    auto& activeMotion = GetMotionData();
+    if (activeMotion.jointAnimations.empty()) {
+        activeMotion.jointAnimations.resize(joints_.size());
         for (size_t i = 0; i < joints_.size(); ++i) {
-            motionData_.jointAnimations[i].name = joints_[i].name;
+            activeMotion.jointAnimations[i].name = joints_[i].name;
         }
     }
 
     // 2. 各ジョイントの現在の状態をキーフレームとして記録
     for (size_t i = 0; i < joints_.size(); ++i) {
-        auto& jointAnim = motionData_.jointAnimations[i];
+        auto& jointAnim = GetMotionData().jointAnimations[i];
         
         // 既に同じ時間のキーフレームがあるか確認し、あれば上書きする
         bool found = false;
@@ -486,10 +536,11 @@ void SkinnedModel::AddKeyframe(float time) {
 }
 
 void SkinnedModel::ClearKeyframes() {
-    for (auto& jointAnim : motionData_.jointAnimations) {
+    auto& activeMotion = GetMotionData();
+    for (auto& jointAnim : activeMotion.jointAnimations) {
         jointAnim.keyframes.clear();
     }
-    motionData_.jointAnimations.clear();
+    activeMotion.jointAnimations.clear();
 }
 
 bool SkinnedModel::SaveMotion(const std::string& filePath) {
@@ -502,10 +553,10 @@ bool SkinnedModel::SaveMotion(const std::string& filePath) {
     std::ofstream ofs(filePath);
     if (!ofs.is_open()) return false;
 
-    ofs << "Duration " << motionData_.duration << "\n";
+    ofs << "Duration " << GetMotionData().duration << "\n";
     ofs << "NumJoints " << joints_.size() << "\n";
 
-    for (const auto& jointAnim : motionData_.jointAnimations) {
+    for (const auto& jointAnim : GetMotionData().jointAnimations) {
         ofs << "JointName " << jointAnim.name << "\n";
         ofs << "NumKeyframes " << jointAnim.keyframes.size() << "\n";
         for (const auto& kf : jointAnim.keyframes) {
@@ -529,9 +580,10 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
     float duration = 2.0f;
     int numJoints = 0;
 
-    motionData_.jointAnimations.resize(joints_.size());
+    auto& activeMotion = GetMotionData();
+    activeMotion.jointAnimations.resize(joints_.size());
     for (size_t i = 0; i < joints_.size(); ++i) {
-        motionData_.jointAnimations[i].name = joints_[i].name;
+        activeMotion.jointAnimations[i].name = joints_[i].name;
     }
 
     while (std::getline(ifs, line)) {
@@ -543,7 +595,7 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
 
         if (command == "Duration") {
             ss >> duration;
-            motionData_.duration = duration;
+            GetMotionData().duration = duration;
         } else if (command == "NumJoints") {
             ss >> numJoints;
         } else if (command == "JointName") {
@@ -568,7 +620,7 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
                 ssKey >> cmdKey >> numKeyframes;
 
                 if (cmdKey == "NumKeyframes" && targetIdx != -1) {
-                    auto& jointAnim = motionData_.jointAnimations[targetIdx];
+                    auto& jointAnim = GetMotionData().jointAnimations[targetIdx];
                     jointAnim.keyframes.clear();
                     
                     for (int k = 0; k < numKeyframes; ++k) {
@@ -609,14 +661,16 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
 }
 
 void SkinnedModel::ApplyMotion(float time) {
-    if (motionData_.jointAnimations.empty()) return;
+    const auto& activeMotion = GetMotionData();
+    if (activeMotion.jointAnimations.empty()) return;
 
     // 時間を Duration 内にループさせる
-    float loopedTime = std::fmod(time, motionData_.duration);
-    if (loopedTime < 0.0f) loopedTime += motionData_.duration;
+    float loopedTime = std::fmod(time, activeMotion.duration);
+    if (loopedTime < 0.0f) loopedTime += activeMotion.duration;
 
     for (size_t i = 0; i < joints_.size(); ++i) {
-        const auto& jointAnim = motionData_.jointAnimations[i];
+        if (i >= activeMotion.jointAnimations.size()) continue;
+        const auto& jointAnim = activeMotion.jointAnimations[i];
         if (jointAnim.keyframes.empty()) continue;
 
         auto& joint = joints_[i];
@@ -626,6 +680,8 @@ void SkinnedModel::ApplyMotion(float time) {
             joint.translation = jointAnim.keyframes[0].translation;
             joint.rotation = jointAnim.keyframes[0].rotation;
             joint.scale = jointAnim.keyframes[0].scale;
+            joint.rotationQuat = jointAnim.keyframes[0].rotationQuat;
+            joint.isQuaternion = jointAnim.keyframes[0].isQuaternion;
             continue;
         }
 
@@ -635,6 +691,8 @@ void SkinnedModel::ApplyMotion(float time) {
             joint.translation = first.translation;
             joint.rotation = first.rotation;
             joint.scale = first.scale;
+            joint.rotationQuat = first.rotationQuat;
+            joint.isQuaternion = first.isQuaternion;
             continue;
         }
 
@@ -644,6 +702,8 @@ void SkinnedModel::ApplyMotion(float time) {
             joint.translation = last.translation;
             joint.rotation = last.rotation;
             joint.scale = last.scale;
+            joint.rotationQuat = last.rotationQuat;
+            joint.isQuaternion = last.isQuaternion;
             continue;
         }
 
@@ -662,12 +722,20 @@ void SkinnedModel::ApplyMotion(float time) {
                     kfA.translation.z + t * (kfB.translation.z - kfA.translation.z)
                 };
 
-                // 角度の補間 (オイラー角の単純な Lerp)
-                joint.rotation = {
-                    kfA.rotation.x + t * (kfB.rotation.x - kfA.rotation.x),
-                    kfA.rotation.y + t * (kfB.rotation.y - kfA.rotation.y),
-                    kfA.rotation.z + t * (kfB.rotation.z - kfA.rotation.z)
-                };
+                // 回転の補間
+                if (kfA.isQuaternion && kfB.isQuaternion) {
+                    joint.rotationQuat = Math::Slerp(kfA.rotationQuat, kfB.rotationQuat, t);
+                    joint.rotation = Math::ToEuler(joint.rotationQuat);
+                    joint.isQuaternion = true;
+                } else {
+                    // 角度の補間 (オイラー角の単純な Lerp)
+                    joint.rotation = {
+                        kfA.rotation.x + t * (kfB.rotation.x - kfA.rotation.x),
+                        kfA.rotation.y + t * (kfB.rotation.y - kfA.rotation.y),
+                        kfA.rotation.z + t * (kfB.rotation.z - kfA.rotation.z)
+                    };
+                    joint.isQuaternion = false;
+                }
 
                 joint.scale = {
                     kfA.scale.x + t * (kfB.scale.x - kfA.scale.x),
@@ -684,7 +752,7 @@ void SkinnedModel::GenerateWalkPreset() {
     ClearKeyframes();
 
     // 2.0秒のアニメーションを0.1秒刻み（21キーフレーム）で生成
-    motionData_.duration = 2.0f;
+    GetMotionData().duration = 2.0f;
     float step = 0.1f;
 
     // 一時的にポーズを退避
@@ -719,7 +787,7 @@ void SkinnedModel::GenerateRunPreset() {
     ClearKeyframes();
 
     // 小走りは1サイクル1.0秒の素早いループが綺麗
-    motionData_.duration = 1.0f;
+    GetMotionData().duration = 1.0f;
     float step = 0.05f; // 1.0秒間を0.05秒刻み（合計21キーフレーム）で生成
 
     // 一時的にポーズを退避
@@ -779,5 +847,48 @@ void SkinnedModel::GenerateRunPreset() {
         joints_[i].translation = origTrans[i];
         joints_[i].rotation = origRot[i];
         joints_[i].scale = origScale[i];
+    }
+}
+
+float SkinnedModel::GetMotionDuration() const {
+    if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
+        return motions_[activeMotionIndex_].duration;
+    }
+    return 2.0f;
+}
+
+void SkinnedModel::SetMotionDuration(float duration) {
+    if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
+        motions_[activeMotionIndex_].duration = duration;
+    }
+}
+
+const MotionData& SkinnedModel::GetMotionData() const {
+    static MotionData empty{};
+    if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
+        return motions_[activeMotionIndex_];
+    }
+    if (motions_.empty()) {
+        const_cast<SkinnedModel*>(this)->motions_.push_back(empty);
+        const_cast<SkinnedModel*>(this)->activeMotionIndex_ = 0;
+    }
+    return motions_[0];
+}
+
+MotionData& SkinnedModel::GetMotionData() {
+    static MotionData empty{};
+    if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
+        return motions_[activeMotionIndex_];
+    }
+    if (motions_.empty()) {
+        motions_.push_back(empty);
+        activeMotionIndex_ = 0;
+    }
+    return motions_[0];
+}
+
+void SkinnedModel::SetActiveMotionIndex(int index) {
+    if (index >= -1 && index < static_cast<int>(motions_.size())) {
+        activeMotionIndex_ = index;
     }
 }

@@ -15,10 +15,36 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 	object_->SetShininess(0.6f);
 	object_->SetMetallic(0.15f);
 	object_->SetEmissive(0.0f);
+
+	skinnedObject_.reset();
+	isSkinned_ = false;
+}
+
+void Player::InitializeWithSkinnedGltf(Object3dCommon* common, DirectXCommon* dxCommon, const std::string& gltfPath, TextureManager* textureManager) {
+	skinnedObject_ = std::make_unique<SkinnedObject>();
+	skinnedObject_->InitializeFromGltf(common, dxCommon, gltfPath, textureManager);
+	// カスタムモーション再生モードにして、再生時間とインデックスをプログラム側で制御する
+	skinnedObject_->SetPlayAnimation(false);
+	skinnedObject_->SetPlayCustomAnimation(true);
+	skinnedObject_->SetAnimationSpeed(1.0f);
+	
+	object_.reset();
+	isSkinned_ = true;
+}
+
+void Player::InitializeWithDefaultSkinned(Object3dCommon* common, DirectXCommon* dxCommon, TextureManager* textureManager) {
+	skinnedObject_ = std::make_unique<SkinnedObject>();
+	skinnedObject_->Initialize(common, dxCommon, textureManager);
+	skinnedObject_->SetPlayAnimation(false);
+	skinnedObject_->SetPlayCustomAnimation(true);
+	skinnedObject_->SetAnimationSpeed(1.0f);
+	
+	object_.reset();
+	isSkinned_ = true;
 }
 
 // 更新：移動・重力・当たり判定の処理
-void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Matrix4x4& lightVP)
+void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Matrix4x4& lightVP, DirectXCommon* dxCommon)
 {
 	input_ = input;
 	// --- 1. ハシゴ判定 ---
@@ -325,16 +351,59 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 collision_end:
 
 	// --- 表示更新 ---
-	object_->SetPosition(position_);
-	object_->SetRotation(rotation_);
-	object_->Update(lightVP);
+	if (isSkinned_ && skinnedObject_) {
+		skinnedObject_->SetPosition(position_);
+		skinnedObject_->SetRotation(rotation_);
+		skinnedObject_->SetScale({ 1.0f, 1.0f, 1.0f });
+
+		// 移動状態に合わせてモーション切り替え
+		auto* model = skinnedObject_->GetModel();
+		if (model) {
+			const auto& motions = model->GetMotions();
+			if (motions.size() >= 2) {
+				bool isMoving = (std::abs(velocity_.x) > 0.01f || std::abs(velocity_.z) > 0.01f);
+				if (isOnLadder_) {
+					// はしご登り (あれば3番、なければ歩きで代用)
+					if (motions.size() >= 4) {
+						model->SetActiveMotionIndex(3);
+					} else {
+						model->SetActiveMotionIndex(1);
+					}
+				} else if (!isGrounded_) {
+					// 空中 (あれば2番、なければ歩きで代用)
+					if (motions.size() >= 3) {
+						model->SetActiveMotionIndex(2);
+					} else {
+						model->SetActiveMotionIndex(1);
+					}
+				} else if (isMoving) {
+					// 移動中 (歩き/走り)
+					model->SetActiveMotionIndex(1);
+				} else {
+					// アイドル (静止)
+					model->SetActiveMotionIndex(0);
+				}
+			} else if (motions.size() == 1) {
+				model->SetActiveMotionIndex(0);
+			}
+		}
+
+		skinnedObject_->Update(dxCommon, lightVP);
+	} else if (object_) {
+		object_->SetPosition(position_);
+		object_->SetRotation(rotation_);
+		object_->Update(lightVP);
+	}
 }
 
 // Object3d の行列を更新する（ライトカメラの行列も渡す）
 void Player::UpdateTransform(const Matrix4x4& lightVP) 
 {
-	if (object_) {
-		// 内部で持っている Object3d の行列計算だけを行う
+	if (isSkinned_ && skinnedObject_) {
+		skinnedObject_->SetPosition(position_);
+		skinnedObject_->SetRotation(rotation_);
+		skinnedObject_->Update(nullptr, lightVP);
+	} else if (object_) {
 		object_->Update(lightVP);
 	}
 }
@@ -512,46 +581,73 @@ void Player::PSwitchUpdate(StageMap& map)
 
 // 描画：内部で持っている Object3d を描画
 void Player::Draw() {
-	if (object_) {
+	if (isSkinned_ && skinnedObject_) {
+		skinnedObject_->Draw();
+	} else if (object_) {
 		object_->Draw();
 	}
 }
 
 // 影の描画：ライトカメラの行列を渡して影を描く
 void Player::DrawShadow(const Matrix4x4& lightViewProjection) {
-	// 自身が持っている 3Dオブジェクトの影用描画を呼ぶ
-	if (object_) {
+	if (isSkinned_ && skinnedObject_) {
+		skinnedObject_->DrawShadow(lightViewProjection);
+	} else if (object_) {
 		object_->DrawShadow(lightViewProjection);
 	}
 }
 
 void Player::DrawHighlight() {
-	if (!object_) {
-		return;
+	if (isSkinned_ && skinnedObject_) {
+		auto* obj3d = skinnedObject_->GetObject3d();
+		if (!obj3d) return;
+
+		// 1回目：一番外側の大きい白
+		obj3d->SetScale({ 1.55f, 1.55f, 1.55f });
+		obj3d->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		obj3d->SetEnableLighting(false);
+		obj3d->Draw();
+
+		// 2回目：中間の白
+		obj3d->SetScale({ 1.35f, 1.35f, 1.35f });
+		obj3d->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		obj3d->SetEnableLighting(false);
+		obj3d->Draw();
+
+		// 3回目：本体に近い白
+		obj3d->SetScale({ 1.18f, 1.18f, 1.18f });
+		obj3d->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		obj3d->SetEnableLighting(false);
+		obj3d->Draw();
+
+		// 元に戻す
+		obj3d->SetScale({ 1.0f, 1.0f, 1.0f });
+		obj3d->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		obj3d->SetEnableLighting(true);
+	} else if (object_) {
+		// 1回目：一番外側の大きい白
+		object_->SetScale({ 1.55f, 1.55f, 1.55f });
+		object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		object_->SetEnableLighting(false);
+		object_->Draw();
+
+		// 2回目：中間の白
+		object_->SetScale({ 1.35f, 1.35f, 1.35f });
+		object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		object_->SetEnableLighting(false);
+		object_->Draw();
+
+		// 3回目：本体に近い白
+		object_->SetScale({ 1.18f, 1.18f, 1.18f });
+		object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		object_->SetEnableLighting(false);
+		object_->Draw();
+
+		// 元に戻す
+		object_->SetScale({ 1.0f, 1.0f, 1.0f });
+		object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+		object_->SetEnableLighting(true);
 	}
-
-	// 1回目：一番外側の大きい白
-	object_->SetScale({ 1.55f, 1.55f, 1.55f });
-	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-	object_->SetEnableLighting(false);
-	object_->Draw();
-
-	// 2回目：中間の白
-	object_->SetScale({ 1.35f, 1.35f, 1.35f });
-	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-	object_->SetEnableLighting(false);
-	object_->Draw();
-
-	// 3回目：本体に近い白
-	object_->SetScale({ 1.18f, 1.18f, 1.18f });
-	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-	object_->SetEnableLighting(false);
-	object_->Draw();
-
-	// 元に戻す
-	object_->SetScale({ 1.0f, 1.0f, 1.0f });
-	object_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-	object_->SetEnableLighting(true);
 }
 
 void Player::CrumbleUpdate(StageMap& map) {
