@@ -102,7 +102,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Block;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Block;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -125,7 +125,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Block;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Block;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -148,7 +148,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
@@ -215,6 +215,8 @@
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
     <ClCompile Include="Game\Scene\GameClearScene.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
+    <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
+    <ClCompile Include="Engine\Graphics\PostProcessRenderer.cpp" />
     <ClCompile Include="Game\Scene\Skybox.cpp" />
     <ClCompile Include="Game\UI\GameplayUIManager.cpp" />
     <ClCompile Include="Game\UI\BlockInventoryUI.cpp" />
@@ -360,6 +362,8 @@
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
     <ClInclude Include="Game\Scene\GameClearScene.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
+    <ClInclude Include="Game\Scene\SkinningEditorController.h" />
+    <ClInclude Include="Engine\Graphics\PostProcessRenderer.h" />
     <ClInclude Include="Game\Scene\Skybox.h" />
     <ClInclude Include="Game\UI\GameplayUIManager.h" />
     <ClInclude Include="Game\UI\BlockInventoryUI.h" />
