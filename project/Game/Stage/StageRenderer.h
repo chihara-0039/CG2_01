@@ -194,5 +194,5 @@ public:
         const Vector3& playerPos
     );
 
-   
+    void UpdateCloudTransparency(const Vector3& playerPos);
 };
