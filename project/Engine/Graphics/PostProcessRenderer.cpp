@@ -98,7 +98,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     hr = D3D12SerializeRootSignature(
         &rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
     if (FAILED(hr)) {
-        if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+        if (errorBlob) { OutputDebugStringA((char*)errorBlob->GetBufferPointer()); }
         assert(false);
     }
     hr = device->CreateRootSignature(

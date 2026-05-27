@@ -89,7 +89,7 @@ void SkinningEditorController::Update(
     const Matrix4x4&     lightVP,
     bool                 isGuiCaptured)
 {
-    if (!skinnedObject_) return;
+    if (!skinnedObject_) { return; }
 
     // ----------------------------------------------------------
     // 1. レイキャストによるジョイントクリック選択
@@ -157,13 +157,13 @@ void SkinningEditorController::Update(
             float   b  = m.x * rayDir.x + m.y * rayDir.y + m.z * rayDir.z;
             float   c  = (m.x * m.x + m.y * m.y + m.z * m.z) - (clickRadius * clickRadius);
 
-            if (c > 0.0f && b > 0.0f) continue; // 球の外側かつレイが逆方向 → スキップ
+            if (c > 0.0f && b > 0.0f) { continue; } // 球の外側かつレイが逆方向 → スキップ
 
             float discr = b * b - c;
-            if (discr < 0.0f) continue; // 判別式が負 → 交点なし
+            if (discr < 0.0f) { continue; } // 判別式が負 → 交点なし
 
             float t = -b - std::sqrt(discr);
-            if (t < 0.0f) t = 0.0f;
+            if (t < 0.0f) { t = 0.0f; }
 
             if (t < minT) {
                 minT = t;
@@ -229,7 +229,7 @@ void SkinningEditorController::DrawShadow(const Matrix4x4& lightVP) {
 //  下パネル (Tools & Controls) に描画するタイムライン UI
 // ==========================================================
 void SkinningEditorController::DrawImGuiTimeline() {
-    if (!skinnedObject_) return;
+    if (!skinnedObject_) { return; }
 
     ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Custom Motion Animation Timeline ]");
 
@@ -385,7 +385,7 @@ void SkinningEditorController::DrawImGuiTimeline() {
 //  右パネル (Skinning Editor) の内容を描画する
 // ==========================================================
 void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player, Model* defaultObjModel) {
-    if (!skinnedObject_) return;
+    if (!skinnedObject_) { return; }
 
     // ----------------------------------------------------------
     // [ Model Selection ] モデル選択コンボボックス
@@ -450,7 +450,7 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
                 }
 
                 int currentAnimIdx = previewModel->GetActiveMotionIndex();
-                if (currentAnimIdx < 0) currentAnimIdx = 0;
+                if (currentAnimIdx < 0) { currentAnimIdx = 0; }
 
                 if (ImGui::Combo("##AnimList", &currentAnimIdx,
                                  motionNamePtrs.data(), static_cast<int>(motionNamePtrs.size()))) {
@@ -541,7 +541,7 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 
     float duration = skinnedObject_->GetModel()->GetMotionDuration();
     if (ImGui::InputFloat("Motion Duration", &duration, 0.1f, 1.0f, "%.2f")) {
-        if (duration < 0.1f) duration = 0.1f;
+        if (duration < 0.1f) { duration = 0.1f; }
         skinnedObject_->GetModel()->SetMotionDuration(duration);
     }
 
@@ -654,9 +654,9 @@ void SkinningEditorController::ScanGltfModels() {
     const std::string modelsDir = "Resources/Models";
     if (std::filesystem::exists(modelsDir)) {
         for (const auto& entry : std::filesystem::recursive_directory_iterator(modelsDir)) {
-            if (!entry.is_regular_file()) continue;
+            if (!entry.is_regular_file()) { continue; }
             std::string ext = entry.path().extension().string();
-            if (ext != ".gltf" && ext != ".glb") continue;
+            if (ext != ".gltf" && ext != ".glb") { continue; }
 
             std::string relPath = entry.path().string();
             std::replace(relPath.begin(), relPath.end(), '\\', '/'); // パス区切りを統一
@@ -671,7 +671,7 @@ void SkinningEditorController::ScanGltfModels() {
 //  プレビュー SkinnedObject を指定インデックスのモデルで再初期化する
 // ==========================================================
 void SkinningEditorController::ChangePreviewModel(int index) {
-    if (index < 0 || index >= static_cast<int>(modelPaths_.size())) return;
+    if (index < 0 || index >= static_cast<int>(modelPaths_.size())) { return; }
     selectedModelIndex_ = index;
 
     if (index == 0) {
@@ -693,7 +693,7 @@ void SkinningEditorController::ChangePreviewModel(int index) {
 // ==========================================================
 void SkinningEditorController::ApplyModelToPlayer(Player* player, Model* defaultObjModel) {
     activeGameModelIndex_ = selectedModelIndex_;
-    if (!player) return;
+    if (!player) { return; }
 
     if (activeGameModelIndex_ == 0) {
         // デフォルト人型スキニング
