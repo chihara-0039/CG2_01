@@ -584,6 +584,10 @@ void MyGame::Update() {
         );
     }
 
+    if (stageRenderer_ && player_) {
+        stageRenderer_->UpdateCloudTransparency(player_->GetPosition());
+    }
+
 	// マップカーソルの更新 (エディタモードまたは配置モードの時のみ更新)
     if (mapCursor_ && (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace)) {
         mapCursor_->SetCamera(view, proj);
