@@ -15,6 +15,7 @@ void GameplayCameraController::Initialize() {
     cameraDistance_ = 35.0f;
     cameraHeight_ = 20.0f;
 
+    followPlayerMode_ = false;
     cameraDirty_ = true;
 }
 
@@ -31,6 +32,19 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 #endif
 
     bool changed = false;
+
+    if (followPlayerMode_) {
+        // プレイヤーに追従 (Yオフセットを加えて見やすく調整)
+        Vector3 targetPivot = player->GetPosition();
+        targetPivot.y += 0.8f;
+
+        if (std::abs(cameraPivot_.x - targetPivot.x) > 0.001f ||
+            std::abs(cameraPivot_.y - targetPivot.y) > 0.001f ||
+            std::abs(cameraPivot_.z - targetPivot.z) > 0.001f) {
+            cameraPivot_ = targetPivot;
+            changed = true;
+        }
+    }
 
     
     if (!isGuiCaptured && mouse.wheel != 0) {
@@ -200,6 +214,8 @@ void GameplayCameraController::ResetCamera(
     int stageIndex
 ) {
     if (!camera || !player) return;
+
+    followPlayerMode_ = false;
 
     currentStageIndex_ = stageIndex;
 

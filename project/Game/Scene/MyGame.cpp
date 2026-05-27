@@ -55,6 +55,7 @@ void MyGame::Initialize() {
     // モデル読み込み（vector<unique_ptr<Model>> に入れるため unique_ptr で包む） 
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/block", "block.obj", textureManager.get())));
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/axis", "axis.obj", textureManager.get())));
+    models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/player", "player.obj", textureManager.get())));
 
     /*models.push_back(modelPlane);
     models.push_back(modelAxis);*/
@@ -81,7 +82,7 @@ void MyGame::Initialize() {
 
     // プレイヤーの生成
     player_ = std::make_unique<Player>();
-    player_->Initialize(object3dCommon.get(), models[0].get());
+    player_->Initialize(object3dCommon.get(), models[2].get());
     player_->SetPosition({ 0.0f, 1.5f, 0.0f });
 
     // エディタ用カメラ
@@ -661,6 +662,26 @@ void MyGame::UpdateGamePlay() {
     }
 
     if (!useFirstPersonCamera_) {
+        // Vキーで追従モードの切り替え (トグル)
+        if (input->TriggerKey(DIK_V)) {
+            bool currentFollow = gameplayCameraController_.IsFollowPlayerMode();
+            gameplayCameraController_.SetFollowPlayerMode(!currentFollow);
+            if (!currentFollow) {
+                // 追従モードにする場合、現在のプレイヤー位置をピボットにする
+                if (player_) {
+                    Vector3 playerPos = player_->GetPosition();
+                    playerPos.y += 0.8f;
+                    gameplayCameraController_.SetCameraPivot(playerPos);
+                }
+            } else {
+                // 追従モードを解除する場合、デフォルトのカメラ位置（ステージ全体表示）にリセットする
+                if (stageSelect_) {
+                    int stageIndex = stageSelect_->GetSelectedIndex();
+                    gameplayCameraController_.ResetCamera(camera.get(), player_.get(), stageMap_, stageIndex);
+                }
+            }
+        }
+
         camera->SetFov(gameplayCameraController_.GetFov()); // 三人称は元のFOVに戻す
         gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
     } else {
@@ -1607,7 +1628,10 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
 
     // UIスプライトの描画
     if (gameplayUIManager_) {
-        gameplayUIManager_->DrawSprites(currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
+        gameplayUIManager_->DrawSprites(
+            currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace,
+            gameplayCameraController_.IsFollowPlayerMode()
+        );
     }
 
     // インベントリUIの描画
