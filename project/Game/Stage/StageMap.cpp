@@ -116,29 +116,20 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                     int order = cell.variant % 10;
                     if (group >= 1 && group < 10 && !groupOrders[group].empty()) {
                         const auto& orders = groupOrders[group];
-                        int minOrder = orders.front();
-                        int maxOrder = orders.back();
 
-                        float kAppearDelay = 0.8f;      // 0.8秒間隔で出現
-                        float kOverlapDuration = 1.5f;  // 次のブロックが出てから消えるまでの猶予
-                        float kLastDuration = 2.0f;     // 最後のブロックの表示時間
-                        float kRestDuration = 1.5f;     // サイクル終了後のインターバル
+                        float kAppearDelay = 1.2f;       // 1.2秒間隔で次のブロックが出現
+                        float kActiveDuration = 3.0f;    // 3.0秒間表示（2個出現中に3個目が出た後、0.6秒後に消える）
+                        float kRestDuration = 1.5f;      // 全て消えた後のインターバル
 
                         // サイクル全体の長さを計算
-                        float T_cycle = static_cast<float>(maxOrder - minOrder) * kAppearDelay + kLastDuration + kRestDuration;
+                        float T_cycle = static_cast<float>(orders.size() - 1) * kAppearDelay + kActiveDuration + kRestDuration;
 
                         // このブロックの出現順インデックスを取得
                         auto it = std::find(orders.begin(), orders.end(), order);
                         size_t idx = std::distance(orders.begin(), it);
 
-                        float t_appear = static_cast<float>(order - minOrder) * kAppearDelay;
-                        float t_disappear = 0.0f;
-                        if (idx < orders.size() - 1) {
-                            int nextOrder = orders[idx + 1];
-                            t_disappear = static_cast<float>(nextOrder - minOrder) * kAppearDelay + kOverlapDuration;
-                        } else {
-                            t_disappear = t_appear + kLastDuration;
-                        }
+                        float t_appear = static_cast<float>(idx) * kAppearDelay;
+                        float t_disappear = t_appear + kActiveDuration;
 
                         float t_local = std::fmod(accumulatedTime_, T_cycle);
                         if (t_local >= t_appear && t_local < t_disappear) {
