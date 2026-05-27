@@ -164,7 +164,11 @@ public:
     void Initialize(int width, int height, int depth);
 
     // 追加
-    void Update(float deltaTime, float totalTime, const Vector3& playerPos);
+    void Update(float deltaTime, const Vector3& playerPos);
+
+    // 時間差ブロック用の経過時間操作メソッド
+    void ResetTime() { accumulatedTime_ = 0.0f; }
+    float GetAccumulatedTime() const { return accumulatedTime_; }
 
     // ステージデータをファイルに保存する
     void SaveToFile(const std::string& filename);
@@ -351,4 +355,5 @@ private:
 
     bool isPSwitchActive_ = false; // Pスイッチの状態
     bool needsRebuild_ = false; // ★追加
+    float accumulatedTime_ = 0.0f; // 累積時間を保存する変数
 };

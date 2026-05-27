@@ -9,8 +9,6 @@
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 
-
-
 // --- MyGameクラスの実装 ---
 void MyGame::Initialize() {
     // 基盤系の生成（new ではなく std::make_unique を使用） 
@@ -63,9 +61,9 @@ void MyGame::Initialize() {
 
     // --- オブジェクト生成 ---
     // models[index].get() で生ポインタを取得して渡す
-    CreateObject(models[0].get(), { 0.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
-    CreateObject(models[1].get(), { 2.0f, 0.0f, 0.0f });
-    CreateObject(models[1].get(), { -2.0f, 0.0f, 0.0f });
+    CreateObject(models[0].get(), { -25.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
+    CreateObject(models[1].get(), { -23.0f, 0.0f, 0.0f });
+    CreateObject(models[1].get(), { -27.0f, 0.0f, 0.0f });
 
     // スプライト
     uint32_t texHandle = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
@@ -227,6 +225,15 @@ void MyGame::Initialize() {
     skinnedObject_->SetScale({ 1.0f, 1.0f, 1.0f });
 
     debugCubeModel_ = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/cube", "cube.obj", textureManager.get()));
+
+    // 地形 (Terrain) の初期化
+    terrainModel_ = std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/terrain", "terrain.obj", textureManager.get()));
+    terrainObject_ = std::make_unique<Object3d>();
+    terrainObject_->Initialize(object3dCommon.get());
+    terrainObject_->SetModel(terrainModel_.get());
+    terrainObject_->SetPosition({ 0.0f, 0.0f, 0.0f });
+    terrainObject_->SetScale({ 1.0f, 1.0f, 1.0f });
+    terrainObject_->SetRotation({ 0.0f, 0.0f, 0.0f });
 
     // 地面グリッド線の生成 (-10m から 10m まで 1m刻み)
     for (int i = -10; i <= 10; ++i) {
@@ -553,6 +560,10 @@ void MyGame::Update() {
                 obj->Update(lightVP);
             }
         }
+        if (terrainObject_ && debugFlags_.showTerrain) {
+            terrainObject_->SetCamera(view, proj);
+            terrainObject_->Update(lightVP);
+        }
     }
 
 	// ステージ描画オブジェクトの更新 (StageRenderer内部でのDirtyフラグ最適化に対応)
@@ -737,7 +748,7 @@ void MyGame::UpdateGamePlay() {
 
     float deltaTime = 1.0f / 60.0f;
     totalTime_ += deltaTime;
-    stageMap_.Update(deltaTime, totalTime_, player_ ? player_->GetPosition() : Vector3{0.0f, 0.0f, 0.0f});
+    stageMap_.Update(deltaTime, player_ ? player_->GetPosition() : Vector3{0.0f, 0.0f, 0.0f});
 
     stageRenderer_->UpdateEffect(stageMap_);
 
@@ -854,6 +865,7 @@ void MyGame::UpdateImGui() {
             }
         }
         ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
+        ImGui::Checkbox("Show Terrain", &debugFlags_.showTerrain);
         ImGui::Checkbox("Show Skybox", &debugFlags_.showSkybox);
         ImGui::Checkbox("Show Skybox (Cubemap)", &showSkyboxCubemap_);
         ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
@@ -1561,6 +1573,9 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
                 }
             }
             if (currentMode_ == AppMode::DebugView) {
+                if (terrainObject_ && debugFlags_.showTerrain) {
+                    terrainObject_->Draw();
+                }
                 for (auto& obj : objectList) {
                     if (obj) obj->Draw();
                 }
@@ -1655,6 +1670,8 @@ void MyGame::Finalize() {
     player_.reset();
     skinnedObject_.reset();
     debugCubeModel_.reset();
+    terrainObject_.reset();
+    terrainModel_.reset();
     skydomeObject_.reset();
     skydomeModel_.reset();
     sprite.reset();

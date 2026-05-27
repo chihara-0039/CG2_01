@@ -27,6 +27,9 @@ void StageRespawnController::Update(
     // ここに来るのは1回だけ
     isRespawning_ = true;
 
+    // 時間差ブロックのタイマーをリセット
+    stageMap.ResetTime();
+
     // Pスイッチ状態だけ戻す
     if (stageMap.IsPSwitchActive()) {
         stageMap.ResetPSwitchStateNoRebuild();

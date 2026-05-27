@@ -67,6 +67,7 @@ private:
         bool showSkybox = true;
         bool showSprite = true;
         bool showParticles = true;
+        bool showTerrain = true;
     };
 
     // ==========================================================
@@ -97,6 +98,10 @@ private:
     std::unique_ptr<SkinnedObject> skinnedObject_;
     std::unique_ptr<Model> debugCubeModel_;
     std::vector<std::unique_ptr<Object3d>> gridLines_;
+
+    // 地形 (Terrain)
+    std::unique_ptr<Model> terrainModel_;
+    std::unique_ptr<Object3d> terrainObject_;
 
     // スカイドーム
     std::unique_ptr<Model> skydomeModel_;
