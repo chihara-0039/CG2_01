@@ -191,11 +191,21 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sepiaPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> vignetteConstantBuffer_;
+
+    struct VignetteParams {
+        float scale;
+        float exponent;
+        float padding[2];
+    };
+    VignetteParams* vignetteParamsData_ = nullptr;
+
     bool offscreenEnabled_ = true;
     Vector4 offscreenClearColor_ = { 1.0f, 0.0f, 0.0f, 1.0f }; // 赤背景でクリア
     D3D12_RESOURCE_STATES renderTextureState_ = D3D12_RESOURCE_STATE_RENDER_TARGET;
     int skyboxLinkMode_ = 0; // 0: None, 1: Link (Multiply)
-    int postEffectMode_ = 0; // 0: Normal, 1: Grayscale, 2: Sepia
+    int postEffectMode_ = 0; // 0: Normal, 1: Grayscale, 2: Sepia, 3: Vignette
     std::unique_ptr<Skybox> skybox_;
     uint32_t skyboxTextureHandle_ = 0;
     bool showSkyboxCubemap_ = false;

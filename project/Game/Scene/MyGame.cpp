@@ -879,8 +879,13 @@ void MyGame::UpdateImGui() {
         const char* skyboxModes[] = { "Ignore", "Link (Multiply)" };
         ImGui::Combo("Skybox Color Link", &skyboxLinkMode_, skyboxModes, IM_ARRAYSIZE(skyboxModes));
 
-        const char* effectNames[] = { "Normal", "Grayscale", "Sepia" };
+        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette" };
         ImGui::Combo("Post Effect", &postEffectMode_, effectNames, IM_ARRAYSIZE(effectNames));
+
+        if (postEffectMode_ == 3 && vignetteParamsData_) {
+            ImGui::DragFloat("Vignette Scale", &vignetteParamsData_->scale, 0.1f, 0.0f, 100.0f, "%.1f");
+            ImGui::DragFloat("Vignette Exponent", &vignetteParamsData_->exponent, 0.05f, 0.0f, 10.0f, "%.2f");
+        }
     }
 
     if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1439,6 +1444,9 @@ void MyGame::Draw() {
             commandList->SetPipelineState(grayscalePipelineState_.Get());
         } else if (postEffectMode_ == 2) {
             commandList->SetPipelineState(sepiaPipelineState_.Get());
+        } else if (postEffectMode_ == 3) {
+            commandList->SetPipelineState(vignettePipelineState_.Get());
+            commandList->SetGraphicsRootConstantBufferView(1, vignetteConstantBuffer_->GetGPUVirtualAddress());
         } else {
             commandList->SetPipelineState(copyPipelineState_.Get());
         }
@@ -1903,11 +1911,16 @@ void MyGame::InitializeOffscreenRendering() {
     descriptorRange.BaseShaderRegister = 0; // t0
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameter{};
-    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
-    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRange;
+    D3D12_ROOT_PARAMETER rootParameters[2]{};
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[0].DescriptorTable.pDescriptorRanges = &descriptorRange;
+
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[1].Descriptor.ShaderRegister = 0; // b0
+    rootParameters[1].Descriptor.RegisterSpace = 0;
 
     D3D12_STATIC_SAMPLER_DESC staticSampler{};
     staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -1920,8 +1933,8 @@ void MyGame::InitializeOffscreenRendering() {
     staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
-    rootSignatureDesc.NumParameters = 1;
-    rootSignatureDesc.pParameters = &rootParameter;
+    rootSignatureDesc.NumParameters = 2;
+    rootSignatureDesc.pParameters = rootParameters;
     rootSignatureDesc.NumStaticSamplers = 1;
     rootSignatureDesc.pStaticSamplers = &staticSampler;
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -1976,6 +1989,35 @@ void MyGame::InitializeOffscreenRendering() {
     psoDesc.PS = { psSepiaBlob->GetBufferPointer(), psSepiaBlob->GetBufferSize() };
     hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&sepiaPipelineState_));
     assert(SUCCEEDED(hr));
+
+    // D. ヴィネッティング
+    Microsoft::WRL::ComPtr<IDxcBlob> psVignetteBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Vignette.PS.hlsl", L"ps_6_0");
+    psoDesc.PS = { psVignetteBlob->GetBufferPointer(), psVignetteBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&vignettePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // ヴィネッティング用定数バッファの作成
+    D3D12_HEAP_PROPERTIES cbHeapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_RESOURCE_DESC cbResDesc = {};
+    cbResDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    cbResDesc.Width = (sizeof(VignetteParams) + 0xff) & ~0xff;
+    cbResDesc.Height = 1;
+    cbResDesc.DepthOrArraySize = 1;
+    cbResDesc.MipLevels = 1;
+    cbResDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    cbResDesc.SampleDesc.Count = 1;
+
+    hr = device->CreateCommittedResource(
+        &cbHeapProps, D3D12_HEAP_FLAG_NONE, &cbResDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        IID_PPV_ARGS(&vignetteConstantBuffer_)
+    );
+    assert(SUCCEEDED(hr));
+    vignetteConstantBuffer_->Map(0, nullptr, (void**)&vignetteParamsData_);
+
+    // 初期値
+    vignetteParamsData_->scale = 16.0f;
+    vignetteParamsData_->exponent = 0.8f;
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> MyGame::CreateRenderTextureResource(
