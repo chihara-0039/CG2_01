@@ -55,6 +55,10 @@ public:
     /// </summary>
     void SetPitch(float pitch) { cameraPitch_ = pitch; }
 
+    void SetFollowPlayerMode(bool follow) { followPlayerMode_ = follow; cameraDirty_ = true; }
+    bool IsFollowPlayerMode() const { return followPlayerMode_; }
+    void SetCameraPivot(const Vector3& pivot) { cameraPivot_ = pivot; cameraDirty_ = true; }
+
     /// <summary>
     /// カメラ位置と角度をデフォルト状態にリセットし、即座に反映します。
     /// </summary>
@@ -88,6 +92,7 @@ private:
 
     int currentStageIndex_ = 0;
     float initialPivotYOffset_ = 8.0f;
+    bool followPlayerMode_ = false;
 
     struct CameraPreset {
         float angle;
@@ -99,4 +104,3 @@ private:
     };
 
 };
-

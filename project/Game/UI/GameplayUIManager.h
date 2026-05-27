@@ -16,7 +16,7 @@ public:
     void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager, SpriteCommon* spriteCommon, Object3dCommon* object3dCommon);
     void Update(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
     void UpdateCameraGuide(bool isGamePlay, Input* input, WinApp* winApp);
-    void DrawSprites(bool isGamePlayMode);
+    void DrawSprites(bool isGamePlayMode, bool isFollowPlayerMode);
     void Draw3DPrompts(bool isGamePlayMode, Player* player, Object3dCommon* object3dCommon, ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle);
     void Finalize();
 
@@ -37,6 +37,12 @@ private:
     uint32_t cameraGuideRightTextureHandle_ = 0;
     uint32_t cameraGuideUpTextureHandle_ = 0;
     uint32_t cameraGuideDownTextureHandle_ = 0;
+
+    // カメラモード表示用UIスプライト
+    std::unique_ptr<Sprite> cameraModeStageSprite_;
+    std::unique_ptr<Sprite> cameraModePlayerSprite_;
+    uint32_t cameraModeStageTextureHandle_ = 0;
+    uint32_t cameraModePlayerTextureHandle_ = 0;
 
     // ドア用3D F UI
     std::unique_ptr<Model> doorPromptModel_;

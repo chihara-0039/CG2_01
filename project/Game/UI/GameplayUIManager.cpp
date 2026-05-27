@@ -54,12 +54,33 @@ void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* text
     ladderPromptObject_->SetModel(ladderPromptModel_.get());
     ladderPromptObject_->SetEnableLighting(false);
     ladderPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    // カメラモード表示用UIスプライトの初期化
+    cameraModeStageTextureHandle_ = textureManager->LoadTexture("Resources/UI/stage_overview_icon.png");
+    cameraModePlayerTextureHandle_ = textureManager->LoadTexture("Resources/UI/follow_player_icon.png");
+
+    cameraModeStageSprite_ = std::make_unique<Sprite>();
+    cameraModeStageSprite_->Initialize(spriteCommon, cameraModeStageTextureHandle_);
+    cameraModeStageSprite_->SetPosition({ 1180.0f, 20.0f });
+    cameraModeStageSprite_->SetSize({ 64.0f, 64.0f });
+
+    cameraModePlayerSprite_ = std::make_unique<Sprite>();
+    cameraModePlayerSprite_->Initialize(spriteCommon, cameraModePlayerTextureHandle_);
+    cameraModePlayerSprite_->SetPosition({ 1180.0f, 20.0f });
+    cameraModePlayerSprite_->SetSize({ 64.0f, 64.0f });
 }
 
 void GameplayUIManager::Update(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera) {
     /*UpdateCameraGuideSprites(isGamePlayMode);*/
     UpdateDoorPrompt3D(isGamePlayMode, player, camera, lightCamera);
     UpdateLadderPrompt3D(isGamePlayMode, player, camera, lightCamera);
+
+    if (cameraModeStageSprite_) {
+        cameraModeStageSprite_->Update();
+    }
+    if (cameraModePlayerSprite_) {
+        cameraModePlayerSprite_->Update();
+    }
 }
 
 
@@ -290,7 +311,7 @@ void GameplayUIManager::UpdateCameraGuide(bool isGamePlay, Input* input, WinApp*
 }
 
 
-void GameplayUIManager::DrawSprites(bool isGamePlayMode) {
+void GameplayUIManager::DrawSprites(bool isGamePlayMode, bool isFollowPlayerMode) {
     if (!isGamePlayMode) {
         return;
     }
@@ -308,6 +329,16 @@ void GameplayUIManager::DrawSprites(bool isGamePlayMode) {
     cameraGuideRightSprite_->Draw();
     cameraGuideUpSprite_->Draw();
     cameraGuideDownSprite_->Draw();
+
+    if (isFollowPlayerMode) {
+        if (cameraModePlayerSprite_) {
+            cameraModePlayerSprite_->Draw();
+        }
+    } else {
+        if (cameraModeStageSprite_) {
+            cameraModeStageSprite_->Draw();
+        }
+    }
 }
 
 void GameplayUIManager::Draw3DPrompts(bool isGamePlayMode, Player* player, Object3dCommon* object3dCommon, ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle) {
@@ -342,4 +373,6 @@ void GameplayUIManager::Finalize() {
     cameraGuideRightSprite_.reset();
     cameraGuideUpSprite_.reset();
     cameraGuideDownSprite_.reset();
+    cameraModeStageSprite_.reset();
+    cameraModePlayerSprite_.reset();
 }
