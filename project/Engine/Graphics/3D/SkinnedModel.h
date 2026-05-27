@@ -17,6 +17,8 @@ struct Joint {
     Vector3 translation; // 親からの相対位置 (初期位置)
     Vector3 rotation;    // 回転角 (オイラー角: ラジアン)
     Vector3 scale;       // スケール
+    Quaternion rotationQuat = { 0.0f, 0.0f, 0.0f, 1.0f }; // クォータニオン回転
+    bool isQuaternion = false; // クォータニオンでの更新を行うか
 
     Matrix4x4 localMatrix;
     Matrix4x4 globalMatrix;
@@ -31,6 +33,8 @@ struct JointKeyframe {
     Vector3 translation = { 0.0f, 0.0f, 0.0f };
     Vector3 rotation = { 0.0f, 0.0f, 0.0f }; // オイラー角 (ラジアン)
     Vector3 scale = { 1.0f, 1.0f, 1.0f };
+    Quaternion rotationQuat = { 0.0f, 0.0f, 0.0f, 1.0f }; // クォータニオン回転
+    bool isQuaternion = false; // クォータニオンでの補間を行うか
 };
 
 struct JointAnimation {
@@ -39,6 +43,7 @@ struct JointAnimation {
 };
 
 struct MotionData {
+    std::string name;          // アニメーション名 (glTFから読み込む)
     float duration = 2.0f; // アニメーションの総時間 (秒)
     std::vector<JointAnimation> jointAnimations;
 };
@@ -51,6 +56,9 @@ public:
 
     // 初期化 (人型モデルの生成とバッファ構築)
     void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager);
+
+    // glTFファイルから初期化
+    void InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager);
 
     // アニメーション/ポーズの更新とスキニング計算
     void Update(DirectXCommon* dxCommon);
@@ -81,10 +89,16 @@ public:
     void GenerateRunPreset();
 
     // ゲッター・セッター
-    float GetMotionDuration() const { return motionData_.duration; }
-    void SetMotionDuration(float duration) { motionData_.duration = duration; }
-    const MotionData& GetMotionData() const { return motionData_; }
-    MotionData& GetMotionData() { return motionData_; }
+    float GetMotionDuration() const;
+    void SetMotionDuration(float duration);
+    const MotionData& GetMotionData() const;
+    MotionData& GetMotionData();
+
+    // 複数モーション対応のゲッター・セッター
+    const std::vector<MotionData>& GetMotions() const { return motions_; }
+    std::vector<MotionData>& GetMotions() { return motions_; }
+    int GetActiveMotionIndex() const { return activeMotionIndex_; }
+    void SetActiveMotionIndex(int index);
 
 private:
     // 人型メッシュとスケルトンの生成
@@ -105,5 +119,6 @@ private:
 
     std::unique_ptr<Model> model_;                  // 内部描画用モデル
 
-    MotionData motionData_;                         // 現在編集・再生中のモーションデータ
+    std::vector<MotionData> motions_;               // 読み込まれた複数のモーションデータ
+    int activeMotionIndex_ = -1;                    // 現在再生中のモーションインデックス
 };

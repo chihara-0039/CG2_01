@@ -13,6 +13,17 @@ void SkinnedObject::Initialize(Object3dCommon* object3dCommon, DirectXCommon* dx
     object3d_->SetModel(skinnedModel_->GetModel());
 }
 
+void SkinnedObject::InitializeFromGltf(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager) {
+    // 1. スキニングモデルをglTFから生成
+    skinnedModel_ = std::make_unique<SkinnedModel>();
+    skinnedModel_->InitializeFromGltf(dxCommon, filePath, textureManager);
+
+    // 2. 表示用のObject3dを初期化して、SkinnedModel内部のModelを登録
+    object3d_ = std::make_unique<Object3d>();
+    object3d_->Initialize(object3dCommon);
+    object3d_->SetModel(skinnedModel_->GetModel());
+}
+
 void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
     // 1. アニメーションの再生
     if (playAnimation_) {

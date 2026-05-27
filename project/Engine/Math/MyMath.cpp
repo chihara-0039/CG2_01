@@ -230,4 +230,129 @@ namespace Math {
         return v;
     }
 
+    Quaternion Multiply(const Quaternion& q1, const Quaternion& q2) {
+        Quaternion result;
+        result.x = q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y;
+        result.y = q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x;
+        result.z = q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w;
+        result.w = q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z;
+        return result;
+    }
+
+    Quaternion Slerp(const Quaternion& q1, const Quaternion& q2, float t) {
+        float cosHalfTheta = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
+        
+        Quaternion targetQ2 = q2;
+        if (cosHalfTheta < 0.0f) {
+            targetQ2.x = -q2.x;
+            targetQ2.y = -q2.y;
+            targetQ2.z = -q2.z;
+            targetQ2.w = -q2.w;
+            cosHalfTheta = -cosHalfTheta;
+        }
+
+        if (cosHalfTheta >= 1.0f - 1e-5f) {
+            Quaternion result;
+            result.x = q1.x + t * (targetQ2.x - q1.x);
+            result.y = q1.y + t * (targetQ2.y - q1.y);
+            result.z = q1.z + t * (targetQ2.z - q1.z);
+            result.w = q1.w + t * (targetQ2.w - q1.w);
+            
+            float len = std::sqrt(result.x * result.x + result.y * result.y + result.z * result.z + result.w * result.w);
+            if (len > 0.0f) {
+                result.x /= len;
+                result.y /= len;
+                result.z /= len;
+                result.w /= len;
+            }
+            return result;
+        }
+
+        float halfTheta = std::acos(cosHalfTheta);
+        float sinHalfTheta = std::sin(halfTheta);
+
+        float ratioA = std::sin((1.0f - t) * halfTheta) / sinHalfTheta;
+        float ratioB = std::sin(t * halfTheta) / sinHalfTheta;
+
+        Quaternion result;
+        result.x = q1.x * ratioA + targetQ2.x * ratioB;
+        result.y = q1.y * ratioA + targetQ2.y * ratioB;
+        result.z = q1.z * ratioA + targetQ2.z * ratioB;
+        result.w = q1.w * ratioA + targetQ2.w * ratioB;
+        return result;
+    }
+
+    Matrix4x4 MakeRotateMatrix(const Quaternion& q) {
+        Matrix4x4 result = MakeIdentity4x4();
+        float xx = q.x * q.x;
+        float yy = q.y * q.y;
+        float zz = q.z * q.z;
+        float xy = q.x * q.y;
+        float xz = q.x * q.z;
+        float yz = q.y * q.z;
+        float wx = q.w * q.x;
+        float wy = q.w * q.y;
+        float wz = q.w * q.z;
+
+        result.m[0][0] = 1.0f - 2.0f * (yy + zz);
+        result.m[0][1] = 2.0f * (xy + wz);
+        result.m[0][2] = 2.0f * (xz - wy);
+
+        result.m[1][0] = 2.0f * (xy - wz);
+        result.m[1][1] = 1.0f - 2.0f * (xx + zz);
+        result.m[1][2] = 2.0f * (yz + wx);
+
+        result.m[2][0] = 2.0f * (xz + wy);
+        result.m[2][1] = 2.0f * (yz - wx);
+        result.m[2][2] = 1.0f - 2.0f * (xx + yy);
+
+        return result;
+    }
+
+    Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Quaternion& rotate, const Vector3& translate) {
+        Matrix4x4 scaleMatrix = Matrix4x4MakeScaleMatrix(scale);
+        Matrix4x4 rotateMatrix = MakeRotateMatrix(rotate);
+        Matrix4x4 translateMatrix = MakeTranslateMatrix(translate);
+
+        return Multiply(Multiply(scaleMatrix, rotateMatrix), translateMatrix);
+    }
+
+    Quaternion MakeQuaternionFromEuler(const Vector3& euler) {
+        float cx = std::cos(euler.x * 0.5f);
+        float sx = std::sin(euler.x * 0.5f);
+        float cy = std::cos(euler.y * 0.5f);
+        float sy = std::sin(euler.y * 0.5f);
+        float cz = std::cos(euler.z * 0.5f);
+        float sz = std::sin(euler.z * 0.5f);
+
+        Quaternion q;
+        q.x = sx * cy * cz - cx * sy * sz;
+        q.y = cx * sy * cz + sx * cy * sz;
+        q.z = cx * cy * sz - sx * sy * cz;
+        q.w = cx * cy * cz + sx * sy * sz;
+        return q;
+    }
+
+    Vector3 ToEuler(const Quaternion& q) {
+        Vector3 euler;
+        // roll (x-axis rotation)
+        float sinr_cosp = 2.0f * (q.w * q.x + q.y * q.z);
+        float cosr_cosp = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
+        euler.x = std::atan2(sinr_cosp, cosr_cosp);
+
+        // pitch (y-axis rotation)
+        float sinp = 2.0f * (q.w * q.y - q.z * q.x);
+        if (std::abs(sinp) >= 1.0f)
+            euler.y = std::copysign(3.14159265f / 2.0f, sinp);
+        else
+            euler.y = std::asin(sinp);
+
+        // yaw (z-axis rotation)
+        float siny_cosp = 2.0f * (q.w * q.z + q.x * q.y);
+        float cosy_cosp = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+        euler.z = std::atan2(siny_cosp, cosy_cosp);
+
+        return euler;
+    }
+
 }

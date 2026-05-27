@@ -82,6 +82,9 @@ void MyGame::Initialize() {
 
     // プレイヤーの生成
     player_ = std::make_unique<Player>();
+    ScanGltfModels();
+    activeGameModelIndex_ = 1; // デフォルトは OBJ モデル
+    selectedModelIndex_ = 1;
     player_->Initialize(object3dCommon.get(), models[2].get());
     player_->SetPosition({ 0.0f, 1.5f, 0.0f });
 
@@ -221,7 +224,7 @@ void MyGame::Initialize() {
 
     // スキニングオブジェクトとデバッグ用の立方体モデルを初期化
     skinnedObject_ = std::make_unique<SkinnedObject>();
-    skinnedObject_->Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
+    ChangePreviewModel(0);
     skinnedObject_->SetPosition({ 0.0f, 0.0f, 0.0f }); // 地面(Y=0.0f)に接地させる
     skinnedObject_->SetScale({ 1.0f, 1.0f, 1.0f });
 
@@ -776,7 +779,7 @@ void MyGame::UpdateGamePlay() {
     // --- プレイヤー更新 ---
     if (player_) {
         float cameraRotY = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
-        player_->Update(input.get(), stageMap_, cameraRotY, lightCamera_->GetViewProjectionMatrix());
+        player_->Update(input.get(), stageMap_, cameraRotY, lightCamera_->GetViewProjectionMatrix(), dxCommon.get());
     }
 
     if (stageMap_.NeedsRebuild()) {
@@ -1153,11 +1156,90 @@ void MyGame::UpdateImGui() {
         ImGui::SetNextWindowBgAlpha(1.0f); // 透過なし
         ImGui::Begin("Skinning Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Model Selection ]");
+
+        // --- モデル選択コンボボックス ---
+        {
+            std::vector<const char*> modelNamePtrs;
+            for (const auto& name : modelNames_) {
+                modelNamePtrs.push_back(name.c_str());
+            }
+
+            if (!modelNamePtrs.empty()) {
+                int tempIdx = selectedModelIndex_;
+                if (ImGui::Combo("##ModelList", &tempIdx, modelNamePtrs.data(), static_cast<int>(modelNamePtrs.size()))) {
+                    if (tempIdx != selectedModelIndex_) {
+                        ChangePreviewModel(tempIdx);
+                    }
+                }
+            }
+        }
+
+        // --- ゲームに反映ボタン ---
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.55f, 0.2f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.15f, 0.75f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.05f, 0.4f, 0.15f, 1.0f));
+        if (ImGui::Button("Apply to Game Player", ImVec2(-FLT_MIN, 26))) {
+            ApplyModelToPlayer();
+        }
+        ImGui::PopStyleColor(3);
+
+        // 現在ゲームに適用中のモデル名を表示
+        if (activeGameModelIndex_ >= 0 && activeGameModelIndex_ < static_cast<int>(modelNames_.size())) {
+            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "Active: %s", modelNames_[activeGameModelIndex_].c_str());
+        }
+
+        // --- アニメーション選択 ---
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Animation Selection ]");
+
+        {
+            auto* previewModel = skinnedObject_->GetModel();
+            if (previewModel) {
+                const auto& motions = previewModel->GetMotions();
+                if (!motions.empty()) {
+                    // モーション名リストの構築
+                    std::vector<std::string> motionNames;
+                    for (size_t i = 0; i < motions.size(); ++i) {
+                        if (!motions[i].name.empty()) {
+                            motionNames.push_back(motions[i].name);
+                        } else {
+                            motionNames.push_back("Motion_" + std::to_string(i));
+                        }
+                    }
+
+                    std::vector<const char*> motionNamePtrs;
+                    for (const auto& n : motionNames) {
+                        motionNamePtrs.push_back(n.c_str());
+                    }
+
+                    int currentAnimIdx = previewModel->GetActiveMotionIndex();
+                    if (currentAnimIdx < 0) currentAnimIdx = 0;
+
+                    if (ImGui::Combo("##AnimList", &currentAnimIdx, motionNamePtrs.data(), static_cast<int>(motionNamePtrs.size()))) {
+                        previewModel->SetActiveMotionIndex(currentAnimIdx);
+                        // glTFアニメーション再生：Play Custom Animation をON、Test Animation をOFF
+                        skinnedObject_->SetPlayCustomAnimation(true);
+                        skinnedObject_->SetPlayAnimation(false);
+                    }
+
+                    ImGui::Text("Total Motions: %d", static_cast<int>(motions.size()));
+                    if (currentAnimIdx >= 0 && currentAnimIdx < static_cast<int>(motions.size())) {
+                        ImGui::Text("Duration: %.2f sec", motions[currentAnimIdx].duration);
+                    }
+                } else {
+                    ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.0f), "No animations in this model.");
+                }
+            }
+        }
+
+        ImGui::Separator();
         ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Skinned Mesh Settings ]");
-        
+
         bool playAnim = skinnedObject_->IsPlayAnimation();
         if (ImGui::Checkbox("Play Test Animation", &playAnim)) {
             skinnedObject_->SetPlayAnimation(playAnim);
+
         }
 
         float speed = skinnedObject_->GetAnimationSpeed();
@@ -2082,4 +2164,62 @@ Microsoft::WRL::ComPtr<ID3D12Resource> MyGame::CreateRenderTextureResource(
     );
     assert(SUCCEEDED(hr));
     return resource;
+}
+
+void MyGame::ScanGltfModels() {
+    modelPaths_.clear();
+    modelNames_.clear();
+
+    // 1. デフォルト人型
+    modelNames_.push_back("Default Humanoid (Skinning)");
+    modelPaths_.push_back("Default");
+
+    // 2. 従来のプレイヤー (.obj)
+    modelNames_.push_back("Default Player (.obj)");
+    modelPaths_.push_back("DefaultPlayer");
+
+    // 3. スキャン
+    std::string modelsDir = "Resources/Models";
+    if (std::filesystem::exists(modelsDir)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(modelsDir)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                if (ext == ".gltf" || ext == ".glb") {
+                    std::string relPath = entry.path().string();
+                    std::replace(relPath.begin(), relPath.end(), '\\', '/');
+                    modelPaths_.push_back(relPath);
+                    modelNames_.push_back(entry.path().filename().string());
+                }
+            }
+        }
+    }
+}
+
+void MyGame::ChangePreviewModel(int index) {
+    if (index < 0 || index >= static_cast<int>(modelPaths_.size())) return;
+    selectedModelIndex_ = index;
+
+    if (index == 0) {
+        skinnedObject_->Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
+    } else if (index == 1) {
+        // 従来のOBJはスキニング非対応のため、ダミーでデフォルト人型を表示
+        skinnedObject_->Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
+    } else {
+        skinnedObject_->InitializeFromGltf(object3dCommon.get(), dxCommon.get(), modelPaths_[index], textureManager.get());
+    }
+}
+
+void MyGame::ApplyModelToPlayer() {
+    activeGameModelIndex_ = selectedModelIndex_;
+    if (!player_) return;
+
+    if (activeGameModelIndex_ == 0) {
+        player_->InitializeWithDefaultSkinned(object3dCommon.get(), dxCommon.get(), textureManager.get());
+    } else if (activeGameModelIndex_ == 1) {
+        player_->Initialize(object3dCommon.get(), models[2].get());
+    } else {
+        player_->InitializeWithSkinnedGltf(object3dCommon.get(), dxCommon.get(), modelPaths_[activeGameModelIndex_], textureManager.get());
+    }
+    
+    player_->SetPosition({ 0.0f, 1.5f, 0.0f });
 }

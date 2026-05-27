@@ -26,6 +26,10 @@ struct Transform {
     Vector3 translate;
 };
 
+struct Quaternion {
+    float x, y, z, w;
+};
+
 //=======================
 // 数学関数群
 //=======================
@@ -71,4 +75,12 @@ namespace Math {
     Vector3 Cross(const Vector3& v1, const Vector3& v2);
     // ビュー行列 (LookAt) の作成
     Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vector3& up);
+
+    // クォータニオン関連
+    Quaternion Multiply(const Quaternion& q1, const Quaternion& q2);
+    Quaternion Slerp(const Quaternion& q1, const Quaternion& q2, float t);
+    Matrix4x4 MakeRotateMatrix(const Quaternion& q);
+    Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Quaternion& rotate, const Vector3& translate);
+    Quaternion MakeQuaternionFromEuler(const Vector3& euler);
+    Vector3 ToEuler(const Quaternion& q);
 }
