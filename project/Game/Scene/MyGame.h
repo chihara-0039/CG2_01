@@ -27,6 +27,7 @@
 #include "MapCursor.h"
 #include "StageMap.h"
 #include "StageRenderer.h"
+#include"PlayerBasePosition.h"
 
 // ===== UI =====
 #include "GameplayUIManager.h"
@@ -177,6 +178,12 @@ private:
     StageMap             stageMap_;                  ///< 現在のステージマップデータ
     StageMap             backupMap_;                 ///< ESC で復元するためのバックアップ
     StageRespawnController stageRespawnController_;  ///< リスポーン処理
+
+    // ==========================================================
+    //  自機管理
+    // ==========================================================
+    PlayerBasePosition playerBasePosition_;
+
 
     // ==========================================================
     //  サウンド (Sound.h のラッパー)

@@ -57,6 +57,11 @@
     <ClCompile Include="Game\Scene\StageSelect.cpp" />
     <ClCompile Include="Sound\Sound.cpp" />
     <ClCompile Include="Game\Stage\StageRespawnController.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\GltfLoader.cpp" />
+    <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
+    <ClCompile Include="Engine\Graphics\PostProcessRenderer.cpp" />
+    <ClCompile Include="Game\Scene\Skybox.cpp" />
+    <ClCompile Include="Game\Player\PlayerBasePosition.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Utility\Camera.h" />
@@ -105,6 +110,11 @@
     <ClInclude Include="Game\Scene\StageSelect.h" />
     <ClInclude Include="Sound\Sound.h" />
     <ClInclude Include="Game\Stage\StageRespawnController.h" />
+    <ClInclude Include="Engine\Graphics\3D\GltfLoader.h" />
+    <ClInclude Include="Game\Scene\SkinningEditorController.h" />
+    <ClInclude Include="Engine\Graphics\PostProcessRenderer.h" />
+    <ClInclude Include="Game\Scene\Skybox.h" />
+    <ClInclude Include="Game\Player\PlayerBasePosition.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\Particle.hlsli" />

@@ -107,6 +107,8 @@ void MyGame::Initialize() {
     player_->Initialize(object3dCommon.get(), models[2].get());
     player_->SetPosition({ 0.0f, 1.5f, 0.0f });
 
+    
+
     // --------------------------------------------------------
     // 8. メインカメラの初期化
     //    Debug ビルドでは ImGui パネル分だけビューポートが狭いため
@@ -134,7 +136,7 @@ void MyGame::Initialize() {
     postProcess_.SetEnabled(false);
     if (std::filesystem::exists("Resources/Stages/stage1.txt")) {
         stageMap_.LoadFromFile("Resources/Stages/stage1.txt");
-        stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+        playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #elif defined(NDEBUG)
     currentMode_           = AppMode::Title;
@@ -146,7 +148,7 @@ void MyGame::Initialize() {
     postProcess_.SetEnabled(false);
     if (std::filesystem::exists("Resources/Stages/stage01.txt")) {
         stageMap_.LoadFromFile("Resources/Stages/stage01.txt");
-        stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+        playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #endif
 
@@ -1276,6 +1278,9 @@ void MyGame::UpdateStageSelect() {
             stageMap_.LoadFromFile(path);
             backupMap_ = stageMap_; // リスポーン / ESC でこのバックアップに戻す
             stageRenderer_->BuildFromStageMap(stageMap_);
+
+            playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
+
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
             gameplayCameraController_.ResetCamera(
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
