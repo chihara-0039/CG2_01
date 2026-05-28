@@ -694,6 +694,21 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     cell.isSolid = false;
     break;
 
+    case BlockType::OnBlock:
+        // ON状態なら実体化（true）、OFF状態ならすり抜ける（false）
+        cell.isSolid = isOnState_; 
+        break;
+
+    case BlockType::OffBlock:
+        // OFF状態なら実体化（true）、ON状態ならすり抜ける（false）
+        cell.isSolid = !isOnState_; 
+        break;
+        
+    case BlockType::OnOffSwitch:
+        // スイッチ自体は叩く必要があるので常に当たり判定を持たせる
+        cell.isSolid = false;
+        break;
+
     default:
     cell.isSolid = false;
     break;

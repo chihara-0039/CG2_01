@@ -270,6 +270,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	CrumbleUpdate(map);
 	PSwitchUpdate(map);
 	DoorWarp(map);
+	OnOffSwitchUpdate(map);
 	
 	// ▼ 追加：鍵の取得チェック
 	KeyUpdate(map);
@@ -575,6 +576,37 @@ void Player::PSwitchUpdate(StageMap& map)
 		// Pスイッチの判定
 		if (cellBelow && cellBelow->type == BlockType::PSwitch) {
 			map.SetPSwitchActive(cellBelow->variant); // これで needsRebuild_ が true になる
+		}
+	}
+}
+
+void Player::OnOffSwitchUpdate(StageMap& map)
+{
+	if (input_->TriggerKey(DIK_F)) {
+		// プレイヤーの現在位置（マス目）
+		int px = static_cast<int>(std::floor(position_.x + 0.5f));
+		int py = static_cast<int>(std::floor(position_.y + 0.5f));
+		int pz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+		bool switchFound = false;
+
+		// プレイヤーの周囲（上下左右前後 3x3x3マス）をチェック
+		for (int dy = -1; dy <= 1; ++dy) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				for (int dz = -1; dz <= 1; ++dz) {
+					const MapCell* cell = map.GetCell(px + dx, py + dy, pz + dz);
+					// 近くにスイッチがあればフラグを立てる
+					if (cell && cell->type == BlockType::OnOffSwitch) {
+						switchFound = true;
+					}
+				}
+			}
+		}
+
+		// スイッチが見つかっていればON/OFFを切り替える
+		if (switchFound) {
+			map.ToggleOnState();
+			// （効果音を鳴らす処理をここに入れると気持ちいいです！）
 		}
 	}
 }

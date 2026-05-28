@@ -28,7 +28,10 @@ enum class BlockType : uint32_t {
     EnemyChaser,  // 敵（追尾）
     PBlockAppears, // 🌟 追加：押すと出現するPブロック
 	Checkpoint,      // 🌟 追加：中間地点
-	TimedBlock      // 🌟 追加：時間差ブロック
+	TimedBlock,      // 🌟 追加：時間差ブロック
+    OnOffSwitch,    // 🔴 追加：ON/OFF切り替えスイッチ
+    OnBlock,        // 🔴 追加：ONの時に実体化するブロック（赤）
+    OffBlock        // 🔵 追加：OFFの時に実体化するブロック（青）
 };
 
 struct MovingFloorRef {
@@ -66,8 +69,11 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::EnemyFlyer:     return "EnemyFlyer";
     case BlockType::EnemyChaser:    return "EnemyChaser";
     case BlockType::PBlockAppears:  return "PBlock (On)"; // 🌟 追加
-	  case BlockType::Checkpoint:     return "Checkpoint";
-	  case BlockType::TimedBlock:     return "TimedBlock"; // 🌟 追加
+	case BlockType::Checkpoint:     return "Checkpoint";
+	case BlockType::TimedBlock:     return "TimedBlock"; // 🌟 追加
+    case BlockType::OnOffSwitch:    return "OnOffSwitch";
+    case BlockType::OnBlock:        return "OnBlock";
+    case BlockType::OffBlock:       return "OffBlock";
     default:                        return "Unknown";
     }
 }
@@ -329,6 +335,22 @@ public:
     /// </summary>
     Int3 FindPairedDoor(int srcX, int srcY, int srcZ) const;
 
+    // 🌟 状態取得・変更関数を追加
+    bool IsOnState() const { return isOnState_; }
+
+    // スイッチを押した時の処理
+    void ToggleOnState() {
+        isOnState_ = !isOnState_;
+
+        // マップ上の全ON/OFFブロックの当たり判定を更新する
+        for (auto& cell : cells_) {
+            if (cell.type == BlockType::OnBlock) cell.isSolid = isOnState_;
+            if (cell.type == BlockType::OffBlock) cell.isSolid = !isOnState_;
+        }
+        // 見た目の再構築を要求する（すでに実装されている機能を利用）
+        needsRebuild_ = true;
+    }
+
 private:
 
     int width_ = 0;
@@ -346,14 +368,14 @@ private:
     Vector3 lightColor_ = { 0.9f, 0.9f, 0.9f };
     Vector3 lightDirection_ = { 0.5f, -1.0f, 0.5f };
 
-
-
-
 private:
+
     int ToIndex(int x, int y, int z) const;
-    static MapCell MakeCell(BlockType type, int variant);
+    MapCell MakeCell(BlockType type, int variant);
 
     bool isPSwitchActive_ = false; // Pスイッチの状態
     bool needsRebuild_ = false; // ★追加
     float accumulatedTime_ = 0.0f; // 累積時間を保存する変数
+
+    bool isOnState_ = true; // 🌟 初期状態はON
 };

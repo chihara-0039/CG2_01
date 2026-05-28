@@ -130,6 +130,30 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetTextureManager()
 	);
 
+	// ONブロックモデル
+	onBlockModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/wall",
+		"wall.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
+	//OFFブロックモデル
+	offBlockModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/wall",
+		"wall.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
+	// ONOFFスイッチモデル
+	onOffSwichModel_ = Model::CreateFromOBJ(
+		object3dCommon_->GetDxCommon(),
+		"Resources/Models/switch",
+		"switch.obj",
+		object3dCommon_->GetTextureManager()
+	);
+
 	// インスタンシング用の ViewProjection 定数バッファを作成
 	D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
 	D3D12_RESOURCE_DESC resDesc = {};
@@ -636,6 +660,54 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						}
 					}
 					break;
+				case BlockType::OnOffSwitch: 
+				{
+					Object3d* obj = CreateStageObject(
+						onOffSwichModel_.get(), // 🌟 専用モデルを使用
+						position, blockScale_, { 0.0f, 0.0f, 0.0f }, BlockType::OnOffSwitch
+					);
+					if (obj) {
+						if (stageMap.IsOnState()) {
+							obj->SetColor({ 1.0f, 0.2f, 0.2f, 1.0f }); // 最初はON（赤）
+						}
+						else {
+							obj->SetColor({ 0.2f, 0.2f, 1.0f, 1.0f }); // OFF（青）
+						}
+					}
+				} 
+					break;
+				case BlockType::OnBlock: 
+				{
+					Object3d* obj = CreateStageObject(
+						onBlockModel_.get(), // 🌟 専用モデルを使用
+						position, blockScale_, { 0.0f, 0.0f, 0.0f }, BlockType::OnBlock
+					);
+					if (obj) {
+						if (stageMap.IsOnState()) {
+							obj->SetColor({ 1.0f, 0.2f, 0.2f, 1.0f }); // 最初はON（赤・不透明で出現）
+						}
+						else {
+							obj->SetColor({ 1.0f, 0.2f, 0.2f, 0.3f }); // OFF（赤・透明で消滅）
+						}
+					}
+				}
+					break;
+				case BlockType::OffBlock: 
+				{
+					Object3d* obj = CreateStageObject(
+						offBlockModel_.get(), // 🌟 専用モデルを使用
+						position, blockScale_, { 0.0f, 0.0f, 0.0f }, BlockType::OffBlock
+					);
+					if (obj) {
+						if (!stageMap.IsOnState()) {
+							obj->SetColor({ 0.2f, 0.2f, 1.0f, 1.0f }); // 最初はOFF（青・不透明で出現）
+						}
+						else {
+							obj->SetColor({ 0.2f, 0.2f, 1.0f, 0.3f }); // ON（青・透明で消滅）
+						}
+					}
+				}
+					break;
 				// ブロックの種類が不明な場合は何もしない
 				default:
 				break;
@@ -796,6 +868,9 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 			cloud.objects[i]->Update(lightVP);
 		}
 	}
+
+	// ▼ この一行を追加して、ON / OFF状態を同期する
+	ApplyOnOffVisualState(stageMap);
 }
 
 // 全てのオブジェクトの影描画処理を呼び出す
@@ -1052,6 +1127,60 @@ void StageRenderer::Clear() {
 	renderGroups_.clear();
 	previewRenderGroups_.clear();
 	objectToInstanceMap_.clear();
+}
+
+void StageRenderer::ApplyOnOffVisualState(const StageMap& stageMap) {
+	bool isOn = stageMap.IsOnState();
+	size_t objIndex = 0;
+
+	// マップの全セルを走査してオブジェクトの色と透明度（Alpha）を書き換える
+	for (int y = 0; y < stageMap.GetHeight(); ++y) {
+		for (int z = 0; z < stageMap.GetDepth(); ++z) {
+			for (int x = 0; x < stageMap.GetWidth(); ++x) {
+				const MapCell* cell = stageMap.GetCell(x, y, z);
+				if (!cell || cell->type == BlockType::None) {
+					continue;
+				}
+
+				// 配列の範囲を安全にチェック
+				if (objIndex >= objects_.size()) return;
+				Object3d* obj = objects_[objIndex].get();
+
+				// 🔴 ON/OFFスイッチの処理
+				if (cell->type == BlockType::OnOffSwitch) {
+					if (isOn) {
+						obj->SetColor({ 1.0f, 0.2f, 0.2f, 1.0f }); // スイッチON：赤色
+					}
+					else {
+						obj->SetColor({ 0.2f, 0.2f, 1.0f, 1.0f }); // スイッチOFF：青色
+					}
+					MarkDirty(obj); // 変更をGPU側に反映
+				}
+				// 🔴 ONブロック（赤ブロック）の処理
+				else if (cell->type == BlockType::OnBlock) {
+					if (isOn) {
+						obj->SetColor({ 1.0f, 0.2f, 0.2f, 1.0f }); // ON：赤色・不透明（出現）
+					}
+					else {
+						obj->SetColor({ 1.0f, 0.2f, 0.2f, 0.3f }); // OFF：赤色・透明（消滅）
+					}
+					MarkDirty(obj);
+				}
+				// 🔵 OFFブロック（青ブロック）の処理
+				else if (cell->type == BlockType::OffBlock) {
+					if (!isOn) {
+						obj->SetColor({ 0.2f, 0.2f, 1.0f, 1.0f }); // OFF：青色・不透明（出現）
+					}
+					else {
+						obj->SetColor({ 0.2f, 0.2f, 1.0f, 0.3f }); // ON：青色・透明（消滅）
+					}
+					MarkDirty(obj);
+				}
+
+				objIndex++;
+			}
+		}
+	}
 }
 
 // 🌟 配置プレビュー表示機能の実装

@@ -145,6 +145,8 @@ public:
     /// <summary>P スイッチ (コイン⇔ブロック変換) の更新処理</summary>
     void PSwitchUpdate(StageMap& map);
 
+    void OnOffSwitchUpdate(StageMap& map);
+  
     /// <summary>鍵ブロックの取得判定と所持フラグの更新</summary>
     void KeyUpdate(StageMap& map);
 
