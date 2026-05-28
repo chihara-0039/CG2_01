@@ -111,7 +111,6 @@
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
       <AdditionalLibraryDirectories>$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)enjine\scene;$(SolutionDir)project\externals\DirectXTex\Bin\Desktop_2022_Win10\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
-
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -134,7 +133,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)enjine\scene;$(SolutionDir)project\externals\DirectXTex\Bin\Desktop_2022_Win10\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
-
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <ClCompile>
@@ -160,7 +158,6 @@
       <AdditionalLibraryDirectories>$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)enjine\scene;$(SolutionDir)project\externals\DirectXTex\Bin\Desktop_2022_Win10\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <LinkTimeCodeGeneration />
     </Link>
-
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Depelopment|x64'">
     <ClCompile>
@@ -186,7 +183,6 @@
       <LinkTimeCodeGeneration />
       <AdditionalLibraryDirectories>$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)enjine\scene;$(SolutionDir)project\externals\DirectXTex\Bin\Desktop_2022_Win10\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
-
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Game\Block\BlockPlacementController.cpp" />
@@ -213,6 +209,7 @@
     <ClCompile Include="Engine\Graphics\3D\SkinnedModel.cpp" />
     <ClCompile Include="Engine\Graphics\3D\SkinnedObject.cpp" />
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
+    <ClCompile Include="Game\Player\PlayerBasePosition.cpp" />
     <ClCompile Include="Game\Scene\GameClearScene.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
@@ -360,6 +357,7 @@
     <ClInclude Include="Engine\Graphics\3D\SkinnedModel.h" />
     <ClInclude Include="Engine\Graphics\3D\SkinnedObject.h" />
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
+    <ClInclude Include="Game\Player\PlayerBasePosition.h" />
     <ClInclude Include="Game\Scene\GameClearScene.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
     <ClInclude Include="Game\Scene\SkinningEditorController.h" />

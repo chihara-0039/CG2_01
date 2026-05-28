@@ -184,6 +184,10 @@ void StageRenderer::UpdateEffect(const StageMap& stageMap) {
 					continue;
 				}
 
+				if (cell->type == BlockType::PlayerStart && !isEditorMode_) {
+					continue;
+				}
+
 				if (objIndex >= objects_.size()) {
 					return;
 				}
@@ -303,6 +307,10 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				// セルのタイプが None（空）ならスキップ
 				if (cell->type == BlockType::None ) {
 					// 空のセルは描画しない
+					continue;
+				}
+
+				if (cell->type == BlockType::PlayerStart && !isEditorMode_) {
 					continue;
 				}
 
