@@ -368,7 +368,7 @@ void MyGame::Update() {
     // 7. サウンドの再生 (キーイベント)
     //    SPACE:WAV / M:MP4 / N:MP3 / UP-DOWN:MP3 音量調整
     // --------------------------------------------------------
-    if (input->TriggerKey(DIK_SPACE)) { sound.SoundPlay(wavSoundData, wavVolume); }
+    if (input->TriggerKey(DIK_P))     { sound.SoundPlay(wavSoundData, wavVolume); }
     if (input->TriggerKey(DIK_M))     { sound.SoundPlay(mp4SoundData, mp4Volume); }
     if (input->TriggerKey(DIK_N))     { sound.SoundPlay(mp3SoundData, mp3Volume); }
     if (input->TriggerKey(DIK_UP)) {
