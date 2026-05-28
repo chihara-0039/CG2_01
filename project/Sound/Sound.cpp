@@ -43,6 +43,10 @@ void Sound::Initialize() {
 }
 
 void Sound::Finalize() {
+
+    // BGMを先に停止
+    BGMStop();
+
     // SourceVoiceを先に停止・破棄
     for (IXAudio2SourceVoice* sourceVoice : sourceVoices) {
         if (sourceVoice) {
@@ -229,4 +233,50 @@ void Sound::SoundPlay(const SoundData& soundData, float volume) {
 
     // ★終了時に破棄できるように保持
     sourceVoices.push_back(pSourceVoice);
+}
+
+void Sound::BGMPlay(const SoundData& soundData, float volume)
+{
+
+    HRESULT result;
+
+    // すでに鳴っているBGMを止める
+    BGMStop();
+
+    if (volume < 0.0f) {
+        volume = 0.0f;
+    }
+    if (volume > 1.0f) {
+        volume = 1.0f;
+    }
+
+    result = xAudio2->CreateSourceVoice(&bgmSourceVoice, &soundData.wfex);
+    assert(SUCCEEDED(result));
+
+    result = bgmSourceVoice->SetVolume(volume);
+    assert(SUCCEEDED(result));
+
+    XAUDIO2_BUFFER buf{};
+    buf.pAudioData = soundData.buffer.data();
+    buf.AudioBytes = static_cast<UINT32>(soundData.buffer.size());
+    buf.Flags = XAUDIO2_END_OF_STREAM;
+
+    // 無限ループ
+    buf.LoopCount = XAUDIO2_LOOP_INFINITE;
+
+    result = bgmSourceVoice->SubmitSourceBuffer(&buf);
+    assert(SUCCEEDED(result));
+
+    result = bgmSourceVoice->Start();
+    assert(SUCCEEDED(result));
+}
+
+void Sound::BGMStop() {
+    if (bgmSourceVoice) {
+        bgmSourceVoice->Stop();
+        bgmSourceVoice->FlushSourceBuffers();
+        bgmSourceVoice->DestroyVoice();
+        bgmSourceVoice = nullptr;
+    }
+
 }

@@ -96,9 +96,10 @@ void MyGame::Initialize() {
     //    SPACE:WAV / M:MP4 / N:MP3 / UP-DOWN:MP3 音量調整
     // --------------------------------------------------------
     sound.Initialize();
-    wavSoundData = sound.SoundLoadFile("Resources/Sound/Alarm01.wav");
-    mp4SoundData = sound.SoundLoadFile("Resources/Sound/AlarmMovie.mp4");
-    mp3SoundData = sound.SoundLoadFile("Resources/Sound/maou_bgm_neorock83.mp3");
+    
+    titleBgmData = sound.SoundLoadFile("Resources/Sound/gameTitle.mp3");
+    gameBgmData = sound.SoundLoadFile("Resources/Sound/gamePlay.mp3");
+    clearBgmData = sound.SoundLoadFile("Resources/Sound/gameClear.mp3");
 
     // --------------------------------------------------------
     // 7. プレイヤーの生成と初期化
@@ -303,6 +304,9 @@ void MyGame::Update() {
     // 1. モード変化の検知 → SkinningEditor 移行時にカメラリセット
     // --------------------------------------------------------
     if (currentMode_ != prevMode_) {
+        UpdateBGM();
+
+
         if (currentMode_ == AppMode::SkinningEditor) {
             // モデル正面に強制リセット
             camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
@@ -370,7 +374,9 @@ void MyGame::Update() {
     // 7. サウンドの再生 (キーイベント)
     //    SPACE:WAV / M:MP4 / N:MP3 / UP-DOWN:MP3 音量調整
     // --------------------------------------------------------
-    if (input->TriggerKey(DIK_P))     { sound.SoundPlay(wavSoundData, wavVolume); }
+
+
+   /* if (input->TriggerKey(DIK_P))     { sound.SoundPlay(wavSoundData, wavVolume); }
     if (input->TriggerKey(DIK_M))     { sound.SoundPlay(mp4SoundData, mp4Volume); }
     if (input->TriggerKey(DIK_N))     { sound.SoundPlay(mp3SoundData, mp3Volume); }
     if (input->TriggerKey(DIK_UP)) {
@@ -380,7 +386,7 @@ void MyGame::Update() {
     if (input->TriggerKey(DIK_DOWN)) {
         mp3Volume = (mp3Volume - 0.1f > 0.0f) ? mp3Volume - 0.1f : 0.0f;
         OutputDebugStringA("[MyGame] mp3 volume down\n");
-    }
+    }*/
 
     // --------------------------------------------------------
     // 8. AppMode に応じた更新処理
@@ -1306,6 +1312,55 @@ void MyGame::UpdateSceneTransition() {
         isGoalReached_ = false;
         if (player_) { player_->Respawn(); }
         currentMode_ = AppMode::StageSelect;
+    }
+}
+
+void MyGame::UpdateBGM() {
+    BgmType nextBgmType = BgmType::None;
+
+    switch (currentMode_) {
+    case AppMode::Title:
+    case AppMode::StageSelect:
+        nextBgmType = BgmType::Title;
+        break;
+
+    case AppMode::GamePlay:
+    case AppMode::GamePlay_BlockPlace:
+        nextBgmType = BgmType::Game;
+        break;
+
+    case AppMode::GameClear:
+        nextBgmType = BgmType::Clear;
+        break;
+
+    default:
+        nextBgmType = BgmType::None;
+        break;
+    }
+
+    if (currentBgmType_ == nextBgmType) {
+        return;
+    }
+
+    sound.BGMStop();
+    currentBgmType_ = nextBgmType;
+
+    switch (currentBgmType_) {
+    case BgmType::Title:
+        sound.BGMPlay(titleBgmData, bgmVolume_);
+        break;
+
+    case BgmType::Game:
+        sound.BGMPlay(gameBgmData, bgmVolume_);
+        break;
+
+    case BgmType::Clear:
+        sound.BGMPlay(clearBgmData, bgmVolume_);
+        break;
+
+    case BgmType::None:
+    default:
+        break;
     }
 }
 
