@@ -1,30 +1,45 @@
-#include "StageSelect.h"
+﻿#include "StageSelect.h"
 #include <filesystem>
+#include <fstream>
 
-void StageSelect::Initialize(Object3dCommon* objCommon, Input* input)
+void StageSelect::Initialize(Object3dCommon* objCommon, Input* input, int startIndex)
 {
 	object3dCommon_ = objCommon;
 	input_ = input;
 
-	stageFiles_.clear();
-	stageFiles_.push_back("tutorial.txt");
+		stageFiles_.clear();
+	std::string sequencePath = "Resources/Stages/sequence.txt";
 	std::string stageDir = "Resources/Stages/";
-	if (std::filesystem::exists(stageDir))
-	{
-		for (const auto& entry : std::filesystem::directory_iterator(stageDir))
-		{
-			if (entry.is_regular_file())
-			{
-				std::string fileName = entry.path().filename().string();
-				if (fileName.ends_with(".txt"))
-				{
-					stageFiles_.push_back(fileName);
+
+	if (std::filesystem::exists(sequencePath)) {
+		std::ifstream ifs(sequencePath);
+		std::string line;
+		while (std::getline(ifs, line)) {
+			if (!line.empty()) {
+				stageFiles_.push_back(line);
+			}
+		}
+	} else {
+		if (std::filesystem::exists(stageDir)) {
+			for (const auto& entry : std::filesystem::directory_iterator(stageDir)) {
+				if (entry.is_regular_file()) {
+					std::string fileName = entry.path().filename().string();
+					if (fileName.ends_with(".txt") && fileName != "sequence.txt") {
+						stageFiles_.push_back(fileName);
+					}
 				}
 			}
 		}
 	}
 
-	selectedStageIndex_ = 0;
+	if (stageFiles_.empty()) {
+		stageFiles_.push_back("tutorial.txt");
+	}
+
+		selectedStageIndex_ = startIndex;
+	if (selectedStageIndex_ >= stageFiles_.size()) {
+		selectedStageIndex_ = (std::max)(0, (int)stageFiles_.size() - 1);
+	}
 	isFinished_ = false;
 
 	camera_.SetPosition({ 8.0f, 5.0f, -11.0f });
