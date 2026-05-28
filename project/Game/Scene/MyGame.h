@@ -189,6 +189,24 @@ private:
     //  サウンド (Sound.h のラッパー)
     // ==========================================================
     Sound            sound;         ///< サウンドシステム
+
+    Sound::SoundData titleBgmData;
+    Sound::SoundData gameBgmData;
+    Sound::SoundData clearBgmData;
+
+    float bgmVolume_ = 0.5f;
+
+    enum class BgmType {
+        None,
+        Title,
+        Game,
+        Clear,
+    };
+
+    BgmType currentBgmType_ = BgmType::None;
+
+    void UpdateBGM();
+
     Sound::SoundData wavSoundData;  ///< WAV 効果音 (SPACE で再生)
     Sound::SoundData mp4SoundData;  ///< MP4 音声 (M で再生)
     Sound::SoundData mp3SoundData;  ///< MP3 BGM (N で再生 / UP・DOWN で音量調整)

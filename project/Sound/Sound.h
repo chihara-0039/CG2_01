@@ -42,6 +42,13 @@ public:
     // 音声再生
     void SoundPlay(const SoundData& soundData, float volume = 1.0f);
 
+    // BGM再生
+    void BGMPlay(const SoundData& soundData, float volume = 0.5f);
+
+
+    //音源停止
+    void BGMStop();
+
 private:
     // チャンクヘッダ
     struct ChunkHeader {
@@ -74,6 +81,9 @@ private:
 
     // 再生中のSourceVoiceを保持
     std::vector<IXAudio2SourceVoice*> sourceVoices;
+
+    //現在再生中のBGM
+    IXAudio2SourceVoice* bgmSourceVoice = nullptr;
 
 };
 
