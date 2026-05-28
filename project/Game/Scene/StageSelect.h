@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Model.h"
@@ -11,7 +11,7 @@
 class StageSelect
 {
 public:
-	void Initialize(Object3dCommon* objCommon, Input* input);
+	void Initialize(Object3dCommon* objCommon, Input* input, int startIndex = 0);
 
 	void Update();
 

@@ -1,4 +1,4 @@
-﻿
+
 #include "StageEditorController.h"
 #include <cmath>
 #include <algorithm>
@@ -7,6 +7,7 @@
 #endif
 
 void StageEditorController::Initialize() {
+    LoadCampaignSequence();
     // ブロック表示スケールの初期化
     editorBlockScale_ = { 1.0f, 1.0f, 1.0f };
     editorUniformBlockScale_ = 1.0f;
@@ -516,9 +517,76 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
         }
     }
 
-    // ツールバー（配置ブロックやアクション）の描画
+    // ツールバー描画
     DrawEditorToolbar(stageMap, stageRenderer, mapCursor, player);
     ImGui::End();
+
+    ImGui::Begin("Playlist Manager");
+    ImGui::Text("Resources/Stages/sequence.txt");
+    ImGui::Separator();
+
+    ImGui::Columns(2, "PlaylistColumns");
+    ImGui::Text("Available Stages");
+    ImGui::NextColumn();
+    ImGui::Text("Campaign Stages (Playlist)");
+    ImGui::NextColumn();
+    ImGui::Separator();
+
+    ImGui::BeginChild("AvailableStages", ImVec2(0, 200), true);
+    for (int i = 0; i < availableFiles_.size(); ++i) {
+        if (ImGui::Selectable(availableFiles_[i].c_str(), selectedAvailableIndex_ == i)) {
+            selectedAvailableIndex_ = i;
+        }
+    }
+    ImGui::EndChild();
+
+    if (ImGui::Button("Add ->") && selectedAvailableIndex_ >= 0 && selectedAvailableIndex_ < availableFiles_.size()) {
+        campaignFiles_.push_back(availableFiles_[selectedAvailableIndex_]);
+        availableFiles_.erase(availableFiles_.begin() + selectedAvailableIndex_);
+        selectedAvailableIndex_ = -1;
+    }
+
+    ImGui::NextColumn();
+
+    ImGui::BeginChild("CampaignStages", ImVec2(0, 200), true);
+    for (int i = 0; i < campaignFiles_.size(); ++i) {
+        std::string label = "Stage " + std::to_string(i + 1) + ": " + campaignFiles_[i];
+        if (ImGui::Selectable(label.c_str(), selectedCampaignIndex_ == i)) {
+            selectedCampaignIndex_ = i;
+        }
+    }
+    ImGui::EndChild();
+
+    if (ImGui::Button("<- Remove") && selectedCampaignIndex_ >= 0 && selectedCampaignIndex_ < campaignFiles_.size()) {
+        availableFiles_.push_back(campaignFiles_[selectedCampaignIndex_]);
+        campaignFiles_.erase(campaignFiles_.begin() + selectedCampaignIndex_);
+        selectedCampaignIndex_ = -1;
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Up") && selectedCampaignIndex_ > 0 && selectedCampaignIndex_ < campaignFiles_.size()) {
+        std::swap(campaignFiles_[selectedCampaignIndex_], campaignFiles_[selectedCampaignIndex_ - 1]);
+        selectedCampaignIndex_--;
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Down") && selectedCampaignIndex_ >= 0 && selectedCampaignIndex_ < campaignFiles_.size() - 1) {
+        std::swap(campaignFiles_[selectedCampaignIndex_], campaignFiles_[selectedCampaignIndex_ + 1]);
+        selectedCampaignIndex_++;
+    }
+
+    ImGui::Columns(1);
+    ImGui::Separator();
+    
+    if (ImGui::Button("Save Playlist")) {
+        SaveCampaignSequence();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reload Playlist")) {
+        LoadCampaignSequence();
+    }
+    ImGui::End();
+    
 #endif
 }
 
@@ -698,6 +766,7 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
             stageRenderer->BuildFromStageMap(stageMap);
         }
     }
+    
 #endif
 }
 
@@ -828,4 +897,46 @@ bool StageEditorController::RepeatKey(Input* input, BYTE key, int firstDelay, in
     }
 
     return false;
+}
+
+#include <fstream>
+#include <algorithm>
+
+void StageEditorController::LoadCampaignSequence() {
+    campaignFiles_.clear();
+    availableFiles_.clear();
+    std::string sequencePath = "Resources/Stages/sequence.txt";
+    std::string stageDir = "Resources/Stages/";
+
+    if (std::filesystem::exists(sequencePath)) {
+        std::ifstream ifs(sequencePath);
+        std::string line;
+        while (std::getline(ifs, line)) {
+            if (!line.empty()) {
+                campaignFiles_.push_back(line);
+            }
+        }
+    }
+
+    if (std::filesystem::exists(stageDir)) {
+        for (const auto& entry : std::filesystem::directory_iterator(stageDir)) {
+            if (entry.is_regular_file()) {
+                std::string fileName = entry.path().filename().string();
+                if (fileName.ends_with(".txt") && fileName != "sequence.txt") {
+                    // Check if not in campaign
+                    if (std::find(campaignFiles_.begin(), campaignFiles_.end(), fileName) == campaignFiles_.end()) {
+                        availableFiles_.push_back(fileName);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void StageEditorController::SaveCampaignSequence() {
+    std::string sequencePath = "Resources/Stages/sequence.txt";
+    std::ofstream ofs(sequencePath);
+    for (const auto& fileName : campaignFiles_) {
+        ofs << fileName << "\n";
+    }
 }
