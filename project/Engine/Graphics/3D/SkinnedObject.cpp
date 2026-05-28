@@ -3,35 +3,35 @@
 #include <cmath>
 
 void SkinnedObject::Initialize(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, TextureManager* textureManager) {
-    // 1. 郢ｧ・ｹ郢ｧ・ｭ郢昜ｹ斟ｦ郢ｧ・ｰ郢晢ｽ｢郢昴・ﾎ晉ｸｺ・ｮ騾墓ｻ薙・
+    // 1. スキニングモデルの生成
     skinnedModel_ = std::make_unique<SkinnedModel>();
     skinnedModel_->Initialize(dxCommon, textureManager);
 
-    // 2. 髯ｦ・ｨ驕会ｽｺ騾包ｽｨ邵ｺ・ｮObject3d郢ｧ雋槭・隴帶ｺｷ蝟ｧ邵ｺ蜉ｱ窶ｻ邵ｲ繝ｾkinnedModel陷繝ｻﾎ夂ｸｺ・ｮModel郢ｧ蝣､蛹ｳ鬪ｭ・ｲ
+    // 2. 表示用のObject3dを初期化して、SkinnedModel内部のModelを登録
     object3d_ = std::make_unique<Object3d>();
     object3d_->Initialize(object3dCommon);
     object3d_->SetModel(skinnedModel_->GetModel());
 }
 
 void SkinnedObject::InitializeFromGltf(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager) {
-    // 1. 郢ｧ・ｹ郢ｧ・ｭ郢昜ｹ斟ｦ郢ｧ・ｰ郢晢ｽ｢郢昴・ﾎ晉ｹｧ證僕TF邵ｺ荵晢ｽ蛾墓ｻ薙・
+    // 1. スキニングモデルをglTFから生成
     skinnedModel_ = std::make_unique<SkinnedModel>();
     skinnedModel_->InitializeFromGltf(dxCommon, filePath, textureManager);
 
-    // 2. 髯ｦ・ｨ驕会ｽｺ騾包ｽｨ邵ｺ・ｮObject3d郢ｧ雋槭・隴帶ｺｷ蝟ｧ邵ｺ蜉ｱ窶ｻ邵ｲ繝ｾkinnedModel陷繝ｻﾎ夂ｸｺ・ｮModel郢ｧ蝣､蛹ｳ鬪ｭ・ｲ
+    // 2. 表示用のObject3dを初期化して、SkinnedModel内部のModelを登録
     object3d_ = std::make_unique<Object3d>();
     object3d_->Initialize(object3dCommon);
     object3d_->SetModel(skinnedModel_->GetModel());
 }
 
 void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
-    // 1. 郢ｧ・｢郢昜ｹ斟鍋ｹ晢ｽｼ郢ｧ・ｷ郢晢ｽｧ郢晢ｽｳ邵ｺ・ｮ陷蜥ｲ蜃ｽ
+    // 1. アニメーションの再生
     if (playAnimation_) {
-        // 60FPS隲・ｳ陞ｳ螢ｹ縲定ｭ弱ｋ菫｣郢ｧ蟶敖・ｲ郢ｧ竏夲ｽ・
+        // 60FPS想定で時間を進める
         animationTime_ += (1.0f / 60.0f);
         skinnedModel_->ApplyTestAnimation(animationTime_, animationSpeed_);
     } else if (playCustomAnimation_) {
-        // 郢ｧ・ｫ郢ｧ・ｹ郢ｧ・ｿ郢晢｣ｰ郢ｧ・ｭ郢晢ｽｼ郢晁ｼ釆樒ｹ晢ｽｼ郢晢｣ｰ郢晢ｽ｢郢晢ｽｼ郢ｧ・ｷ郢晢ｽｧ郢晢ｽｳ邵ｺ・ｮ陷蜥ｲ蜃ｽ
+        // カスタムキーフレームモーションの再生
         animationTime_ += (1.0f / 60.0f) * animationSpeed_;
         float dur = skinnedModel_->GetMotionDuration();
         currentKeyframeTime_ = std::fmod(animationTime_, dur);
@@ -39,10 +39,10 @@ void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
         skinnedModel_->ApplyMotion(currentKeyframeTime_);
     }
 
-    // 2. 郢ｧ・ｹ郢ｧ・ｭ郢昜ｹ斟ｦ郢ｧ・ｰ鬯・ｉ縺幃坎閧ｲ・ｮ蜉ｱ繝ｻ陞ｳ貅ｯ・｡蠕娯・GPU邵ｺ・ｸ邵ｺ・ｮ髴・ｽ｢鬨ｾ繝ｻ
+    // 2. スキニング計算の実行とGPUへの転送
     skinnedModel_->Update(dxCommon);
 
-    // 3. Object3d 邵ｺ・ｮ郢晏現ﾎ帷ｹ晢ｽｳ郢ｧ・ｹ郢晁ｼ斐°郢晢ｽｼ郢晢｣ｰ髫ｪ・ｭ陞ｳ螢ｹ竊帝勗謔溘・隴厄ｽｴ隴・ｽｰ
+    // 3. Object3d のトランスフォーム設定と行列更新
     if (object3d_) {
         object3d_->SetPosition(position_);
         object3d_->SetRotation(rotation_);
@@ -57,41 +57,40 @@ void SkinnedObject::Draw() {
     
     auto commandList = object3d_->GetObject3dCommon()->GetDxCommon()->GetCommandList();
     
-    // pipeline setup
+    // パイプライン設定
     if (object3d_->GetObject3dCommon()->GetSkinnedPipelineState()) {
         commandList->SetPipelineState(object3d_->GetObject3dCommon()->GetSkinnedPipelineState());
     }
 
-    // 0. 繝槭ユ繝ｪ繧｢繝ｫ
+    // 0. マテリアル
     commandList->SetGraphicsRootConstantBufferView(0, object3d_->GetMaterialResource()->GetGPUVirtualAddress());
-    // 1. Transform (繝医Λ繝ｳ繧ｹ繝輔か繝ｼ繝)
+    // 1. トランスフォーム
     commandList->SetGraphicsRootConstantBufferView(1, object3d_->GetTransformationResource()->GetGPUVirtualAddress());
-    // 2. Light (蟷ｳ陦悟・貅・ (Common縺梧戟縺､)
+    // 2. 平行光源
     commandList->SetGraphicsRootConstantBufferView(2, object3d_->GetObject3dCommon()->GetLightGPUVirtualAddress());
-    // 3. Texture (繝・け繧ｹ繝√Ε)
+    // 3. テクスチャ
     if (object3d_->GetObject3dCommon()->GetTextureManager()) {
         auto gpuHandle = object3d_->GetObject3dCommon()->GetTextureManager()->GetSrvHandleGPU(skinnedModel_->GetTextureHandle());
         commandList->SetGraphicsRootDescriptorTable(3, gpuHandle);
     }
     
-    // 5. JointMatrices (繧ｸ繝ｧ繧､繝ｳ繝郁｡悟・繝舌ャ繝輔ぃ)
+    // 5. ジョイント行列バッファ
     if (skinnedModel_->GetJointBuffer()) {
         commandList->SetGraphicsRootShaderResourceView(5, skinnedModel_->GetJointBuffer()->GetGPUVirtualAddress());
     }
     
-    // 鬆らせ繝舌ャ繝輔ぃ繧偵ヰ繧､繝ｳ繝峨＠縺ｦ謠冗判
+    // 頂点バッファをバインドして描画
     D3D12_VERTEX_BUFFER_VIEW vbView = skinnedModel_->GetVertexBufferView();
     commandList->IASetVertexBuffers(0, 1, &vbView);
     commandList->DrawInstanced(static_cast<UINT>(skinnedModel_->GetVertexCount()), 1, 0, 0);
     
-    // restore pipeline
+    // パイプラインを元に戻す
     if (object3d_->GetObject3dCommon()->GetPipelineState()) {
         commandList->SetPipelineState(object3d_->GetObject3dCommon()->GetPipelineState());
     }
 }
 
-void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {
-    if (!skinnedModel_ || !object3d_) return;
+void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {    if (!skinnedModel_ || !object3d_) return;
 
     auto commandList = object3d_->GetObject3dCommon()->GetDxCommon()->GetCommandList();
     
