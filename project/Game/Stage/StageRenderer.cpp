@@ -437,21 +437,6 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					BlockType::Star
 				);
 				break;
-
-				// ブロックの種類が PlayerStart（プレイヤーの開始位置）の場合
-				case BlockType::PlayerStart:
-				{
-					Object3d* pObj = CreateStageObject(
-						groundModel_.get(),
-						position,
-						blockScale_,
-						{ 0.0f, 0.0f, 0.0f },
-						BlockType::PlayerStart
-					);
-					pObj->SetColor({ 1.0f, 0.0f, 0.0f, 1.0f });
-				}
-				break;
-				
 				// ブロックの種類が Door (ドア) の場合
 				case BlockType::Door:
 					CreateStageObject(
@@ -1158,6 +1143,10 @@ void StageRenderer::Clear() {
 	renderGroups_.clear();
 	previewRenderGroups_.clear();
 	objectToInstanceMap_.clear();
+
+	instancedBuffers_.clear();
+
+	activeObjectCount_ = 0;
 }
 
 void StageRenderer::ApplyOnOffVisualState(const StageMap& stageMap) {
