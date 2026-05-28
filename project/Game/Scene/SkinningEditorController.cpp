@@ -89,7 +89,12 @@ void SkinningEditorController::Update(
     const Matrix4x4&     lightVP,
     bool                 isGuiCaptured)
 {
-    if (!skinnedObject_) { return; }
+    // ----------------------------------------------------------
+    // 1. レイキャストによるジョイントクリック選択
+    //    OBJ モードはスケルトンがないためこのブロックをスキップする
+    //    (以前は関数全体を return していたため、カメラ更新も止まっていた → 修正済み)
+    // ----------------------------------------------------------
+    if (!isObjPreviewMode_ && skinnedObject_) {
 
     // ----------------------------------------------------------
     // 1. レイキャストによるジョイントクリック選択
@@ -176,12 +181,21 @@ void SkinningEditorController::Update(
             skinnedObject_->SetSelectedJointIndex(closestJointIndex);
         }
     }
+    } // if (!isObjPreviewMode_ && skinnedObject_)
 
     // ----------------------------------------------------------
-    // 2. SkinnedObject の更新 (スキニング行列の計算・定数バッファ転送)
+    // 2. モデルの更新 (OBJ / SkinnedObject を切り替える)
+    //    OBJ モードでもここは必ず通る (レイキャストのみスキップした)
     // ----------------------------------------------------------
-    skinnedObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-    skinnedObject_->Update(dxCommon, lightVP);
+    if (isObjPreviewMode_ && objPreviewObject_) {
+        // OBJ モード: 通常の Object3d を更新する
+        objPreviewObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+        objPreviewObject_->Update(lightVP);
+    } else if (skinnedObject_) {
+        // glTF / デフォルト人型モード: SkinnedObject を更新する
+        skinnedObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+        skinnedObject_->Update(dxCommon, lightVP);
+    }
 
     // ----------------------------------------------------------
     // 3. グリッド線の更新 (カメラ行列のセットと定数バッファ転送)
@@ -198,19 +212,21 @@ void SkinningEditorController::Update(
 //  グリッド線・スキニングメッシュ・スケルトンを描画する
 // ==========================================================
 void SkinningEditorController::Draw(Object3dCommon* object3dCommon, Camera* camera) {
-    // グリッド線の描画
+    // グリッド線の描画 (モードに関わらず常に表示)
     for (auto& line : gridLines_) {
         line->Draw();
     }
 
-    if (skinnedObject_) {
-        // スキニングメッシュの描画
+    if (isObjPreviewMode_ && objPreviewObject_) {
+        // OBJ モード: 通常の Object3d として描画 (スケルトンなし)
+        objPreviewObject_->Draw();
+
+    } else if (skinnedObject_) {
+        // glTF / デフォルト人型モード: スキニングメッシュとスケルトンを描画
         skinnedObject_->Draw();
-        // スケルトン (ジョイントをデバッグキューブで可視化) の描画
         skinnedObject_->DrawSkeleton(
             object3dCommon, debugCubeModel_.get(),
             camera->GetViewMatrix(), camera->GetProjectionMatrix());
-
     }
 }
 
@@ -219,7 +235,11 @@ void SkinningEditorController::Draw(Object3dCommon* object3dCommon, Camera* came
 //  シャドウマップへの描画 (スキニングメッシュが影を落とすため)
 // ==========================================================
 void SkinningEditorController::DrawShadow(const Matrix4x4& lightVP) {
-    if (skinnedObject_) {
+    if (isObjPreviewMode_ && objPreviewObject_) {
+        // OBJ モード: 通常の Object3d で影描画
+        objPreviewObject_->DrawShadow(lightVP);
+    } else if (skinnedObject_) {
+        // glTF / デフォルト人型モード
         skinnedObject_->DrawShadow(lightVP);
     }
 }
@@ -230,6 +250,16 @@ void SkinningEditorController::DrawShadow(const Matrix4x4& lightVP) {
 // ==========================================================
 void SkinningEditorController::DrawImGuiTimeline() {
     if (!skinnedObject_) { return; }
+
+    // OBJ モードはスケルトン・タイムラインが存在しないため代替メッセージを表示
+    if (isObjPreviewMode_) {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "[ OBJ Model - No Animation ]");
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+            "This model is a static OBJ and does not support\n"
+            "skeletal animation or keyframe editing.\n\n"
+            "To add animations, export from Blender as .gltf or .glb.");
+        return;
+    }
 
     ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Custom Motion Animation Timeline ]");
 
@@ -418,6 +448,14 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
         ApplyModelToPlayer(player, defaultObjModel);
     }
     ImGui::PopStyleColor(3);
+
+    // OBJ モード中はスキニング操作が使えない旨を表示
+    if (isObjPreviewMode_) {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
+            "[OBJ Mode] No skeleton / animation.");
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+            "Import a .gltf/.glb for rigging.");
+    }
 
     // 現在ゲームに適用中のモデル名を緑で表示
     if (activeGameModelIndex_ >= 0 && activeGameModelIndex_ < static_cast<int>(modelNames_.size())) {
@@ -642,16 +680,37 @@ void SkinningEditorController::ScanGltfModels() {
     modelPaths_.clear();
     modelNames_.clear();
 
+    // ----------------------------------------------------------
     // インデックス 0 : デフォルト人型 (組み込みスキニング)
+    // ----------------------------------------------------------
     modelNames_.push_back("Default Humanoid (Skinning)");
     modelPaths_.push_back("Default");
 
-    // インデックス 1 : 従来の OBJ プレイヤー (スキニング非対応)
-    modelNames_.push_back("Default Player (.obj)");
-    modelPaths_.push_back("DefaultPlayer");
-
-    // インデックス 2以降 : Resources/Models 以下を再帰スキャン
+    // ----------------------------------------------------------
+    // インデックス 1以降 : Resources/Models 以下の OBJ を再帰スキャン
+    //   OBJ は静止モデルとして Object3d で表示する
+    // ----------------------------------------------------------
+    objStartIndex_ = static_cast<int>(modelPaths_.size()); // OBJ の開始位置を記録
     const std::string modelsDir = "Resources/Models";
+    if (std::filesystem::exists(modelsDir)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(modelsDir)) {
+            if (!entry.is_regular_file()) { continue; }
+            std::string ext = entry.path().extension().string();
+            if (ext != ".obj") { continue; }
+
+            std::string relPath = entry.path().string();
+            std::replace(relPath.begin(), relPath.end(), '\\', '/');
+            modelPaths_.push_back(relPath);
+            // ファイル名だけ表示 (例: player.obj)
+            modelNames_.push_back("[OBJ] " + entry.path().filename().string());
+        }
+    }
+
+    // ----------------------------------------------------------
+    // OBJ の後 : glTF / GLB を再帰スキャン
+    //   glTF は SkinnedObject でアニメーション付き表示する
+    // ----------------------------------------------------------
+    gltfStartIndex_ = static_cast<int>(modelPaths_.size()); // glTF の開始位置を記録
     if (std::filesystem::exists(modelsDir)) {
         for (const auto& entry : std::filesystem::recursive_directory_iterator(modelsDir)) {
             if (!entry.is_regular_file()) { continue; }
@@ -659,9 +718,9 @@ void SkinningEditorController::ScanGltfModels() {
             if (ext != ".gltf" && ext != ".glb") { continue; }
 
             std::string relPath = entry.path().string();
-            std::replace(relPath.begin(), relPath.end(), '\\', '/'); // パス区切りを統一
+            std::replace(relPath.begin(), relPath.end(), '\\', '/');
             modelPaths_.push_back(relPath);
-            modelNames_.push_back(entry.path().filename().string());
+            modelNames_.push_back("[glTF] " + entry.path().filename().string());
         }
     }
 }
@@ -675,13 +734,41 @@ void SkinningEditorController::ChangePreviewModel(int index) {
     selectedModelIndex_ = index;
 
     if (index == 0) {
-        // デフォルト人型 (組み込みスキニング)
+        // ----------------------------------------------------------
+        // デフォルト人型 (組み込みスキニング) : SkinnedObject で表示
+        // ----------------------------------------------------------
+        isObjPreviewMode_ = false;
         skinnedObject_->Initialize(object3dCommon_, dxCommon_, textureManager_);
-    } else if (index == 1) {
-        // OBJ プレイヤーはスキニング非対応のため、デフォルト人型をダミー表示する
-        skinnedObject_->Initialize(object3dCommon_, dxCommon_, textureManager_);
-    } else {
-        // glTF ファイルからスキニングモデルを読み込む
+
+    } else if (index >= objStartIndex_ && index < gltfStartIndex_) {
+        // ----------------------------------------------------------
+        // OBJ モデル : Object3d + Model で表示 (スキニングなし)
+        //   directoryPath と filename に分割して CreateFromOBJ に渡す
+        // ----------------------------------------------------------
+        isObjPreviewMode_ = true;
+
+        // フルパスからディレクトリとファイル名を分離する
+        std::string fullPath = modelPaths_[index];
+        size_t lastSlash = fullPath.rfind('/');
+        std::string dir  = (lastSlash != std::string::npos) ? fullPath.substr(0, lastSlash) : ".";
+        std::string file = (lastSlash != std::string::npos) ? fullPath.substr(lastSlash + 1) : fullPath;
+
+        // OBJ を Model としてロードして Object3d にセット
+        objPreviewModel_ = std::unique_ptr<Model>(
+            Model::CreateFromOBJ(dxCommon_, dir, file, textureManager_));
+
+        objPreviewObject_ = std::make_unique<Object3d>();
+        objPreviewObject_->Initialize(object3dCommon_);
+        objPreviewObject_->SetModel(objPreviewModel_.get());
+        objPreviewObject_->SetPosition({ 0.0f, 0.0f, 0.0f });
+        objPreviewObject_->SetScale({ 1.0f, 1.0f, 1.0f });
+        objPreviewObject_->SetRotation({ 0.0f, 0.0f, 0.0f });
+
+    } else if (index >= gltfStartIndex_) {
+        // ----------------------------------------------------------
+        // glTF モデル : SkinnedObject でアニメーション付き表示
+        // ----------------------------------------------------------
+        isObjPreviewMode_ = false;
         skinnedObject_->InitializeFromGltf(
             object3dCommon_, dxCommon_, modelPaths_[index], textureManager_);
     }
@@ -696,13 +783,29 @@ void SkinningEditorController::ApplyModelToPlayer(Player* player, Model* default
     if (!player) { return; }
 
     if (activeGameModelIndex_ == 0) {
+        // ----------------------------------------------------------
         // デフォルト人型スキニング
+        // ----------------------------------------------------------
         player->InitializeWithDefaultSkinned(object3dCommon_, dxCommon_, textureManager_);
-    } else if (activeGameModelIndex_ == 1) {
-        // 従来の OBJ プレイヤーモデル
-        player->Initialize(object3dCommon_, defaultObjModel);
-    } else {
+
+    } else if (activeGameModelIndex_ >= objStartIndex_ && activeGameModelIndex_ < gltfStartIndex_) {
+        // ----------------------------------------------------------
+        // OBJ モデルをプレイヤーに適用
+        //   Player::Initialize() は Model* を受け取るため、
+        //   プレビュー用の objPreviewModel_ をそのまま渡す
+        //   (Player は Model の所有権を持たないので安全)
+        // ----------------------------------------------------------
+        if (objPreviewModel_) {
+            player->Initialize(object3dCommon_, objPreviewModel_.get());
+        } else {
+            // フォールバック: デフォルト OBJ モデルを使用
+            player->Initialize(object3dCommon_, defaultObjModel);
+        }
+
+    } else if (activeGameModelIndex_ >= gltfStartIndex_) {
+        // ----------------------------------------------------------
         // glTF モデルをプレイヤーに適用
+        // ----------------------------------------------------------
         player->InitializeWithSkinnedGltf(
             object3dCommon_, dxCommon_, modelPaths_[activeGameModelIndex_], textureManager_);
     }

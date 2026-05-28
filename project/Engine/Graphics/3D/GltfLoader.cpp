@@ -185,141 +185,143 @@ bool GltfLoader::LoadGltfModel(
     outVertices.clear();
     outInfluences.clear();
 
-    const tinygltf::Mesh& mesh = model.meshes[0];
-    const tinygltf::Primitive& prim = mesh.primitives[0];
+    for (const auto& mesh : model.meshes) {
+        for (const auto& prim : mesh.primitives) {
 
-    // アクセッサからのデータ抽出ヘルパー
-    auto getFloatAttribute = [&](const std::string& name, std::vector<float>& outVec) {
-        auto it = prim.attributes.find(name);
-        if (it == prim.attributes.end()) return;
+            // アクセッサからのデータ抽出ヘルパー
+            auto getFloatAttribute = [&](const std::string& name, std::vector<float>& outVec) {
+                auto it = prim.attributes.find(name);
+                if (it == prim.attributes.end()) return;
 
-        const tinygltf::Accessor& accessor = model.accessors[it->second];
-        const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-        const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-        int stride = accessor.ByteStride(bufferView);
-        int numComp = tinygltf::GetNumComponentsInType(accessor.type);
+                const tinygltf::Accessor& accessor = model.accessors[it->second];
+                const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+                const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+                int stride = accessor.ByteStride(bufferView);
+                int numComp = tinygltf::GetNumComponentsInType(accessor.type);
 
-        outVec.resize(accessor.count * numComp);
-        const unsigned char* dataPtr = &buffer.data[bufferView.byteOffset + accessor.byteOffset];
-        for (size_t i = 0; i < accessor.count; ++i) {
-            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT) {
-                const float* ptr = reinterpret_cast<const float*>(dataPtr + i * stride);
-                for (int c = 0; c < numComp; ++c) {
-                    outVec[i * numComp + c] = ptr[c];
+                outVec.resize(accessor.count * numComp);
+                const unsigned char* dataPtr = &buffer.data[bufferView.byteOffset + accessor.byteOffset];
+                for (size_t i = 0; i < accessor.count; ++i) {
+                    if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT) {
+                        const float* ptr = reinterpret_cast<const float*>(dataPtr + i * stride);
+                        for (int c = 0; c < numComp; ++c) {
+                            outVec[i * numComp + c] = ptr[c];
+                        }
+                    }
+                }
+            };
+
+            std::vector<float> posData, normData, uvData, weightsData;
+            std::vector<uint32_t> jointIndicesData;
+
+            getFloatAttribute("POSITION", posData);
+            getFloatAttribute("NORMAL", normData);
+            getFloatAttribute("TEXCOORD_0", uvData);
+
+            // JOINTS_0
+            auto itJoints = prim.attributes.find("JOINTS_0");
+            if (itJoints != prim.attributes.end()) {
+                const tinygltf::Accessor& accessor = model.accessors[itJoints->second];
+                const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+                const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+                int stride = accessor.ByteStride(bufferView);
+                const unsigned char* dataPtr = &buffer.data[bufferView.byteOffset + accessor.byteOffset];
+
+                jointIndicesData.resize(accessor.count * 4);
+                for (size_t i = 0; i < accessor.count; ++i) {
+                    const unsigned char* elementPtr = dataPtr + i * stride;
+                    if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+                        const uint16_t* ptr = reinterpret_cast<const uint16_t*>(elementPtr);
+                        for (int c = 0; c < 4; ++c) jointIndicesData[i * 4 + c] = ptr[c];
+                    } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
+                        const uint8_t* ptr = reinterpret_cast<const uint8_t*>(elementPtr);
+                        for (int c = 0; c < 4; ++c) jointIndicesData[i * 4 + c] = ptr[c];
+                    } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
+                        const uint32_t* ptr = reinterpret_cast<const uint32_t*>(elementPtr);
+                        for (int c = 0; c < 4; ++c) jointIndicesData[i * 4 + c] = ptr[c];
+                    }
                 }
             }
-        }
-    };
 
-    std::vector<float> posData, normData, uvData, weightsData;
-    std::vector<uint32_t> jointIndicesData;
+            // WEIGHTS_0
+            getFloatAttribute("WEIGHTS_0", weightsData);
 
-    getFloatAttribute("POSITION", posData);
-    getFloatAttribute("NORMAL", normData);
-    getFloatAttribute("TEXCOORD_0", uvData);
+            // インデックスバッファのパース
+            std::vector<uint32_t> indices;
+            if (prim.indices != -1) {
+                const tinygltf::Accessor& accessor = model.accessors[prim.indices];
+                const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+                const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+                const unsigned char* dataPtr = &buffer.data[bufferView.byteOffset + accessor.byteOffset];
 
-    // JOINTS_0
-    auto itJoints = prim.attributes.find("JOINTS_0");
-    if (itJoints != prim.attributes.end()) {
-        const tinygltf::Accessor& accessor = model.accessors[itJoints->second];
-        const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-        const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-        int stride = accessor.ByteStride(bufferView);
-        const unsigned char* dataPtr = &buffer.data[bufferView.byteOffset + accessor.byteOffset];
-
-        jointIndicesData.resize(accessor.count * 4);
-        for (size_t i = 0; i < accessor.count; ++i) {
-            const unsigned char* elementPtr = dataPtr + i * stride;
-            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
-                const uint16_t* ptr = reinterpret_cast<const uint16_t*>(elementPtr);
-                for (int c = 0; c < 4; ++c) jointIndicesData[i * 4 + c] = ptr[c];
-            } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
-                const uint8_t* ptr = reinterpret_cast<const uint8_t*>(elementPtr);
-                for (int c = 0; c < 4; ++c) jointIndicesData[i * 4 + c] = ptr[c];
-            } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
-                const uint32_t* ptr = reinterpret_cast<const uint32_t*>(elementPtr);
-                for (int c = 0; c < 4; ++c) jointIndicesData[i * 4 + c] = ptr[c];
-            }
-        }
-    }
-
-    // WEIGHTS_0
-    getFloatAttribute("WEIGHTS_0", weightsData);
-
-    // インデックスバッファのパース
-    std::vector<uint32_t> indices;
-    if (prim.indices != -1) {
-        const tinygltf::Accessor& accessor = model.accessors[prim.indices];
-        const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-        const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-        const unsigned char* dataPtr = &buffer.data[bufferView.byteOffset + accessor.byteOffset];
-
-        indices.resize(accessor.count);
-        if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
-            const uint32_t* p = reinterpret_cast<const uint32_t*>(dataPtr);
-            std::copy(p, p + accessor.count, indices.begin());
-        } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
-            const uint16_t* p = reinterpret_cast<const uint16_t*>(dataPtr);
-            for (size_t i = 0; i < accessor.count; ++i) indices[i] = p[i];
-        } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
-            const uint8_t* p = reinterpret_cast<const uint8_t*>(dataPtr);
-            for (size_t i = 0; i < accessor.count; ++i) indices[i] = p[i];
-        }
-    } else {
-        // インデックスがない場合はシーケンシャルなインデックスを作成
-        size_t count = posData.size() / 3;
-        indices.resize(count);
-        for (size_t i = 0; i < count; ++i) indices[i] = static_cast<uint32_t>(i);
-    }
-
-    // インデックスバッファを走査してインデックスなし頂点配列を作成（巻順を反転）
-    size_t numTriangles = indices.size() / 3;
-    for (size_t t = 0; t < numTriangles; ++t) {
-        // 巻順反転
-        uint32_t idx[3] = {
-            indices[t * 3 + 0],
-            indices[t * 3 + 2],
-            indices[t * 3 + 1]
-        };
-
-        for (int i = 0; i < 3; ++i) {
-            uint32_t vIdx = idx[i];
-
-            ModelVertexData v{};
-            v.position = { posData[vIdx * 3 + 0], posData[vIdx * 3 + 1], posData[vIdx * 3 + 2], 1.0f };
-            // 右手系から左手系へ変換（Z反転）
-            v.position.z *= -1.0f;
-
-            if (!normData.empty()) {
-                v.normal = { normData[vIdx * 3 + 0], normData[vIdx * 3 + 1], normData[vIdx * 3 + 2] };
-                v.normal.z *= -1.0f;
-            }
-
-            if (!uvData.empty()) {
-                v.texcoord = { uvData[vIdx * 2 + 0], 1.0f - uvData[vIdx * 2 + 1] };
-            }
-
-            outVertices.push_back(v);
-
-            VertexInfluence inf{};
-            if (!jointIndicesData.empty() && !weightsData.empty()) {
-                float wSum = 0.0f;
-                for (int c = 0; c < 4; ++c) {
-                    inf.jointIndices[c] = static_cast<int>(jointIndicesData[vIdx * 4 + c]);
-                    inf.weights[c] = weightsData[vIdx * 4 + c];
-                    wSum += inf.weights[c];
-                }
-                // ウェイト正規化
-                if (wSum > 0.0f) {
-                    for (int c = 0; c < 4; ++c) inf.weights[c] /= wSum;
+                indices.resize(accessor.count);
+                if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
+                    const uint32_t* p = reinterpret_cast<const uint32_t*>(dataPtr);
+                    std::copy(p, p + accessor.count, indices.begin());
+                } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+                    const uint16_t* p = reinterpret_cast<const uint16_t*>(dataPtr);
+                    for (size_t i = 0; i < accessor.count; ++i) indices[i] = p[i];
+                } else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
+                    const uint8_t* p = reinterpret_cast<const uint8_t*>(dataPtr);
+                    for (size_t i = 0; i < accessor.count; ++i) indices[i] = p[i];
                 }
             } else {
-                inf.jointIndices[0] = 0;
-                inf.weights[0] = 1.0f;
+                // インデックスがない場合はシーケンシャルなインデックスを作成
+                size_t count = posData.size() / 3;
+                indices.resize(count);
+                for (size_t i = 0; i < count; ++i) indices[i] = static_cast<uint32_t>(i);
             }
-            outInfluences.push_back(inf);
-        }
-    }
+
+            // インデックスバッファを走査してインデックスなし頂点配列を作成（巻順を反転）
+            size_t numTriangles = indices.size() / 3;
+            for (size_t t = 0; t < numTriangles; ++t) {
+                // 巻順反転
+                uint32_t idx[3] = {
+                    indices[t * 3 + 0],
+                    indices[t * 3 + 2],
+                    indices[t * 3 + 1]
+                };
+
+                for (int i = 0; i < 3; ++i) {
+                    uint32_t vIdx = idx[i];
+
+                    ModelVertexData v{};
+                    v.position = { posData[vIdx * 3 + 0], posData[vIdx * 3 + 1], posData[vIdx * 3 + 2], 1.0f };
+                    // 右手系から左手系へ変換（Z反転）
+                    v.position.z *= -1.0f;
+
+                    if (!normData.empty()) {
+                        v.normal = { normData[vIdx * 3 + 0], normData[vIdx * 3 + 1], normData[vIdx * 3 + 2] };
+                        v.normal.z *= -1.0f;
+                    }
+
+                    if (!uvData.empty()) {
+                        v.texcoord = { uvData[vIdx * 2 + 0], 1.0f - uvData[vIdx * 2 + 1] };
+                    }
+
+                    outVertices.push_back(v);
+
+                    VertexInfluence inf{};
+                    if (!jointIndicesData.empty() && !weightsData.empty()) {
+                        float wSum = 0.0f;
+                        for (int c = 0; c < 4; ++c) {
+                            inf.jointIndices[c] = static_cast<int>(jointIndicesData[vIdx * 4 + c]);
+                            inf.weights[c] = weightsData[vIdx * 4 + c];
+                            wSum += inf.weights[c];
+                        }
+                        // ウェイト正規化
+                        if (wSum > 0.0f) {
+                            for (int c = 0; c < 4; ++c) inf.weights[c] /= wSum;
+                        }
+                    } else {
+                        inf.jointIndices[0] = 0;
+                        inf.weights[0] = 1.0f;
+                    }
+                    outInfluences.push_back(inf);
+                }
+            }
+        } // end for prim
+    } // end for mesh
 
     // 4. アニメーションのパース
     outMotions.clear();
