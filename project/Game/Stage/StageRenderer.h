@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <memory>
 #include <unordered_map>
@@ -85,6 +85,7 @@ private:
     };
     std::vector<CloudInstance> clouds_;
     std::vector<std::unique_ptr<Object3d>> objects_;
+    size_t activeObjectCount_ = 0;
     std::vector<std::unique_ptr<Object3d>> previewObjects_; // 🌟 半透明プレビュー用オブジェクト
     Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };
 

@@ -29,6 +29,19 @@ private:
     Camera camera_;
     std::unique_ptr<Model> titleModel_; // unique_ptr に変更
     std::unique_ptr<Object3d> titleObject_; // unique_ptr に変更
+    
+    // 雲のモデルとインスタンス群
+    std::unique_ptr<Model> cloudModel_;
+    struct CloudInstance {
+        std::vector<std::unique_ptr<Object3d>> objects;
+        Vector3 basePosition;
+        Vector3 speed;
+        float floatTimer;
+        float floatSpeed;
+        std::vector<Vector3> localOffsets;
+        std::vector<Vector3> localScales;
+    };
+    std::vector<CloudInstance> clouds_;
 
     bool isFinished_ = false;
     float timer_ = 0.0f;

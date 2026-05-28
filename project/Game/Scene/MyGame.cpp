@@ -428,6 +428,12 @@ void MyGame::Update() {
             }
         }
         gameClearScene_->Update();
+        
+        // 花火パーティクルをランダムに発生させる
+        if (rand() % 15 == 0) {
+            Vector3 fireworkPos = { (rand() % 40) - 20.0f, (rand() % 20) + 5.0f, (rand() % 20) - 5.0f };
+            particleManager->Emit(fireworkPos, 30);
+        }
         break;
 
     case AppMode::SkinningEditor:
@@ -507,7 +513,7 @@ void MyGame::Update() {
     if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
         sprite->Update();
     }
-    if (debugFlags_.showParticles) {
+    if (debugFlags_.showParticles || currentMode_ == AppMode::GameClear) {
         particleManager->Update(view, proj);
     }
 
@@ -838,6 +844,9 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
     commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
 
     // ---- シーン別描画ルーティング ----
+    // 全シーン共通でスカイボックスを描画（最背面）
+    DrawSkybox(commandList);
+
     if (currentMode_ == AppMode::Title) {
         if (titleScene_) { titleScene_->Draw(); }
 
@@ -848,12 +857,10 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
         if (gameClearScene_) { gameClearScene_->Draw(); }
 
     } else if (currentMode_ == AppMode::SkinningEditor) {
-        DrawSkybox(commandList);
         skinningEditor_.Draw(object3dCommon.get(), camera.get());
 
     } else {
         // DebugView / StageEditor / GamePlay / GamePlay_BlockPlace の共通描画パス
-        DrawSkybox(commandList);
 
         bool isGameMode = (currentMode_ == AppMode::StageEditor ||
                            currentMode_ == AppMode::GamePlay     ||
@@ -903,7 +910,7 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
     }
 
     // パーティクルの描画 (SRV ヒープを再バインドしてから描画)
-    if (debugFlags_.showParticles) {
+    if (debugFlags_.showParticles || currentMode_ == AppMode::GameClear) {
         ID3D12DescriptorHeap* ph[] = { textureManager->GetSrvHeap() };
         commandList->SetDescriptorHeaps(1, ph);
         particleManager->Draw();

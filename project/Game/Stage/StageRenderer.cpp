@@ -1,4 +1,4 @@
-#include "StageRenderer.h"
+﻿#include "StageRenderer.h"
 #include <cassert>
 #include <random>
 
@@ -1109,7 +1109,7 @@ ID3D12Resource* StageRenderer::GetOrCreateInstancedBuffer(Model* model, UINT num
 
 // 既存のオブジェクトを全て削除してリストをクリアする
 void StageRenderer::Clear() {
-	objects_.clear();
+	activeObjectCount_ = 0; // objects_.clear(); avoided for pooling
 	previewObjects_.clear(); // 🌟 プレビューも一緒にクリア
 	crumblingFloorInstances_.clear();
 	movingFloorInstances_.clear(); // ★追加：動く足場の管理リストもクリアしてダングリングポインタを防ぐ
@@ -1318,14 +1318,22 @@ void StageRenderer::ClearPlacementPreview() {
 // 指定したモデルと位置・スケール・回転を使ってオブジェクトを生成し、リストに追加して返す
 Object3d* StageRenderer::CreateStageObject(
 	Model* model,
-	// ブロックの位置（ステージマップ of セルの位置をワールド座標に変換したもの）
 	const Vector3& position,
 	const Vector3& scale,
 	const Vector3& rotation,
 	BlockType type
 ) {
-	auto obj = std::make_unique<Object3d>();
-	obj->Initialize(object3dCommon_);
+	Object3d* obj = nullptr;
+	if (activeObjectCount_ >= objects_.size()) {
+		auto newObj = std::make_unique<Object3d>();
+		newObj->Initialize(object3dCommon_);
+		obj = newObj.get();
+		objects_.push_back(std::move(newObj));
+	} else {
+		obj = objects_[activeObjectCount_].get();
+	}
+	activeObjectCount_++;
+
 	obj->SetModel(model);
 	obj->SetPosition(position);
 	obj->SetScale(scale);
@@ -1350,23 +1358,23 @@ Object3d* StageRenderer::CreateStageObject(
 		obj->SetEmissive(0.0f);
 		break;
 	case BlockType::IceBlock:
-		obj->SetShininess(0.95f); // 氷ならではの鋭く美しいハイライト
-		obj->SetMetallic(0.7f);   // 氷ならではの鏡面感のある反射
-		obj->SetEmissive(0.1f);   // ほんのりと輝く氷の質感
+		obj->SetShininess(0.95f);
+		obj->SetMetallic(0.7f);
+		obj->SetEmissive(0.1f);
 		break;
 	case BlockType::Goal:
 	case BlockType::Star:
 		obj->SetShininess(0.8f);
 		obj->SetMetallic(0.5f);
-		obj->SetEmissive(0.7f);   // ゴールやスターは幻想的に自己発光
+		obj->SetEmissive(0.7f);
 		break;
 	case BlockType::CrumblingFloor:
-		obj->SetShininess(0.15f); // 崩れそうなボロボロの床（マットでザラザラした質感）
+		obj->SetShininess(0.15f);
 		obj->SetMetallic(0.0f);
 		obj->SetEmissive(0.0f);
 		break;
 	case BlockType::MovingFloor:
-		obj->SetShininess(0.7f);  // 重厚な金属・石の質感
+		obj->SetShininess(0.7f);
 		obj->SetMetallic(0.4f);
 		obj->SetEmissive(0.0f);
 		break;
@@ -1374,21 +1382,19 @@ Object3d* StageRenderer::CreateStageObject(
 	case BlockType::PBlock:
 		obj->SetShininess(0.8f);
 		obj->SetMetallic(0.3f);
-		obj->SetEmissive(0.4f);   // スイッチ系は軽く自己発光して目立たせる
+		obj->SetEmissive(0.4f);
 		break;
 	case BlockType::BubblePickup:
-		obj->SetShininess(0.9f);  // シャボン玉の透明で滑らかなハイライト
+		obj->SetShininess(0.9f);
 		obj->SetMetallic(0.1f);
-		obj->SetEmissive(0.3f);   // 内部の輝きを表現
+		obj->SetEmissive(0.3f);
 		break;
 	default:
 		break;
 	}
 
-	Object3d* ptr = obj.get();
 	obj->Update(Math::MakeIdentity4x4());
-	objects_.push_back(std::move(obj));
-	return ptr;
+	return obj;
 }
 
 //5/19佐倉
@@ -1427,7 +1433,7 @@ void StageRenderer::BuildRenderGroups() {
 	objectToInstanceMap_.clear();
 	std::unordered_map<Model*, size_t> modelToGroupIndex;
 
-	for (size_t i = 0; i < objects_.size(); ++i) {
+	for (size_t i = 0; i < activeObjectCount_; ++i) {
 		Object3d* obj = objects_[i].get();
 		if (!obj || !obj->GetModel()) continue;
 
@@ -1595,7 +1601,7 @@ void StageRenderer::RebuildTransparencyGroups()
 		targetGroup->instances.push_back(inst);
 		};
 
-	for (size_t i = 0; i < objects_.size(); ++i) {
+	for (size_t i = 0; i < activeObjectCount_; ++i) {
 		Object3d* obj = objects_[i].get();
 		if (!obj || !obj->GetModel()) continue;
 
