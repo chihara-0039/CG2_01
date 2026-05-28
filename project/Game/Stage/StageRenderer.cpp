@@ -1712,9 +1712,35 @@ void StageRenderer::UpdateWallTransparency(
 			wallCellY <= playerCellY + 3;
 
 		if (insideTransparencyArea) {
-			obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.22f });
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.01f });
 		}
 	}
 
 	RebuildTransparencyGroups();
+}
+
+void StageRenderer::UpdateCloudTransparency(const Vector3& playerPos)
+{
+	for (auto& cloud : clouds_) {
+		for (size_t i = 0; i < cloud.objects.size(); ++i) {
+			Object3d* obj = cloud.objects[i].get();
+
+			if (!obj) {
+				continue;
+			}
+
+			Vector3 cloudPos = obj->GetPosition();
+
+			float dx = cloudPos.x - playerPos.x;
+			float dz = cloudPos.z - playerPos.z;
+
+			float distSq = dx * dx + dz * dz;
+
+			if (distSq < 64.0f) {
+				obj->SetScale({ 0.0f, 0.0f, 0.0f });
+			} else {
+				obj->SetScale(cloud.localScales[i]);
+			}
+		}
+	}
 }
