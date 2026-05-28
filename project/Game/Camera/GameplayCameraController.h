@@ -64,6 +64,12 @@ public:
     /// </summary>
     void ResetCamera(Camera* camera,Player*player, const StageMap& stageMap, int stageIndex);
 
+    bool IsWallTransparencyEnabled() const { return enableWallTransparency_; }
+
+    float GetWallTransparencyAlpha() const {
+        return wallTransparencyAlpha_;
+    }
+
 private:
     void ApplyCamera(Camera* camera);
 private:
@@ -90,7 +96,7 @@ private:
 
     bool cameraDirty_ = true;
 
-    int currentStageIndex_ = 0;
+    
     float initialPivotYOffset_ = 8.0f;
     bool followPlayerMode_ = false;
 
@@ -101,6 +107,18 @@ private:
         float heightRate;
         float fov;
         float pivotYRate;
+
+        bool enableWallTransparency;
+
+        float wallTransparencyAlpha;
     };
 
+    //透過させるか
+    bool enableWallTransparency_ = true;
+
+    //透過の強さ
+    float wallTransparencyAlpha_ = 0.25f;
+
+    public:
+        int currentStageIndex_ = 0;
 };
