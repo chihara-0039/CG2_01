@@ -484,9 +484,7 @@ void MyGame::Update() {
         stageRenderer_->SetCamera(view, proj);
         stageRenderer_->Update(stageMap_, lightVP);
     }
-    if (stageRenderer_ && player_ && camera) {
-        stageRenderer_->UpdateWallTransparency(camera->GetPosition(), player_->GetPosition(),gameplayCameraController_.IsWallTransparencyEnabled(),gameplayCameraController_.GetWallTransparencyAlpha(),stageSelect_->GetSelectedIndex());
-    }
+    
 
     stageRenderer_->UpdateCloudTransparency(
         camera->GetPosition(),

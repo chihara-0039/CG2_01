@@ -552,7 +552,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::KeyBlock,
                 BlockType::TimedBlock,     // 🌟 追加
                 BlockType::OnBlock,
-                BlockType::OffBlock
+                BlockType::OffBlock,
+                BlockType::TransparentBlock
             }
         },
         {

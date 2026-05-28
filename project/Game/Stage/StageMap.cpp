@@ -664,6 +664,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     case BlockType::IceBlock:
     case BlockType::KeyBlock:    // 鍵ブロックは通り抜けられない
     case BlockType::PBlock:
+    case BlockType::TransparentBlock:
     cell.isSolid = true;
     break;
 
@@ -708,10 +709,6 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
         // スイッチ自体は叩く必要があるので常に当たり判定を持たせる
         cell.isSolid = false;
         break;
-
-    default:
-    cell.isSolid = false;
-    break;
     }
 
     return cell;
