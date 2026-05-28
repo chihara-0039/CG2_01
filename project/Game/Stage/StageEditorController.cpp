@@ -1,4 +1,4 @@
-
+﻿
 #include "StageEditorController.h"
 #include <cmath>
 #include <algorithm>
@@ -167,11 +167,6 @@ void StageEditorController::Update(Input* input, StageMap& stageMap, StageRender
         holdFrame_ = 0;
     }
 
-    // 1. カーソル操作 (WASD / QE)
-    HandleCursorInput(input, stageMap, mapCursor, lightCamera, camera);
-
-    // 2. エディタカメラ操作 (IJKL / UO)
-    HandleCameraInput(input, camera);
 
     // 3. ブロック配置 (Enter)
     if (input->TriggerKey(DIK_RETURN) || RepeatKey(input, DIK_RETURN, 20, 5)) {
@@ -187,6 +182,11 @@ void StageEditorController::Update(Input* input, StageMap& stageMap, StageRender
             }
         }
     }
+    // 1. カーソル操作 (WASD / QE)
+    HandleCursorInput(input, stageMap, mapCursor, lightCamera, camera);
+
+    // 2. エディタカメラ操作 (IJKL / UO)
+    HandleCameraInput(input, camera);
 
     // 5. ブロック回転 (Rキー)
     if (input->TriggerKey(DIK_R)) {
