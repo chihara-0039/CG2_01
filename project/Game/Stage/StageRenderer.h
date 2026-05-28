@@ -43,6 +43,9 @@ public:
 
     void Clear();
 
+    // StageRenderer.h
+    void ApplyOnOffVisualState(const StageMap& stageMap);
+
 private:
     Object3dCommon* object3dCommon_ = nullptr;
 
@@ -64,6 +67,10 @@ private:
     // 中間地点
     std::unique_ptr<Model> checkpointModel_;
     std::unique_ptr<Model> spikeModel_;
+    // ONOFFブロックとスイッチ
+    std::unique_ptr<Model> onBlockModel_;
+    std::unique_ptr<Model> offBlockModel_;
+    std::unique_ptr<Model> onOffSwichModel_;
 
     struct CloudInstance {
         std::vector<std::unique_ptr<Object3d>> objects; // 雲を構成する球体オブジェクトのリスト

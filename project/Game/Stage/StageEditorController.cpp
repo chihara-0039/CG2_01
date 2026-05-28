@@ -550,7 +550,9 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::IceBlock,
                 BlockType::MovingFloor,
                 BlockType::KeyBlock,
-                BlockType::TimedBlock      // 🌟 追加
+                BlockType::TimedBlock,     // 🌟 追加
+                BlockType::OnBlock,
+                BlockType::OffBlock
             }
         },
         {
@@ -562,7 +564,8 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
                 BlockType::Goal,
                 BlockType::Door,
                 BlockType::PSwitch,
-                BlockType::Key
+                BlockType::Key,
+                BlockType::OnOffSwitch
             }
         },
         {
