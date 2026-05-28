@@ -356,6 +356,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				}
 				break;
 
+				
+
 				// ブロックの種類が Ladder（はしご）の場合
 				case BlockType::Ladder:
 				{
@@ -563,6 +565,9 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
 					// 2. 生成に成功したら、更新用のリストに「オブジェクト」と「セルのインデックス」を記録
 					if (newObj) {
+
+						newObj->SetColor({ 1.0f,1.0f,1.0f,1.0f });
+
 						MovingFloorInstance instance;
 						instance.object = newObj;
 						instance.cellIndex = { x, y, z }; // 現在ループで走査中の [x, y, z]
@@ -709,6 +714,23 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					}
 				}
 					break;
+
+				case BlockType::TransparentBlock:
+				{
+					Object3d* obj = CreateStageObject(
+						wallModel_.get(),
+						position,
+						blockScale_,
+						{ 0.0f, 0.0f, 0.0f },
+						BlockType::TransparentBlock
+					);
+
+					if (obj) {
+						obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.35f });
+					}
+				}
+				break;
+
 				// ブロックの種類が不明な場合は何もしない
 				default:
 				break;
@@ -717,7 +739,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 		}
 	}
 	// リビルド後にインスタンス描画グループを再構築する
-	BuildRenderGroups();
+	RebuildTransparencyGroups();
 }
 
 // カメラ設定を全てのオブジェクトに伝える
@@ -1212,7 +1234,10 @@ void StageRenderer::SetPlacementPreview(
 		if (type == BlockType::Wall) {
 			colorR = 1.0f; colorG = 0.4f; colorB = 0.4f;
 			targetModel = wallModel_.get();
-		} else if (type == BlockType::Ladder) {
+		} else if (type == BlockType::TransparentBlock) {
+			colorR = 1.0f; colorG = 1.0f; colorB = 1.0f;
+			targetModel = wallModel_.get();
+		}else if (type == BlockType::Ladder) {
 			colorR = 0.4f; colorG = 1.0f; colorB = 0.4f;
 			targetModel = ladderModel_.get();
 		} else if (type == BlockType::Ground) {
@@ -1352,6 +1377,14 @@ Object3d* StageRenderer::CreateStageObject(
 		obj->SetEmissive(0.0f);
 		obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 		break;
+
+	case BlockType::TransparentBlock:
+		obj->SetShininess(0.4f);
+		obj->SetMetallic(0.0f);
+		obj->SetEmissive(0.0f);
+		obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.35f });
+		break;
+
 	case BlockType::Ladder:
 		obj->SetShininess(0.5f);
 		obj->SetMetallic(0.2f);
@@ -1377,6 +1410,7 @@ Object3d* StageRenderer::CreateStageObject(
 		obj->SetShininess(0.7f);
 		obj->SetMetallic(0.4f);
 		obj->SetEmissive(0.0f);
+		obj->SetColor({ 1.0f,1.0f,1.0f,1.0f });
 		break;
 	case BlockType::PSwitch:
 	case BlockType::PBlock:
@@ -1598,12 +1632,42 @@ void StageRenderer::RebuildTransparencyGroups()
 		RenderInstance inst;
 		inst.object = obj;
 		inst.index = index;
+
+		size_t instanceIndex = targetGroup->instances.size();
 		targetGroup->instances.push_back(inst);
-		};
+
+		// ★通常描画グループだけ MarkDirty 用マップに登録
+		if (&groups == &renderGroups_) {
+			size_t groupIndex = 0;
+			for (size_t i = 0; i < renderGroups_.size(); ++i) {
+				if (&renderGroups_[i] == targetGroup) {
+					groupIndex = i;
+					break;
+				}
+			}
+			objectToInstanceMap_[obj] = { groupIndex, instanceIndex };
+		}
+	};
+
+	auto IsMovingFloorObject = [&](Object3d* obj) {
+		for (const auto& instance : movingFloorInstances_) {
+			if (instance.object == obj) {
+				return true;
+			}
+		}
+		return false;
+	};
 
 	for (size_t i = 0; i < activeObjectCount_; ++i) {
 		Object3d* obj = objects_[i].get();
 		if (!obj || !obj->GetModel()) continue;
+
+		// ★最重要：MovingFloorは絶対に通常描画
+		if (IsMovingFloorObject(obj)) {
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+			AddToGroups(renderGroups_, obj, i);
+			continue;
+		}
 
 		const auto& mat = obj->GetMaterial();
 
@@ -1675,7 +1739,7 @@ void StageRenderer::RebuildTransparencyGroups()
 
 			group.isDirty = false;
 		}
-		};
+	};
 
 	BuildGroupData(renderGroups_);
 	BuildGroupData(transparentRenderGroups_);

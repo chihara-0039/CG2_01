@@ -31,7 +31,8 @@ enum class BlockType : uint32_t {
 	TimedBlock,      // 🌟 追加：時間差ブロック
     OnOffSwitch,    // 🔴 追加：ON/OFF切り替えスイッチ
     OnBlock,        // 🔴 追加：ONの時に実体化するブロック（赤）
-    OffBlock        // 🔵 追加：OFFの時に実体化するブロック（青）
+    OffBlock,      // 🔵 追加：OFFの時に実体化するブロック（青）
+    TransparentBlock
 };
 
 struct MovingFloorRef {
@@ -48,33 +49,34 @@ struct EnemyRef {
 
 inline const char* BlockTypeToString(BlockType type) {
     switch (type) {
-    case BlockType::None:           return "None";
-    case BlockType::Ground:         return "Ground";
-    case BlockType::Wall:           return "Wall";
-    case BlockType::Ladder:         return "Ladder";
-    case BlockType::Star:           return "Star";
-    case BlockType::BubblePickup:   return "BubblePickup";
-    case BlockType::Goal:           return "Goal";
-    case BlockType::PlayerStart:    return "PlayerStart";
-    case BlockType::Door:           return "Door";
-    case BlockType::PSwitch:        return "PSwitch";
-    case BlockType::PBlock:         return "PBlock";
-    case BlockType::CrumblingFloor: return "CrumblingFloor";
-    case BlockType::IceBlock:       return "IceBlock";
-    case BlockType::MovingFloor:    return "MovingFloor";
-    case BlockType::Key:            return "Key";
-    case BlockType::KeyBlock:       return "KeyBlock";
-    case BlockType::Spike:          return "Spike";
-    case BlockType::EnemyWalker:    return "EnemyWalker";
-    case BlockType::EnemyFlyer:     return "EnemyFlyer";
-    case BlockType::EnemyChaser:    return "EnemyChaser";
-    case BlockType::PBlockAppears:  return "PBlock (On)"; // 🌟 追加
-	case BlockType::Checkpoint:     return "Checkpoint";
-	case BlockType::TimedBlock:     return "TimedBlock"; // 🌟 追加
-    case BlockType::OnOffSwitch:    return "OnOffSwitch";
-    case BlockType::OnBlock:        return "OnBlock";
-    case BlockType::OffBlock:       return "OffBlock";
-    default:                        return "Unknown";
+    case BlockType::None:              return "None";
+    case BlockType::Ground:            return "Ground";
+    case BlockType::Wall:              return "Wall";
+    case BlockType::Ladder:            return "Ladder";
+    case BlockType::Star:              return "Star";
+    case BlockType::BubblePickup:      return "BubblePickup";
+    case BlockType::Goal:              return "Goal";
+    case BlockType::PlayerStart:       return "PlayerStart";
+    case BlockType::Door:              return "Door";
+    case BlockType::PSwitch:           return "PSwitch";
+    case BlockType::PBlock:            return "PBlock";
+    case BlockType::CrumblingFloor:    return "CrumblingFloor";
+    case BlockType::IceBlock:          return "IceBlock";
+    case BlockType::MovingFloor:       return "MovingFloor";
+    case BlockType::Key:               return "Key";
+    case BlockType::KeyBlock:          return "KeyBlock";
+    case BlockType::Spike:             return "Spike";
+    case BlockType::EnemyWalker:       return "EnemyWalker";
+    case BlockType::EnemyFlyer:        return "EnemyFlyer";
+    case BlockType::EnemyChaser:       return "EnemyChaser";
+    case BlockType::PBlockAppears:     return "PBlock (On)"; // 🌟 追加
+	case BlockType::Checkpoint:        return "Checkpoint";
+	case BlockType::TimedBlock:        return "TimedBlock"; // 🌟 追加
+    case BlockType::OnOffSwitch:       return "OnOffSwitch";
+    case BlockType::OnBlock:           return "OnBlock";
+    case BlockType::OffBlock:          return "OffBlock";
+    case BlockType::TransparentBlock:  return "TransparentBrock";
+    default:                           return "Unknown";
     }
 }
 
