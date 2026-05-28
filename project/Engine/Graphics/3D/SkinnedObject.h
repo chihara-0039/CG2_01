@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "SkinnedModel.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
@@ -208,3 +208,5 @@ private:
     std::vector<std::unique_ptr<Object3d>> jointVisuals_; // 各関節の位置を示すキューブ
     std::vector<std::unique_ptr<Object3d>> boneVisuals_;  // 親子関節をつなぐ棒
 };
+
+

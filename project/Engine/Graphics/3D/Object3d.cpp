@@ -1,4 +1,4 @@
-#include "Object3d.h"
+﻿#include "Object3d.h"
 #include "TextureManager.h" // GetSrvHandleGPUを使うために必要
 #include <cassert>
 
@@ -63,13 +63,13 @@ void Object3d::Draw() {
     if (!model_) return;
     auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
 
-    // 0. Material
+    // 0. マテリアル
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
-    // 1. Transform
+    // 1. Transform (トランスフォーム)
     commandList->SetGraphicsRootConstantBufferView(1, transformationResource_->GetGPUVirtualAddress());
-    // 2. Light (Commonが持つ)
+    // 2. Light (平行光源) (Commonが持つ)
     commandList->SetGraphicsRootConstantBufferView(2, object3dCommon_->GetLightGPUVirtualAddress());
-    // 3. Texture
+    // 3. Texture (テクスチャ)
     // ★ここが修正ポイント: Common経由でTextureManagerを呼び出す
     if (object3dCommon_->GetTextureManager()) {
         auto gpuHandle = object3dCommon_->GetTextureManager()->GetSrvHandleGPU(model_->GetTextureHandle());
@@ -94,3 +94,4 @@ void Object3d::DrawShadow(const Matrix4x4& lightViewProjection) {
     // モデル（頂点バッファ）の描画。引数に commandList が必要です
     model_->Draw(commandList);
 }
+

@@ -1,4 +1,4 @@
-#include "Model.h"
+﻿#include "Model.h"
 #include <fstream>
 #include <sstream>
 #include <cassert>
@@ -217,3 +217,4 @@ void Model::DrawInstanced(ID3D12GraphicsCommandList* commandList, UINT instanceC
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList->DrawInstanced(UINT(vertices_.size()), instanceCount, 0, 0);
 }
+

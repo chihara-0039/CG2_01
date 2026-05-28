@@ -1,4 +1,4 @@
-#include "ModelManager.h"
+﻿#include "ModelManager.h"
 
 // 静的メンバの定義
 Object3dCommon* ModelManager::common_ = nullptr;
@@ -51,3 +51,4 @@ void ModelManager::Finalize() {
     // 使い回し用オブジェクトも忘れずに削除
     internalObject_.reset();
 }
+

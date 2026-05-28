@@ -1,21 +1,24 @@
-#pragma once
+﻿#pragma once
 #include "Model.h"
 #include "MyMath.h"
 #include <vector>
 #include <string>
 #include <memory>
 
-// スキンウェイト情報 (頂点あたり最大4つの影響ボーン)
-struct VertexInfluence {
-    int jointIndices[4] = { -1, -1, -1, -1 };
-    float weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+// スキニング用頂点データ (GPUへ転送する構造体)
+struct SkinnedVertexData {
+    Vector4 position; // ローカル座標 (xyz + w=1.0)
+    Vector2 texcoord; // UV 座標 (0.0?1.0)
+    Vector3 normal;   // 法線ベクトル (正規化済み)
+    int32_t jointIndices[4]; // 影響を受けるボーンのインデックス
+    float   weights[4];      // ウェイト
 };
 
 // ボーン (ジョイント) 構造体
 struct Joint {
     std::string name;
     Vector3 translation; // 親からの相対位置 (初期位置)
-    Vector3 rotation;    // 回転角 (オイラー角: ラジアン)
+    Vector3 rotation;    // 回転 (オイラー角 ラジアン)
     Vector3 scale;       // スケール
     Quaternion rotationQuat = { 0.0f, 0.0f, 0.0f, 1.0f }; // クォータニオン回転
     bool isQuaternion = false; // クォータニオンでの更新を行うか
@@ -59,6 +62,16 @@ public:
 
     // glTFファイルから初期化
     void InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager);
+    void CreateBuffers(DirectXCommon* dxCommon);
+
+    // ゲッター群
+    const std::vector<Joint>& GetJoints() const { return joints_; }
+    uint32_t GetTextureHandle() const { return textureHandle_; }
+
+    // D3D12 描画用バッファビュー
+    const D3D12_VERTEX_BUFFER_VIEW& GetVertexBufferView() const { return vertexBufferView_; }
+    ID3D12Resource* GetJointBuffer() const { return jointBuffer_.Get(); }
+    size_t GetVertexCount() const { return skinnedVertices_.size(); }
 
     // アニメーション/ポーズの更新とスキニング計算
     void Update(DirectXCommon* dxCommon);
@@ -68,57 +81,66 @@ public:
 
     // ボーンの取得・設定
     std::vector<Joint>& GetJoints() { return joints_; }
-    const std::vector<Joint>& GetJoints() const { return joints_; }
     
     // 描画用のModelポインタを取得
     Model* GetModel() const { return model_.get(); }
 
     // ポーズをデフォルトに戻す
     void ResetPose();
-
-    // 簡易的な走るアニメーションなどを適用する
-    void ApplyTestAnimation(float time, float speed = 1.0f);
-
-    // アニメーションデータ操作
-    void AddKeyframe(float time);
-    void ClearKeyframes();
     bool SaveMotion(const std::string& filePath);
     bool LoadMotion(const std::string& filePath);
     void ApplyMotion(float time);
+    const std::string& GetName() const { return name_; }
+    void ClearKeyframes();
     void GenerateWalkPreset();
     void GenerateRunPreset();
-
-    // ゲッター・セッター
-    float GetMotionDuration() const;
-    void SetMotionDuration(float duration);
-    const MotionData& GetMotionData() const;
-    MotionData& GetMotionData();
-
-    // 複数モーション対応のゲッター・セッター
-    const std::vector<MotionData>& GetMotions() const { return motions_; }
-    std::vector<MotionData>& GetMotions() { return motions_; }
     int GetActiveMotionIndex() const { return activeMotionIndex_; }
     void SetActiveMotionIndex(int index);
+    const std::vector<MotionData>& GetMotions() const { return motions_; }
+    const std::string& GetActiveMotionName() const { return GetMotionData().name; }
+    float GetMotionDuration() const;
+    void SetMotionDuration(float duration);
+
+    // 簡易的なアニメーション (テスト用)
+    void ApplyTestAnimation(float time, float speed = 1.0f);
+
+    // 現在のボーン状態をキーフレームとして追加 (アニメーション作成用)
+    void AddKeyframe(float time);
+    
+    // 特定のモーションを再生開始
+    void PlayAnimation(const std::string& animationName);
+    
+    // アニメーションを評価し、時間 time におけるポーズを joints_ に適用する
+    void EvaluateAnimation(float time);
+
+    MotionData& GetMotionData();
+    const MotionData& GetMotionData() const;
 
 private:
-    // 人型メッシュとスケルトンの生成
     void CreateHumanoidSkeleton();
     void GenerateHumanoidMesh();
-
-    // メッシュにウェイトを割り当てるヘルパー
     void AddCubeMesh(const Vector3& center, const Vector3& size, int jointIndex);
-    // 関節部分のウェイトを滑らかにブレンドする処理
     void SmoothWeights();
 
 private:
     std::vector<Joint> joints_;
-    std::vector<ModelVertexData> bindPoseVertices_; // 初期姿勢の頂点データ
-    std::vector<VertexInfluence> influences_;        // 頂点ウェイトデータ
-    
-    std::vector<ModelVertexData> animatedVertices_; // スキニング変形後の頂点データ
+    std::vector<SkinnedVertexData> skinnedVertices_; // GPUに転送するスキニング用頂点データ
 
-    std::unique_ptr<Model> model_;                  // 内部描画用モデル
+    // GPU バッファ
+    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> jointBuffer_;
+    D3D12_VERTEX_BUFFER_VIEW               vertexBufferView_{};
 
-    std::vector<MotionData> motions_;               // 読み込まれた複数のモーションデータ
-    int activeMotionIndex_ = -1;                    // 現在再生中のモーションインデックス
+    std::string name_ = "SkinnedModel";
+    std::unique_ptr<Model> model_;                  // デバッグ描画や互換性のために保持
+    uint32_t textureHandle_ = 0;                    // テクスチャハンドル
+
+    std::vector<MotionData> motions_;               // 読み込まれたアニメーションデータ
+    int activeMotionIndex_ = -1;                    // 現在再生中のアニメーションインデックス
 };
+
+
+
+
+
+

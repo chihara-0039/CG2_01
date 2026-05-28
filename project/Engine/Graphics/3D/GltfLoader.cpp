@@ -1,4 +1,4 @@
-#define NOMINMAX
+﻿#define NOMINMAX
 #define _CRT_SECURE_NO_WARNINGS
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -29,8 +29,7 @@ bool GltfLoader::LoadGltfModel(
     DirectXCommon* dxCommon,
     TextureManager* textureManager,
     const std::string& filePath,
-    std::vector<ModelVertexData>& outVertices,
-    std::vector<VertexInfluence>& outInfluences,
+    std::vector<SkinnedVertexData>& outVertices,
     std::vector<Joint>& outJoints,
     std::vector<MotionData>& outMotions,
     std::string& outTexturePath
@@ -183,7 +182,6 @@ bool GltfLoader::LoadGltfModel(
 
     // 3. メッシュ（頂点・インデックス・スキンウェイト）のパース
     outVertices.clear();
-    outInfluences.clear();
 
     for (const auto& mesh : model.meshes) {
         for (const auto& prim : mesh.primitives) {
@@ -285,7 +283,7 @@ bool GltfLoader::LoadGltfModel(
                 for (int i = 0; i < 3; ++i) {
                     uint32_t vIdx = idx[i];
 
-                    ModelVertexData v{};
+                    SkinnedVertexData v{};
                     v.position = { posData[vIdx * 3 + 0], posData[vIdx * 3 + 1], posData[vIdx * 3 + 2], 1.0f };
                     // 右手系から左手系へ変換（Z反転）
                     v.position.z *= -1.0f;
@@ -299,25 +297,23 @@ bool GltfLoader::LoadGltfModel(
                         v.texcoord = { uvData[vIdx * 2 + 0], 1.0f - uvData[vIdx * 2 + 1] };
                     }
 
-                    outVertices.push_back(v);
-
-                    VertexInfluence inf{};
                     if (!jointIndicesData.empty() && !weightsData.empty()) {
                         float wSum = 0.0f;
                         for (int c = 0; c < 4; ++c) {
-                            inf.jointIndices[c] = static_cast<int>(jointIndicesData[vIdx * 4 + c]);
-                            inf.weights[c] = weightsData[vIdx * 4 + c];
-                            wSum += inf.weights[c];
+                            v.jointIndices[c] = static_cast<int>(jointIndicesData[vIdx * 4 + c]);
+                            v.weights[c] = weightsData[vIdx * 4 + c];
+                            wSum += v.weights[c];
                         }
                         // ウェイト正規化
                         if (wSum > 0.0f) {
-                            for (int c = 0; c < 4; ++c) inf.weights[c] /= wSum;
+                            for (int c = 0; c < 4; ++c) v.weights[c] /= wSum;
                         }
                     } else {
-                        inf.jointIndices[0] = 0;
-                        inf.weights[0] = 1.0f;
+                        v.jointIndices[0] = 0; v.jointIndices[1] = 0; v.jointIndices[2] = 0; v.jointIndices[3] = 0;
+                        v.weights[0] = 1.0f; v.weights[1] = 0.0f; v.weights[2] = 0.0f; v.weights[3] = 0.0f;
                     }
-                    outInfluences.push_back(inf);
+
+                    outVertices.push_back(v);
                 }
             }
         } // end for prim
@@ -424,3 +420,5 @@ bool GltfLoader::LoadGltfModel(
 
     return true;
 }
+
+
