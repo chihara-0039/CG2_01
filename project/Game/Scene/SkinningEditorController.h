@@ -101,17 +101,19 @@ private:
     // ========== 内部処理 ==========
 
     /// <summary>
-    /// Resources/Models 以下の .gltf / .glb ファイルを再帰スキャンし、
+    /// Resources/Models 以下の .gltf / .glb / .obj ファイルを再帰スキャンし、
     /// modelPaths_ / modelNames_ に追加する。
     /// インデックス 0 : Default Humanoid (組み込みスキニング人型)
-    /// インデックス 1 : Default Player (.obj 静止モデル)
-    /// インデックス 2以降 : スキャンした glTF ファイル
+    /// インデックス 1以降 : スキャンした OBJ ファイル
+    /// その後      : スキャンした glTF ファイル
     /// </summary>
     void ScanGltfModels();
 
     /// <summary>
-    /// 指定インデックスのモデルをプレビュー SkinnedObject にロードする。
-    /// インデックス 0/1 はデフォルト人型、2 以降は glTF ファイルから初期化する。
+    /// 指定インデックスのモデルをプレビューにロードする。
+    /// インデックス 0      : デフォルトスキニング人型 (SkinnedObject)
+    /// OBJ インデックス    : Object3d で OBJ を表示 (isObjPreviewMode_ = true)
+    /// glTF インデックス  : SkinnedObject で glTF を表示
     /// </summary>
     void ChangePreviewModel(int index);
 
@@ -126,16 +128,25 @@ private:
 private:
     // ========== 所有リソース ==========
 
-    std::unique_ptr<SkinnedObject>           skinnedObject_;  ///< スキニングプレビュー用オブジェクト
+    std::unique_ptr<SkinnedObject>           skinnedObject_;  ///< スキニングプレビュー用オブジェクト (glTF)
     std::unique_ptr<Model>                   debugCubeModel_; ///< スケルトン描画用のデバッグ立方体モデル
     std::vector<std::unique_ptr<Object3d>>   gridLines_;      ///< 地面補助グリッド線のオブジェクト群
 
+    // OBJ モデルをプレビューするための Object3d と Model
+    // isObjPreviewMode_ が true のとき skinnedObject_ の代わりにこちらを使う
+    std::unique_ptr<Object3d> objPreviewObject_;  ///< OBJ プレビュー用の Object3d
+    std::unique_ptr<Model>    objPreviewModel_;   ///< OBJ プレビュー用の Model
+    bool                      isObjPreviewMode_ = false; ///< OBJ モード中かどうか
+
     // ========== モデルリスト ==========
 
-    std::vector<std::string> modelPaths_; ///< ファイルパス (glTF は実際のパス, Default 系は識別子)
+    std::vector<std::string> modelPaths_; ///< ファイルパス (OBJ/glTF は実際のパス, Default は識別子)
     std::vector<std::string> modelNames_; ///< UI 表示用のモデル名
-    int selectedModelIndex_   = 0;        ///< 現在プレビュー中のモデルインデックス
-    int activeGameModelIndex_ = 1;        ///< ゲームに反映済みのモデルインデックス (初期: OBJ)
+    // OBJ と glTF の境界インデックスを記録しておく (ChangePreviewModel での分岐に使用)
+    int objStartIndex_  = 1;  ///< OBJ ファイルが始まるインデックス (通常 1)
+    int gltfStartIndex_ = 0;  ///< glTF ファイルが始まるインデックス (スキャン後に確定)
+    int selectedModelIndex_   = 0; ///< 現在プレビュー中のモデルインデックス
+    int activeGameModelIndex_ = 0; ///< ゲームに反映済みのモデルインデックス
 
     // ========== 非所有ポインタ (依存参照) ==========
 
