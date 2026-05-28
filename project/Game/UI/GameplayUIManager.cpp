@@ -39,6 +39,24 @@ void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* text
     doorPromptObject_->SetEnableLighting(false);
     doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
 
+    pSwitchPromptObject_ = std::make_unique<Object3d>();
+    pSwitchPromptObject_->Initialize(object3dCommon);
+    pSwitchPromptObject_->SetModel(doorPromptModel_.get());
+    pSwitchPromptObject_->SetEnableLighting(false);
+    pSwitchPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    keyPromptObject_ = std::make_unique<Object3d>();
+    keyPromptObject_->Initialize(object3dCommon);
+    keyPromptObject_->SetModel(doorPromptModel_.get());
+    keyPromptObject_->SetEnableLighting(false);
+    keyPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    keyBlockPromptObject_ = std::make_unique<Object3d>();
+    keyBlockPromptObject_->Initialize(object3dCommon);
+    keyBlockPromptObject_->SetModel(doorPromptModel_.get());
+    keyBlockPromptObject_->SetEnableLighting(false);
+    keyBlockPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
+
     // はしご用3D UI
     ladderPromptModel_ = std::unique_ptr<Model>(
         Model::CreateFromOBJ(
@@ -74,6 +92,9 @@ void GameplayUIManager::Update(bool isGamePlayMode, Player* player, Camera* came
     /*UpdateCameraGuideSprites(isGamePlayMode);*/
     UpdateDoorPrompt3D(isGamePlayMode, player, camera, lightCamera);
     UpdateLadderPrompt3D(isGamePlayMode, player, camera, lightCamera);
+    UpdatePSwitchPrompt3D(isGamePlayMode, player, camera, lightCamera);
+    UpdateKeyPrompt3D(isGamePlayMode, player, camera, lightCamera);
+    UpdateKeyBlockPrompt3D(isGamePlayMode, player, camera, lightCamera);
 
     if (cameraModeStageSprite_) {
         cameraModeStageSprite_->Update();
@@ -112,6 +133,76 @@ void GameplayUIManager::UpdateDoorPrompt3D(bool isGamePlayMode, Player* player, 
     );
     doorPromptObject_->Update(
         lightCamera->GetViewProjectionMatrix()
+    );
+}
+
+static void UpdatePromptObject3D(
+    Object3d* object,
+    const Vector3& pos,
+    Camera* camera,
+    LightCamera* lightCamera)
+{
+    if (!object || !camera || !lightCamera) {
+        return;
+    }
+
+    object->SetPosition(pos);
+    object->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    Vector3 camPos = camera->GetPosition();
+
+    float angleY = std::atan2f(
+        camPos.x - pos.x,
+        camPos.z - pos.z
+    );
+
+    object->SetRotation({ 0.0f, angleY, 0.0f });
+    object->SetCamera(
+        camera->GetViewMatrix(),
+        camera->GetProjectionMatrix()
+    );
+    object->Update(lightCamera->GetViewProjectionMatrix());
+}
+
+void GameplayUIManager::UpdatePSwitchPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera)
+{
+    if (!isGamePlayMode || !player || !player->IsNearPSwitch()) {
+        return;
+    }
+
+    UpdatePromptObject3D(
+        pSwitchPromptObject_.get(),
+        player->GetNearPSwitchWorldPos(),
+        camera,
+        lightCamera
+    );
+}
+
+void GameplayUIManager::UpdateKeyPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera)
+{
+    if (!isGamePlayMode || !player || !player->IsNearKey()) {
+        return;
+    }
+
+    UpdatePromptObject3D(
+        keyPromptObject_.get(),
+        player->GetNearKeyWorldPos(),
+        camera,
+        lightCamera
+    );
+}
+
+void GameplayUIManager::UpdateKeyBlockPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera)
+{
+    if (!isGamePlayMode || !player || !player->IsNearKeyBlock()) {
+        return;
+    }
+
+    UpdatePromptObject3D(
+        keyBlockPromptObject_.get(),
+        player->GetNearKeyBlockWorldPos(),
+        camera,
+        lightCamera
     );
 }
 
@@ -348,8 +439,16 @@ void GameplayUIManager::Draw3DPrompts(bool isGamePlayMode, Player* player, Objec
 
     bool drawDoorPrompt = doorPromptObject_ && player->IsNearDoor();
     bool drawLadderPrompt = ladderPromptObject_ && player->IsOnLadder();
+    bool drawPSwitchPrompt = pSwitchPromptObject_ && player->IsNearPSwitch();
+    bool drawKeyPrompt = keyPromptObject_ && player->IsNearKey();
+    bool drawKeyBlockPrompt = keyBlockPromptObject_ && player->IsNearKeyBlock();
 
-    if (drawDoorPrompt || drawLadderPrompt) {
+    if (drawDoorPrompt ||
+        drawLadderPrompt ||
+        drawPSwitchPrompt ||
+        drawKeyPrompt ||
+        drawKeyBlockPrompt) {
+
         object3dCommon->PreDrawPlayerHighlight();
 
         if (drawDoorPrompt) {
@@ -358,15 +457,28 @@ void GameplayUIManager::Draw3DPrompts(bool isGamePlayMode, Player* player, Objec
         if (drawLadderPrompt) {
             ladderPromptObject_->Draw();
         }
+        if (drawPSwitchPrompt) {
+            pSwitchPromptObject_->Draw();
+        }
+        if (drawKeyPrompt) {
+            keyPromptObject_->Draw();
+        }
+        if (drawKeyBlockPrompt) {
+            keyBlockPromptObject_->Draw();
+        }
 
         object3dCommon->PreDraw();
         commandList->SetGraphicsRootDescriptorTable(4, shadowSrvHandle);
     }
+    
 }
 
 void GameplayUIManager::Finalize() {
     doorPromptObject_.reset();
     doorPromptModel_.reset();
+    pSwitchPromptObject_.reset();
+    keyPromptObject_.reset();
+    keyBlockPromptObject_.reset();
     ladderPromptObject_.reset();
     ladderPromptModel_.reset();
     cameraGuideLeftSprite_.reset();

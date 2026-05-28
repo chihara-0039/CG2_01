@@ -25,6 +25,10 @@ private:
     void UpdateDoorPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
     void UpdateLadderPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
     
+    //新たにPスイッチ・鍵・鍵ブロック追加
+    void UpdatePSwitchPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
+    void UpdateKeyPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
+    void UpdateKeyBlockPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
 
     SpriteCommon* spriteCommon_ = nullptr;
 
@@ -51,6 +55,11 @@ private:
     // はしご用3D UI
     std::unique_ptr<Model> ladderPromptModel_;
     std::unique_ptr<Object3d> ladderPromptObject_;
+
+    //鍵・Pスイッチ・鍵ブロック
+    std::unique_ptr<Object3d> pSwitchPromptObject_;
+    std::unique_ptr<Object3d> keyPromptObject_;
+    std::unique_ptr<Object3d> keyBlockPromptObject_;
 
     //文字ふわふわ演出用
     float cameraGuideTime_ = 0.0f;
