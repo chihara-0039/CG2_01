@@ -34,7 +34,7 @@ struct DirectionalLight {
 };
 
 // ==============================================================
-//  Object3dCommon
+//  SkinnedObjectCommon
 //
 //  繧ｷ繝ｼ繝ｳ蜀・・蜈ｨ 3D 繧ｪ繝悶ず繧ｧ繧ｯ繝医′蜈ｱ譛峨☆繧区緒逕ｻ繝ｪ繧ｽ繝ｼ繧ｹ繧堤ｮ｡逅・☆繧九け繝ｩ繧ｹ縲・
 //
@@ -61,7 +61,7 @@ struct DirectionalLight {
 //  繧､繝ｳ繧ｹ繧ｿ繝ｳ繧ｷ繝ｳ繧ｰ PSO : 蜷後§繝｢繝・Ν繧定､・焚縺ｾ縺ｨ繧√※ 1 繝峨Ο繝ｼ繧ｳ繝ｼ繝ｫ縺ｧ謠上￥縺溘ａ縺ｮ PSO縲・
 //  蜊企乗・繧､繝ｳ繧ｹ繧ｿ繝ｳ繧ｷ繝ｳ繧ｰ PSO : 繝悶Ο繝・け縺ｮ蜊企乗・陦ｨ遉ｺ逕ｨ縲・
 // ==============================================================
-class Object3dCommon {
+class SkinnedObjectCommon {
 public:
     // -------------------------------------------------------
     //  蛻晄悄蛹悶３ootSignature / PSO / LightBuffer 繧堤函謌舌☆繧九・
@@ -96,7 +96,6 @@ public:
     /// 縺薙％縺ｧ null 縺瑚ｿ斐ｋ蝣ｴ蜷医・ Initialize() 縺ｧ縺ｮ PSO 逕滓・縺ｫ螟ｱ謨励＠縺ｦ縺・ｋ縲・
     /// </summary>
     ID3D12PipelineState* GetPipelineState() const { return pipelineState_.Get(); }
-    ID3D12PipelineState* GetSkinnedPipelineState() const { return skinnedPipelineState_.Get(); }
 
     /// <summary>
     /// 蠖ｱ謠冗判逕ｨ縺ｮ PSO (豺ｱ蠎ｦ蛟､縺ｮ縺ｿ譖ｸ縺崎ｾｼ繧繝ｻ繝斐け繧ｻ繝ｫ繧ｷ繧ｧ繝ｼ繝繝ｼ縺ｪ縺・縲・
@@ -179,8 +178,7 @@ private:
     // 蜷・Μ繧ｽ繝ｼ繧ｹ縺ｮ逕滓・繧貞ｽｹ蜑ｲ縺斐→縺ｫ蛻・牡縲る・分縺ｫ萓晏ｭ倬未菫ゅ′縺ゅｋ縺溘ａ豕ｨ諢上・
 
     void CreateRootSignature();             // 騾壼ｸｸ謠冗判逕ｨ RootSignature
-    void CreateGraphicsPipeline();
-    void CreateSkinnedPipeline();          // 騾壼ｸｸ謠冗判逕ｨ PSO
+    void CreateGraphicsPipeline();          // 騾壼ｸｸ謠冗判逕ｨ PSO
     void CreateLightBuffer();              // 蟷ｳ陦悟・貅舌・螳壽焚繝舌ャ繝輔ぃ
     void CreateShadowPipeline();           // 蠖ｱ謠冗判逕ｨ PSO
     void CreateInstancedRootSignature();   // 繧､繝ｳ繧ｹ繧ｿ繝ｳ繧ｷ繝ｳ繧ｰ逕ｨ RootSignature
@@ -195,8 +193,7 @@ private:
 
     // 笏笏 RootSignature / PSO 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;     // 騾壼ｸｸ謠冗判逕ｨ
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> skinnedPipelineState_;     // 騾壼ｸｸ謠冗判逕ｨ
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;     // 騾壼ｸｸ謠冗判逕ｨ
 
     // 笏笏 蟷ｳ陦悟・貅仙ｮ壽焚繝舌ャ繝輔ぃ 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     // GPU 荳翫↓遒ｺ菫昴＆繧後◆繝舌ャ繝輔ぃ縺ｫ lightData_ 繝昴う繝ｳ繧ｿ邨檎罰縺ｧ CPU 縺九ｉ譖ｸ縺崎ｾｼ繧縲・

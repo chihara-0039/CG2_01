@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "SkinnedModel.h"
 #include <string>
 #include <vector>
@@ -10,10 +10,11 @@ public:
         DirectXCommon* dxCommon,
         TextureManager* textureManager,
         const std::string& filePath,
-        std::vector<ModelVertexData>& outVertices,
-        std::vector<VertexInfluence>& outInfluences,
+        std::vector<SkinnedVertexData>& outVertices,
         std::vector<Joint>& outJoints,
         std::vector<MotionData>& outMotions,
         std::string& outTexturePath
     );
 };
+
+

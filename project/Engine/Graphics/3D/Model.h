@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "DirectXCommon.h"
 #include "TextureManager.h"
 #include "MyMath.h"
@@ -137,3 +137,4 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW               vertexBufferView_{}; // バッファの場所・サイズ・ストライドを GPU に教えるビュー
 };
+

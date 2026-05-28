@@ -1,4 +1,4 @@
-#include "ShadowMap.h"
+﻿#include "ShadowMap.h"
 #include <cassert>
 
 using namespace Microsoft::WRL;
@@ -104,3 +104,4 @@ void ShadowMap::PostDraw(ID3D12GraphicsCommandList* commandList) {
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     commandList->ResourceBarrier(1, &barrier);
 }
+

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <unordered_map>
 #include <memory>
@@ -34,3 +34,4 @@ private:
     static Matrix4x4 viewMatrix_;
     static Matrix4x4 projectionMatrix_;
 };
+

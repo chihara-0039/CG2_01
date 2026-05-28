@@ -1,4 +1,4 @@
-﻿#include "Object3dCommon.h"
+﻿#include "SkinnedObjectCommon.h"
 #include "Logger.h" // 繝ｭ繧ｰ逕ｨ
 #include <cassert>
 
@@ -6,12 +6,12 @@ using namespace Microsoft::WRL;
 
 // 繝ｫ繝ｼ繝医す繧ｰ繝阪メ繝｣縺ｨ繝代う繝励Λ繧､繝ｳ繧ｹ繝・・繝医・菴懈・縺ｫ螟ｱ謨励＠縺ｦ縺・ｋ蜿ｯ閭ｽ諤ｧ縺後≠繧九◆繧√・
 // Initialize髢｢謨ｰ縺ｫ繝ｭ繧ｰ縺ｨ繧｢繧ｵ繝ｼ繧ｷ繝ｧ繝ｳ繧定ｿｽ蜉縺励※縺ｿ縺ｾ縺吶・
-void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
+void SkinnedObjectCommon::Initialize(DirectXCommon* dxCommon) {
     assert(dxCommon);
     dxCommon_ = dxCommon;
 
     // 繝ｭ繧ｰ繧貞・縺励※騾ｲ陦檎憾豕√ｒ遒ｺ隱・
-    OutputDebugStringA("Object3dCommon::Initialize Start\n");
+    OutputDebugStringA("SkinnedObjectCommon::Initialize Start\n");
 
     CreateRootSignature();
     // 繝ｫ繝ｼ繝医す繧ｰ繝阪メ繝｣縺後〒縺阪※縺・ｋ縺九メ繧ｧ繝・け
@@ -33,8 +33,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
 
    
 
-    CreatePlayerHighlightPipeline();
-    CreateSkinnedPipeline(); // 霑ｽ蜉5/7菴仙・
+    CreatePlayerHighlightPipeline(); // 霑ｽ蜉5/7菴仙・
 
     CreateLightBuffer();
     SetDefaultLight();
@@ -50,11 +49,11 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
     //蜊企乗・繝代う繝励Λ繧､繝ｳ
     CreateInstancedAlphaPipeline();
 
-    OutputDebugStringA("Object3dCommon::Initialize Finish\n");
+    OutputDebugStringA("SkinnedObjectCommon::Initialize Finish\n");
 }
 
 // 謠冗判蜑阪・蜈ｱ騾夊ｨｭ螳・
-void Object3dCommon::PreDraw() {
+void SkinnedObjectCommon::PreDraw() {
     auto commandList = dxCommon_->GetCommandList();
 
     // 縺薙％縺ｧ關ｽ縺｡繧句ｴ蜷医！nitialize縺ｧ菴懈・螟ｱ謨励＠縺ｦ縺・ｋ
@@ -74,7 +73,7 @@ void Object3dCommon::PreDraw() {
 }
 
 
-void Object3dCommon::PreDrawPlayerHighlight() {
+void SkinnedObjectCommon::PreDrawPlayerHighlight() {
     auto commandList = dxCommon_->GetCommandList();
 
     if (!rootSignature_ || !playerHighlightPipelineState_) {
@@ -93,7 +92,7 @@ void Object3dCommon::PreDrawPlayerHighlight() {
 }
 
 // 繝ｩ繧､繝医・蛻晄悄蛟､繧定ｨｭ螳壹☆繧矩未謨ｰ
-void Object3dCommon::SetDefaultLight() {
+void SkinnedObjectCommon::SetDefaultLight() {
     if (lightData_) {
         lightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         lightData_->direction = { 0.0f, -1.0f, 0.0f };
@@ -104,7 +103,7 @@ void Object3dCommon::SetDefaultLight() {
 }
 
 // 繝ｫ繝ｼ繝医す繧ｰ繝阪メ繝｣縺ｮ菴懈・髢｢謨ｰ
-void Object3dCommon::CreateRootSignature() {
+void SkinnedObjectCommon::CreateRootSignature() {
     OutputDebugStringA("CreateRootSignature Start\n");
 
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
@@ -116,7 +115,7 @@ void Object3dCommon::CreateRootSignature() {
     // 3. Texture (テクスチャ) (PS t0)
     // 4. ShadowMap (シャドウマップ) (PS t1)
     // 5: InstanceBuffer (VS t2) - SRV (StructuredBuffer 逕ｨ)
-    D3D12_ROOT_PARAMETER rootParameters[6] = {};
+        D3D12_ROOT_PARAMETER rootParameters[6] = {};
 
     // 0. マテリアル
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -145,21 +144,25 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[3].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    // ShadowMap
+    // 4. ShadowMap (シャドウマップ)
     D3D12_DESCRIPTOR_RANGE shadowRange[1] = {};
-    shadowRange[0].BaseShaderRegister = 1; // t1 繝ｬ繧ｸ繧ｹ繧ｿ繧剃ｽｿ逕ｨ
+    shadowRange[0].BaseShaderRegister = 1; // t1
     shadowRange[0].NumDescriptors = 1;
     shadowRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     shadowRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
+    
     rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[4].DescriptorTable.pDescriptorRanges = shadowRange;
     rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(shadowRange);
-    rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // 繝斐け繧ｻ繝ｫ繧ｷ繧ｧ繝ｼ繝繝ｼ縺ｧ蠖ｱ蛻､螳壹☆繧九◆繧・
+    rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    // 5. InstanceBuffer (VS t2)
+    // 5. JointMatrices (SRV at t0 in VertexShader, wait, our shader uses t0!)
+    // Let's change our shader to use t2 for Joint Matrices instead of t0 so we don't conflict if we accidentally use t0.
+    // Wait, in my VS, I said StructuredBuffer<float4x4> gJointMatrices : register(t0);
+    // It's perfectly valid for VS to use t0 and PS to use t0, if visibility is explicitly restricted.
+    // I'll change VS to use t2 anyway.
     rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[5].Descriptor.ShaderRegister = 2;
+    rootParameters[5].Descriptor.ShaderRegister = 2; // t2
     rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
     // Sampler
@@ -198,52 +201,7 @@ void Object3dCommon::CreateRootSignature() {
 }
 
 // 繝代う繝励Λ繧､繝ｳ繧ｹ繝・・繝医・菴懈・髢｢謨ｰ
-void Object3dCommon::CreateSkinnedPipeline() {
-    auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/SkinnedObject.VS.hlsl", L"vs_6_0");
-    assert(vsBlob);
-    auto psBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3d.PS.hlsl", L"ps_6_0");
-    assert(psBlob);
-
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.pRootSignature = rootSignature_.Get();
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
-
-    D3D12_BLEND_DESC blendDesc = {};
-    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-    psoDesc.BlendState = blendDesc;
-
-    D3D12_RASTERIZER_DESC rasterizerDesc = {};
-    rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
-    rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
-    psoDesc.RasterizerState = rasterizerDesc;
-
-    psoDesc.DepthStencilState.DepthEnable = true;
-    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-
-    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.SampleDesc.Count = 1;
-    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
-    psoDesc.InputLayout.pInputElementDescs = inputElementDescs;
-    psoDesc.InputLayout.NumElements = _countof(inputElementDescs);
-
-    HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&skinnedPipelineState_));
-    assert(SUCCEEDED(hr));
-}
-
-void Object3dCommon::CreateGraphicsPipeline() {
+void SkinnedObjectCommon::CreateGraphicsPipeline() {
     OutputDebugStringA("CreateGraphicsPipeline Start\n");
 
     // Vertex Shader
@@ -254,10 +212,12 @@ void Object3dCommon::CreateGraphicsPipeline() {
     auto psBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3d.PS.hlsl", L"ps_6_0");
     assert(psBlob); // 縺薙％繧る夐℃縺励※縺・ｋ縺ｯ縺・
 
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -299,7 +259,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
 }
 
 // 蠖ｱ逕ｨ縺ｮ繝代う繝励Λ繧､繝ｳ繧ｹ繝・・繝医・菴懈・髢｢謨ｰ
-void Object3dCommon::CreateShadowPipeline() {
+void SkinnedObjectCommon::CreateShadowPipeline() {
     // 蠖ｱ蟆ら畑繧ｷ繧ｧ繝ｼ繝繝ｼ繧偵さ繝ｳ繝代う繝ｫ
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/ShadowMap.VS.hlsl", L"vs_6_0");
     // PS縺ｯ nullptr ・育ｩｺ・峨〒OK・∬牡縺御ｸ崎ｦ√↑縺溘ａ蜃ｦ逅・′鬮倬溘↓縺ｪ繧翫∪縺・
@@ -308,8 +268,12 @@ void Object3dCommon::CreateShadowPipeline() {
     psoDesc.pRootSignature = rootSignature_.Get();
 
     // 蜈･蜉帙Ξ繧､繧｢繧ｦ繝茨ｼ亥ｺｧ讓・POSITION 縺縺代〒蜊∝・縺ｧ縺呻ｼ・
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
     psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
 
@@ -338,7 +302,7 @@ void Object3dCommon::CreateShadowPipeline() {
 }
 
 // 繝ｩ繧､繝育畑縺ｮ螳壽焚繝舌ャ繝輔ぃ繧剃ｽ懈・縺吶ｋ髢｢謨ｰ
-void Object3dCommon::CreateLightBuffer() {
+void SkinnedObjectCommon::CreateLightBuffer() {
     auto device = dxCommon_->GetDevice();
     D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
     D3D12_RESOURCE_DESC resDesc = {};
@@ -351,7 +315,7 @@ void Object3dCommon::CreateLightBuffer() {
     lightResource_->Map(0, nullptr, (void**)&lightData_);
 }
 
-void Object3dCommon::CreatePlayerHighlightPipeline() {
+void SkinnedObjectCommon::CreatePlayerHighlightPipeline() {
     OutputDebugStringA("CreatePlayerHighlightPipeline Start\n");
 
     auto vsBlob = dxCommon_->CompileShader(
@@ -366,10 +330,12 @@ void Object3dCommon::CreatePlayerHighlightPipeline() {
     );
     assert(psBlob);
 
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -418,7 +384,7 @@ void Object3dCommon::CreatePlayerHighlightPipeline() {
     }
 }
 
-void Object3dCommon::CreateInstancedAlphaPipeline()
+void SkinnedObjectCommon::CreateInstancedAlphaPipeline()
 {
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.VS.hlsl", L"vs_6_0");
     assert(vsBlob);
@@ -426,10 +392,12 @@ void Object3dCommon::CreateInstancedAlphaPipeline()
     auto psBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.PS.hlsl", L"ps_6_0");
     assert(psBlob);
 
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -471,21 +439,23 @@ void Object3dCommon::CreateInstancedAlphaPipeline()
     assert(SUCCEEDED(hr));
 }
 
-void Object3dCommon::CreateInstancedRootSignature() {
+void SkinnedObjectCommon::CreateInstancedRootSignature() {
     instancedRootSignature_ = rootSignature_;
 }
 
-void Object3dCommon::CreateInstancedGraphicsPipeline() {
+void SkinnedObjectCommon::CreateInstancedGraphicsPipeline() {
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.VS.hlsl", L"vs_6_0");
     assert(vsBlob);
 
     auto psBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.PS.hlsl", L"ps_6_0");
     assert(psBlob);
 
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -517,15 +487,19 @@ void Object3dCommon::CreateInstancedGraphicsPipeline() {
     assert(SUCCEEDED(hr));
 }
 
-void Object3dCommon::CreateInstancedShadowPipeline() {
+void SkinnedObjectCommon::CreateInstancedShadowPipeline() {
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/ShadowMapInstanced.VS.hlsl", L"vs_6_0");
     assert(vsBlob);
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = instancedRootSignature_.Get();
 
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
     psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
 

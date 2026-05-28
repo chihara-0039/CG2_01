@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "DirectXCommon.h"
 #include "TextureManager.h"
 #include <d3d12.h>
@@ -94,3 +94,4 @@ private:
     /// <summary>DSV 専用のディスクリプタヒープ (DSV だけを格納する)</summary>
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap_{};
 };
+

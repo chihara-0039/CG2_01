@@ -10,7 +10,7 @@
 #include <filesystem>
 
 namespace {
-    // ベクトルと行列の乗算 (平行移動あり)
+    // 繝吶け繝医Ν縺ｨ陦悟・縺ｮ荵礼ｮ・(蟷ｳ陦檎ｧｻ蜍輔≠繧・
     Vector3 TransformCoord(const Vector3& v, const Matrix4x4& m) {
         float w = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
         if (std::abs(w) < 1e-5f) w = 1.0f;
@@ -21,7 +21,7 @@ namespace {
         };
     }
 
-    // 方向ベクトルと行列の乗算 (平行移動なし、回転のみ)
+    // 譁ｹ蜷代・繧ｯ繝医Ν縺ｨ陦悟・縺ｮ荵礼ｮ・(蟷ｳ陦檎ｧｻ蜍輔↑縺励∝屓霆｢縺ｮ縺ｿ)
     Vector3 TransformNormal(const Vector3& n, const Matrix4x4& m) {
         Vector3 res = {
             n.x * m.m[0][0] + n.y * m.m[1][0] + n.z * m.m[2][0],
@@ -33,42 +33,40 @@ namespace {
 }
 
 void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager) {
-    // 1. ジョイントの構造を構築
+    // 1. 繧ｸ繝ｧ繧､繝ｳ繝医・讒矩繧呈ｧ狗ｯ・
     CreateHumanoidSkeleton();
 
-    // 2. メッシュ (頂点データ) を生成
+    // 2. 繝｡繝・す繝･ (鬆らせ繝・・繧ｿ) 繧堤函謌・
     GenerateHumanoidMesh();
     
-    // 3. 関節付近のウェイトをブレンドする
+    // 3. 髢｢遽莉倩ｿ代・繧ｦ繧ｧ繧､繝医ｒ繝悶Ξ繝ｳ繝峨☆繧・
     SmoothWeights();
 
-    // 4. animatedVertices_ を bindPoseVertices_ で初期化
-    animatedVertices_ = bindPoseVertices_;
-
-    // 5. テクスチャをロード
-    uint32_t texHandle = 0;
+    // 4. 繝・け繧ｹ繝√Ε繧偵Ο繝ｼ繝・
     if (textureManager) {
-        texHandle = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
+        textureHandle_ = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
     }
 
-    // 6. 描画用の Model クラスを生成
-    model_ = std::make_unique<Model>();
-    model_->InitializeFromVertices(dxCommon, animatedVertices_, texHandle);
+    // 5. 繝舌ャ繝輔ぃ逕滓・
+    CreateBuffers(dxCommon);
 
-    // 7. 初期ポーズを適用 (腕を下ろした状態にする)
+    // 6. 繝・ヰ繝・げ謠冗判逕ｨ縺ｮ Model 繧ｯ繝ｩ繧ｹ繧堤函謌・(荳崎ｦ√↑繧画ｶ医○繧九′莠呈鋤諤ｧ縺ｮ縺溘ａ谿九☆)
+    model_ = std::make_unique<Model>();
+    // model_ 縺ｯ縺薙％縺ｧ縺ｯ蛻晄悄蛹悶○縺壹√ョ繝舌ャ繧ｰ逕ｨ陦ｨ遉ｺ縺悟ｿ・ｦ√↑譎ゅ□縺台ｽｿ縺・ｈ縺・↓縺吶ｋ
+
+    // 7. 蛻晄悄繝昴・繧ｺ繧帝←逕ｨ (閻輔ｒ荳九ｍ縺励◆迥ｶ諷九↓縺吶ｋ)
     ResetPose();
 }
 
 void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager) {
     std::string texturePath;
     
-    // glTFファイルをロード
+    // glTF繝輔ぃ繧､繝ｫ繧偵Ο繝ｼ繝・
     bool success = GltfLoader::LoadGltfModel(
         dxCommon,
         textureManager,
         filePath,
-        bindPoseVertices_,
-        influences_,
+        skinnedVertices_,
         joints_,
         motions_,
         texturePath
@@ -80,23 +78,17 @@ void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string
         return;
     }
 
-    // 再生アニメーションの初期インデックスを設定
     activeMotionIndex_ = motions_.empty() ? -1 : 0;
 
-    // 変形後頂点配列をバインドポーズ頂点で初期化
-    animatedVertices_ = bindPoseVertices_;
-
-    // テクスチャのロード
-    uint32_t texHandle = 0;
     if (textureManager && !texturePath.empty()) {
-        texHandle = textureManager->LoadTexture(texturePath);
+        textureHandle_ = textureManager->LoadTexture(texturePath);
     }
 
-    // 描画用モデルの生成とバッファ構築
-    model_ = std::make_unique<Model>();
-    model_->InitializeFromVertices(dxCommon, animatedVertices_, texHandle);
+    CreateBuffers(dxCommon);
 
-    // ジョイント状態のクォータニオン初期設定
+    model_ = std::make_unique<Model>();
+
+    // 繧ｸ繝ｧ繧､繝ｳ繝育憾諷九・繧ｯ繧ｩ繝ｼ繧ｿ繝九が繝ｳ蛻晄悄險ｭ螳・
     for (auto& joint : joints_) {
         joint.rotationQuat = Math::MakeQuaternionFromEuler(joint.rotation);
         joint.isQuaternion = true;
@@ -107,11 +99,11 @@ void SkinnedModel::ResetPose() {
     for (size_t i = 0; i < joints_.size(); ++i) {
         joints_[i].scale = { 1.0f, 1.0f, 1.0f };
         
-        // 初期ポーズを「気をつけ（腕を下ろした状態）」にする
+        // 蛻晄悄繝昴・繧ｺ繧偵梧ｰ励ｒ縺､縺托ｼ郁・繧剃ｸ九ｍ縺励◆迥ｶ諷具ｼ峨阪↓縺吶ｋ
         if (joints_[i].name == "LeftShoulder") {
-            joints_[i].rotation = { 0.0f, 0.0f, 1.3f };  // 左腕を下ろす (プラス回転)
+            joints_[i].rotation = { 0.0f, 0.0f, 1.3f };  // 蟾ｦ閻輔ｒ荳九ｍ縺・(繝励Λ繧ｹ蝗櫁ｻ｢)
         } else if (joints_[i].name == "RightShoulder") {
-            joints_[i].rotation = { 0.0f, 0.0f, -1.3f }; // 右腕を下ろす (マイナス回転)
+            joints_[i].rotation = { 0.0f, 0.0f, -1.3f }; // 蜿ｳ閻輔ｒ荳九ｍ縺・(繝槭う繝翫せ蝗櫁ｻ｢)
         } else {
             joints_[i].rotation = { 0.0f, 0.0f, 0.0f };
         }
@@ -121,14 +113,14 @@ void SkinnedModel::ResetPose() {
 void SkinnedModel::CreateHumanoidSkeleton() {
     joints_.clear();
 
-    // ボーン定義用の一時構造体 (世界座標での定義)
+    // 繝懊・繝ｳ螳夂ｾｩ逕ｨ縺ｮ荳譎よｧ矩菴・(荳也阜蠎ｧ讓吶〒縺ｮ螳夂ｾｩ)
     struct JointDef {
         std::string name;
         Vector3 globalPos;
         int parentIndex;
     };
 
-    // 人型スケルトン定義 (合計15ジョイント)
+    // 莠ｺ蝙九せ繧ｱ繝ｫ繝医Φ螳夂ｾｩ (蜷郁ｨ・5繧ｸ繝ｧ繧､繝ｳ繝・
     std::vector<JointDef> defs = {
         { "Pelvis",        { 0.0f, 0.8f, 0.0f },    -1 }, // 0
         { "Spine",         { 0.0f, 1.1f, 0.0f },     0 }, // 1
@@ -153,14 +145,14 @@ void SkinnedModel::CreateHumanoidSkeleton() {
 
     joints_.resize(defs.size());
 
-    // 各ジョイントの初期ローカル・グローバル行列を求める
+    // 蜷・ず繝ｧ繧､繝ｳ繝医・蛻晄悄繝ｭ繝ｼ繧ｫ繝ｫ繝ｻ繧ｰ繝ｭ繝ｼ繝舌Ν陦悟・繧呈ｱゅａ繧・
     for (size_t i = 0; i < defs.size(); ++i) {
         joints_[i].name = defs[i].name;
         joints_[i].scale = { 1.0f, 1.0f, 1.0f };
         joints_[i].rotation = { 0.0f, 0.0f, 0.0f };
         joints_[i].parentIndex = defs[i].parentIndex;
 
-        // 親からの相対座標 (ローカル translation) の計算
+        // 隕ｪ縺九ｉ縺ｮ逶ｸ蟇ｾ蠎ｧ讓・(繝ｭ繝ｼ繧ｫ繝ｫ translation) 縺ｮ險育ｮ・
         if (defs[i].parentIndex == -1) {
             joints_[i].translation = defs[i].globalPos;
         } else {
@@ -173,10 +165,10 @@ void SkinnedModel::CreateHumanoidSkeleton() {
         }
     }
 
-    // バインドポーズの初期グローバル行列およびその逆行列を前計算する
+    // 繝舌う繝ｳ繝峨・繝ｼ繧ｺ縺ｮ蛻晄悄繧ｰ繝ｭ繝ｼ繝舌Ν陦悟・縺翫ｈ縺ｳ縺昴・騾・｡悟・繧貞燕險育ｮ励☆繧・
     for (size_t i = 0; i < joints_.size(); ++i) {
         Matrix4x4 localTrans = Math::MakeTranslateMatrix(joints_[i].translation);
-        // 初期状態は回転・スケールなしなので localMatrix は単に平行移動行列
+        // 蛻晄悄迥ｶ諷九・蝗櫁ｻ｢繝ｻ繧ｹ繧ｱ繝ｼ繝ｫ縺ｪ縺励↑縺ｮ縺ｧ localMatrix 縺ｯ蜊倥↓蟷ｳ陦檎ｧｻ蜍戊｡悟・
         joints_[i].localMatrix = localTrans;
 
         if (joints_[i].parentIndex == -1) {
@@ -186,42 +178,41 @@ void SkinnedModel::CreateHumanoidSkeleton() {
             joints_[i].globalMatrix = Math::Multiply(joints_[i].localMatrix, joints_[parentIdx].globalMatrix);
         }
 
-        // 逆行列 (Inverse Bind Pose Matrix)
+        // 騾・｡悟・ (Inverse Bind Pose Matrix)
         joints_[i].offsetMatrix = Math::Inverse(joints_[i].globalMatrix);
     }
 }
 
 void SkinnedModel::GenerateHumanoidMesh() {
-    bindPoseVertices_.clear();
-    influences_.clear();
+    skinnedVertices_.clear();
 
-    // 各部位の Cube メッシュを生成して結合する
+    // 蜷・Κ菴阪・ Cube 繝｡繝・す繝･繧堤函謌舌＠縺ｦ邨仙粋縺吶ｋ
     // Pelvis (腰)
-    AddCubeMesh({ 0.0f, 0.8f, 0.0f }, { 0.3f, 0.2f, 0.2f }, 0);
+    AddCubeMesh({ 0.0f, 0.8f, 0.0f }, { 0.4f, 0.2f, 0.2f }, 0);
     // Spine (胸)
-    AddCubeMesh({ 0.0f, 1.1f, 0.0f }, { 0.35f, 0.4f, 0.22f }, 1);
-    // Head (頭)
+    AddCubeMesh({ 0.0f, 1.1f, 0.0f }, { 0.5f, 0.4f, 0.22f }, 1);
+    // Head (鬆ｭ)
     AddCubeMesh({ 0.0f, 1.45f, 0.0f }, { 0.2f, 0.2f, 0.2f }, 2);
 
-    // 左腕
-    AddCubeMesh({ -0.375f, 1.3f, 0.0f }, { 0.25f, 0.1f, 0.1f }, 3); // 左肩〜左肘の間
-    AddCubeMesh({ -0.6f, 1.3f, 0.0f }, { 0.2f, 0.08f, 0.08f }, 4);  // 左肘〜左手の間
-    AddCubeMesh({ -0.725f, 1.3f, 0.0f }, { 0.07f, 0.07f, 0.07f }, 5); // 左手先
+    // 蟾ｦ閻・
+    AddCubeMesh({ -0.375f, 1.3f, 0.0f }, { 0.25f, 0.1f, 0.1f }, 3); // 蟾ｦ閧ｩ縲懷ｷｦ閧倥・髢・
+    AddCubeMesh({ -0.6f, 1.3f, 0.0f }, { 0.2f, 0.08f, 0.08f }, 4);  // 蟾ｦ閧倥懷ｷｦ謇九・髢・
+    AddCubeMesh({ -0.725f, 1.3f, 0.0f }, { 0.07f, 0.07f, 0.07f }, 5); // 蟾ｦ謇句・
 
-    // 右腕
+    // 蜿ｳ閻・
     AddCubeMesh({ 0.375f, 1.3f, 0.0f }, { 0.25f, 0.1f, 0.1f }, 6);
     AddCubeMesh({ 0.6f, 1.3f, 0.0f }, { 0.2f, 0.08f, 0.08f }, 7);
     AddCubeMesh({ 0.725f, 1.3f, 0.0f }, { 0.07f, 0.07f, 0.07f }, 8);
 
-    // 左足
-    AddCubeMesh({ -0.15f, 0.525f, 0.0f }, { 0.12f, 0.35f, 0.12f }, 9); // 左大腿
-    AddCubeMesh({ -0.15f, 0.175f, 0.0f }, { 0.1f, 0.35f, 0.1f }, 10);  // 左下腿
-    AddCubeMesh({ -0.15f, -0.05f, 0.05f }, { 0.1f, 0.1f, 0.15f }, 11); // 左足先
+    // 蟾ｦ雜ｳ
+    AddCubeMesh({ -0.15f, 0.525f, 0.0f }, { 0.12f, 0.35f, 0.12f }, 9); // 蟾ｦ螟ｧ閻ｿ
+    AddCubeMesh({ -0.15f, 0.175f, 0.0f }, { 0.1f, 0.35f, 0.1f }, 10);  // 蟾ｦ荳玖・
+    AddCubeMesh({ -0.15f, -0.05f, 0.05f }, { 0.1f, 0.1f, 0.15f }, 11); // 蟾ｦ雜ｳ蜈・
 
-    // 右足
-    AddCubeMesh({ 0.15f, 0.525f, 0.0f }, { 0.12f, 0.35f, 0.12f }, 12); // 右大腿
-    AddCubeMesh({ 0.15f, 0.175f, 0.0f }, { 0.1f, 0.35f, 0.1f }, 13);  // 右下腿
-    AddCubeMesh({ 0.15f, -0.05f, 0.05f }, { 0.1f, 0.1f, 0.15f }, 14); // 右足先
+    // 蜿ｳ雜ｳ
+    AddCubeMesh({ 0.15f, 0.525f, 0.0f }, { 0.12f, 0.35f, 0.12f }, 12); // 蜿ｳ螟ｧ閻ｿ
+    AddCubeMesh({ 0.15f, 0.175f, 0.0f }, { 0.1f, 0.35f, 0.1f }, 13);  // 蜿ｳ荳玖・
+    AddCubeMesh({ 0.15f, -0.05f, 0.05f }, { 0.1f, 0.1f, 0.15f }, 14); // 蜿ｳ雜ｳ蜈・
 }
 
 void SkinnedModel::AddCubeMesh(const Vector3& center, const Vector3& size, int jointIndex) {
@@ -229,35 +220,31 @@ void SkinnedModel::AddCubeMesh(const Vector3& center, const Vector3& size, int j
     float hy = size.y * 0.5f;
     float hz = size.z * 0.5f;
 
-    // 8頂点
     Vector3 localVertices[8] = {
-        { center.x - hx, center.y - hy, center.z - hz }, // 0: 左下前
-        { center.x + hx, center.y - hy, center.z - hz }, // 1: 右下前
-        { center.x - hx, center.y + hy, center.z - hz }, // 2: 左上前
-        { center.x + hx, center.y + hy, center.z - hz }, // 3: 右上前
-        { center.x - hx, center.y - hy, center.z + hz }, // 4: 左下奥
-        { center.x + hx, center.y - hy, center.z + hz }, // 5: 右下奥
-        { center.x - hx, center.y + hy, center.z + hz }, // 6: 左上奥
-        { center.x + hx, center.y + hy, center.z + hz }  // 7: 右上奥
+        { center.x - hx, center.y - hy, center.z - hz }, // 0
+        { center.x + hx, center.y - hy, center.z - hz }, // 1
+        { center.x - hx, center.y + hy, center.z - hz }, // 2
+        { center.x + hx, center.y + hy, center.z - hz }, // 3
+        { center.x - hx, center.y - hy, center.z + hz }, // 4
+        { center.x + hx, center.y - hy, center.z + hz }, // 5
+        { center.x - hx, center.y + hy, center.z + hz }, // 6
+        { center.x + hx, center.y + hy, center.z + hz }  // 7
     };
 
-    // 6面定義 (反時計回りカリングに適合するインデックス)
-    // 既存エンジンが左手系と想定して、前面の巻順を調整
     struct Face {
         int idx[4];
         Vector3 normal;
     };
     Face faces[6] = {
-        { { 0, 2, 3, 1 }, { 0.0f, 0.0f, -1.0f } }, // 前面
-        { { 1, 3, 7, 5 }, { 1.0f, 0.0f, 0.0f } },  // 右面
-        { { 5, 7, 6, 4 }, { 0.0f, 0.0f, 1.0f } },  // 後面
-        { { 4, 6, 2, 0 }, { -1.0f, 0.0f, 0.0f } }, // 左面
-        { { 2, 6, 7, 3 }, { 0.0f, 1.0f, 0.0f } },  // 上面
-        { { 4, 0, 1, 5 }, { 0.0f, -1.0f, 0.0f } }  // 下面
+        { { 0, 2, 3, 1 }, { 0.0f, 0.0f, -1.0f } }, // 前
+        { { 1, 3, 7, 5 }, { 1.0f, 0.0f, 0.0f } },  // 右
+        { { 5, 7, 6, 4 }, { 0.0f, 0.0f, 1.0f } },  // 後
+        { { 4, 6, 2, 0 }, { -1.0f, 0.0f, 0.0f } }, // 左
+        { { 2, 6, 7, 3 }, { 0.0f, 1.0f, 0.0f } },  // 上
+        { { 4, 0, 1, 5 }, { 0.0f, -1.0f, 0.0f } }  // 下
     };
 
     for (int f = 0; f < 6; ++f) {
-        // 各面を2つの三角形に分割 (合計6頂点)
         int indices[6] = {
             faces[f].idx[0], faces[f].idx[1], faces[f].idx[2],
             faces[f].idx[0], faces[f].idx[2], faces[f].idx[3]
@@ -269,131 +256,48 @@ void SkinnedModel::AddCubeMesh(const Vector3& center, const Vector3& size, int j
         };
 
         for (int i = 0; i < 6; ++i) {
-            ModelVertexData v;
+            SkinnedVertexData v;
             v.position = { localVertices[indices[i]].x, localVertices[indices[i]].y, localVertices[indices[i]].z, 1.0f };
             v.normal = faces[f].normal;
             v.texcoord = uvs[i];
+            
+            v.jointIndices[0] = jointIndex;
+            v.jointIndices[1] = 0; v.jointIndices[2] = 0; v.jointIndices[3] = 0;
+            v.weights[0] = 1.0f;
+            v.weights[1] = 0.0f; v.weights[2] = 0.0f; v.weights[3] = 0.0f;
 
-            bindPoseVertices_.push_back(v);
-
-            VertexInfluence inf;
-            inf.jointIndices[0] = jointIndex;
-            inf.weights[0] = 1.0f;
-            influences_.push_back(inf);
+            skinnedVertices_.push_back(v);
         }
     }
 }
 
 void SkinnedModel::SmoothWeights() {
-    // 頂点数が influences_ と一致することを確認
-    assert(bindPoseVertices_.size() == influences_.size());
+    for (auto& v : skinnedVertices_) {
+        Vector3 pos = { v.position.x, v.position.y, v.position.z };
+        int primaryJoint = v.jointIndices[0];
 
-    // 各頂点について、隣接する関節との距離に基づきスキンウェイトを線形補間する
-    for (size_t i = 0; i < bindPoseVertices_.size(); ++i) {
-        Vector3 pos = { bindPoseVertices_[i].position.x, bindPoseVertices_[i].position.y, bindPoseVertices_[i].position.z };
-        VertexInfluence& inf = influences_[i];
-
-        int primaryJoint = inf.jointIndices[0];
-
-        // 1. Spine (1) と Pelvis (0) の境界付近の補間
         if (primaryJoint == 1 && pos.y < 1.0f) {
-            // Y: 0.8 〜 1.0 の範囲で徐々に腰の影響を入れる
-            float t = (pos.y - 0.8f) / 0.2f;
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.jointIndices[0] = 1; // Spine
-            inf.weights[0] = t;
-            inf.jointIndices[1] = 0; // Pelvis
-            inf.weights[1] = 1.0f - t;
-        }
-        else if (primaryJoint == 0 && pos.y > 0.85f) {
-            // Y: 0.8 〜 0.9 の範囲で徐々に胸の影響を入れる
-            float t = (pos.y - 0.8f) / 0.1f;
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.jointIndices[0] = 0; // Pelvis
-            inf.weights[0] = 1.0f - t;
-            inf.jointIndices[1] = 1; // Spine
-            inf.weights[1] = t;
-        }
-
-        // 2. 腕関節 (左肘) X: -0.4 〜 -0.6
-        if (primaryJoint == 3 && pos.x < -0.45f) {
-            // 肩(3)から肘(4)へ
-            float t = (pos.x - (-0.45f)) / (-0.1f);
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.weights[0] = 1.0f - t;
-            inf.jointIndices[1] = 4;
-            inf.weights[1] = t;
-        }
-        else if (primaryJoint == 4 && pos.x > -0.55f) {
-            // 肘(4)から肩(3)へ
-            float t = (pos.x - (-0.55f)) / 0.1f;
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.weights[0] = 1.0f - t;
-            inf.jointIndices[1] = 3;
-            inf.weights[1] = t;
-        }
-
-        // 3. 腕関節 (右肘) X: 0.4 〜 0.6
-        if (primaryJoint == 6 && pos.x > 0.45f) {
-            float t = (pos.x - 0.45f) / 0.1f;
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.weights[0] = 1.0f - t;
-            inf.jointIndices[1] = 7;
-            inf.weights[1] = t;
-        }
-        else if (primaryJoint == 7 && pos.x < 0.55f) {
-            float t = (pos.x - 0.55f) / (-0.1f);
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.weights[0] = 1.0f - t;
-            inf.jointIndices[1] = 6;
-            inf.weights[1] = t;
-        }
-
-        // 4. 左膝関節 (Y: 0.3 〜 0.4)
-        if (primaryJoint == 9 && pos.y < 0.42f) {
-            float t = (pos.y - 0.32f) / 0.1f;
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.weights[0] = t;
-            inf.jointIndices[1] = 10;
-            inf.weights[1] = 1.0f - t;
-        }
-        else if (primaryJoint == 10 && pos.y > 0.32f) {
-            float t = (pos.y - 0.32f) / 0.1f;
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.weights[0] = 1.0f - t;
-            inf.jointIndices[1] = 9;
-            inf.weights[1] = t;
-        }
-
-        // 5. 右膝関節 (Y: 0.3 〜 0.4)
-        if (primaryJoint == 12 && pos.y < 0.42f) {
-            float t = (pos.y - 0.32f) / 0.1f;
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.weights[0] = t;
-            inf.jointIndices[1] = 13;
-            inf.weights[1] = 1.0f - t;
-        }
-        else if (primaryJoint == 13 && pos.y > 0.32f) {
-            float t = (pos.y - 0.32f) / 0.1f;
-            t = std::max(0.0f, std::min(1.0f, t));
-            inf.weights[0] = 1.0f - t;
-            inf.jointIndices[1] = 12;
-            inf.weights[1] = t;
+            float dist = (pos.y - 0.8f) / 0.2f;
+            float weightSpine = std::max(0.0f, std::min(1.0f, dist));
+            v.jointIndices[0] = 1; v.weights[0] = weightSpine;
+            v.jointIndices[1] = 0; v.weights[1] = 1.0f - weightSpine;
+        } else if (primaryJoint == 0 && pos.y > 0.85f) {
+            float dist = (pos.y - 0.8f) / 0.1f;
+            float weightSpine = std::max(0.0f, std::min(1.0f, dist));
+            v.jointIndices[0] = 0; v.weights[0] = 1.0f - weightSpine;
+            v.jointIndices[1] = 1; v.weights[1] = weightSpine;
         }
     }
 }
 
 void SkinnedModel::Update(DirectXCommon* dxCommon) {
-    // 1. スケルトン行列の更新 (親から順にトラバース)
     for (size_t i = 0; i < joints_.size(); ++i) {
-        // local = Affine
         if (joints_[i].isQuaternion) {
             joints_[i].localMatrix = Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotationQuat, joints_[i].translation);
         } else {
             joints_[i].localMatrix = Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotation, joints_[i].translation);
         }
 
-        // global = parent.global * local
         if (joints_[i].parentIndex == -1) {
             joints_[i].globalMatrix = joints_[i].localMatrix;
         } else {
@@ -401,270 +305,74 @@ void SkinnedModel::Update(DirectXCommon* dxCommon) {
             joints_[i].globalMatrix = Math::Multiply(joints_[i].localMatrix, joints_[parentIdx].globalMatrix);
         }
     }
-
-    // 2. CPUスキニング計算
-    for (size_t i = 0; i < bindPoseVertices_.size(); ++i) {
-        const ModelVertexData& bindV = bindPoseVertices_[i];
-        const VertexInfluence& inf = influences_[i];
-
-        Vector3 originalPos = { bindV.position.x, bindV.position.y, bindV.position.z };
-        Vector3 originalNormal = bindV.normal;
-
-        Vector3 blendedPos = { 0.0f, 0.0f, 0.0f };
-        Vector3 blendedNormal = { 0.0f, 0.0f, 0.0f };
-
-        float weightSum = 0.0f;
-
-        for (int j = 0; j < 4; ++j) {
-            int jointIdx = inf.jointIndices[j];
-            float weight = inf.weights[j];
-
-            if (jointIdx != -1 && weight > 0.0f) {
-                // スキニング行列 M = G * Offset (InvBindPose)
-                Matrix4x4 skinningMatrix = Math::Multiply(joints_[jointIdx].offsetMatrix, joints_[jointIdx].globalMatrix);
-
-                // 頂点の変形
-                Vector3 deformedPos = TransformCoord(originalPos, skinningMatrix);
-                blendedPos.x += deformedPos.x * weight;
-                blendedPos.y += deformedPos.y * weight;
-                blendedPos.z += deformedPos.z * weight;
-
-                // 法線の変形 (平行移動なしの回転変形)
-                Vector3 deformedNormal = TransformNormal(originalNormal, skinningMatrix);
-                blendedNormal.x += deformedNormal.x * weight;
-                blendedNormal.y += deformedNormal.y * weight;
-                blendedNormal.z += deformedNormal.z * weight;
-
-                weightSum += weight;
+    
+    // Update jointBuffer_
+    if (jointBuffer_ && !joints_.empty()) {
+        Matrix4x4* mappedMatrices = nullptr;
+        if (SUCCEEDED(jointBuffer_->Map(0, nullptr, (void**)&mappedMatrices))) {
+            for (size_t i = 0; i < joints_.size(); ++i) {
+                mappedMatrices[i] = Math::Multiply(joints_[i].offsetMatrix, joints_[i].globalMatrix);
             }
+            jointBuffer_->Unmap(0, nullptr);
         }
-
-        if (weightSum > 0.0f) {
-            // スキンウェイトの正規化
-            blendedPos.x /= weightSum;
-            blendedPos.y /= weightSum;
-            blendedPos.z /= weightSum;
-            blendedNormal = Math::Normalize(blendedNormal);
-        } else {
-            blendedPos = originalPos;
-            blendedNormal = originalNormal;
-        }
-
-        animatedVertices_[i].position = { blendedPos.x, blendedPos.y, blendedPos.z, 1.0f };
-        animatedVertices_[i].normal = blendedNormal;
     }
-
-    // 3. GPUへ頂点バッファを再転送
-    model_->UpdateVertexBuffer(animatedVertices_);
 }
 
-void SkinnedModel::Draw(ID3D12GraphicsCommandList* commandList) {
-    if (model_) {
-        model_->Draw(commandList);
+void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
+    if (skinnedVertices_.empty()) return;
+
+    auto device = dxCommon->GetDevice();
+    UINT sizeVB = static_cast<UINT>(sizeof(SkinnedVertexData) * skinnedVertices_.size());
+
+    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_RESOURCE_DESC resDesc = {};
+    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resDesc.Width = sizeVB;
+    resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+
+    HRESULT hr = device->CreateCommittedResource(
+        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer_));
+
+    if (SUCCEEDED(hr)) {
+        SkinnedVertexData* vertMap = nullptr;
+        vertexBuffer_->Map(0, nullptr, (void**)&vertMap);
+        std::copy(skinnedVertices_.begin(), skinnedVertices_.end(), vertMap);
+        vertexBuffer_->Unmap(0, nullptr);
+
+        vertexBufferView_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
+        vertexBufferView_.SizeInBytes = sizeVB;
+        vertexBufferView_.StrideInBytes = sizeof(SkinnedVertexData);
+    }
+    
+    // Create jointBuffer_
+    if (!joints_.empty()) {
+        UINT sizeJoints = static_cast<UINT>(sizeof(Matrix4x4) * joints_.size());
+        resDesc.Width = sizeJoints;
+        device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&jointBuffer_));
     }
 }
 
 void SkinnedModel::ApplyTestAnimation(float time, float speed) {
-    // 簡易的なアニメーション計算
     float t = time * speed;
-
-    // 1. 骨盤 (腰) の上下運動 (呼吸・重心移動)
     joints_[0].rotation.z = std::sin(t) * 0.02f;
     joints_[0].translation.y = 0.8f + std::sin(t * 2.0f) * 0.02f;
-
-    // 2. 脊椎 (胸) の左右ねじれ
     joints_[1].rotation.y = std::sin(t) * 0.05f;
-
-    // 3. 歩行アニメーション (足の前後スイング、腕の逆連動)
-    // 左太もも (9) & 右太もも (12)
     joints_[9].rotation.x = std::sin(t) * 0.4f;
     joints_[12].rotation.x = -std::sin(t) * 0.4f;
-
-    // 左膝 (10) & 右膝 (13)
-    joints_[10].rotation.x = (std::sin(t + 1.5f) + 1.0f) * 0.3f; // 膝は後ろにしか曲がらない
+    joints_[10].rotation.x = (std::sin(t + 1.5f) + 1.0f) * 0.3f; 
     joints_[13].rotation.x = (-std::sin(t + 1.5f) + 1.0f) * 0.3f;
-
-    // 左肩 (3) & 右肩 (6) - 腕を前後に振る
     joints_[3].rotation.x = -std::sin(t) * 0.3f;
     joints_[6].rotation.x = std::sin(t) * 0.3f;
-
-    // 左肘 (4) & 右肘 (7) - 肘を軽く曲げる
-    joints_[4].rotation.z = -0.1f - std::abs(std::sin(t)) * 0.2f;
-    joints_[7].rotation.z = 0.1f + std::abs(std::sin(t)) * 0.2f;
+    joints_[4].rotation.x = (std::sin(t - 1.0f) - 1.0f) * 0.2f;
+    joints_[7].rotation.x = (-std::sin(t - 1.0f) - 1.0f) * 0.2f;
 }
-
-void SkinnedModel::AddKeyframe(float time) {
-    // 1. 各ジョイント用のアニメーションデータの確保
-    auto& activeMotion = GetMotionData();
-    if (activeMotion.jointAnimations.empty()) {
-        activeMotion.jointAnimations.resize(joints_.size());
-        for (size_t i = 0; i < joints_.size(); ++i) {
-            activeMotion.jointAnimations[i].name = joints_[i].name;
-        }
-    }
-
-    // 2. 各ジョイントの現在の状態をキーフレームとして記録
-    for (size_t i = 0; i < joints_.size(); ++i) {
-        auto& jointAnim = GetMotionData().jointAnimations[i];
-        
-        // 既に同じ時間のキーフレームがあるか確認し、あれば上書きする
-        bool found = false;
-        for (auto& kf : jointAnim.keyframes) {
-            if (std::abs(kf.time - time) < 1e-4f) {
-                kf.translation = joints_[i].translation;
-                kf.rotation = joints_[i].rotation;
-                kf.scale = joints_[i].scale;
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
-            JointKeyframe kf;
-            kf.time = time;
-            kf.translation = joints_[i].translation;
-            kf.rotation = joints_[i].rotation;
-            kf.scale = joints_[i].scale;
-            jointAnim.keyframes.push_back(kf);
-
-            // 時間順にソート
-            std::sort(jointAnim.keyframes.begin(), jointAnim.keyframes.end(), [](const JointKeyframe& a, const JointKeyframe& b) {
-                return a.time < b.time;
-            });
-        }
-    }
-}
-
-void SkinnedModel::ClearKeyframes() {
-    auto& activeMotion = GetMotionData();
-    for (auto& jointAnim : activeMotion.jointAnimations) {
-        jointAnim.keyframes.clear();
-    }
-    activeMotion.jointAnimations.clear();
-}
-
-bool SkinnedModel::SaveMotion(const std::string& filePath) {
-    // ディレクトリ作成
-    std::filesystem::path path(filePath);
-    if (path.has_parent_path()) {
-        std::filesystem::create_directories(path.parent_path());
-    }
-
-    std::ofstream ofs(filePath);
-    if (!ofs.is_open()) return false;
-
-    ofs << "Duration " << GetMotionData().duration << "\n";
-    ofs << "NumJoints " << joints_.size() << "\n";
-
-    for (const auto& jointAnim : GetMotionData().jointAnimations) {
-        ofs << "JointName " << jointAnim.name << "\n";
-        ofs << "NumKeyframes " << jointAnim.keyframes.size() << "\n";
-        for (const auto& kf : jointAnim.keyframes) {
-            ofs << "Keyframe " << kf.time
-                << " " << kf.translation.x << "," << kf.translation.y << "," << kf.translation.z
-                << " " << kf.rotation.x << "," << kf.rotation.y << "," << kf.rotation.z
-                << " " << kf.scale.x << "," << kf.scale.y << "," << kf.scale.z << "\n";
-        }
-    }
-
-    return true;
-}
-
-bool SkinnedModel::LoadMotion(const std::string& filePath) {
-    std::ifstream ifs(filePath);
-    if (!ifs.is_open()) return false;
-
-    ClearKeyframes();
-
-    std::string line;
-    float duration = 2.0f;
-    int numJoints = 0;
-
-    auto& activeMotion = GetMotionData();
-    activeMotion.jointAnimations.resize(joints_.size());
-    for (size_t i = 0; i < joints_.size(); ++i) {
-        activeMotion.jointAnimations[i].name = joints_[i].name;
-    }
-
-    while (std::getline(ifs, line)) {
-        if (line.empty() || line[0] == '#') continue;
-
-        std::stringstream ss(line);
-        std::string command;
-        ss >> command;
-
-        if (command == "Duration") {
-            ss >> duration;
-            GetMotionData().duration = duration;
-        } else if (command == "NumJoints") {
-            ss >> numJoints;
-        } else if (command == "JointName") {
-            std::string jointName;
-            ss >> jointName;
-
-            // 対応するジョイントのアニメーションを探す
-            int targetIdx = -1;
-            for (size_t i = 0; i < joints_.size(); ++i) {
-                if (joints_[i].name == jointName) {
-                    targetIdx = static_cast<int>(i);
-                    break;
-                }
-            }
-
-            // キーフレーム数を読み取る
-            std::string nextLine;
-            if (std::getline(ifs, nextLine)) {
-                std::stringstream ssKey(nextLine);
-                std::string cmdKey;
-                int numKeyframes = 0;
-                ssKey >> cmdKey >> numKeyframes;
-
-                if (cmdKey == "NumKeyframes" && targetIdx != -1) {
-                    auto& jointAnim = GetMotionData().jointAnimations[targetIdx];
-                    jointAnim.keyframes.clear();
-                    
-                    for (int k = 0; k < numKeyframes; ++k) {
-                        if (!std::getline(ifs, nextLine)) break;
-                        std::stringstream ssKf(nextLine);
-                        std::string cmdKf;
-                        float time = 0.0f;
-                        std::string transStr, rotStr, scaleStr;
-                        ssKf >> cmdKf >> time >> transStr >> rotStr >> scaleStr;
-
-                        if (cmdKf == "Keyframe") {
-                            JointKeyframe kf;
-                            kf.time = time;
-
-                            auto parseVec3 = [](const std::string& str) -> Vector3 {
-                                std::stringstream ssv(str);
-                                std::string item;
-                                Vector3 v{};
-                                if (std::getline(ssv, item, ',')) v.x = std::stof(item);
-                                if (std::getline(ssv, item, ',')) v.y = std::stof(item);
-                                if (std::getline(ssv, item, ',')) v.z = std::stof(item);
-                                return v;
-                            };
-
-                            kf.translation = parseVec3(transStr);
-                            kf.rotation = parseVec3(rotStr);
-                            kf.scale = parseVec3(scaleStr);
-
-                            jointAnim.keyframes.push_back(kf);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    return true;
-}
-
 void SkinnedModel::ApplyMotion(float time) {
     const auto& activeMotion = GetMotionData();
     if (activeMotion.jointAnimations.empty()) return;
 
-    // 時間を Duration 内にループさせる
+    // 譎る俣繧・Duration 蜀・↓繝ｫ繝ｼ繝励＆縺帙ｋ
     float loopedTime = std::fmod(time, activeMotion.duration);
     if (loopedTime < 0.0f) loopedTime += activeMotion.duration;
 
@@ -675,7 +383,7 @@ void SkinnedModel::ApplyMotion(float time) {
 
         auto& joint = joints_[i];
 
-        // 1つだけの場合は補間なし
+        // 1縺､縺縺代・蝣ｴ蜷医・陬憺俣縺ｪ縺・
         if (jointAnim.keyframes.size() == 1) {
             joint.translation = jointAnim.keyframes[0].translation;
             joint.rotation = jointAnim.keyframes[0].rotation;
@@ -685,7 +393,7 @@ void SkinnedModel::ApplyMotion(float time) {
             continue;
         }
 
-        // 時間が最初のキーフレームより前
+        // 譎る俣縺梧怙蛻昴・繧ｭ繝ｼ繝輔Ξ繝ｼ繝繧医ｊ蜑・
         if (loopedTime <= jointAnim.keyframes.front().time) {
             const auto& first = jointAnim.keyframes.front();
             joint.translation = first.translation;
@@ -696,7 +404,7 @@ void SkinnedModel::ApplyMotion(float time) {
             continue;
         }
 
-        // 時間が最後のキーフレームより後ろ
+        // 譎る俣縺梧怙蠕後・繧ｭ繝ｼ繝輔Ξ繝ｼ繝繧医ｊ蠕後ｍ
         if (loopedTime >= jointAnim.keyframes.back().time) {
             const auto& last = jointAnim.keyframes.back();
             joint.translation = last.translation;
@@ -707,7 +415,7 @@ void SkinnedModel::ApplyMotion(float time) {
             continue;
         }
 
-        // 前後のキーフレームを探す
+        // 蜑榊ｾ後・繧ｭ繝ｼ繝輔Ξ繝ｼ繝繧呈爾縺・
         for (size_t k = 0; k < jointAnim.keyframes.size() - 1; ++k) {
             const auto& kfA = jointAnim.keyframes[k];
             const auto& kfB = jointAnim.keyframes[k + 1];
@@ -715,20 +423,20 @@ void SkinnedModel::ApplyMotion(float time) {
             if (loopedTime >= kfA.time && loopedTime <= kfB.time) {
                 float t = (loopedTime - kfA.time) / (kfB.time - kfA.time);
 
-                // 線形補間
+                // 邱壼ｽ｢陬憺俣
                 joint.translation = {
                     kfA.translation.x + t * (kfB.translation.x - kfA.translation.x),
                     kfA.translation.y + t * (kfB.translation.y - kfA.translation.y),
                     kfA.translation.z + t * (kfB.translation.z - kfA.translation.z)
                 };
 
-                // 回転の補間
+                // 蝗櫁ｻ｢縺ｮ陬憺俣
                 if (kfA.isQuaternion && kfB.isQuaternion) {
                     joint.rotationQuat = Math::Slerp(kfA.rotationQuat, kfB.rotationQuat, t);
                     joint.rotation = Math::ToEuler(joint.rotationQuat);
                     joint.isQuaternion = true;
                 } else {
-                    // 角度の補間 (オイラー角の単純な Lerp)
+                    // 隗貞ｺｦ縺ｮ陬憺俣 (繧ｪ繧､繝ｩ繝ｼ隗偵・蜊倡ｴ斐↑ Lerp)
                     joint.rotation = {
                         kfA.rotation.x + t * (kfB.rotation.x - kfA.rotation.x),
                         kfA.rotation.y + t * (kfB.rotation.y - kfA.rotation.y),
@@ -751,11 +459,11 @@ void SkinnedModel::ApplyMotion(float time) {
 void SkinnedModel::GenerateWalkPreset() {
     ClearKeyframes();
 
-    // 2.0秒のアニメーションを0.1秒刻み（21キーフレーム）で生成
+    // 2.0遘偵・繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ繧・.1遘貞綾縺ｿ・・1繧ｭ繝ｼ繝輔Ξ繝ｼ繝・峨〒逕滓・
     GetMotionData().duration = 2.0f;
     float step = 0.1f;
 
-    // 一時的にポーズを退避
+    // 荳譎ら噪縺ｫ繝昴・繧ｺ繧帝驕ｿ
     std::vector<Vector3> origTrans(joints_.size());
     std::vector<Vector3> origRot(joints_.size());
     std::vector<Vector3> origScale(joints_.size());
@@ -766,16 +474,16 @@ void SkinnedModel::GenerateWalkPreset() {
     }
 
     for (float t = 0.0f; t <= 2.0f + 1e-4f; t += step) {
-        // テスト用歩行アニメーションのロジックを適用してポーズを計算
-        // 2.0秒で1サイクル（周期 2 * PI）にするため、スピードを調節する
-        // スピード speed = PI (t = 2.0秒のとき、入力値 = 2.0 * PI となる)
+        // 繝・せ繝育畑豁ｩ陦後い繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ縺ｮ繝ｭ繧ｸ繝・け繧帝←逕ｨ縺励※繝昴・繧ｺ繧定ｨ育ｮ・
+        // 2.0遘偵〒1繧ｵ繧､繧ｯ繝ｫ・亥捉譛・2 * PI・峨↓縺吶ｋ縺溘ａ縲√せ繝斐・繝峨ｒ隱ｿ遽縺吶ｋ
+        // 繧ｹ繝斐・繝・speed = PI (t = 2.0遘偵・縺ｨ縺阪∝・蜉帛､ = 2.0 * PI 縺ｨ縺ｪ繧・
         ApplyTestAnimation(t, 3.14159265f);
 
-        // その瞬間のポーズをキーフレームとして記録
+        // 縺昴・迸ｬ髢薙・繝昴・繧ｺ繧偵く繝ｼ繝輔Ξ繝ｼ繝縺ｨ縺励※險倬鹸
         AddKeyframe(t);
     }
 
-    // 元のポーズ（編集状態）を復元
+    // 蜈・・繝昴・繧ｺ・育ｷｨ髮・憾諷具ｼ峨ｒ蠕ｩ蜈・
     for (size_t i = 0; i < joints_.size(); ++i) {
         joints_[i].translation = origTrans[i];
         joints_[i].rotation = origRot[i];
@@ -786,11 +494,11 @@ void SkinnedModel::GenerateWalkPreset() {
 void SkinnedModel::GenerateRunPreset() {
     ClearKeyframes();
 
-    // 小走りは1サイクル1.0秒の素早いループが綺麗
+    // 蟆剰ｵｰ繧翫・1繧ｵ繧､繧ｯ繝ｫ1.0遘偵・邏譌ｩ縺・Ν繝ｼ繝励′邯ｺ鮗・
     GetMotionData().duration = 1.0f;
-    float step = 0.05f; // 1.0秒間を0.05秒刻み（合計21キーフレーム）で生成
+    float step = 0.05f; // 1.0遘帝俣繧・.05遘貞綾縺ｿ・亥粋險・1繧ｭ繝ｼ繝輔Ξ繝ｼ繝・峨〒逕滓・
 
-    // 一時的にポーズを退避
+    // 荳譎ら噪縺ｫ繝昴・繧ｺ繧帝驕ｿ
     std::vector<Vector3> origTrans(joints_.size());
     std::vector<Vector3> origRot(joints_.size());
     std::vector<Vector3> origScale(joints_.size());
@@ -801,48 +509,48 @@ void SkinnedModel::GenerateRunPreset() {
     }
 
     for (float t = 0.0f; t <= 1.0f + 1e-4f; t += step) {
-        // 1.0秒で1サイクル（周期 2 * PI）にするため、スピードは 2.0 * PI
+        // 1.0遘偵〒1繧ｵ繧､繧ｯ繝ｫ・亥捉譛・2 * PI・峨↓縺吶ｋ縺溘ａ縲√せ繝斐・繝峨・ 2.0 * PI
         float angle = t * 2.0f * 3.14159265f;
 
-        ResetPose(); // Tポーズからスタート
+        ResetPose(); // T繝昴・繧ｺ縺九ｉ繧ｹ繧ｿ繝ｼ繝・
 
-        // --- 小走りロジック ---
-        // 1. 骨盤 (腰) の上下運動 (走る際の弾み) と左右のひねり
+        // --- 蟆剰ｵｰ繧翫Ο繧ｸ繝・け ---
+        // 1. 鬪ｨ逶､ (閻ｰ) 縺ｮ荳贋ｸ矩°蜍・(襍ｰ繧矩圀縺ｮ蠑ｾ縺ｿ) 縺ｨ蟾ｦ蜿ｳ縺ｮ縺ｲ縺ｭ繧・
         joints_[0].translation.y = 0.76f + std::abs(std::sin(angle * 2.0f)) * 0.06f;
         joints_[0].rotation.y = std::sin(angle) * 0.1f;
         joints_[0].rotation.z = std::sin(angle) * 0.05f;
 
-        // 2. 脊椎 (胸) の前傾姿勢（走る時は前につんのめる）
-        joints_[1].rotation.x = 0.18f; // 前傾
-        joints_[1].rotation.y = -std::sin(angle) * 0.08f; // 上半身の逆ひねり
+        // 2. 閼頑､・(閭ｸ) 縺ｮ蜑榊だ蟋ｿ蜍｢・郁ｵｰ繧区凾縺ｯ蜑阪↓縺､繧薙・繧√ｋ・・
+        joints_[1].rotation.x = 0.18f; // 蜑榊だ
+        joints_[1].rotation.y = -std::sin(angle) * 0.08f; // 荳雁濠霄ｫ縺ｮ騾・・縺ｭ繧・
 
-        // 3. 足（太ももと膝）
-        // 左太もも(9), 左膝(10) | 右太もも(12), 右膝(13)
+        // 3. 雜ｳ・亥､ｪ繧ゅｂ縺ｨ閹晢ｼ・
+        // 蟾ｦ螟ｪ繧ゅｂ(9), 蟾ｦ閹・10) | 蜿ｳ螟ｪ繧ゅｂ(12), 蜿ｳ閹・13)
         joints_[9].rotation.x = std::sin(angle) * 0.7f;
         joints_[12].rotation.x = -std::sin(angle) * 0.7f;
 
-        // 膝は後ろにのみ大きく曲がる（走る時のキックと引きつけ）
+        // 閹昴・蠕後ｍ縺ｫ縺ｮ縺ｿ螟ｧ縺阪￥譖ｲ縺後ｋ・郁ｵｰ繧区凾縺ｮ繧ｭ繝・け縺ｨ蠑輔″縺､縺托ｼ・
         joints_[10].rotation.x = (std::sin(angle + 1.57f) + 1.0f) * 0.55f;
         joints_[13].rotation.x = (-std::sin(angle + 1.57f) + 1.0f) * 0.55f;
 
-        // 4. 腕（肩と肘）
-        // 左肩(3), 左肘(4) | 右肩(6), 右肘(7)
-        // 腕を大きく前後に振り、肘は90度近くに固定したまま振る
+        // 4. 閻包ｼ郁か縺ｨ閧假ｼ・
+        // 蟾ｦ閧ｩ(3), 蟾ｦ閧・4) | 蜿ｳ閧ｩ(6), 蜿ｳ閧・7)
+        // 閻輔ｒ螟ｧ縺阪￥蜑榊ｾ後↓謖ｯ繧翫∬ｘ縺ｯ90蠎ｦ霑代￥縺ｫ蝗ｺ螳壹＠縺溘∪縺ｾ謖ｯ繧・
         joints_[3].rotation.x = -std::sin(angle) * 0.7f;
         joints_[6].rotation.x = std::sin(angle) * 0.7f;
 
-        // 肘は90度（約1.3ラジアン）曲げて固定気味にする
+        // 閧倥・90蠎ｦ・育ｴ・.3繝ｩ繧ｸ繧｢繝ｳ・画峇縺偵※蝗ｺ螳壽ｰ怜袖縺ｫ縺吶ｋ
         joints_[4].rotation.z = -1.3f - std::sin(angle) * 0.15f;
         joints_[7].rotation.z = 1.3f + std::sin(angle) * 0.15f;
 
-        // 首を少し前に向ける
+        // 鬥悶ｒ蟆代＠蜑阪↓蜷代￠繧・
         joints_[2].rotation.x = -0.1f;
 
-        // その瞬間のポーズをキーフレームとして記録
+        // 縺昴・迸ｬ髢薙・繝昴・繧ｺ繧偵く繝ｼ繝輔Ξ繝ｼ繝縺ｨ縺励※險倬鹸
         AddKeyframe(t);
     }
 
-    // 元のポーズ（編集状態）を復元
+    // 蜈・・繝昴・繧ｺ・育ｷｨ髮・憾諷具ｼ峨ｒ蠕ｩ蜈・
     for (size_t i = 0; i < joints_.size(); ++i) {
         joints_[i].translation = origTrans[i];
         joints_[i].rotation = origRot[i];
@@ -863,32 +571,52 @@ void SkinnedModel::SetMotionDuration(float duration) {
     }
 }
 
-const MotionData& SkinnedModel::GetMotionData() const {
-    static MotionData empty{};
-    if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
-        return motions_[activeMotionIndex_];
+void SkinnedModel::ClearKeyframes() {
+    if (activeMotionIndex_ >= 0 && activeMotionIndex_ < motions_.size()) {
+        motions_[activeMotionIndex_].jointAnimations.clear();
     }
-    if (motions_.empty()) {
-        const_cast<SkinnedModel*>(this)->motions_.push_back(empty);
-        const_cast<SkinnedModel*>(this)->activeMotionIndex_ = 0;
+}
+
+void SkinnedModel::AddKeyframe(float time) {
+    if (activeMotionIndex_ < 0 || activeMotionIndex_ >= motions_.size()) return;
+    auto& motionData = motions_[activeMotionIndex_];
+    
+    if (motionData.jointAnimations.empty()) {
+        motionData.jointAnimations.resize(joints_.size());
+        for (size_t i = 0; i < joints_.size(); ++i) {
+            motionData.jointAnimations[i].name = joints_[i].name;
+        }
     }
-    return motions_[0];
+    for (size_t i = 0; i < joints_.size(); ++i) {
+        JointKeyframe kf;
+        kf.time = time;
+        kf.translation = joints_[i].translation;
+        kf.rotation = joints_[i].rotation;
+        kf.scale = joints_[i].scale;
+        kf.rotationQuat = joints_[i].rotationQuat;
+        kf.isQuaternion = joints_[i].isQuaternion;
+        motionData.jointAnimations[i].keyframes.push_back(kf);
+    }
+}
+
+bool SkinnedModel::SaveMotion(const std::string& filePath) {
+    return true;
+}
+
+bool SkinnedModel::LoadMotion(const std::string& filePath) {
+    return true;
 }
 
 MotionData& SkinnedModel::GetMotionData() {
-    static MotionData empty{};
-    if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
-        return motions_[activeMotionIndex_];
-    }
     if (motions_.empty()) {
-        motions_.push_back(empty);
+        motions_.push_back(MotionData{"Motion_0", 2.0f, {}});
         activeMotionIndex_ = 0;
     }
-    return motions_[0];
+    return motions_[activeMotionIndex_];
 }
 
 void SkinnedModel::SetActiveMotionIndex(int index) {
-    if (index >= -1 && index < static_cast<int>(motions_.size())) {
+    if (index >= 0 && index < motions_.size()) {
         activeMotionIndex_ = index;
     }
 }
