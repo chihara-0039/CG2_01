@@ -232,6 +232,10 @@ void GameplayCameraController::ResetCamera(
 
     switch (stageIndex) {
     case 0:
+
+        preset.enableWallTransparency = false;
+        preset.wallTransparencyAlpha = 1.0f;
+
         // 操作説明ステージ
         // ==========================================
 // カメラの左右回転角度
@@ -288,6 +292,9 @@ void GameplayCameraController::ResetCamera(
         break;
 
     case 1:
+        preset.enableWallTransparency = true;
+        preset.wallTransparencyAlpha = 0.50f;
+
         // 通常ステージ
         preset.angle = 0.78f;
         preset.pitch = 0.72f;
@@ -342,6 +349,9 @@ void GameplayCameraController::ResetCamera(
     cameraDistance_ = maxSize * preset.distanceRate;
     cameraHeight_ = maxSize * preset.heightRate;
     cameraFov_ = preset.fov;
+
+    enableWallTransparency_ = preset.enableWallTransparency;
+    wallTransparencyAlpha_ = preset.wallTransparencyAlpha;
 
     initialPivotYOffset_ = cameraPivot_.y - player->GetPosition().y;
 

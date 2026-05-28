@@ -2,6 +2,7 @@
 #include <cassert>
 #include <random>
 
+
 // 解放
 StageRenderer::~StageRenderer() {
 	Clear();
@@ -1547,9 +1548,23 @@ void StageRenderer::RebuildTransparencyGroups()
 
 void StageRenderer::UpdateWallTransparency(
 	const Vector3& cameraPos,
-	const Vector3& playerPos
+	const Vector3& playerPos,
+	bool enableTransparency,
+	float transparencyAlpha,
+	int currentStageIndex
 )
 {
+
+	if (!enableTransparency) {
+		for (auto& obj : wallObjects_) {
+			if (obj) {
+				obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+			}
+		}
+
+		RebuildTransparencyGroups();
+		return;
+	}
 	cameraPos;
 
 	int playerCellX = static_cast<int>(std::floor(playerPos.x + 0.5f));
@@ -1576,22 +1591,49 @@ void StageRenderer::UpdateWallTransparency(
 			continue;
 		}
 
+		if (!IsTransparencyArea(
+			currentStageIndex,
+			wallCellX,
+			wallCellY,
+			wallCellZ
+		)) {
+			continue;
+		}
+
 		// 自機中心の見やすい範囲
 		bool insideTransparencyArea =
-			std::abs(wallCellX - playerCellX) <= 4 &&
-			std::abs(wallCellZ - playerCellZ) <= 3 &&
-			wallCellY <= playerCellY + 3;
+			std::abs(wallCellX - playerCellX) <= 2 &&
+			std::abs(wallCellZ - playerCellZ) <= 1 &&
+			wallCellY <= playerCellY + 2;
 
 		if (insideTransparencyArea) {
-			obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.01f });
+			obj->SetColor({ 1.0f, 1.0f, 1.0f, transparencyAlpha });
 		}
 	}
 
 	RebuildTransparencyGroups();
 }
 
-void StageRenderer::UpdateCloudTransparency(const Vector3& playerPos)
+void StageRenderer::UpdateCloudTransparency(
+	const Vector3& cameraPos,
+	const Vector3& playerPos
+)
 {
+	Vector3 viewLine = {
+		playerPos.x - cameraPos.x,
+		playerPos.y - cameraPos.y,
+		playerPos.z - cameraPos.z
+	};
+
+	float lineLenSq =
+		viewLine.x * viewLine.x +
+		viewLine.y * viewLine.y +
+		viewLine.z * viewLine.z;
+
+	if (lineLenSq <= 0.0001f) {
+		return;
+	}
+
 	for (auto& cloud : clouds_) {
 		for (size_t i = 0; i < cloud.objects.size(); ++i) {
 			Object3d* obj = cloud.objects[i].get();
@@ -1602,16 +1644,77 @@ void StageRenderer::UpdateCloudTransparency(const Vector3& playerPos)
 
 			Vector3 cloudPos = obj->GetPosition();
 
-			float dx = cloudPos.x - playerPos.x;
-			float dz = cloudPos.z - playerPos.z;
+			Vector3 cameraToCloud = {
+				cloudPos.x - cameraPos.x,
+				cloudPos.y - cameraPos.y,
+				cloudPos.z - cameraPos.z
+			};
 
-			float distSq = dx * dx + dz * dz;
+			// カメラ→自機の線分上のどの位置に雲が近いか
+			float t =
+				(cameraToCloud.x * viewLine.x +
+					cameraToCloud.y * viewLine.y +
+					cameraToCloud.z * viewLine.z) / lineLenSq;
 
-			if (distSq < 64.0f) {
+			// カメラより手前、または自機より奥は対象外
+			if (t < 0.0f || t > 1.0f) {
+				obj->SetScale(cloud.localScales[i]);
+				continue;
+			}
+
+			Vector3 closestPoint = {
+				cameraPos.x + viewLine.x * t,
+				cameraPos.y + viewLine.y * t,
+				cameraPos.z + viewLine.z * t
+			};
+
+			float dx = cloudPos.x - closestPoint.x;
+			float dy = cloudPos.y - closestPoint.y;
+			float dz = cloudPos.z - closestPoint.z;
+
+			float distSqToViewLine = dx * dx + dy * dy + dz * dz;
+
+			// 視線に近い雲だけ消す
+			if (distSqToViewLine < 16.0f) {
 				obj->SetScale({ 0.0f, 0.0f, 0.0f });
 			} else {
 				obj->SetScale(cloud.localScales[i]);
 			}
 		}
 	}
+}
+
+bool StageRenderer::IsTransparencyArea(
+	int stageIndex,
+	int x,
+	int y,
+	int z
+)
+{
+	switch (stageIndex) {
+
+		// ==========================================
+		// 操作説明
+		// ==========================================
+	case 0:
+		return false;
+
+		// ==========================================
+		// ステージ1
+		// ==========================================
+	case 1:
+
+		// 階段周辺だけ透過
+		if (
+			x >= 6 && x <= 15 &&
+			y >= 1 && y <= 3 &&
+			z ==6
+			) {
+			return true;
+		}
+
+		return false;
+	}
+
+	return false;
 }

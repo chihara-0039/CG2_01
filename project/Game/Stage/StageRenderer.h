@@ -6,6 +6,8 @@
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Model.h"
+#include <GameplayCameraController.h>
+
 
 class StageRenderer {
 public:
@@ -191,8 +193,19 @@ public:
 
     void UpdateWallTransparency(
         const Vector3& cameraPos,
-        const Vector3& playerPos
+        const Vector3& playerPos,
+        bool enableTransparency,
+        float transparencyAlpha,
+        int currentStageIndex
     );
+    //雲の透過
+    void UpdateCloudTransparency(const Vector3& cameraPos, const Vector3& playerPos);
 
-    void UpdateCloudTransparency(const Vector3& playerPos);
+    //ステージの部分透過エリアのための関数
+    bool IsTransparencyArea(
+        int stageIndex,
+        int x,
+        int y,
+        int z
+    );
 };
