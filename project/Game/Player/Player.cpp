@@ -47,6 +47,12 @@ void Player::InitializeWithDefaultSkinned(Object3dCommon* common, DirectXCommon*
 void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Matrix4x4& lightVP, DirectXCommon* dxCommon)
 {
 	input_ = input;
+
+	// UI表示フラグを毎フレームリセット
+	isNearPSwitch_ = false;
+	isNearKey_ = false;
+	isNearKeyBlock_ = false;
+
 	// --- 1. ハシゴ判定 ---
 	int gx = static_cast<int>(std::floor(position_.x + 0.5f));
 	int gyBottom = static_cast<int>(std::floor(position_.y + 0.1f));
@@ -275,6 +281,9 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	// ▼ 追加：鍵の取得チェック
 	KeyUpdate(map);
 
+	//鍵を持った状態で触れているかチェック
+	KeyBlockUIUpdate(map);
+
 	// --- 敵やトゲとの接触判定 ---
 	{
 		int px = static_cast<int>(std::floor(position_.x + 0.5f));
@@ -478,12 +487,52 @@ void Player::KeyUpdate(StageMap& map)
 
 	MapCell* cell = map.GetCell(gx, gy, gz);
 
-	// 触れているのが鍵だったら取得
 	if (cell && cell->type == BlockType::Key) {
-		hasKey_ = true;                 // 鍵を取得
-		cell->type = BlockType::None;   // マップから鍵を消す
-		cell->isSolid = false;
-		map.RequestRebuild();           // ステージの見た目を再構築
+		isNearKey_ = true;
+		nearKeyWorldPos_ = {
+			static_cast<float>(gx),
+			static_cast<float>(gy) + 1.0f,
+			static_cast<float>(gz)
+		};
+
+		if (input_->TriggerKey(DIK_F)) {
+			hasKey_ = true;
+			cell->type = BlockType::None;
+			cell->isSolid = false;
+			map.RequestRebuild();
+		}
+	}
+	
+}
+
+//鍵ブロックUI判定関数
+
+void Player::KeyBlockUIUpdate(StageMap& map)
+{
+	if (!hasKey_) {
+		return;
+	}
+
+	int px = static_cast<int>(std::floor(position_.x + 0.5f));
+	int py = static_cast<int>(std::floor(position_.y + 0.5f));
+	int pz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+	for (int dy = -1; dy <= 1; ++dy) {
+		for (int dx = -1; dx <= 1; ++dx) {
+			for (int dz = -1; dz <= 1; ++dz) {
+				const MapCell* cell = map.GetCell(px + dx, py + dy, pz + dz);
+
+				if (cell && cell->type == BlockType::KeyBlock) {
+					isNearKeyBlock_ = true;
+					nearKeyBlockWorldPos_ = {
+						static_cast<float>(px + dx),
+						static_cast<float>(py + dy) + 1.0f,
+						static_cast<float>(pz + dz)
+					};
+					return;
+				}
+			}
+		}
 	}
 }
 
@@ -571,11 +620,16 @@ void Player::PSwitchUpdate(StageMap& map)
 
 	const MapCell* cellBelow = map.GetCell(gx, gyBottom, gz);
 
-	if (input_->TriggerKey(DIK_F))
-	{
-		// Pスイッチの判定
-		if (cellBelow && cellBelow->type == BlockType::PSwitch) {
-			map.SetPSwitchActive(cellBelow->variant); // これで needsRebuild_ が true になる
+	if (cellBelow && cellBelow->type == BlockType::PSwitch) {
+		isNearPSwitch_ = true;
+		nearPSwitchWorldPos_ = {
+			static_cast<float>(gx),
+			static_cast<float>(gyBottom) + 1.0f,
+			static_cast<float>(gz)
+		};
+
+		if (input_->TriggerKey(DIK_F)) {
+			map.SetPSwitchActive(cellBelow->variant);
 		}
 	}
 }

@@ -150,10 +150,24 @@ public:
     /// <summary>鍵ブロックの取得判定と所持フラグの更新</summary>
     void KeyUpdate(StageMap& map);
 
+    void KeyBlockUIUpdate(StageMap& map);
+
     // ── 状態フラグゲッター ────────────────────────────────
 
     /// <summary>ドアの近くにいるか (UI 表示用)</summary>
     bool IsNearDoor() const { return isNearDoor_; }
+
+    // Pスイッチの近くにいるか
+    bool IsNearPSwitch() const { return isNearPSwitch_; }
+    const Vector3& GetNearPSwitchWorldPos() const { return nearPSwitchWorldPos_; }
+
+    // 鍵の近くにいるか
+    bool IsNearKey() const { return isNearKey_; }
+    const Vector3& GetNearKeyWorldPos() const { return nearKeyWorldPos_; }
+
+    // 鍵ブロックの近くにいるか
+    bool IsNearKeyBlock() const { return isNearKeyBlock_; }
+    const Vector3& GetNearKeyBlockWorldPos() const { return nearKeyBlockWorldPos_; }
 
     /// <summary>ドアのワールド座標 (UI のワールド→スクリーン変換に使用)</summary>
     const Vector3& GetNearDoorWorldPos() const { return nearDoorWorldPos_; }
@@ -203,6 +217,18 @@ private:
     // ── ドア・はしご状態 ──────────────────────────────────
     Vector3 nearDoorWorldPos_ = { 0,0,0 }; // 近くのドアのワールド座標 (UI 追従用)
     bool    isNearDoor_       = false;     // ドアの近くにいるか
+
+    // PスイッチUI
+    Vector3 nearPSwitchWorldPos_ = { 0,0,0 };
+    bool isNearPSwitch_ = false;
+
+    // 鍵UI
+    Vector3 nearKeyWorldPos_ = { 0,0,0 };
+    bool isNearKey_ = false;
+
+    // 鍵ブロックUI
+    Vector3 nearKeyBlockWorldPos_ = { 0,0,0 };
+    bool isNearKeyBlock_ = false;
 
     bool    isOnLadder_       = false;     // はしごに掴まっているか
     Vector3 ladderWorldPos_   = { 0,0,0 }; // はしごのワールド座標 (UI 追従用)
