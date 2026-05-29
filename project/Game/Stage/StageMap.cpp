@@ -21,6 +21,16 @@ void StageMap::Initialize(int width, int height, int depth) {
     depth_ = depth;
 
     cells_.resize(width_ * height_ * depth_);
+
+    // ==================================================
+  // ▼ ステージ読み込み時にギミック状態を完全リセット
+  // ==================================================
+    isPSwitchActive_ = false;
+    isOnState_ = true;
+    needsRebuild_ = false;
+    accumulatedTime_ = 0.0f;
+
+
     Clear();
 
     // 5つのカスタムブロックパーツスロットをデフォルト値で初期化
@@ -465,13 +475,22 @@ void StageMap::LoadFromFile(const std::string& filename) {
     RebuildEnemyList();
 }
 
+
 void StageMap::Clear() {
     for (MapCell& cell : cells_) {
+        cell = MapCell{};
         cell.type = BlockType::None;
         cell.variant = 0;
         cell.isSolid = false;
     }
+
+    movingFloors_.clear();
     enemies_.clear();
+
+    isPSwitchActive_ = false;
+    isOnState_ = true;
+    needsRebuild_ = false;
+
     ResetTime();
 }
 
