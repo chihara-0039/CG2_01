@@ -1,4 +1,4 @@
-#include "Player.h"
+﻿#include "Player.h"
 #include <cmath>
 
 Player::~Player() = default;
@@ -134,12 +134,16 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 				}
 			}
 		}
-		else if (moveSide != 0.0f)
+				else if (moveSide != 0.0f)
 		{
-			// 2. 上下入力がなく、左右入力がある場合（ハシゴからの離脱など）
-			Vector3 nextPosX = position_;
-			nextPosX.x += moveSide * 0.3f;
-			if (!CheckCollision(nextPosX, map)) position_.x = nextPosX.x;
+			// カメラの向きに合わせて左右に移動する
+			Vector3 nextPos = position_;
+			nextPos.x += moveSide * std::cos(cameraRotY) * walkSpeed_;
+			nextPos.z += -moveSide * std::sin(cameraRotY) * walkSpeed_;
+			
+			if (!CheckCollision(nextPos, map)) {
+				position_ = nextPos;
+			}
 		}
 
 		// ハシゴ中は接地扱いにしてジャンプなどを可能にする

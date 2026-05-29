@@ -969,8 +969,8 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
 
     // チュートリアルスプライトの描画
     bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-    if (currentMode_ == AppMode::GamePlay && !invOpen && stageSelect_) {
-        if (stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_) {
+    if (currentMode_ == AppMode::GamePlay && !invOpen) {
+        if (tutorialSprite_) {
             spriteCommon->PreDraw();
             tutorialSprite_->Draw();
         }
@@ -1089,9 +1089,9 @@ void MyGame::UpdateGamePlay() {
         // V キーでプレイヤー追従 / 固定カメラを切り替える
         if (input->TriggerKey(DIK_V)) {
             bool cur = gameplayCameraController_.IsFollowPlayerMode();
-            gameplayCameraController_.SetFollowPlayerMode(!cur);
             if (!cur && player_) {
                 // 追従モードに切り替えたらカメラピボットをプレイヤー頭部に合わせる
+                gameplayCameraController_.SetFollowPlayerMode(true);
                 Vector3 pp  = player_->GetPosition();
                 pp.y       += 0.8f;
                 gameplayCameraController_.SetCameraPivot(pp);
@@ -1099,6 +1099,8 @@ void MyGame::UpdateGamePlay() {
                 // 固定モードに切り替えたらステージデフォルト位置にリセット
                 gameplayCameraController_.ResetCamera(
                     camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
+                // ResetCamera内で追従モードにリセットされるため、明示的にOFFにする
+                gameplayCameraController_.SetFollowPlayerMode(false);
             }
         }
         camera->SetFov(gameplayCameraController_.GetFov());
@@ -1115,7 +1117,16 @@ void MyGame::UpdateGamePlay() {
         camera->SetFov(fpsCameraFov_);
 
         const auto& mouse = input->GetMouseState();
-        if (mouse.buttons[0] && !isGuiCaptured) {
+        static bool isDraggingFpsCamera = false;
+        if (mouse.buttons[0]) {
+            if (!isDraggingFpsCamera && !isGuiCaptured) {
+                isDraggingFpsCamera = true;
+            }
+        } else {
+            isDraggingFpsCamera = false;
+        }
+
+        if (isDraggingFpsCamera) {
             RECT rect;
             GetClientRect(winApp->GetHwnd(), &rect);
             float cw = static_cast<float>(rect.right  - rect.left);
@@ -1172,10 +1183,9 @@ void MyGame::UpdateGamePlay() {
             currentMode_ == AppMode::GamePlay, input.get(), winApp.get());
     }
 
-    // チュートリアルスプライトの更新 (tutorial ステージ + インベントリを閉じているとき)
+    // チュートリアルスプライトの更新 (インベントリを閉じているとき)
     bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-    if (stageSelect_ && stageSelect_->GetSelectedFileName() == "tutorial.txt"
-        && tutorialSprite_ && !invOpen) {
+    if (tutorialSprite_ && !invOpen) {
         tutorialSprite_->Update();
     }
     if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
@@ -1357,17 +1367,34 @@ void MyGame::UpdateStageSelect() {
 //  マップをバックアップから復元してステージ選択に戻る
 // --------------------------------------------------------
 void MyGame::UpdateSceneTransition() {
+    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+
     if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)
         && input->TriggerKey(DIK_ESCAPE)) {
-        stageMap_ = backupMap_; // バックアップから復元 (ブロック設置も元に戻る)
-        stageRenderer_->BuildFromStageMap(stageMap_);
-        // コントローラーをリセットしてステージ選択に戻る
-        bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
-        stageSelect_->Initialize(object3dCommon.get(), input.get());
-        isGoalReached_ = false;
-        if (player_) { player_->Respawn(); }
-        particleManager->ClearParticles();
-        currentMode_ = AppMode::StageSelect;
+        
+        if (invOpen) {
+            // インベントリが開いている場合は閉じてGamePlayに戻る
+            blockInventoryUI_->ToggleOpen();
+            currentMode_ = AppMode::GamePlay;
+            placeRotationY_ = 0.0f;
+            if (stageRenderer_) { stageRenderer_->ClearPlacementPreview(); }
+        } else if (currentMode_ == AppMode::GamePlay_BlockPlace) {
+            // インベントリは閉じていて配置モードの場合はGamePlayに戻る
+            currentMode_ = AppMode::GamePlay;
+            placeRotationY_ = 0.0f;
+            if (stageRenderer_) { stageRenderer_->ClearPlacementPreview(); }
+        } else {
+            // 純粋なGamePlay中の場合はステージ選択に戻る
+            stageMap_ = backupMap_; // バックアップから復元 (ブロック設置も元に戻る)
+            stageRenderer_->BuildFromStageMap(stageMap_);
+            // コントローラーをリセットしてステージ選択に戻る
+            bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+            stageSelect_->Initialize(object3dCommon.get(), input.get());
+            isGoalReached_ = false;
+            if (player_) { player_->Respawn(); }
+            particleManager->ClearParticles();
+            currentMode_ = AppMode::StageSelect;
+        }
     }
 }
 
