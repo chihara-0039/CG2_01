@@ -215,7 +215,7 @@ void GameplayCameraController::ResetCamera(
 ) {
     if (!camera || !player) return;
 
-    followPlayerMode_ = false;
+    followPlayerMode_ = true;
 
     currentStageIndex_ = stageIndex;
 
@@ -337,12 +337,10 @@ void GameplayCameraController::ResetCamera(
         break;
     }
 
-    // ステージ中心を見る
-    cameraPivot_ = {
-        (width - 1.0f) * 0.5f,
-        height * preset.pivotYRate,
-        (depth - 1.0f) * 0.5f
-    };
+    // ステージ開始時は自機追従カメラから始める
+    Vector3 pp = player->GetPosition();
+    pp.y += 0.8f;
+    cameraPivot_ = pp;
 
     cameraAngle_ = preset.angle;
     cameraPitch_ = preset.pitch;
