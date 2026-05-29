@@ -26,6 +26,11 @@ void StageRespawnController::Update(
     isRespawning_ = true;
 
     // ==================================================
+  // 今のチェックポイント位置を保存
+  // ==================================================
+    Vector3 currentRespawnPos = player->GetRespawnPosition();
+
+    // ==================================================
     // 落下時：ステージ開始時の状態へ丸ごと戻す
     // Pスイッチ / ONOFF / 鍵 / 鍵ブロック / バブル / 設置ブロック
     // など全部 backupMap_ の状態に戻る
@@ -56,9 +61,11 @@ void StageRespawnController::Update(
         );
     }
 
-    if (stageEditorController) {
-        stageEditorController->ResetPlayerToStartCell(stageMap, player);
-    } else {
-        player->Respawn();
-    }
+    // ==================================================
+   // チェックポイント位置は維持する
+   // ただし鍵は必ずリセットする
+   // ==================================================
+    player->SetRespawnPosition(currentRespawnPos);
+    player->SetHasKey(false);
+    player->Respawn();
 }
