@@ -1,4 +1,4 @@
-#include "StageMap.h"
+﻿#include "StageMap.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -302,11 +302,13 @@ void StageMap::SaveToFile(const std::string& filename) {
     ofs << width_ << " " << height_ << " " << depth_ << "\n";
 
     // 環境・ライティング設定を書き出す
+    ofs << "PRESET \"" << weatherPresetName_ << "\"\n";
     ofs << "ENVIRONMENT "
         << clearColor_.x << " " << clearColor_.y << " " << clearColor_.z << " " << clearColor_.w << " "
         << lightIntensity_ << " "
         << lightColor_.x << " " << lightColor_.y << " " << lightColor_.z << " "
         << lightDirection_.x << " " << lightDirection_.y << " " << lightDirection_.z << "\n";
+
 
 
     // カスタムブロック定義を書き出す
@@ -432,7 +434,17 @@ void StageMap::LoadFromFile(const std::string& filename) {
                     }
                 }
             }
+        } else if (token == "PRESET") {
+            std::string presetName;
+            std::getline(lineSS, presetName);
+            // " " を取り除く
+            size_t start = presetName.find('\"');
+            size_t end = presetName.rfind('\"');
+            if (start != std::string::npos && end != std::string::npos && start < end) {
+                weatherPresetName_ = presetName.substr(start + 1, end - start - 1);
+            }
         } else if (token == "ENVIRONMENT") {
+
             lineSS >> clearColor_.x >> clearColor_.y >> clearColor_.z >> clearColor_.w
                    >> lightIntensity_
                    >> lightColor_.x >> lightColor_.y >> lightColor_.z
