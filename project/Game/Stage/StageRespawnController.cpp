@@ -19,24 +19,21 @@ void StageRespawnController::Update(
         return;
     }
 
-    // 既にリスポーン中なら何もしない
     if (isRespawning_) {
         return;
     }
 
-    // ここに来るのは1回だけ
     isRespawning_ = true;
 
-    // 時間差ブロックのタイマーをリセット
-    stageMap.ResetTime();
+    // ==================================================
+    // 落下時：ステージ開始時の状態へ丸ごと戻す
+    // Pスイッチ / ONOFF / 鍵 / 鍵ブロック / バブル / 設置ブロック
+    // など全部 backupMap_ の状態に戻る
+    // ==================================================
+    stageMap = backupMap;
 
-    // Pスイッチ状態だけ戻す
-    if (stageMap.IsPSwitchActive()) {
-        stageMap.ResetPSwitchStateNoRebuild();
-
-        if (stageRenderer) {
-            stageRenderer->BuildFromStageMap(stageMap);
-        }
+    if (stageRenderer) {
+        stageRenderer->BuildFromStageMap(stageMap);
     }
 
     if (blockInventory) {
@@ -45,18 +42,23 @@ void StageRespawnController::Update(
 
     if (bubblePickupController && stageRenderer && blockInventory) {
         bubblePickupController->Initialize(
-            &stageMap, 
-            stageRenderer, 
-            blockInventory);
+            &stageMap,
+            stageRenderer,
+            blockInventory
+        );
     }
 
     if (blockPlacementController && stageRenderer && blockInventory) {
-        blockPlacementController->Initialize(&stageMap, stageRenderer, blockInventory);
+        blockPlacementController->Initialize(
+            &stageMap,
+            stageRenderer,
+            blockInventory
+        );
     }
 
-    /*if (stageEditorController) {
+    if (stageEditorController) {
         stageEditorController->ResetPlayerToStartCell(stageMap, player);
-    }*/
-
-    player->Respawn();
+    } else {
+        player->Respawn();
+    }
 }
