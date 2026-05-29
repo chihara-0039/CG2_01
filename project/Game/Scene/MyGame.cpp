@@ -435,7 +435,9 @@ void MyGame::Update() {
                 isGoalReached_ = false;
                 stageMap_.Clear();
                 player_->Respawn();
+                particleManager->ClearParticles();
                 currentMode_ = AppMode::StageSelect;
+
             }
         }
         gameClearScene_->Update();
@@ -445,6 +447,10 @@ void MyGame::Update() {
             Vector3 fireworkPos = { (rand() % 40) - 20.0f, (rand() % 20) + 5.0f, (rand() % 20) - 5.0f };
             particleManager->Emit(fireworkPos, 30);
         }
+
+
+
+
         break;
 
     case AppMode::SkinningEditor:
@@ -1352,9 +1358,11 @@ void MyGame::UpdateSceneTransition() {
         stageSelect_->Initialize(object3dCommon.get(), input.get());
         isGoalReached_ = false;
         if (player_) { player_->Respawn(); }
+        particleManager->ClearParticles();
         currentMode_ = AppMode::StageSelect;
     }
 }
+
 
 void MyGame::UpdateBGM() {
     BgmType nextBgmType = BgmType::None;
