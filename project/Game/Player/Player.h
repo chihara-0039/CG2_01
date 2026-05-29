@@ -137,6 +137,9 @@ public:
     /// <summary>リスポーン地点をセット (スタートブロックの位置から計算して渡す)</summary>
     void SetRespawnPosition(const Vector3& pos) { respawnPosition = pos; }
 
+    const Vector3& GetRespawnPosition() const { return respawnPosition; }
+
+
     /// <summary>プレイヤーを respawnPosition に戻し、速度をリセットする</summary>
     void Respawn();
 
