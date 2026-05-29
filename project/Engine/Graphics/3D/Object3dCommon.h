@@ -30,7 +30,10 @@ struct DirectionalLight {
     Vector3 direction;       // 蜈峨・譁ｹ蜷・(豁｣隕丞喧貂医∩)
     float   intensity;       // 蜈峨・蠑ｷ縺・
     Vector3 cameraPosition;  // 繧ｹ繝壹く繝･繝ｩ繝ｼ險育ｮ礼畑繧ｫ繝｡繝ｩ菴咲ｽｮ
-    float   paddingLight;    // 16繝舌う繝医い繝ｩ繧､繝｡繝ｳ繝育畑繝代ョ繧｣繝ｳ繧ｰ
+    float   paddingLight;
+    Vector3 pointLightPosition;
+    float   pointLightIntensity;
+    Vector4 pointLightColor;
 };
 
 // ==============================================================
@@ -138,8 +141,13 @@ public:
     }
 
     /// <summary>蟷ｳ陦悟・貅舌・蠑ｷ縺輔ｒ繧ｻ繝・ヨ (0.0 縲・2.0 遞句ｺｦ縺悟ｮ溽畑逧・</summary>
-    void SetLightIntensity(float intensity) {
-        if (lightData_) lightData_->intensity = intensity;
+    void SetLightIntensity(float intensity) { lightData_->intensity = intensity; }
+    void SetPointLight(const Vector3& pos, float intensity, const Vector4& color) {
+        if(lightData_) {
+            lightData_->pointLightPosition = pos;
+            lightData_->pointLightIntensity = intensity;
+            lightData_->pointLightColor = color;
+        }
     }
 
     /// <summary>

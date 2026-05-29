@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Input.h"
 #include "Camera.h"
 #include "WinApp.h"
@@ -29,6 +29,7 @@ public:
     /// 現在のカメラ横回転角度（ラジアン）を取得します。
     /// </summary>
     float GetAngle() const { return cameraAngle_; }
+    void ForceUpdate() { cameraDirty_ = true; }
 
     /// <summary>
     /// 現在のカメラ縦見下ろし角度（ピッチ・ラジアン）を取得します。
