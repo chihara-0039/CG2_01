@@ -404,13 +404,15 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					if (insideCustomId >= 1 && insideCustomId <= 5) {
 						const auto* part = stageMap.GetCustomPart(insideCustomId);
 						if (part) {
-							obj->SetColor({ part->colorR, part->colorG, part->colorB, 0.8f });
+							obj->SetColor({ part->colorR, part->colorG, part->colorB, 1.0f });
 						}
 					} else {
 						if (insideType == BlockType::Wall) {
-							obj->SetColor({ 1.0f, 0.5f, 0.5f, 0.8f });
+							obj->SetColor({ 1.0f, 0.5f, 0.5f, 0.95f });
 						} else if (insideType == BlockType::Ladder) {
-							obj->SetColor({ 0.5f, 1.0f, 0.5f, 0.8f });
+							obj->SetColor({ 0.5f, 1.0f, 0.5f, 0.95f });
+						} else {
+							obj->SetColor({ 1.0f, 1.0f, 1.0f, 0.95f });
 						}
 					}
 				}
@@ -1330,8 +1332,6 @@ void StageRenderer::SetPlacementPreview(
 
 void StageRenderer::ClearPlacementPreview() {
 	previewObjects_.clear();
-	// ▼ 追加：動く足場の管理リストをクリア (Object3d自体は objects_ 側で解放されるため clear だけでOK)
-	movingFloorInstances_.clear();
 
 	// プレビューグループもクリア
 	previewRenderGroups_.clear();
@@ -1360,6 +1360,10 @@ Object3d* StageRenderer::CreateStageObject(
 	obj->SetPosition(position);
 	obj->SetScale(scale);
 	obj->SetRotation(rotation);
+	obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f }); // 確実に色をリセット
+	obj->SetShininess(0.3f);                   // パラメータを確実にリセット
+	obj->SetMetallic(0.0f);                    // パラメータを確実にリセット
+	obj->SetEmissive(0.0f);                    // 発光も確実にリセット
 	
 	// 高品質マイクロマテリアル設定の自動適用
 	switch (type) {
@@ -1416,9 +1420,9 @@ Object3d* StageRenderer::CreateStageObject(
 		obj->SetEmissive(0.4f);
 		break;
 	case BlockType::BubblePickup:
-		obj->SetShininess(0.9f);
-		obj->SetMetallic(0.1f);
-		obj->SetEmissive(0.3f);
+		obj->SetShininess(1.0f);
+		obj->SetMetallic(0.0f);
+		obj->SetEmissive(20.0f); // さらに強く発光させる（アルファ乗算負けしないように）
 		break;
 	default:
 		break;

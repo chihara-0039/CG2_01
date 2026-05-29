@@ -2,5 +2,5 @@ tutorial.txt
 gameStage01.txt
 gameStage02.txt
 stage04.txt
+new_stage_03.txt
 stage_03 .txt
-stage03.txt
