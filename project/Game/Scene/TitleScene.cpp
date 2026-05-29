@@ -19,7 +19,6 @@ void TitleScene::Initialize(Object3dCommon* objCommon, Input* input) {
         object3dCommon_->GetTextureManager()
     ));
 
-
     // オブジェクト生成
     titleObject_ = std::make_unique<Object3d>();
     titleObject_->Initialize(object3dCommon_);
@@ -38,6 +37,28 @@ void TitleScene::Initialize(Object3dCommon* objCommon, Input* input) {
         "soapBubbles.obj",
         object3dCommon_->GetTextureManager()
     ));
+
+    // Space UIモデル読み込み
+    pressSpaceModel_ = std::unique_ptr<Model>(Model::CreateFromOBJ(
+        object3dCommon_->GetDxCommon(),
+        "Resources/UI/pressSpace",
+        "pressSpace.obj",
+        object3dCommon_->GetTextureManager()
+    ));
+
+    pressSpaceObject_ = std::make_unique<Object3d>();
+    pressSpaceObject_->Initialize(object3dCommon_);
+    pressSpaceObject_->SetModel(pressSpaceModel_.get());
+
+    pressSpacePos_ = { 0.0f, -4.0f, 10.0f };
+    pressSpaceRot_ = { 0.0f, 0.0f, 0.0f };
+    pressSpaceScale_ = { 1.5f, 1.5f, 1.5f };
+
+    pressSpaceObject_->SetPosition(pressSpacePos_);
+    pressSpaceObject_->SetRotation(pressSpaceRot_);
+    pressSpaceObject_->SetScale(pressSpaceScale_);
+    pressSpaceObject_->SetEnableLighting(false);
+
 
     // 雲の生成 (StageRendererと同様)
     int cloudCount = 12;
@@ -144,6 +165,32 @@ void TitleScene::Update() {
     titleObject_->SetCamera(view, proj);
     titleObject_->Update(Math::MakeIdentity4x4());
 
+
+    // =========================
+    // Space UI更新
+    // タイトルが上がりきったら表示して、その場で止める
+    // =========================
+    if (position_.y >= 0.0f) {
+        isPressSpaceVisible_ = true;
+    }
+
+    if (pressSpaceObject_ && isPressSpaceVisible_) {
+        pressSpaceTimer_ += 0.05f;
+
+        float scale = 1.0f + std::sin(pressSpaceTimer_) * 0.05f;
+
+        pressSpaceObject_->SetPosition(pressSpacePos_);
+        pressSpaceObject_->SetRotation(pressSpaceRot_);
+        pressSpaceObject_->SetScale({
+            pressSpaceScale_.x * scale,
+            pressSpaceScale_.y * scale,
+            pressSpaceScale_.z * scale
+            });
+
+        pressSpaceObject_->SetCamera(view, proj);
+        pressSpaceObject_->Update(Math::MakeIdentity4x4());
+    }
+
     // =========================
     // 雲の更新
     // =========================
@@ -171,7 +218,7 @@ void TitleScene::Update() {
     // =========================
     // シーン遷移
     // =========================
-    if (input_->TriggerKey(DIK_RETURN)) {
+    if (input_->TriggerKey(DIK_SPACE)) {
         isFinished_ = true;
     }
 }
@@ -179,9 +226,15 @@ void TitleScene::Update() {
 void TitleScene::Draw() {
     titleObject_->Draw();
 
+    
+
     for (const auto& cloud : clouds_) {
         for (const auto& obj : cloud.objects) {
             obj->Draw();
         }
+    }
+
+    if (pressSpaceObject_ && isPressSpaceVisible_) {
+        pressSpaceObject_->Draw();
     }
 }

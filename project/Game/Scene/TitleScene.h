@@ -29,6 +29,15 @@ private:
     Camera camera_;
     std::unique_ptr<Model> titleModel_; // unique_ptr に変更
     std::unique_ptr<Object3d> titleObject_; // unique_ptr に変更
+
+    std::unique_ptr<Model> pressSpaceModel_;
+    std::unique_ptr<Object3d> pressSpaceObject_;
+
+    Vector3 pressSpacePos_ = { 0.0f, -15.0f, 8.0f };
+    Vector3 pressSpaceRot_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 pressSpaceScale_ = { 1.0f, 1.0f, 1.0f };
+
+    float pressSpaceTimer_ = 0.0f;
     
     // 雲のモデルとインスタンス群
     std::unique_ptr<Model> cloudModel_;
@@ -46,4 +55,6 @@ private:
     bool isFinished_ = false;
     float timer_ = 0.0f;
     float spiralAngle_ = 0.0f;
+
+    bool isPressSpaceVisible_ = false;
 };
