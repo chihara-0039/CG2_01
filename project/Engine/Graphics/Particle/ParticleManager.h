@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 #include <d3d12.h>
 #include <wrl.h>
 #include <vector>
 #include <list>
+#include <string>
 #include "MyMath.h"
 #include "DirectXCommon.h"
 #include "TextureManager.h"
@@ -20,7 +21,7 @@ struct Particle {
 class ParticleManager {
 public: // サブクラスなど
     // 定数：最大パーティクル数
-    static const uint32_t kMaxParticles = 1024;
+    static const uint32_t kMaxParticles = 4096; // 天候のために増やす
 
     // インスタンシング用データ構造（シェーダーに送る）
     struct InstanceData {
@@ -35,12 +36,25 @@ public: // サブクラスなど
         Vector3 normal;
     };
 
+    struct WeatherEmitter {
+        bool active = false;
+        Vector3 center = {0,0,0};
+        Vector3 size = {40, 20, 40};       // 発生範囲
+        float emitRate = 100.0f;           // 1秒あたりの発生数
+        float emitTimer = 0.0f;
+        Vector3 velocity = {0, -5.0f, 0};  // 基本落下速度
+        Vector3 velocityRandom = {1, 0.5f, 1}; // 速度のばらつき
+        Vector3 particleSize = {0.2f, 0.2f, 0.2f};
+        float particleLife = 4.0f;
+        Vector4 color = {1,1,1,1};
+    };
+
 public: // メンバ関数
     // 初期化
     void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager);
 
     // 更新
-    void Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
+    void Update(float deltaTime, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const Vector3& playerPos);
 
     // 描画
     void Draw();
@@ -48,6 +62,14 @@ public: // メンバ関数
     // パーティクル発生（エミッター）
     // pos: 発生位置, count: 発生数
     void Emit(const Vector3& pos, uint32_t count);
+
+    // テクスチャ設定
+    void SetTexture(uint32_t textureHandle) { textureHandle_ = textureHandle; }
+
+    // 天候エミッターの取得・設定
+    WeatherEmitter& GetWeatherEmitter() { return weatherEmitter_; }
+
+    void ClearParticles() { particles_.clear(); }
 
 private: // 内部処理
     void CreateRootSignature();
@@ -76,4 +98,7 @@ private: // メンバ変数
 
     // パーティクルリスト
     std::list<Particle> particles_;
+
+    // 天候用エミッター
+    WeatherEmitter weatherEmitter_;
 };

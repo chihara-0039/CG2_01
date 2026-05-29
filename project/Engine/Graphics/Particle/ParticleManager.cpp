@@ -13,7 +13,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
     dxCommon_ = dxCommon;
     textureManager_ = textureManager;
 
-    // 1. テクスチャ読み込み
+    // 1. テクスチャ読み込み (デフォルト)
     textureHandle_ = textureManager_->LoadTexture("Resources/UI/inventory/white.png");
 
     // 2. パイプライン生成
@@ -46,19 +46,61 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
     }
 }
 
-void ParticleManager::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const Vector3& playerPos) {
+    // 0. 天候エミッターの処理
+    if (weatherEmitter_.active && weatherEmitter_.emitRate > 0.0f) {
+        weatherEmitter_.emitTimer += deltaTime;
+        float emitInterval = 1.0f / weatherEmitter_.emitRate;
+        
+        while (weatherEmitter_.emitTimer >= emitInterval) {
+            weatherEmitter_.emitTimer -= emitInterval;
+            
+            if (particles_.size() < kMaxParticles) {
+                std::uniform_real_distribution<float> distX(-weatherEmitter_.size.x / 2.0f, weatherEmitter_.size.x / 2.0f);
+                std::uniform_real_distribution<float> distY(-weatherEmitter_.size.y / 2.0f, weatherEmitter_.size.y / 2.0f);
+                std::uniform_real_distribution<float> distZ(-weatherEmitter_.size.z / 2.0f, weatherEmitter_.size.z / 2.0f);
+                
+                std::uniform_real_distribution<float> randV(-1.0f, 1.0f);
+                
+                Particle p;
+                p.transform.scale = weatherEmitter_.particleSize;
+                p.transform.rotate = { 0.0f, 0.0f, 0.0f };
+                
+                // プレイヤーの周囲に発生させる
+                p.transform.translate = {
+                    playerPos.x + weatherEmitter_.center.x + distX(engine),
+                    playerPos.y + weatherEmitter_.center.y + distY(engine),
+                    playerPos.z + weatherEmitter_.center.z + distZ(engine)
+                };
+                
+                p.velocity = {
+                    weatherEmitter_.velocity.x + randV(engine) * weatherEmitter_.velocityRandom.x,
+                    weatherEmitter_.velocity.y + randV(engine) * weatherEmitter_.velocityRandom.y,
+                    weatherEmitter_.velocity.z + randV(engine) * weatherEmitter_.velocityRandom.z
+                };
+                
+                p.color = weatherEmitter_.color;
+                p.lifeTime = 0.0f;
+                p.maxTime = weatherEmitter_.particleLife;
+                particles_.push_back(p);
+            }
+        }
+    }
+
     // 1. パーティクル更新
     for (auto it = particles_.begin(); it != particles_.end();) {
-        it->lifeTime += 1.0f / 60.0f;
+        it->lifeTime += deltaTime;
         if (it->lifeTime >= it->maxTime) {
             it = particles_.erase(it);
             continue;
         }
-        it->transform.translate.x += it->velocity.x;
-        it->transform.translate.y += it->velocity.y;
-        it->transform.translate.z += it->velocity.z;
+        it->transform.translate.x += it->velocity.x * deltaTime * 60.0f;
+        it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
+        it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
+        
+        // フェードアウト
         float alpha = 1.0f - (it->lifeTime / it->maxTime);
-        it->color.w = alpha;
+        it->color.w = weatherEmitter_.color.w * alpha; // ベースアルファも考慮
         ++it;
     }
 
@@ -83,6 +125,7 @@ void ParticleManager::Update(const Matrix4x4& viewMatrix, const Matrix4x4& proje
         index++;
     }
 }
+
 
 void ParticleManager::Draw() {
     if (particles_.empty()) return;

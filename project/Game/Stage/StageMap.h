@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <cstdint>
 #include <string>
@@ -330,6 +330,10 @@ public:
     const Vector3& GetLightDirection() const { return lightDirection_; }
     void SetLightDirection(const Vector3& dir) { lightDirection_ = dir; }
 
+    const std::string& GetWeatherPresetName() const { return weatherPresetName_; }
+    void SetWeatherPresetName(const std::string& name) { weatherPresetName_ = name; }
+
+
 
 
     /// <summary>
@@ -365,10 +369,12 @@ private:
     std::vector<EnemyRef> enemies_;
 
     // 環境・ライティング設定の保存値 (初期値)
+    std::string weatherPresetName_ = "Sunny (Default)";
     Vector4 clearColor_ = { 0.1f, 0.25f, 0.5f, 1.0f }; // デフォルトの青背景
     float lightIntensity_ = 1.0f;
     Vector3 lightColor_ = { 0.9f, 0.9f, 0.9f };
     Vector3 lightDirection_ = { 0.5f, -1.0f, 0.5f };
+
 
 private:
 

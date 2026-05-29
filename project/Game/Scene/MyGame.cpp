@@ -10,6 +10,7 @@
 #include "MyGame.h"
 #include "Goal.h"
 #include "ModelManager.h"
+#include "../Environment/WeatherPresetManager.h"
 #include <memory>
 
 #include "externals/imgui/imgui.h"
@@ -36,6 +37,8 @@ void MyGame::Initialize() {
 
     dxCommon = std::make_unique<DirectXCommon>();
     dxCommon->Initialize(winApp.get());
+
+    WeatherPresetManager::GetInstance().LoadPresets();
 
     input = std::make_unique<Input>();
     input->Initialize(winApp.get());
@@ -520,7 +523,7 @@ void MyGame::Update() {
         sprite->Update();
     }
     if (debugFlags_.showParticles || currentMode_ == AppMode::GameClear) {
-        particleManager->Update(view, proj);
+        particleManager->Update(1.0f / 60.0f, view, proj, player_->GetPosition());
     }
 
     // --------------------------------------------------------
@@ -539,6 +542,24 @@ void MyGame::Update() {
 
     // クリアカラーをステージ設定と同期 (PostProcessRenderer のオフスクリーン背景色)
     postProcess_.SetClearColor(stageMap_.GetClearColor());
+    
+    // パーティクルシステムの天候エミッターを同期
+    WeatherPreset* preset = WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName());
+    auto& emitter = particleManager->GetWeatherEmitter();
+    if (preset) {
+        emitter.active = preset->particleEnabled;
+        emitter.emitRate = preset->emitRate;
+        emitter.size = preset->emitSize;
+        emitter.velocity = preset->velocity;
+        emitter.velocityRandom = preset->velocityRandom;
+        emitter.particleSize = preset->particleSize;
+        emitter.particleLife = preset->particleLife;
+        emitter.color = preset->particleColor;
+        // （テクスチャ変更も必要ならここで particleManager->SetTexture() を呼ぶ）
+    } else {
+        emitter.active = false;
+    }
+
 
     // --------------------------------------------------------
     // 15. ゲームプレイ UI の更新
