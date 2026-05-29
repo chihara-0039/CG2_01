@@ -1,4 +1,4 @@
-
+﻿
 #include "StageEditorController.h"
 #include <cmath>
 #include <algorithm>

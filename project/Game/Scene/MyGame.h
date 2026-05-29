@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <memory>
 #include <filesystem>
@@ -228,6 +228,7 @@ private:
     bool  useFirstPersonCamera_ = false; ///< FPS カメラ有効フラグ
     float fpsCameraYaw_         = 0.0f;  ///< FPS カメラの水平回転角 (Yaw)
     float fpsCameraPitch_       = 0.0f;  ///< FPS カメラの垂直回転角 (Pitch)
+    float fpsCameraFov_         = 0.9f;
     float placeRotationY_       = 0.0f;  ///< ブロック配置時の回転角
 
     // ==========================================================

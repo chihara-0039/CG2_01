@@ -1,4 +1,4 @@
-#include "ParticleManager.h"
+﻿#include "ParticleManager.h"
 #include <cassert>
 #include <random>
 
@@ -14,7 +14,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
     textureManager_ = textureManager;
 
     // 1. テクスチャ読み込み
-    textureHandle_ = textureManager_->LoadTexture("Resources/Models/axis/uvChecker.png");
+    textureHandle_ = textureManager_->LoadTexture("Resources/UI/inventory/white.png");
 
     // 2. パイプライン生成
     CreateRootSignature();

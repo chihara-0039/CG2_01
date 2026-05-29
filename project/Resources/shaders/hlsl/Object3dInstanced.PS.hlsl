@@ -1,4 +1,4 @@
-struct VertexShaderOutput
+﻿struct VertexShaderOutput
 {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
@@ -19,6 +19,9 @@ struct DirectionalLight
     float intensity;
     float3 cameraPosition;
     float paddingLight;
+    float3 pointLightPosition;
+    float pointLightIntensity;
+    float4 pointLightColor;
 };
 
 ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
@@ -36,7 +39,6 @@ PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
     
-    // テクスチャのサンプリング
     float4 textureColor = gTexture.Sample(gSampler, input.texcoord);
     
     float4 matColor = input.color;
@@ -44,13 +46,12 @@ PixelShaderOutput main(VertexShaderOutput input)
     float matMetallic = input.metallic;
     float matEmissive = input.emissive;
     
-    // 影の計算
     float3 lightPos = input.lightSpacePosition.xyz / input.lightSpacePosition.w;
     float2 shadowUV = lightPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
     float currentDepth = lightPos.z;
- 
+    
     float shadowFactor = 1.0f;
- 
+    
     if (shadowUV.x >= 0.0f && shadowUV.x <= 1.0f && shadowUV.y >= 0.0f && shadowUV.y <= 1.0f)
     {
         float mapDepth = gShadowMap.Sample(gSampler, shadowUV);
@@ -66,10 +67,25 @@ PixelShaderOutput main(VertexShaderOutput input)
     float cos = pow(NdotL * 0.5f + 0.5f, 2.0f);
     float ambient = 0.35f;
     
-    // 1. 拡散反射光
+    // 1. Diffuse
     float3 diffuseColor = (cos * shadowFactor + ambient) * matColor.rgb * textureColor.rgb * gDirectionalLight.color.rgb * gDirectionalLight.intensity;
     
-    // 2. スペキュラー反射光
+    // Point Light Contribution
+    if (gDirectionalLight.pointLightIntensity > 0.0f) {
+        float3 plDir = gDirectionalLight.pointLightPosition - input.worldPosition;
+        float plDist = length(plDir);
+        float plRadius = 10.0f; // effective radius
+        if (plDist < plRadius) {
+            plDir = normalize(plDir);
+            float plNdotL = max(0.0f, dot(normalize(input.normal), plDir));
+            float plAtten = saturate(1.0f - (plDist / plRadius)); // linear falloff
+            plAtten *= plAtten; // quadratic falloff
+            float3 plContrib = gDirectionalLight.pointLightColor.rgb * plNdotL * plAtten * gDirectionalLight.pointLightIntensity;
+            diffuseColor += plContrib * matColor.rgb * textureColor.rgb;
+        }
+    }
+    
+    // 2. Specular
     float3 viewDir = normalize(gDirectionalLight.cameraPosition - input.worldPosition);
     float3 lightDir = normalize(-gDirectionalLight.direction);
     float3 halfDir = normalize(lightDir + viewDir);
@@ -82,11 +98,11 @@ PixelShaderOutput main(VertexShaderOutput input)
     
     float3 specColor = gDirectionalLight.color.rgb * gDirectionalLight.intensity * specular * specBaseColor * specIntensity * shadowFactor;
     
-    // 3. リムライト
+    // 3. Rim
     float rim = pow(1.0f - saturate(dot(normalize(input.normal), viewDir)), 4.0f);
     float3 rimColor = float3(1.0f, 1.0f, 1.0f) * rim * (0.25f + matEmissive * 0.5f) * gDirectionalLight.intensity;
     
-    // 4. 自発光
+    // 4. Emission
     float3 emissiveColor = matColor.rgb * matEmissive;
     
     output.color.rgb = diffuseColor + specColor + rimColor + emissiveColor;

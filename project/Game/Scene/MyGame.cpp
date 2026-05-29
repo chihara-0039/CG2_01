@@ -1033,6 +1033,10 @@ void MyGame::UpdateDebugView() {
 //  V キー: プレイヤー追従 ↔ 固定カメラ切り替え
 // --------------------------------------------------------
 void MyGame::UpdateGamePlay() {
+    bool isGuiCaptured = false;
+#ifndef NDEBUG
+    isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
+#endif
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
     // C キーでカメラモード切り替え
@@ -1042,6 +1046,14 @@ void MyGame::UpdateGamePlay() {
             // 一人称に切り替えた瞬間、プレイヤーの向きをカメラ方向に合わせる
             fpsCameraYaw_   = player_->GetRotation().y;
             fpsCameraPitch_ = 0.0f;
+            fpsCameraFov_   = 0.9f;
+        } else {
+            // 三人称に戻る時カメラ位置をリセット
+            if (stageSelect_) {
+                gameplayCameraController_.ResetCamera(camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
+            }
+            camera->SetFov(0.785f);
+            camera->Update();
         }
     }
 
@@ -1067,13 +1079,14 @@ void MyGame::UpdateGamePlay() {
 
     } else {
         // === 一人称カメラ (FPS) ===
-        // 画面端へのマウス移動でカメラを回転させる
-        camera->SetFov(0.9f); // FPS は少し狭い FOV が自然に見える
+        // マウスホイールで FOV 調整
+        int wheel = input->GetMouseState().wheel;
+        if (wheel != 0 && !isGuiCaptured) {
+            fpsCameraFov_ -= wheel * 0.001f;
+            fpsCameraFov_ = std::clamp(fpsCameraFov_, 0.1f, 1.5f);
+        }
+        camera->SetFov(fpsCameraFov_);
 
-        bool isGuiCaptured = false;
-#ifndef NDEBUG
-        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
-#endif
         const auto& mouse = input->GetMouseState();
         if (mouse.buttons[0] && !isGuiCaptured) {
             RECT rect;
@@ -1095,25 +1108,25 @@ void MyGame::UpdateGamePlay() {
 
                 // マウスが画面左端 → 左を向く / 右端 → 右を向く
                 if (mx < le) {
-                    fpsCameraYaw_ += spd;
-                } else if (mx > re) {
                     fpsCameraYaw_ -= spd;
+                } else if (mx > re) {
+                    fpsCameraYaw_ += spd;
                 }
                 // マウスが画面上端 → 上を向く / 下端 → 下を向く
                 if (my < te) {
-                    fpsCameraPitch_ += spd;
-                } else if (my > be) {
                     fpsCameraPitch_ -= spd;
+                } else if (my > be) {
+                    fpsCameraPitch_ += spd;
                 }
             }
         }
 
         // キーボードでもカメラ回転できるようにする
         const float ks = 0.03f;
-        if (input->PushKey(DIK_LEFT))  { fpsCameraYaw_   += ks; }
-        if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_   -= ks; }
-        if (input->PushKey(DIK_UP))    { fpsCameraPitch_ += ks; }
-        if (input->PushKey(DIK_DOWN))  { fpsCameraPitch_ -= ks; }
+        if (input->PushKey(DIK_LEFT))  { fpsCameraYaw_   -= ks; }
+        if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_   += ks; }
+        if (input->PushKey(DIK_UP))    { fpsCameraPitch_ -= ks; }
+        if (input->PushKey(DIK_DOWN))  { fpsCameraPitch_ += ks; }
         // 仰角は ±80° (約1.4rad) に制限してひっくり返らないようにする
         fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
 
@@ -1152,6 +1165,13 @@ void MyGame::UpdateGamePlay() {
     if (player_) {
         float camRot = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
         player_->Update(input.get(), stageMap_, camRot, lightVP, dxCommon.get());
+        // プレイヤーの発光 (ポイントライト)
+        if (object3dCommon) {
+            Vector3 pp = player_->GetPosition();
+            object3dCommon->SetPointLight(pp, 5.0f, { 1.0f, 1.0f, 1.0f, 1.0f });
+        }
+    } else if (object3dCommon) {
+        object3dCommon->SetPointLight({0,0,0}, 0.0f, {0,0,0,0});
     }
 
     // マップの変化 (爆発・崩壊など) があればレンダラーを再構築
