@@ -1308,9 +1308,17 @@ void MyGame::UpdateStageSelect() {
             playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
 
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+
+            if (player_) {
+                player_->SetHasKey(false);
+            }
+
             gameplayCameraController_.ResetCamera(
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
-            blockInventory_.Initialize(0); // インベントリをリセット
+
+            blockInventory_.Initialize(0);
+            bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+            blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
         }
         currentMode_ = AppMode::GamePlay;
     }
