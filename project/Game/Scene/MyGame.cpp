@@ -237,6 +237,25 @@ void MyGame::Initialize() {
     placementTutorialSprite_->SetPosition({ 20, 20 });
     placementTutorialSprite_->SetSize({ 682, 185 });
 
+    // UIガイド用スプライトの初期化
+    objectiveGuideTexture_ = textureManager->LoadTexture("Resources/UI/objective_guide.png");
+    objectiveGuideSprite_ = std::make_unique<Sprite>();
+    objectiveGuideSprite_->Initialize(spriteCommon.get(), objectiveGuideTexture_);
+    objectiveGuideSprite_->SetPosition({ 784, 20 });
+    objectiveGuideSprite_->SetSize({ 476, 65 });
+
+    stageSelectGuideTexture_ = textureManager->LoadTexture("Resources/UI/stage_select_guide.png");
+    stageSelectGuideSprite_ = std::make_unique<Sprite>();
+    stageSelectGuideSprite_->Initialize(spriteCommon.get(), stageSelectGuideTexture_);
+    stageSelectGuideSprite_->SetPosition({ 227, 635 });
+    stageSelectGuideSprite_->SetSize({ 826, 65 });
+
+    clearGuideTexture_ = textureManager->LoadTexture("Resources/UI/clear_guide.png");
+    clearGuideSprite_ = std::make_unique<Sprite>();
+    clearGuideSprite_->Initialize(spriteCommon.get(), clearGuideTexture_);
+    clearGuideSprite_->SetPosition({ 396, 635 });
+    clearGuideSprite_->SetSize({ 488, 65 });
+
     // --------------------------------------------------------
     // 16. カメラ・ステージエディタコントローラーの初期化
     // --------------------------------------------------------
@@ -437,8 +456,8 @@ void MyGame::Update() {
                 player_->Respawn();
                 particleManager->ClearParticles();
                 currentMode_ = AppMode::StageSelect;
-
-            }
+            stageSelect_->Initialize(object3dCommon.get(), input.get());
+        }
         }
         gameClearScene_->Update();
         
@@ -663,6 +682,11 @@ void MyGame::UpdateImGui() {
     postProcess_.DrawImGui();
 
     // カメラ設定
+    ImGui::Begin("Debug State");
+    ImGui::Text("CurrentMode: %d", (int)currentMode_);
+    ImGui::Text("Sprite: %p", stageSelectGuideSprite_.get());
+    ImGui::End();
+
     if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Use First-Person Camera", &useFirstPersonCamera_);
         if (useFirstPersonCamera_) {
@@ -843,6 +867,31 @@ void MyGame::Draw() {
         commandList->RSSetScissorRects(1, &scissor);
         dxCommon->PreDraw();
         RenderScene(commandList, lightVP);
+    }    // --- UI Sprites (Direct to BackBuffer) ---
+    ID3D12DescriptorHeap* spriteHeaps[] = { textureManager->GetSrvHeap() };
+    commandList->SetDescriptorHeaps(1, spriteHeaps);
+    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+    if (currentMode_ == AppMode::GamePlay && !invOpen) {
+        if (tutorialSprite_) {
+            spriteCommon->PreDraw();
+            tutorialSprite_->Draw();
+        }
+    }
+    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
+        spriteCommon->PreDraw();
+        placementTutorialSprite_->Draw();
+    }
+    if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) && objectiveGuideSprite_) {
+        spriteCommon->PreDraw();
+        objectiveGuideSprite_->Draw();
+    }
+    if (currentMode_ == AppMode::StageSelect && stageSelectGuideSprite_) {
+        spriteCommon->PreDraw();
+        stageSelectGuideSprite_->Draw();
+    }
+    if (currentMode_ == AppMode::GameClear && clearGuideSprite_) {
+        spriteCommon->PreDraw();
+        clearGuideSprite_->Draw();
     }
 
     // ========================================================
@@ -965,19 +1014,6 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
     // インベントリ UI の描画 (ゲームプレイ・配置モード中のみ)
     if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
         blockInventoryUI_->Draw();
-    }
-
-    // チュートリアルスプライトの描画
-    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-    if (currentMode_ == AppMode::GamePlay && !invOpen) {
-        if (tutorialSprite_) {
-            spriteCommon->PreDraw();
-            tutorialSprite_->Draw();
-        }
-    }
-    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
-        spriteCommon->PreDraw();
-        placementTutorialSprite_->Draw();
     }
 }
 
@@ -1192,6 +1228,10 @@ void MyGame::UpdateGamePlay() {
         placementTutorialSprite_->Update();
     }
 
+    if (objectiveGuideSprite_) { objectiveGuideSprite_->Update(); }
+    if (stageSelectGuideSprite_) { stageSelectGuideSprite_->Update(); }
+    if (clearGuideSprite_) { clearGuideSprite_->Update(); }
+
     // ステージマップの更新 (ギミックの時間経過・アニメーションなど)
     float dt = 1.0f / 60.0f; // 固定タイムステップ (60fps 前提)
     totalTime_ += dt;
@@ -1325,6 +1365,7 @@ void MyGame::UpdateTitle() {
         titleScene_->Update();
         if (titleScene_->IsFinished()) {
             currentMode_ = AppMode::StageSelect;
+            stageSelect_->Initialize(object3dCommon.get(), input.get());
         }
     }
 }
@@ -1394,6 +1435,7 @@ void MyGame::UpdateSceneTransition() {
             if (player_) { player_->Respawn(); }
             particleManager->ClearParticles();
             currentMode_ = AppMode::StageSelect;
+            stageSelect_->Initialize(object3dCommon.get(), input.get());
         }
     }
 }
@@ -1505,3 +1547,7 @@ bool MyGame::IsPlayerHiddenByWall() const {
     }
     return false;
 }
+
+
+
+

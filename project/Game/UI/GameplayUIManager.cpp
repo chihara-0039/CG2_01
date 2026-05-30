@@ -79,12 +79,12 @@ void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* text
 
     cameraModeStageSprite_ = std::make_unique<Sprite>();
     cameraModeStageSprite_->Initialize(spriteCommon, cameraModeStageTextureHandle_);
-    cameraModeStageSprite_->SetPosition({ 1180.0f, 20.0f });
+    cameraModeStageSprite_->SetPosition({ 1180.0f, 100.0f });
     cameraModeStageSprite_->SetSize({ 64.0f, 64.0f });
 
     cameraModePlayerSprite_ = std::make_unique<Sprite>();
     cameraModePlayerSprite_->Initialize(spriteCommon, cameraModePlayerTextureHandle_);
-    cameraModePlayerSprite_->SetPosition({ 1180.0f, 20.0f });
+    cameraModePlayerSprite_->SetPosition({ 1180.0f, 100.0f });
     cameraModePlayerSprite_->SetSize({ 64.0f, 64.0f });
 }
 

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <vector>
 #include <memory>
 #include <filesystem>
@@ -156,6 +156,14 @@ private:
     std::unique_ptr<BlockInventoryUI>  blockInventoryUI_;          ///< インベントリ UI
     std::unique_ptr<Sprite>            tutorialSprite_;            ///< 操作チュートリアル画像
     std::unique_ptr<Sprite>            placementTutorialSprite_;   ///< 配置チュートリアル画像
+    
+    // UIガイド用スプライト
+    uint32_t objectiveGuideTexture_ = 0;
+    uint32_t stageSelectGuideTexture_ = 0;
+    uint32_t clearGuideTexture_ = 0;
+    std::unique_ptr<Sprite> objectiveGuideSprite_;
+    std::unique_ptr<Sprite> stageSelectGuideSprite_;
+    std::unique_ptr<Sprite> clearGuideSprite_;
 
     // ==========================================================
     //  コントローラー (値として保持: 常に有効)
