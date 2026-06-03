@@ -9,6 +9,7 @@ class Skybox {
 public:
     void Initialize(Object3dCommon* object3dCommon, uint32_t textureHandle);
     void Update();
+    void Update(const Vector3& cameraPosition);
     void Draw();
 
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection) {

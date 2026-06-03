@@ -368,8 +368,7 @@ void MyGame::Update() {
     }
     if (skybox_ && debugFlags_.showSkybox && showSkyboxCubemap_) {
         skybox_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-        skybox_->SetPosition(camera->GetPosition());
-        skybox_->Update();
+        skybox_->Update(camera->GetPosition());
     }
 
     // --------------------------------------------------------
