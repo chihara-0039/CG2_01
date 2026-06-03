@@ -51,6 +51,7 @@ struct Material {
     float     metallic;        // 驥大ｱ樊─ (0.0:髱樣≡螻・縲・1.0:驥大ｱ・
     float     emissive;        // 閾ｪ蟾ｱ逋ｺ蜈蛾㍼ (0.0:逋ｺ蜈峨↑縺・縲・1.0莉･荳・逋ｺ蜈・
     Matrix4x4 uvTransform;     // UV 螟画鋤陦悟・ (繧ｹ繧ｯ繝ｭ繝ｼ繝ｫ繝ｻ繧ｿ繧､繝ｪ繝ｳ繧ｰ縺ｫ菴ｿ逕ｨ)
+    float     environmentCoefficient;
 };
 
 // ==============================================================
@@ -159,6 +160,8 @@ public:
 
     /// <summary>閾ｪ蟾ｱ逋ｺ蜈蛾㍼縲・.0 雜・〒繝ｩ繧､繝医′縺ｪ縺上※繧り｡ｨ遉ｺ縺輔ｌ繧九・/summary>
     void SetEmissive(float emissive) { if (materialData_) materialData_->emissive = emissive; }
+
+    void SetEnvironmentCoefficient(float coefficient) { if (materialData_) materialData_->environmentCoefficient = coefficient; }
 
     /// <summary>UV 螟画鋤陦悟・繧偵そ繝・ヨ (繧ｹ繧ｯ繝ｭ繝ｼ繝ｫ繝ｻ繧ｿ繧､繝ｪ繝ｳ繧ｰ逕ｨ)</summary>
     void SetUVTransform(const Transform& uvTransform);

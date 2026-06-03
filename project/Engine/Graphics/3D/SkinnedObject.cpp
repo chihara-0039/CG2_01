@@ -72,6 +72,9 @@ void SkinnedObject::Draw() {
     if (object3d_->GetObject3dCommon()->GetTextureManager()) {
         auto gpuHandle = object3d_->GetObject3dCommon()->GetTextureManager()->GetSrvHandleGPU(skinnedModel_->GetTextureHandle());
         commandList->SetGraphicsRootDescriptorTable(3, gpuHandle);
+
+        auto environmentHandle = object3d_->GetObject3dCommon()->GetTextureManager()->GetSrvHandleGPU(object3d_->GetObject3dCommon()->GetEnvironmentTextureHandle());
+        commandList->SetGraphicsRootDescriptorTable(6, environmentHandle);
     }
     
     // 5. ジョイント行列バッファ

@@ -15,6 +15,7 @@ struct Material
     float metallic;
     float emissive;
     float4x4 uvTransform;
+    float environmentCoefficient;
 };
 
 struct DirectionalLight
@@ -36,6 +37,7 @@ SamplerState gSampler : register(s0);
 
 // 5番目のスロット(t1)に届いているシャドウマップを受け取る
 Texture2D<float> gShadowMap : register(t1);
+TextureCube<float4> gEnvironmentTexture : register(t2);
 
 struct PixelShaderOutput
 {
@@ -111,8 +113,16 @@ PixelShaderOutput main(VertexShaderOutput input)
         // 4. 自発光 (Emission) - 光源がなくても自己発光する
         float3 emissiveColor = gMaterial.color.rgb * gMaterial.emissive;
         
+        float3 environmentColor = float3(0.0f, 0.0f, 0.0f);
+        if (gMaterial.environmentCoefficient > 0.0f)
+        {
+            float3 cameraToPosition = normalize(input.worldPosition - gDirectionalLight.cameraPosition);
+            float3 reflectedVector = reflect(cameraToPosition, normalize(input.normal));
+            environmentColor = gEnvironmentTexture.Sample(gSampler, reflectedVector).rgb * gMaterial.environmentCoefficient;
+        }
+
         // 最終カラー合成
-        output.color.rgb = diffuseColor + specColor + rimColor + emissiveColor;
+        output.color.rgb = diffuseColor + specColor + rimColor + emissiveColor + environmentColor;
         output.color.a = gMaterial.color.a * textureColor.a;
     }
     else

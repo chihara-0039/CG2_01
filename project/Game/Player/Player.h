@@ -185,6 +185,14 @@ public:
     bool HasKey() const  { return hasKey_; }
     void SetHasKey(bool hasKey) { hasKey_ = hasKey; }
     void SetGlow(float glow) { if (object_) object_->SetEmissive(glow); }
+    void SetEnvironmentCoefficient(float coefficient) {
+        if (object_) {
+            object_->SetEnvironmentCoefficient(coefficient);
+        }
+        if (skinnedObject_ && skinnedObject_->GetObject3d()) {
+            skinnedObject_->GetObject3d()->SetEnvironmentCoefficient(coefficient);
+        }
+    }
 
     // リスポーン位置 (public: StageRespawnController から直接セットされる)
     Vector3 respawnPosition = { 0.0f, 1.5f, 0.0f };

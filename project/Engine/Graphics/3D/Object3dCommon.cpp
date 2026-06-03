@@ -117,7 +117,8 @@ void Object3dCommon::CreateRootSignature() {
     // 3. Texture (テクスチャ) (PS t0)
     // 4. ShadowMap (シャドウマップ) (PS t1)
     // 5: InstanceBuffer (VS t2) - SRV (StructuredBuffer 逕ｨ)
-    D3D12_ROOT_PARAMETER rootParameters[6] = {};
+    // 6: EnvironmentMap (PS t2)
+    D3D12_ROOT_PARAMETER rootParameters[7] = {};
 
     // 0. マテリアル
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -162,6 +163,17 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     rootParameters[5].Descriptor.ShaderRegister = 2;
     rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
+    D3D12_DESCRIPTOR_RANGE environmentRange[1] = {};
+    environmentRange[0].BaseShaderRegister = 2;
+    environmentRange[0].NumDescriptors = 1;
+    environmentRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    environmentRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    rootParameters[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[6].DescriptorTable.pDescriptorRanges = environmentRange;
+    rootParameters[6].DescriptorTable.NumDescriptorRanges = _countof(environmentRange);
+    rootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     // Sampler
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
