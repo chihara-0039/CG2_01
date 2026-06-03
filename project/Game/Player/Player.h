@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Object3d.h"
 #include "Input.h"
 #include "StageMap.h"
@@ -184,6 +184,7 @@ public:
     /// <summary>鍵を持っているか (鍵ブロックで扉を開くために必要)</summary>
     bool HasKey() const  { return hasKey_; }
     void SetHasKey(bool hasKey) { hasKey_ = hasKey; }
+    void SetGlow(float glow) { if (object_) object_->SetEmissive(glow); }
 
     // リスポーン位置 (public: StageRespawnController から直接セットされる)
     Vector3 respawnPosition = { 0.0f, 1.5f, 0.0f };
@@ -242,3 +243,4 @@ private:
 
     const Input* input_ = nullptr; // 入力ポインタ (Update() で毎フレーム受け取る)
 };
+

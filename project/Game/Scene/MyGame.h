@@ -34,9 +34,7 @@
 #include "BlockInventoryUI.h"
 
 // ===== シーン =====
-#include "TitleScene.h"
 #include "StageSelect.h"
-#include "GameClearScene.h"
 
 // ===== コントローラー =====
 #include "GameplayCameraController.h"
@@ -83,13 +81,11 @@ private:
     //  AppMode : アプリケーションのモード定義
     // ==========================================================
     enum class AppMode {
-        Title,             ///< タイトル画面
         StageSelect,       ///< ステージ選択画面
         DebugView,         ///< デバッグ確認用ビュー
         StageEditor,       ///< ステージエディタ
         GamePlay,          ///< ゲームプレイ
         GamePlay_BlockPlace,///< ブロック配置モード (GamePlay のサブモード)
-        GameClear,         ///< ゲームクリア画面
         SkinningEditor,    ///< スキニングエディタ
     };
 
@@ -145,9 +141,7 @@ private:
     // ==========================================================
     //  シーン管理
     // ==========================================================
-    std::unique_ptr<TitleScene>     titleScene_;     ///< タイトル画面
     std::unique_ptr<StageSelect>    stageSelect_;    ///< ステージ選択画面
-    std::unique_ptr<GameClearScene> gameClearScene_; ///< ゲームクリア画面
 
     // ==========================================================
     //  UI・チュートリアル
@@ -233,11 +227,12 @@ private:
     float          totalTime_          = 0.0f;         ///< 累積時間 (秒)
 
     // 一人称カメラ (FPS Camera) 関連
-    bool  useFirstPersonCamera_ = false; ///< FPS カメラ有効フラグ
-    float fpsCameraYaw_         = 0.0f;  ///< FPS カメラの水平回転角 (Yaw)
-    float fpsCameraPitch_       = 0.0f;  ///< FPS カメラの垂直回転角 (Pitch)
+    bool  useFirstPersonCamera_ = false; ///< FPS カメラフラグ
+    float fpsCameraYaw_         = 0.0f;  ///< FPS カメラの回転角 (Yaw)
+    float fpsCameraPitch_       = 0.0f;  ///< FPS カメラの回転角 (Pitch)
     float fpsCameraFov_         = 0.9f;
-    float placeRotationY_       = 0.0f;  ///< ブロック配置時の回転角
+    float placeRotationY_       = 0.0f;  ///< ブロック配置の回転角
+    float playerGlow_           = 0.0f;  ///< プレイヤー発光量
 
     // ==========================================================
     //  内部メソッド
@@ -266,3 +261,7 @@ private:
     /// <summary>カメラとプレイヤーの間に壁ブロックがあるか判定する (シルエット描画の判定用)</summary>
     bool IsPlayerHiddenByWall() const;
 };
+
+
+
+
