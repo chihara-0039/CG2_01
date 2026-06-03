@@ -1,4 +1,5 @@
 ﻿#include "ParticleManager.h"
+#include "StageMap.h"
 #include <cassert>
 #include <random>
 
@@ -46,7 +47,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
     }
 }
 
-void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const Vector3& playerPos) {
+void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const Vector3& playerPos, StageMap* stageMap) {
     // 0. 天候エミッターの処理
     if (weatherEmitter_.active && weatherEmitter_.emitRate > 0.0f) {
         weatherEmitter_.emitTimer += deltaTime;
@@ -79,6 +80,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                     weatherEmitter_.velocity.z + randV(engine) * weatherEmitter_.velocityRandom.z
                 };
                 
+                p.type = Particle::Type::Fall;
                 p.color = weatherEmitter_.color;
                 p.lifeTime = 0.0f;
                 p.maxTime = weatherEmitter_.particleLife;
@@ -94,13 +96,46 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             it = particles_.erase(it);
             continue;
         }
+        
+        float oldY = it->transform.translate.y;
+        
         it->transform.translate.x += it->velocity.x * deltaTime * 60.0f;
         it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
         it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
         
+        // 当たり判定 (StageMapとの衝突判定)
+        if (it->type == Particle::Type::Fall && stageMap) {
+            int bx = (int)std::floor(it->transform.translate.x + 0.5f);
+            int bz = (int)std::floor(it->transform.translate.z + 0.5f);
+            int oldBy = (int)std::floor(oldY + 0.5f);
+            int newBy = (int)std::floor(it->transform.translate.y + 0.5f);
+            
+            bool hit = false;
+            int hitY = newBy;
+            // 落下前の位置から落下後の位置までの間のセルを確認（すり抜け防止）
+            for (int y = oldBy; y >= newBy; --y) {
+                const MapCell* cell = stageMap->GetCell(bx, y, bz);
+                if (cell != nullptr && cell->type != BlockType::None) {
+                    hit = true;
+                    hitY = y;
+                    break;
+                }
+            }
+            
+            if (hit) {
+                // ブロック上面(hitY + 0.5f)の少し上で飛沫を生成して元のパーティクルを消滅させる
+                Vector3 splashPos = it->transform.translate;
+                splashPos.y = (float)hitY + 0.6f;
+                EmitSplash(splashPos, it->color);
+                it = particles_.erase(it);
+                continue;
+            }
+        }
+        
         // フェードアウト
         float alpha = 1.0f - (it->lifeTime / it->maxTime);
         it->color.w = weatherEmitter_.color.w * alpha; // ベースアルファも考慮
+        
         ++it;
     }
 
@@ -297,3 +332,28 @@ void ParticleManager::CreateMesh() {
     vertexBufferView_.SizeInBytes = size;
     vertexBufferView_.StrideInBytes = sizeof(VertexData);
 }
+
+void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
+    int splashCount = 3 + (engine() % 3); // 3〜5個
+    for (int i = 0; i < splashCount; ++i) {
+        if (particles_.size() >= kMaxParticles) break;
+        
+        std::uniform_real_distribution<float> randV(-1.0f, 1.0f);
+        std::uniform_real_distribution<float> randVY(1.0f, 3.0f); // 上向き
+        
+        Particle p;
+        p.type = Particle::Type::Splash;
+        p.transform.translate = pos;
+        p.transform.translate.y += 0.5f; // ブロックの少し上から
+        p.transform.scale = { weatherEmitter_.particleSize.x * 0.5f, weatherEmitter_.particleSize.y * 0.5f, weatherEmitter_.particleSize.z * 0.5f };
+        p.transform.rotate = { 0.0f, 0.0f, 0.0f };
+        
+        p.velocity = { randV(engine) * 2.0f, randVY(engine) * 2.0f, randV(engine) * 2.0f };
+        p.color = color;
+        p.lifeTime = 0.0f;
+        p.maxTime = 0.2f + (engine() % 20) / 100.0f; // 0.2〜0.4秒
+        
+        particles_.push_back(p);
+    }
+}
+

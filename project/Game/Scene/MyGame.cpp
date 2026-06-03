@@ -1,4 +1,4 @@
-﻿// ==========================================================
+// ==========================================================
 //  MyGame.cpp
 //  ゲーム全体の統括クラス実装
 //
@@ -8,9 +8,9 @@
 // ==========================================================
 #include <filesystem>
 #include "MyGame.h"
+#include "../Environment/WeatherPresetManager.h"
 #include "Goal.h"
 #include "ModelManager.h"
-#include "../Environment/WeatherPresetManager.h"
 #include <memory>
 
 #include "externals/imgui/imgui.h"
@@ -27,6 +27,7 @@
 //    Scene群 → Model群 → Player → Camera → Stage → UI → ...
 // ==========================================================
 void MyGame::Initialize() {
+    WeatherPresetManager::GetInstance().LoadPresets();
 
     // --------------------------------------------------------
     // 1. エンジン基盤システムの生成と初期化
@@ -37,8 +38,6 @@ void MyGame::Initialize() {
 
     dxCommon = std::make_unique<DirectXCommon>();
     dxCommon->Initialize(winApp.get());
-
-    WeatherPresetManager::GetInstance().LoadPresets();
 
     input = std::make_unique<Input>();
     input->Initialize(winApp.get());
@@ -61,14 +60,14 @@ void MyGame::Initialize() {
     // --------------------------------------------------------
     // 2. シーン管理の初期化
     // --------------------------------------------------------
-    titleScene_ = std::make_unique<TitleScene>();
-    titleScene_->Initialize(object3dCommon.get(), input.get());
+    
+    
 
     stageSelect_ = std::make_unique<StageSelect>();
     stageSelect_->Initialize(object3dCommon.get(), input.get());
 
-    gameClearScene_ = std::make_unique<GameClearScene>();
-    gameClearScene_->Initialize(object3dCommon.get());
+    
+    
 
     // --------------------------------------------------------
     // 3. モデルのロード
@@ -100,9 +99,9 @@ void MyGame::Initialize() {
     // --------------------------------------------------------
     sound.Initialize();
     
-    titleBgmData = sound.SoundLoadFile("Resources/Sound/gameTitle.mp3");
+    
     gameBgmData = sound.SoundLoadFile("Resources/Sound/gamePlay.mp3");
-    clearBgmData = sound.SoundLoadFile("Resources/Sound/gameClear.mp3");
+    
 
     // --------------------------------------------------------
     // 7. プレイヤーの生成と初期化
@@ -143,11 +142,11 @@ void MyGame::Initialize() {
         playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #elif defined(NDEBUG)
-    currentMode_           = AppMode::Title;
+    currentMode_           = AppMode::StageSelect;
     debugFlags_.showSkybox = true;
     postProcess_.SetEnabled(false);
 #else
-    currentMode_           = AppMode::Title;
+    currentMode_           = AppMode::StageSelect;
     debugFlags_.showSkybox = true;
     postProcess_.SetEnabled(false);
     if (std::filesystem::exists("Resources/Stages/stage01.txt")) {
@@ -236,25 +235,6 @@ void MyGame::Initialize() {
         textureManager->LoadTexture("Resources/UI/tutorial/placement_tutorial.png"));
     placementTutorialSprite_->SetPosition({ 20, 20 });
     placementTutorialSprite_->SetSize({ 682, 185 });
-
-    // UIガイド用スプライトの初期化
-    objectiveGuideTexture_ = textureManager->LoadTexture("Resources/UI/objective_guide.png");
-    objectiveGuideSprite_ = std::make_unique<Sprite>();
-    objectiveGuideSprite_->Initialize(spriteCommon.get(), objectiveGuideTexture_);
-    objectiveGuideSprite_->SetPosition({ 784, 20 });
-    objectiveGuideSprite_->SetSize({ 476, 65 });
-
-    stageSelectGuideTexture_ = textureManager->LoadTexture("Resources/UI/stage_select_guide.png");
-    stageSelectGuideSprite_ = std::make_unique<Sprite>();
-    stageSelectGuideSprite_->Initialize(spriteCommon.get(), stageSelectGuideTexture_);
-    stageSelectGuideSprite_->SetPosition({ 227, 635 });
-    stageSelectGuideSprite_->SetSize({ 826, 65 });
-
-    clearGuideTexture_ = textureManager->LoadTexture("Resources/UI/clear_guide.png");
-    clearGuideSprite_ = std::make_unique<Sprite>();
-    clearGuideSprite_->Initialize(spriteCommon.get(), clearGuideTexture_);
-    clearGuideSprite_->SetPosition({ 396, 635 });
-    clearGuideSprite_->SetSize({ 488, 65 });
 
     // --------------------------------------------------------
     // 16. カメラ・ステージエディタコントローラーの初期化
@@ -386,7 +366,7 @@ void MyGame::Update() {
         skydomeObject_->SetPosition(camera->GetPosition());
         skydomeObject_->Update(Math::MakeIdentity4x4());
     }
-    if (skybox_ && showSkyboxCubemap_) {
+    if (skybox_ && debugFlags_.showSkybox && showSkyboxCubemap_) {
         skybox_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         skybox_->SetPosition(camera->GetPosition());
         skybox_->Update();
@@ -416,10 +396,6 @@ void MyGame::Update() {
     // --------------------------------------------------------
     switch (currentMode_) {
 
-    case AppMode::Title:
-        UpdateTitle();
-        break;
-
     case AppMode::StageSelect:
         UpdateStageSelect();
         break;
@@ -441,35 +417,6 @@ void MyGame::Update() {
 
     case AppMode::GamePlay_BlockPlace:
         UpdateGamePlayBlockPlace();
-        break;
-
-    case AppMode::GameClear:
-        // SPACE: アニメーション中はスキップ / 完了後はステージ選択へ戻る
-        if (input->TriggerKey(DIK_SPACE)) {
-            if (!gameClearScene_->IsFinished()) {
-                gameClearScene_->SkipAnimation();
-            } else {
-                stageSelect_->Initialize(object3dCommon.get(), input.get());
-                gameClearScene_->Initialize(object3dCommon.get());
-                isGoalReached_ = false;
-                stageMap_.Clear();
-                player_->Respawn();
-                particleManager->ClearParticles();
-                currentMode_ = AppMode::StageSelect;
-            stageSelect_->Initialize(object3dCommon.get(), input.get());
-        }
-        }
-        gameClearScene_->Update();
-        
-        // 花火パーティクルをランダムに発生させる
-        if (rand() % 15 == 0) {
-            Vector3 fireworkPos = { (rand() % 40) - 20.0f, (rand() % 20) + 5.0f, (rand() % 20) - 5.0f };
-            particleManager->Emit(fireworkPos, 30);
-        }
-
-
-
-
         break;
 
     case AppMode::SkinningEditor:
@@ -547,8 +494,28 @@ void MyGame::Update() {
     if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
         sprite->Update();
     }
-    if (debugFlags_.showParticles || currentMode_ == AppMode::GameClear) {
-        particleManager->Update(1.0f / 60.0f, view, proj, player_->GetPosition());
+    if (debugFlags_.showParticles) {
+        // 天候プリセットの同期
+        auto& wpMgr = WeatherPresetManager::GetInstance();
+        WeatherPreset* currentPreset = wpMgr.GetPresetByName(stageMap_.GetWeatherPresetName());
+        if (currentPreset) {
+            auto& emitter = particleManager->GetWeatherEmitter();
+            emitter.active = currentPreset->particleEnabled;
+            if (emitter.active) {
+                emitter.emitRate = currentPreset->emitRate;
+                emitter.size = currentPreset->emitSize;
+                emitter.velocity = currentPreset->velocity;
+                emitter.velocityRandom = currentPreset->velocityRandom;
+                emitter.particleSize = currentPreset->particleSize;
+                emitter.particleLife = currentPreset->particleLife;
+                emitter.color = currentPreset->particleColor;
+                // パーティクルを上空から降らせるため、生成位置をプレイヤーの頭上(+15)に設定
+                emitter.center = {0.0f, 15.0f, 0.0f}; 
+                particleManager->SetTexture(textureManager->LoadTexture(currentPreset->particleTexture));
+            }
+        }
+        
+        particleManager->Update(1.0f / 60.0f, view, proj, player_ ? player_->GetPosition() : Vector3{0, 0, 0}, &stageMap_);
     }
 
     // --------------------------------------------------------
@@ -567,24 +534,6 @@ void MyGame::Update() {
 
     // クリアカラーをステージ設定と同期 (PostProcessRenderer のオフスクリーン背景色)
     postProcess_.SetClearColor(stageMap_.GetClearColor());
-    
-    // パーティクルシステムの天候エミッターを同期
-    WeatherPreset* preset = WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName());
-    auto& emitter = particleManager->GetWeatherEmitter();
-    if (preset) {
-        emitter.active = preset->particleEnabled;
-        emitter.emitRate = preset->emitRate;
-        emitter.size = preset->emitSize;
-        emitter.velocity = preset->velocity;
-        emitter.velocityRandom = preset->velocityRandom;
-        emitter.particleSize = preset->particleSize;
-        emitter.particleLife = preset->particleLife;
-        emitter.color = preset->particleColor;
-        // （テクスチャ変更も必要ならここで particleManager->SetTexture() を呼ぶ）
-    } else {
-        emitter.active = false;
-    }
-
 
     // --------------------------------------------------------
     // 15. ゲームプレイ UI の更新
@@ -682,11 +631,6 @@ void MyGame::UpdateImGui() {
     postProcess_.DrawImGui();
 
     // カメラ設定
-    ImGui::Begin("Debug State");
-    ImGui::Text("CurrentMode: %d", (int)currentMode_);
-    ImGui::Text("Sprite: %p", stageSelectGuideSprite_.get());
-    ImGui::End();
-
     if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Use First-Person Camera", &useFirstPersonCamera_);
         if (useFirstPersonCamera_) {
@@ -769,14 +713,14 @@ void MyGame::UpdateImGui() {
         ImGui::Columns(1);
 
     } else {
-        // DebugView / Title / GameClear など
+        // DebugView
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Application Status ]");
-        if (currentMode_ == AppMode::Title) {
-            ImGui::Text("Scene: TITLE");
-        } else if (currentMode_ == AppMode::GameClear) {
-            ImGui::Text("Scene: CLEAR");
-        } else {
-            ImGui::Text("Scene: DEBUG VIEW");
+        ImGui::Text("Scene: DEBUG VIEW");
+
+        // --- Player Options ---
+        if (ImGui::CollapsingHeader("Player Settings")) {
+            ImGui::SliderFloat("Player Glow", &playerGlow_, 0.0f, 5.0f);
+            if (player_) player_->SetGlow(playerGlow_);
         }
     }
 
@@ -867,31 +811,6 @@ void MyGame::Draw() {
         commandList->RSSetScissorRects(1, &scissor);
         dxCommon->PreDraw();
         RenderScene(commandList, lightVP);
-    }    // --- UI Sprites (Direct to BackBuffer) ---
-    ID3D12DescriptorHeap* spriteHeaps[] = { textureManager->GetSrvHeap() };
-    commandList->SetDescriptorHeaps(1, spriteHeaps);
-    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-    if (currentMode_ == AppMode::GamePlay && !invOpen) {
-        if (tutorialSprite_) {
-            spriteCommon->PreDraw();
-            tutorialSprite_->Draw();
-        }
-    }
-    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
-        spriteCommon->PreDraw();
-        placementTutorialSprite_->Draw();
-    }
-    if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) && objectiveGuideSprite_) {
-        spriteCommon->PreDraw();
-        objectiveGuideSprite_->Draw();
-    }
-    if (currentMode_ == AppMode::StageSelect && stageSelectGuideSprite_) {
-        spriteCommon->PreDraw();
-        stageSelectGuideSprite_->Draw();
-    }
-    if (currentMode_ == AppMode::GameClear && clearGuideSprite_) {
-        spriteCommon->PreDraw();
-        clearGuideSprite_->Draw();
     }
 
     // ========================================================
@@ -929,14 +848,8 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
     // 全シーン共通でスカイボックスを描画（最背面）
     DrawSkybox(commandList);
 
-    if (currentMode_ == AppMode::Title) {
-        if (titleScene_) { titleScene_->Draw(); }
-
-    } else if (currentMode_ == AppMode::StageSelect) {
+    if (currentMode_ == AppMode::StageSelect) {
         if (stageSelect_) { stageSelect_->Draw(); }
-
-    } else if (currentMode_ == AppMode::GameClear) {
-        if (gameClearScene_) { gameClearScene_->Draw(); }
 
     } else if (currentMode_ == AppMode::SkinningEditor) {
         skinningEditor_.Draw(object3dCommon.get(), camera.get());
@@ -992,7 +905,7 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
     }
 
     // パーティクルの描画 (SRV ヒープを再バインドしてから描画)
-    if (debugFlags_.showParticles || currentMode_ == AppMode::GameClear) {
+    if (debugFlags_.showParticles) {
         ID3D12DescriptorHeap* ph[] = { textureManager->GetSrvHeap() };
         commandList->SetDescriptorHeaps(1, ph);
         particleManager->Draw();
@@ -1015,6 +928,19 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
     if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
         blockInventoryUI_->Draw();
     }
+
+    // チュートリアルスプライトの描画
+    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+    if (currentMode_ == AppMode::GamePlay && !invOpen && stageSelect_) {
+        if (stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_) {
+            spriteCommon->PreDraw();
+            tutorialSprite_->Draw();
+        }
+    }
+    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
+        spriteCommon->PreDraw();
+        placementTutorialSprite_->Draw();
+    }
 }
 
 // ==========================================================
@@ -1036,8 +962,8 @@ void MyGame::Finalize() {
 #endif
 
     // シーン・モデルの解放
-    gameClearScene_.reset();
-    titleScene_.reset();
+    
+    
     ModelManager::Finalize();
     objectList.clear();
     models.clear();
@@ -1096,10 +1022,6 @@ void MyGame::UpdateDebugView() {
 //  V キー: プレイヤー追従 ↔ 固定カメラ切り替え
 // --------------------------------------------------------
 void MyGame::UpdateGamePlay() {
-    bool isGuiCaptured = false;
-#ifndef NDEBUG
-    isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
-#endif
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
     // C キーでカメラモード切り替え
@@ -1109,14 +1031,6 @@ void MyGame::UpdateGamePlay() {
             // 一人称に切り替えた瞬間、プレイヤーの向きをカメラ方向に合わせる
             fpsCameraYaw_   = player_->GetRotation().y;
             fpsCameraPitch_ = 0.0f;
-            fpsCameraFov_   = 0.9f;
-        } else {
-            // 三人称に戻る時カメラ位置をリセット
-            if (stageSelect_) {
-                gameplayCameraController_.ResetCamera(camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
-            }
-            camera->SetFov(0.785f);
-            camera->Update();
         }
     }
 
@@ -1125,9 +1039,9 @@ void MyGame::UpdateGamePlay() {
         // V キーでプレイヤー追従 / 固定カメラを切り替える
         if (input->TriggerKey(DIK_V)) {
             bool cur = gameplayCameraController_.IsFollowPlayerMode();
+            gameplayCameraController_.SetFollowPlayerMode(!cur);
             if (!cur && player_) {
                 // 追従モードに切り替えたらカメラピボットをプレイヤー頭部に合わせる
-                gameplayCameraController_.SetFollowPlayerMode(true);
                 Vector3 pp  = player_->GetPosition();
                 pp.y       += 0.8f;
                 gameplayCameraController_.SetCameraPivot(pp);
@@ -1135,8 +1049,6 @@ void MyGame::UpdateGamePlay() {
                 // 固定モードに切り替えたらステージデフォルト位置にリセット
                 gameplayCameraController_.ResetCamera(
                     camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
-                // ResetCamera内で追従モードにリセットされるため、明示的にOFFにする
-                gameplayCameraController_.SetFollowPlayerMode(false);
             }
         }
         camera->SetFov(gameplayCameraController_.GetFov());
@@ -1144,25 +1056,15 @@ void MyGame::UpdateGamePlay() {
 
     } else {
         // === 一人称カメラ (FPS) ===
-        // マウスホイールで FOV 調整
-        int wheel = input->GetMouseState().wheel;
-        if (wheel != 0 && !isGuiCaptured) {
-            fpsCameraFov_ -= wheel * 0.001f;
-            fpsCameraFov_ = std::clamp(fpsCameraFov_, 0.1f, 1.5f);
-        }
-        camera->SetFov(fpsCameraFov_);
+        // 画面端へのマウス移動でカメラを回転させる
+        camera->SetFov(0.9f); // FPS は少し狭い FOV が自然に見える
 
+        bool isGuiCaptured = false;
+#ifndef NDEBUG
+        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
+#endif
         const auto& mouse = input->GetMouseState();
-        static bool isDraggingFpsCamera = false;
-        if (mouse.buttons[0]) {
-            if (!isDraggingFpsCamera && !isGuiCaptured) {
-                isDraggingFpsCamera = true;
-            }
-        } else {
-            isDraggingFpsCamera = false;
-        }
-
-        if (isDraggingFpsCamera) {
+        if (mouse.buttons[0] && !isGuiCaptured) {
             RECT rect;
             GetClientRect(winApp->GetHwnd(), &rect);
             float cw = static_cast<float>(rect.right  - rect.left);
@@ -1182,25 +1084,25 @@ void MyGame::UpdateGamePlay() {
 
                 // マウスが画面左端 → 左を向く / 右端 → 右を向く
                 if (mx < le) {
-                    fpsCameraYaw_ -= spd;
-                } else if (mx > re) {
                     fpsCameraYaw_ += spd;
+                } else if (mx > re) {
+                    fpsCameraYaw_ -= spd;
                 }
                 // マウスが画面上端 → 上を向く / 下端 → 下を向く
                 if (my < te) {
-                    fpsCameraPitch_ -= spd;
-                } else if (my > be) {
                     fpsCameraPitch_ += spd;
+                } else if (my > be) {
+                    fpsCameraPitch_ -= spd;
                 }
             }
         }
 
         // キーボードでもカメラ回転できるようにする
         const float ks = 0.03f;
-        if (input->PushKey(DIK_LEFT))  { fpsCameraYaw_   -= ks; }
-        if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_   += ks; }
-        if (input->PushKey(DIK_UP))    { fpsCameraPitch_ -= ks; }
-        if (input->PushKey(DIK_DOWN))  { fpsCameraPitch_ += ks; }
+        if (input->PushKey(DIK_LEFT))  { fpsCameraYaw_   += ks; }
+        if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_   -= ks; }
+        if (input->PushKey(DIK_UP))    { fpsCameraPitch_ += ks; }
+        if (input->PushKey(DIK_DOWN))  { fpsCameraPitch_ -= ks; }
         // 仰角は ±80° (約1.4rad) に制限してひっくり返らないようにする
         fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
 
@@ -1219,18 +1121,15 @@ void MyGame::UpdateGamePlay() {
             currentMode_ == AppMode::GamePlay, input.get(), winApp.get());
     }
 
-    // チュートリアルスプライトの更新 (インベントリを閉じているとき)
+    // チュートリアルスプライトの更新 (tutorial ステージ + インベントリを閉じているとき)
     bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-    if (tutorialSprite_ && !invOpen) {
+    if (stageSelect_ && stageSelect_->GetSelectedFileName() == "tutorial.txt"
+        && tutorialSprite_ && !invOpen) {
         tutorialSprite_->Update();
     }
     if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
         placementTutorialSprite_->Update();
     }
-
-    if (objectiveGuideSprite_) { objectiveGuideSprite_->Update(); }
-    if (stageSelectGuideSprite_) { stageSelectGuideSprite_->Update(); }
-    if (clearGuideSprite_) { clearGuideSprite_->Update(); }
 
     // ステージマップの更新 (ギミックの時間経過・アニメーションなど)
     float dt = 1.0f / 60.0f; // 固定タイムステップ (60fps 前提)
@@ -1242,13 +1141,6 @@ void MyGame::UpdateGamePlay() {
     if (player_) {
         float camRot = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
         player_->Update(input.get(), stageMap_, camRot, lightVP, dxCommon.get());
-        // プレイヤーの発光 (ポイントライト)
-        if (object3dCommon) {
-            Vector3 pp = player_->GetPosition();
-            object3dCommon->SetPointLight(pp, 5.0f, { 1.0f, 1.0f, 1.0f, 1.0f });
-        }
-    } else if (object3dCommon) {
-        object3dCommon->SetPointLight({0,0,0}, 0.0f, {0,0,0,0});
     }
 
     // マップの変化 (爆発・崩壊など) があればレンダラーを再構築
@@ -1279,7 +1171,7 @@ void MyGame::UpdateGamePlay() {
 
     // ゴール到達でクリア画面に遷移
     if (isGoalReached_) {
-        currentMode_ = AppMode::GameClear;
+        // currentMode_ = AppMode::GameClear;
     }
 }
 
@@ -1354,21 +1246,7 @@ void MyGame::UpdateGamePlayBlockPlace() {
 
     // カメラ操作 (StageEditorController に委譲)
     stageEditorController_.HandleCameraInput(input.get(), camera.get());
-}
-
-// --------------------------------------------------------
-//  UpdateTitle : タイトル画面の更新
-//  TitleScene::IsFinished() が true になったらステージ選択へ遷移
-// --------------------------------------------------------
-void MyGame::UpdateTitle() {
-    if (titleScene_) {
-        titleScene_->Update();
-        if (titleScene_->IsFinished()) {
-            currentMode_ = AppMode::StageSelect;
-            stageSelect_->Initialize(object3dCommon.get(), input.get());
-        }
-    }
-}
+} 
 
 // --------------------------------------------------------
 //  UpdateStageSelect : ステージ選択画面の更新
@@ -1386,17 +1264,9 @@ void MyGame::UpdateStageSelect() {
             playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
 
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
-
-            if (player_) {
-                player_->SetHasKey(false);
-            }
-
             gameplayCameraController_.ResetCamera(
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
-
-            blockInventory_.Initialize(0);
-            bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
-            blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+            blockInventory_.Initialize(0); // インベントリをリセット
         }
         currentMode_ = AppMode::GamePlay;
     }
@@ -1408,55 +1278,27 @@ void MyGame::UpdateStageSelect() {
 //  マップをバックアップから復元してステージ選択に戻る
 // --------------------------------------------------------
 void MyGame::UpdateSceneTransition() {
-    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-
     if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)
         && input->TriggerKey(DIK_ESCAPE)) {
-        
-        if (invOpen) {
-            // インベントリが開いている場合は閉じてGamePlayに戻る
-            blockInventoryUI_->ToggleOpen();
-            currentMode_ = AppMode::GamePlay;
-            placeRotationY_ = 0.0f;
-            if (stageRenderer_) { stageRenderer_->ClearPlacementPreview(); }
-        } else if (currentMode_ == AppMode::GamePlay_BlockPlace) {
-            // インベントリは閉じていて配置モードの場合はGamePlayに戻る
-            currentMode_ = AppMode::GamePlay;
-            placeRotationY_ = 0.0f;
-            if (stageRenderer_) { stageRenderer_->ClearPlacementPreview(); }
-        } else {
-            // 純粋なGamePlay中の場合はステージ選択に戻る
-            stageMap_ = backupMap_; // バックアップから復元 (ブロック設置も元に戻る)
-            stageRenderer_->BuildFromStageMap(stageMap_);
-            // コントローラーをリセットしてステージ選択に戻る
-            bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
-            stageSelect_->Initialize(object3dCommon.get(), input.get());
-            isGoalReached_ = false;
-            if (player_) { player_->Respawn(); }
-            particleManager->ClearParticles();
-            currentMode_ = AppMode::StageSelect;
-            stageSelect_->Initialize(object3dCommon.get(), input.get());
-        }
+        stageMap_ = backupMap_; // バックアップから復元 (ブロック設置も元に戻る)
+        stageRenderer_->BuildFromStageMap(stageMap_);
+        // コントローラーをリセットしてステージ選択に戻る
+        bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+        stageSelect_->Initialize(object3dCommon.get(), input.get());
+        isGoalReached_ = false;
+        if (player_) { player_->Respawn(); }
+        currentMode_ = AppMode::StageSelect;
     }
 }
-
 
 void MyGame::UpdateBGM() {
     BgmType nextBgmType = BgmType::None;
 
     switch (currentMode_) {
-    case AppMode::Title:
-    case AppMode::StageSelect:
-        nextBgmType = BgmType::Title;
-        break;
 
     case AppMode::GamePlay:
     case AppMode::GamePlay_BlockPlace:
         nextBgmType = BgmType::Game;
-        break;
-
-    case AppMode::GameClear:
-        nextBgmType = BgmType::Clear;
         break;
 
     default:
@@ -1472,16 +1314,9 @@ void MyGame::UpdateBGM() {
     currentBgmType_ = nextBgmType;
 
     switch (currentBgmType_) {
-    case BgmType::Title:
-        sound.BGMPlay(titleBgmData, bgmVolume_);
-        break;
 
     case BgmType::Game:
         sound.BGMPlay(gameBgmData, bgmVolume_);
-        break;
-
-    case BgmType::Clear:
-        sound.BGMPlay(clearBgmData, bgmVolume_);
         break;
 
     case BgmType::None:
@@ -1501,7 +1336,7 @@ void MyGame::UpdateBGM() {
 //  後続の描画が壊れないようにする
 // --------------------------------------------------------
 void MyGame::DrawSkybox(ID3D12GraphicsCommandList* commandList) {
-    if (showSkyboxCubemap_ && skybox_) {
+    if (debugFlags_.showSkybox && showSkyboxCubemap_ && skybox_) {
         skybox_->Draw();
         // スカイボックス描画後に PSO / ヒープが変わるため再バインド
         object3dCommon->PreDraw();
@@ -1547,6 +1382,12 @@ bool MyGame::IsPlayerHiddenByWall() const {
     }
     return false;
 }
+
+
+
+
+
+
 
 
 

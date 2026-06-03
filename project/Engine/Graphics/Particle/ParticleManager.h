@@ -8,13 +8,20 @@
 #include "DirectXCommon.h"
 #include "TextureManager.h"
 
-// パーティクル1粒のデータ構造
+class StageMap;
+
+// パーティクル1つのデータ構造
 struct Particle {
+    enum class Type {
+        Fall,
+        Splash
+    };
+    Type type = Type::Fall;
     Transform transform; // 位置、回転、スケール
     Vector3 velocity;    // 速度
     Vector4 color;       // 色
-    float lifeTime;      // 生存時間（現在）
-    float maxTime;       // 寿命（最大）
+    float lifeTime;      // 時間(現在)
+    float maxTime;       // (最大)
 };
 
 // マネージャークラス
@@ -54,7 +61,7 @@ public: // メンバ関数
     void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager);
 
     // 更新
-    void Update(float deltaTime, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const Vector3& playerPos);
+    void Update(float deltaTime, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const Vector3& playerPos, StageMap* stageMap = nullptr);
 
     // 描画
     void Draw();
@@ -62,6 +69,9 @@ public: // メンバ関数
     // パーティクル発生（エミッター）
     // pos: 発生位置, count: 発生数
     void Emit(const Vector3& pos, uint32_t count);
+
+    // 飛沫を生成する（ブロック衝突時など）
+    void EmitSplash(const Vector3& pos, const Vector4& color);
 
     // テクスチャ設定
     void SetTexture(uint32_t textureHandle) { textureHandle_ = textureHandle; }
@@ -102,3 +112,4 @@ private: // メンバ変数
     // 天候用エミッター
     WeatherEmitter weatherEmitter_;
 };
+

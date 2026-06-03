@@ -28,7 +28,7 @@ void WinApp::Initialize() {
     // --- メンバ変数名 hwnd_ に統一 ---
     hwnd_ = CreateWindowW(
         wc_.lpszClassName,
-        L"3142_回転の国の探検隊",
+        L"自作エンジン",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,

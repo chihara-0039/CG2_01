@@ -211,7 +211,6 @@
     <ClCompile Include="Engine\Graphics\3D\SkinnedObject.cpp" />
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
     <ClCompile Include="Game\Player\PlayerBasePosition.cpp" />
-    <ClCompile Include="Game\Scene\GameClearScene.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
     <ClCompile Include="Engine\Graphics\PostProcessRenderer.cpp" />
@@ -245,7 +244,6 @@
     <ClCompile Include="Engine\Base\StringUtility.cpp" />
     <ClCompile Include="Engine\Graphics\2D\TextureManager.cpp" />
     <ClCompile Include="Engine\Base\WinApp.cpp" />
-    <ClCompile Include="Game\Scene\TitleScene.cpp" />
     <ClCompile Include="Game\Stage\StageRespawnController.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -362,7 +360,6 @@
     <ClInclude Include="Engine\Graphics\3D\SkinnedObject.h" />
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
     <ClInclude Include="Game\Player\PlayerBasePosition.h" />
-    <ClInclude Include="Game\Scene\GameClearScene.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
     <ClInclude Include="Game\Scene\SkinningEditorController.h" />
     <ClInclude Include="Engine\Graphics\PostProcessRenderer.h" />
@@ -385,7 +382,6 @@
     <ClInclude Include="Engine\Graphics\2D\TextureManager.h" />
     <ClInclude Include="Engine\Base\WinApp.h" />
     <ClInclude Include="Engine\Graphics\3D\ShadowMap.h" />
-    <ClInclude Include="Game\Scene\TitleScene.h" />
     <ClInclude Include="Engine\Utility\LightCamera.h" />
     <ClInclude Include="Sound\Sound.h" />
     <ClInclude Include="Game\Stage\StageRespawnController.h" />
