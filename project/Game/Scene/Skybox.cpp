@@ -180,7 +180,6 @@ void Skybox::CreateGraphicsPipeline() {
 }
 
 void Skybox::Update() {
-    // 平行移動のみ同期（カメラ位置を後から設定するため、MyGame 側で translate を更新して Update を呼ぶ）
     Matrix4x4 worldMatrix = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
     Matrix4x4 wvpMatrix = Math::Multiply(worldMatrix, Math::Multiply(viewMatrix_, projectionMatrix_));
 
@@ -188,13 +187,21 @@ void Skybox::Update() {
     transformationData_->World = worldMatrix;
 }
 
+void Skybox::Update(const Vector3& cameraPosition) {
+    transform_.translate = cameraPosition;
+    Update();
+}
+
 void Skybox::Draw() {
     auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
+    TextureManager* textureManager = object3dCommon_->GetTextureManager();
 
-    if (object3dCommon_->GetTextureManager()) {
-        ID3D12DescriptorHeap* heaps[] = { object3dCommon_->GetTextureManager()->GetSrvHeap() };
-        commandList->SetDescriptorHeaps(1, heaps);
+    if (!textureManager) {
+        return;
     }
+
+    ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
+    commandList->SetDescriptorHeaps(1, heaps);
 
     commandList->SetPipelineState(pipelineState_.Get());
     commandList->SetGraphicsRootSignature(object3dCommon_->GetRootSignature());
@@ -205,10 +212,8 @@ void Skybox::Draw() {
     commandList->SetGraphicsRootConstantBufferView(1, transformationResource_->GetGPUVirtualAddress());
 
     // 3: Texture (Cubemap)
-    if (object3dCommon_->GetTextureManager()) {
-        auto gpuHandle = object3dCommon_->GetTextureManager()->GetSrvHandleGPU(textureHandle_);
-        commandList->SetGraphicsRootDescriptorTable(3, gpuHandle);
-    }
+    auto gpuHandle = textureManager->GetSrvHandleGPU(textureHandle_);
+    commandList->SetGraphicsRootDescriptorTable(3, gpuHandle);
 
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList->IASetIndexBuffer(&indexBufferView_);
