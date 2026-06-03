@@ -174,6 +174,9 @@ public:
     /// <summary>TextureManager 縺ｸ縺ｮ繝昴う繝ｳ繧ｿ繧定ｿ斐☆</summary>
     TextureManager* GetTextureManager() const { return textureManager_; }
 
+    void SetEnvironmentTextureHandle(uint32_t textureHandle) { environmentTextureHandle_ = textureHandle; }
+    uint32_t GetEnvironmentTextureHandle() const { return environmentTextureHandle_; }
+
     // -------------------------------------------------------
     //  PreDrawPlayerHighlight
     //  繧ｫ繝｡繝ｩ縺ｨ繝励Ξ繧､繝､繝ｼ縺ｮ髢薙↓螢√′縺ゅｋ蝣ｴ蜷医↓
@@ -200,6 +203,7 @@ private:
 private:
     DirectXCommon*  dxCommon_       = nullptr;
     TextureManager* textureManager_ = nullptr;
+    uint32_t environmentTextureHandle_ = 0;
 
     // 笏笏 RootSignature / PSO 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;     // 騾壼ｸｸ謠冗判逕ｨ

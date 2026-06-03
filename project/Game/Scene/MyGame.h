@@ -233,6 +233,9 @@ private:
     float fpsCameraFov_         = 0.9f;
     float placeRotationY_       = 0.0f;  ///< ブロック配置の回転角
     float playerGlow_           = 0.0f;  ///< プレイヤー発光量
+    float debugObjectEnvironmentCoefficient_ = 0.25f;
+    float terrainEnvironmentCoefficient_ = 0.0f;
+    float playerEnvironmentCoefficient_ = 0.0f;
 
     // ==========================================================
     //  内部メソッド

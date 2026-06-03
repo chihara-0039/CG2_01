@@ -81,9 +81,15 @@ void MyGame::Initialize() {
     // 4. DebugView 用の汎用オブジェクト生成
     //    ブロックとaxis モデルを DebugView 画面に配置する
     // --------------------------------------------------------
-    CreateObject(models[0].get(), { -25.0f, 0.0f, 0.0f })->SetScale({ 10.0f, 1.0f, 10.0f });
-    CreateObject(models[1].get(), { -23.0f, 0.0f, 0.0f });
-    CreateObject(models[1].get(), { -27.0f, 0.0f, 0.0f });
+    Object3d* debugFloor = CreateObject(models[0].get(), { -25.0f, 0.0f, 0.0f });
+    debugFloor->SetScale({ 10.0f, 1.0f, 10.0f });
+    debugFloor->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
+
+    Object3d* debugAxisA = CreateObject(models[1].get(), { -23.0f, 0.0f, 0.0f });
+    debugAxisA->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
+
+    Object3d* debugAxisB = CreateObject(models[1].get(), { -27.0f, 0.0f, 0.0f });
+    debugAxisB->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
 
     // --------------------------------------------------------
     // 5. テストスプライトの初期化
@@ -170,6 +176,7 @@ void MyGame::Initialize() {
     skydomeObject_->SetScale({ 90.0f, 90.0f, 90.0f });
 
     skyboxTextureHandle_ = textureManager->LoadTexture("Resources/dds/rostock_laage_airport_4k.dds");
+    object3dCommon->SetEnvironmentTextureHandle(skyboxTextureHandle_);
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(object3dCommon.get(), skyboxTextureHandle_);
     skybox_->SetScale({ 50.0f, 50.0f, 50.0f });
@@ -260,6 +267,7 @@ void MyGame::Initialize() {
     terrainObject_->SetPosition({ 0.0f, 0.0f, 0.0f });
     terrainObject_->SetScale({ 1.0f, 1.0f, 1.0f });
     terrainObject_->SetRotation({ 0.0f, 0.0f, 0.0f });
+    terrainObject_->SetEnvironmentCoefficient(terrainEnvironmentCoefficient_);
 
     // --------------------------------------------------------
     // 19. オフスクリーンレンダリング (PostProcessRenderer) の初期化
@@ -720,6 +728,24 @@ void MyGame::UpdateImGui() {
         if (ImGui::CollapsingHeader("Player Settings")) {
             ImGui::SliderFloat("Player Glow", &playerGlow_, 0.0f, 5.0f);
             if (player_) player_->SetGlow(playerGlow_);
+        }
+
+        if (ImGui::CollapsingHeader("Environment Map", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::SliderFloat("Debug Objects", &debugObjectEnvironmentCoefficient_, 0.0f, 1.0f);
+            ImGui::SliderFloat("Terrain", &terrainEnvironmentCoefficient_, 0.0f, 1.0f);
+            ImGui::SliderFloat("Player", &playerEnvironmentCoefficient_, 0.0f, 1.0f);
+
+            for (auto& obj : objectList) {
+                if (obj) {
+                    obj->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
+                }
+            }
+            if (terrainObject_) {
+                terrainObject_->SetEnvironmentCoefficient(terrainEnvironmentCoefficient_);
+            }
+            if (player_) {
+                player_->SetEnvironmentCoefficient(playerEnvironmentCoefficient_);
+            }
         }
     }
 

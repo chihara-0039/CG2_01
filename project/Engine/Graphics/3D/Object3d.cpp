@@ -32,6 +32,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon) {
     materialData_->metallic = 0.0f;
     materialData_->emissive = 0.0f;
     materialData_->uvTransform = Math::MakeIdentity4x4();
+    materialData_->environmentCoefficient = 0.0f;
 }
 
 // 毎フレーム呼び出す更新関数。ワールド行列とWVP行列を計算して定数バッファに転送します
@@ -74,6 +75,9 @@ void Object3d::Draw() {
     if (object3dCommon_->GetTextureManager()) {
         auto gpuHandle = object3dCommon_->GetTextureManager()->GetSrvHandleGPU(model_->GetTextureHandle());
         commandList->SetGraphicsRootDescriptorTable(3, gpuHandle);
+
+        auto environmentHandle = object3dCommon_->GetTextureManager()->GetSrvHandleGPU(object3dCommon_->GetEnvironmentTextureHandle());
+        commandList->SetGraphicsRootDescriptorTable(6, environmentHandle);
     }
 
     model_->Draw(commandList);
