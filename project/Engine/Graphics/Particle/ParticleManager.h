@@ -14,12 +14,14 @@ class StageMap;
 struct Particle {
     enum class Type {
         Fall,
-        Splash
+        Splash,
+        Ring
     };
     Type type = Type::Fall;
     Transform transform; // 位置、回転、スケール
     Vector3 velocity;    // 速度
     Vector4 color;       // 色
+    float initialAlpha = 1.0f;
     float lifeTime;      // 時間(現在)
     float maxTime;       // (最大)
 };
@@ -79,12 +81,17 @@ public: // メンバ関数
     // 天候エミッターの取得・設定
     WeatherEmitter& GetWeatherEmitter() { return weatherEmitter_; }
 
-    void ClearParticles() { particles_.clear(); }
+    void ClearParticles() {
+        particles_.clear();
+        planeInstanceCount_ = 0;
+        ringInstanceCount_ = 0;
+    }
 
 private: // 内部処理
     void CreateRootSignature();
     void CreatePipelineState();
     void CreateMesh(); // 板ポリゴンの作成
+    void CreateRingMesh();
 
 private: // メンバ変数
     DirectXCommon* dxCommon_ = nullptr;
@@ -97,11 +104,23 @@ private: // メンバ変数
     // モデルデータ（板ポリ）
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
+    uint32_t planeVertexCount_ = 0;
+
+    // モデルデータ（Ring）
+    Microsoft::WRL::ComPtr<ID3D12Resource> ringVertexBuffer_;
+    D3D12_VERTEX_BUFFER_VIEW ringVertexBufferView_{};
+    uint32_t ringVertexCount_ = 0;
 
     // インスタンシング用データ
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingBuffer_;
     D3D12_VERTEX_BUFFER_VIEW instancingBufferView_{};
     InstanceData* instancingDataMapped_ = nullptr;
+    uint32_t planeInstanceCount_ = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> ringInstancingBuffer_;
+    D3D12_VERTEX_BUFFER_VIEW ringInstancingBufferView_{};
+    InstanceData* ringInstancingDataMapped_ = nullptr;
+    uint32_t ringInstanceCount_ = 0;
 
     // テクスチャハンドル
     uint32_t textureHandle_ = 0;
