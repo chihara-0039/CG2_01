@@ -15,7 +15,8 @@ struct Particle {
     enum class Type {
         Fall,
         Splash,
-        Ring
+        Ring,
+        Cylinder
     };
     Type type = Type::Fall;
     Transform transform; // 位置、回転、スケール
@@ -85,6 +86,7 @@ public: // メンバ関数
         particles_.clear();
         planeInstanceCount_ = 0;
         ringInstanceCount_ = 0;
+        cylinderInstanceCount_ = 0;
     }
 
 private: // 内部処理
@@ -92,6 +94,7 @@ private: // 内部処理
     void CreatePipelineState();
     void CreateMesh(); // 板ポリゴンの作成
     void CreateRingMesh();
+    void CreateCylinderMesh();
 
 private: // メンバ変数
     DirectXCommon* dxCommon_ = nullptr;
@@ -100,6 +103,7 @@ private: // メンバ変数
     // DirectXリソース
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> primitivePipelineState_;
 
     // モデルデータ（板ポリ）
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
@@ -111,6 +115,11 @@ private: // メンバ変数
     D3D12_VERTEX_BUFFER_VIEW ringVertexBufferView_{};
     uint32_t ringVertexCount_ = 0;
 
+    // モデルデータ（Cylinder）
+    Microsoft::WRL::ComPtr<ID3D12Resource> cylinderVertexBuffer_;
+    D3D12_VERTEX_BUFFER_VIEW cylinderVertexBufferView_{};
+    uint32_t cylinderVertexCount_ = 0;
+
     // インスタンシング用データ
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingBuffer_;
     D3D12_VERTEX_BUFFER_VIEW instancingBufferView_{};
@@ -121,6 +130,11 @@ private: // メンバ変数
     D3D12_VERTEX_BUFFER_VIEW ringInstancingBufferView_{};
     InstanceData* ringInstancingDataMapped_ = nullptr;
     uint32_t ringInstanceCount_ = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> cylinderInstancingBuffer_;
+    D3D12_VERTEX_BUFFER_VIEW cylinderInstancingBufferView_{};
+    InstanceData* cylinderInstancingDataMapped_ = nullptr;
+    uint32_t cylinderInstanceCount_ = 0;
 
     // テクスチャハンドル
     uint32_t textureHandle_ = 0;

@@ -25,6 +25,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
     // 3. メッシュ生成
     CreateMesh();
     CreateRingMesh();
+    CreateCylinderMesh();
 
     // 4. インスタンシング用バッファ生成
     {
@@ -55,6 +56,15 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
         ringInstancingBufferView_.BufferLocation = ringInstancingBuffer_->GetGPUVirtualAddress();
         ringInstancingBufferView_.SizeInBytes = size;
         ringInstancingBufferView_.StrideInBytes = sizeof(InstanceData);
+
+        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&cylinderInstancingBuffer_));
+        assert(SUCCEEDED(hr));
+
+        cylinderInstancingBuffer_->Map(0, nullptr, (void**)&cylinderInstancingDataMapped_);
+
+        cylinderInstancingBufferView_.BufferLocation = cylinderInstancingBuffer_->GetGPUVirtualAddress();
+        cylinderInstancingBufferView_.SizeInBytes = size;
+        cylinderInstancingBufferView_.StrideInBytes = sizeof(InstanceData);
     }
 }
 
@@ -119,6 +129,11 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             float t = it->lifeTime / it->maxTime;
             float ringScale = 0.25f + 1.8f * t;
             it->transform.scale = { ringScale, ringScale, 1.0f };
+        } else if (it->type == Particle::Type::Cylinder) {
+            float t = it->lifeTime / it->maxTime;
+            float radiusScale = 0.7f + 0.6f * t;
+            float heightScale = 0.8f + 0.4f * t;
+            it->transform.scale = { radiusScale, heightScale, radiusScale };
         }
         
         // 当たり判定 (StageMapとの衝突判定)
@@ -160,6 +175,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
     // 2. データ書き込み
     planeInstanceCount_ = 0;
     ringInstanceCount_ = 0;
+    cylinderInstanceCount_ = 0;
     Matrix4x4 cameraMatrix = Math::Inverse(viewMatrix);
     Matrix4x4 billboardMat = Math::MakeIdentity4x4();
     billboardMat.m[0][0] = cameraMatrix.m[0][0]; billboardMat.m[0][1] = cameraMatrix.m[0][1]; billboardMat.m[0][2] = cameraMatrix.m[0][2];
@@ -167,16 +183,29 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
     billboardMat.m[2][0] = cameraMatrix.m[2][0]; billboardMat.m[2][1] = cameraMatrix.m[2][1]; billboardMat.m[2][2] = cameraMatrix.m[2][2];
 
     for (const auto& particle : particles_) {
-        bool isRing = particle.type == Particle::Type::Ring;
-        uint32_t& index = isRing ? ringInstanceCount_ : planeInstanceCount_;
-        InstanceData* instancingData = isRing ? ringInstancingDataMapped_ : instancingDataMapped_;
+        uint32_t* indexPtr = &planeInstanceCount_;
+        InstanceData* instancingData = instancingDataMapped_;
+        bool useBillboard = true;
+
+        if (particle.type == Particle::Type::Ring) {
+            indexPtr = &ringInstanceCount_;
+            instancingData = ringInstancingDataMapped_;
+        } else if (particle.type == Particle::Type::Cylinder) {
+            indexPtr = &cylinderInstanceCount_;
+            instancingData = cylinderInstancingDataMapped_;
+            useBillboard = false;
+        }
+
+        uint32_t& index = *indexPtr;
 
         if (index >= kMaxParticles) continue;
 
         Matrix4x4 scaleMat = Math::Matrix4x4MakeScaleMatrix(particle.transform.scale);
         Matrix4x4 rotateMat = Math::MakeRotateZMatrix(particle.transform.rotate.z);
         Matrix4x4 transMat = Math::MakeTranslateMatrix(particle.transform.translate);
-        Matrix4x4 worldMat = Math::Multiply(scaleMat, Math::Multiply(rotateMat, Math::Multiply(billboardMat, transMat)));
+        Matrix4x4 worldMat = useBillboard
+            ? Math::Multiply(scaleMat, Math::Multiply(rotateMat, Math::Multiply(billboardMat, transMat)))
+            : Math::MakeAffineMatrix(particle.transform.scale, particle.transform.rotate, particle.transform.translate);
         Matrix4x4 wvp = Math::Multiply(worldMat, Math::Multiply(viewMatrix, projectionMatrix));
 
         instancingData[index].WVP = wvp;
@@ -187,7 +216,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
 
 
 void ParticleManager::Draw() {
-    if (planeInstanceCount_ == 0 && ringInstanceCount_ == 0) return;
+    if (planeInstanceCount_ == 0 && ringInstanceCount_ == 0 && cylinderInstanceCount_ == 0) return;
 
     auto commandList = dxCommon_->GetCommandList();
 
@@ -202,15 +231,24 @@ void ParticleManager::Draw() {
     commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
 
     if (planeInstanceCount_ > 0) {
+        commandList->SetPipelineState(pipelineState_.Get());
         commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
         commandList->IASetVertexBuffers(1, 1, &instancingBufferView_);
         commandList->DrawInstanced(planeVertexCount_, planeInstanceCount_, 0, 0);
     }
 
     if (ringInstanceCount_ > 0) {
+        commandList->SetPipelineState(primitivePipelineState_.Get());
         commandList->IASetVertexBuffers(0, 1, &ringVertexBufferView_);
         commandList->IASetVertexBuffers(1, 1, &ringInstancingBufferView_);
         commandList->DrawInstanced(ringVertexCount_, ringInstanceCount_, 0, 0);
+    }
+
+    if (cylinderInstanceCount_ > 0) {
+        commandList->SetPipelineState(primitivePipelineState_.Get());
+        commandList->IASetVertexBuffers(0, 1, &cylinderVertexBufferView_);
+        commandList->IASetVertexBuffers(1, 1, &cylinderInstancingBufferView_);
+        commandList->DrawInstanced(cylinderVertexCount_, cylinderInstanceCount_, 0, 0);
     }
 }
 
@@ -270,8 +308,10 @@ void ParticleManager::CreatePipelineState() {
     // シェーダーコンパイル (パスにhlsl/を追加済み)
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Particle.VS.hlsl", L"vs_6_0");
     auto psBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Particle.PS.hlsl", L"ps_6_0");
+    auto primitivePsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/ParticlePrimitive.PS.hlsl", L"ps_6_0");
     assert(vsBlob != nullptr && "VS Compile Failed");
     assert(psBlob != nullptr && "PS Compile Failed");
+    assert(primitivePsBlob != nullptr && "Primitive PS Compile Failed");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = rootSignature_.Get();
@@ -307,6 +347,13 @@ void ParticleManager::CreatePipelineState() {
     HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState_));
     if (FAILED(hr)) {
         OutputDebugStringA("Failed to create GraphicsPipelineState for Particles!\n");
+        assert(false);
+    }
+
+    psoDesc.PS = { primitivePsBlob->GetBufferPointer(), primitivePsBlob->GetBufferSize() };
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&primitivePipelineState_));
+    if (FAILED(hr)) {
+        OutputDebugStringA("Failed to create GraphicsPipelineState for Particle Primitives!\n");
         assert(false);
     }
 }
@@ -400,6 +447,63 @@ void ParticleManager::CreateRingMesh() {
     ringVertexBufferView_.StrideInBytes = sizeof(VertexData);
 }
 
+void ParticleManager::CreateCylinderMesh() {
+    constexpr uint32_t kCylinderDivide = 64;
+    constexpr float kTopRadius = 0.5f;
+    constexpr float kBottomRadius = 0.5f;
+    constexpr float kHeight = 1.0f;
+    constexpr float kPi = 3.14159265f;
+
+    std::vector<VertexData> vertices;
+    vertices.reserve(kCylinderDivide * 6);
+
+    for (uint32_t index = 0; index < kCylinderDivide; ++index) {
+        float t0 = static_cast<float>(index) / static_cast<float>(kCylinderDivide);
+        float t1 = static_cast<float>(index + 1) / static_cast<float>(kCylinderDivide);
+        float angle0 = t0 * 2.0f * kPi;
+        float angle1 = t1 * 2.0f * kPi;
+
+        float sin0 = std::sin(angle0);
+        float cos0 = std::cos(angle0);
+        float sin1 = std::sin(angle1);
+        float cos1 = std::cos(angle1);
+
+        VertexData top0 = { { sin0 * kTopRadius, kHeight, cos0 * kTopRadius, 1.0f }, { t0, 0.0f }, { sin0, 0, cos0 } };
+        VertexData top1 = { { sin1 * kTopRadius, kHeight, cos1 * kTopRadius, 1.0f }, { t1, 0.0f }, { sin1, 0, cos1 } };
+        VertexData bottom0 = { { sin0 * kBottomRadius, 0.0f, cos0 * kBottomRadius, 1.0f }, { t0, 1.0f }, { sin0, 0, cos0 } };
+        VertexData bottom1 = { { sin1 * kBottomRadius, 0.0f, cos1 * kBottomRadius, 1.0f }, { t1, 1.0f }, { sin1, 0, cos1 } };
+
+        vertices.push_back(top0);
+        vertices.push_back(top1);
+        vertices.push_back(bottom0);
+        vertices.push_back(bottom0);
+        vertices.push_back(top1);
+        vertices.push_back(bottom1);
+    }
+
+    cylinderVertexCount_ = static_cast<uint32_t>(vertices.size());
+    UINT size = static_cast<UINT>(sizeof(VertexData) * vertices.size());
+
+    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_RESOURCE_DESC resDesc = {};
+    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resDesc.Width = size;
+    resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+
+    HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&cylinderVertexBuffer_));
+    assert(SUCCEEDED(hr));
+
+    VertexData* data = nullptr;
+    cylinderVertexBuffer_->Map(0, nullptr, (void**)&data);
+    memcpy(data, vertices.data(), size);
+    cylinderVertexBuffer_->Unmap(0, nullptr);
+
+    cylinderVertexBufferView_.BufferLocation = cylinderVertexBuffer_->GetGPUVirtualAddress();
+    cylinderVertexBufferView_.SizeInBytes = size;
+    cylinderVertexBufferView_.StrideInBytes = sizeof(VertexData);
+}
+
 void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     constexpr int kSplashCount = 8;
     constexpr float kPi = 3.14159265f;
@@ -408,6 +512,20 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     std::uniform_real_distribution<float> distScale(0.4f, 1.5f);
     std::uniform_real_distribution<float> distOffset(-0.08f, 0.08f);
     std::uniform_real_distribution<float> distLife(0.18f, 0.28f);
+
+    if (particles_.size() < kMaxParticles) {
+        Particle cylinder;
+        cylinder.type = Particle::Type::Cylinder;
+        cylinder.transform.translate = { pos.x, pos.y - 0.05f, pos.z };
+        cylinder.transform.scale = { 0.7f, 0.8f, 0.7f };
+        cylinder.transform.rotate = { 0.0f, distRotate(engine), 0.0f };
+        cylinder.velocity = { 0.0f, 0.0f, 0.0f };
+        cylinder.color = { color.x * 0.55f, color.y * 0.75f, 1.0f, 0.28f };
+        cylinder.initialAlpha = cylinder.color.w;
+        cylinder.lifeTime = 0.0f;
+        cylinder.maxTime = 0.45f;
+        particles_.push_back(cylinder);
+    }
 
     if (particles_.size() < kMaxParticles) {
         Particle ring;
@@ -452,6 +570,20 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
     std::uniform_real_distribution<float> distColor(0.7f, 1.0f);
     std::uniform_real_distribution<float> distTime(0.18f, 0.35f);
     std::uniform_real_distribution<float> distOffset(-0.2f, 0.2f);
+
+    if (particles_.size() < kMaxParticles) {
+        Particle cylinder;
+        cylinder.type = Particle::Type::Cylinder;
+        cylinder.transform.scale = { 0.7f, 0.8f, 0.7f };
+        cylinder.transform.rotate = { 0.0f, distRotate(engine), 0.0f };
+        cylinder.transform.translate = { pos.x, pos.y - 0.05f, pos.z };
+        cylinder.velocity = { 0.0f, 0.0f, 0.0f };
+        cylinder.color = { 0.35f, 0.55f, 1.0f, 0.28f };
+        cylinder.initialAlpha = cylinder.color.w;
+        cylinder.lifeTime = 0.0f;
+        cylinder.maxTime = 0.45f;
+        particles_.push_back(cylinder);
+    }
 
     if (particles_.size() < kMaxParticles) {
         Particle ring;
