@@ -151,8 +151,9 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         if (index >= kMaxParticles) break;
 
         Matrix4x4 scaleMat = Math::Matrix4x4MakeScaleMatrix(particle.transform.scale);
+        Matrix4x4 rotateMat = Math::MakeRotateZMatrix(particle.transform.rotate.z);
         Matrix4x4 transMat = Math::MakeTranslateMatrix(particle.transform.translate);
-        Matrix4x4 worldMat = Math::Multiply(scaleMat, Math::Multiply(billboardMat, transMat));
+        Matrix4x4 worldMat = Math::Multiply(scaleMat, Math::Multiply(rotateMat, Math::Multiply(billboardMat, transMat)));
         Matrix4x4 wvp = Math::Multiply(worldMat, Math::Multiply(viewMatrix, projectionMatrix));
 
         instancingDataMapped_[index].WVP = wvp;
@@ -183,25 +184,6 @@ void ParticleManager::Draw() {
     uint32_t count = (uint32_t)particles_.size();
     if (count > kMaxParticles) count = kMaxParticles;
     commandList->DrawInstanced(6, count, 0, 0);
-}
-
-void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
-    std::uniform_real_distribution<float> distVel(-0.1f, 0.1f);
-    std::uniform_real_distribution<float> distColor(0.5f, 1.0f);
-    std::uniform_real_distribution<float> distTime(1.0f, 3.0f);
-
-    for (uint32_t i = 0; i < count; ++i) {
-        if (particles_.size() >= kMaxParticles) return;
-        Particle p;
-        p.transform.scale = { 1.0f, 1.0f, 1.0f };
-        p.transform.rotate = { 0.0f, 0.0f, 0.0f };
-        p.transform.translate = pos;
-        p.velocity = { distVel(engine), distVel(engine), distVel(engine) };
-        p.color = { distColor(engine), distColor(engine), distColor(engine), 1.0f };
-        p.lifeTime = 0.0f;
-        p.maxTime = distTime(engine);
-        particles_.push_back(p);
-    }
 }
 
 void ParticleManager::CreateRootSignature() {
@@ -334,26 +316,59 @@ void ParticleManager::CreateMesh() {
 }
 
 void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
-    int splashCount = 3 + (engine() % 3); // 3〜5個
-    for (int i = 0; i < splashCount; ++i) {
+    constexpr int kSplashCount = 8;
+    constexpr float kPi = 3.14159265f;
+
+    std::uniform_real_distribution<float> distRotate(-kPi, kPi);
+    std::uniform_real_distribution<float> distScale(0.4f, 1.5f);
+    std::uniform_real_distribution<float> distOffset(-0.08f, 0.08f);
+    std::uniform_real_distribution<float> distLife(0.18f, 0.28f);
+
+    for (int i = 0; i < kSplashCount; ++i) {
         if (particles_.size() >= kMaxParticles) break;
-        
-        std::uniform_real_distribution<float> randV(-1.0f, 1.0f);
-        std::uniform_real_distribution<float> randVY(1.0f, 3.0f); // 上向き
-        
+
         Particle p;
         p.type = Particle::Type::Splash;
-        p.transform.translate = pos;
-        p.transform.translate.y += 0.5f; // ブロックの少し上から
-        p.transform.scale = { weatherEmitter_.particleSize.x * 0.5f, weatherEmitter_.particleSize.y * 0.5f, weatherEmitter_.particleSize.z * 0.5f };
-        p.transform.rotate = { 0.0f, 0.0f, 0.0f };
-        
-        p.velocity = { randV(engine) * 2.0f, randVY(engine) * 2.0f, randV(engine) * 2.0f };
+        p.transform.translate = {
+            pos.x + distOffset(engine),
+            pos.y + 0.2f + distOffset(engine),
+            pos.z + distOffset(engine)
+        };
+        p.transform.scale = { 0.05f, distScale(engine), 1.0f };
+        p.transform.rotate = { 0.0f, 0.0f, distRotate(engine) };
+
+        p.velocity = { 0.0f, 0.0f, 0.0f };
         p.color = color;
         p.lifeTime = 0.0f;
-        p.maxTime = 0.2f + (engine() % 20) / 100.0f; // 0.2〜0.4秒
-        
+        p.maxTime = distLife(engine);
+
         particles_.push_back(p);
     }
 }
 
+void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
+    std::uniform_real_distribution<float> distRotate(-3.14159265f, 3.14159265f);
+    std::uniform_real_distribution<float> distScale(0.4f, 1.5f);
+    std::uniform_real_distribution<float> distColor(0.7f, 1.0f);
+    std::uniform_real_distribution<float> distTime(0.18f, 0.35f);
+    std::uniform_real_distribution<float> distOffset(-0.2f, 0.2f);
+
+    for (uint32_t i = 0; i < count; ++i) {
+        if (particles_.size() >= kMaxParticles) return;
+
+        Particle p;
+        p.type = Particle::Type::Splash;
+        p.transform.scale = { 0.05f, distScale(engine), 1.0f };
+        p.transform.rotate = { 0.0f, 0.0f, distRotate(engine) };
+        p.transform.translate = {
+            pos.x + distOffset(engine),
+            pos.y + distOffset(engine),
+            pos.z + distOffset(engine)
+        };
+        p.velocity = { 0.0f, 0.0f, 0.0f };
+        p.color = { distColor(engine), distColor(engine), distColor(engine), 1.0f };
+        p.lifeTime = 0.0f;
+        p.maxTime = distTime(engine);
+        particles_.push_back(p);
+    }
+}
