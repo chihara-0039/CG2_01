@@ -16,18 +16,18 @@ struct PixelShaderOutput
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
-    
-    // テクスチャサンプリング
+
     float4 textureColor = gTexture.Sample(gSampler, input.texcoord);
-    
-    // テクスチャの色 * パーティクルの色
+    float2 centeredUv = input.texcoord * 2.0f - 1.0f;
+    float softCircleAlpha = saturate((1.0f - length(centeredUv)) * 3.0f);
+
     output.color = textureColor * input.color;
-    
-    // アルファテスト (完全に透明な部分は描画しない)
-    if (output.color.a == 0.0f)
+    output.color.a *= softCircleAlpha;
+
+    if (output.color.a <= 0.001f)
     {
         discard;
     }
-    
+
     return output;
 }
