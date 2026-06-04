@@ -1,6 +1,7 @@
 ﻿#include "ParticleManager.h"
 #include "StageMap.h"
 #include <cassert>
+#include <cmath>
 #include <random>
 
 using namespace Microsoft::WRL;
@@ -23,6 +24,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
 
     // 3. メッシュ生成
     CreateMesh();
+    CreateRingMesh();
 
     // 4. インスタンシング用バッファ生成
     {
@@ -44,6 +46,15 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
         instancingBufferView_.BufferLocation = instancingBuffer_->GetGPUVirtualAddress();
         instancingBufferView_.SizeInBytes = size;
         instancingBufferView_.StrideInBytes = sizeof(InstanceData);
+
+        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&ringInstancingBuffer_));
+        assert(SUCCEEDED(hr));
+
+        ringInstancingBuffer_->Map(0, nullptr, (void**)&ringInstancingDataMapped_);
+
+        ringInstancingBufferView_.BufferLocation = ringInstancingBuffer_->GetGPUVirtualAddress();
+        ringInstancingBufferView_.SizeInBytes = size;
+        ringInstancingBufferView_.StrideInBytes = sizeof(InstanceData);
     }
 }
 
@@ -82,6 +93,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 
                 p.type = Particle::Type::Fall;
                 p.color = weatherEmitter_.color;
+                p.initialAlpha = p.color.w;
                 p.lifeTime = 0.0f;
                 p.maxTime = weatherEmitter_.particleLife;
                 particles_.push_back(p);
@@ -102,6 +114,12 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         it->transform.translate.x += it->velocity.x * deltaTime * 60.0f;
         it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
         it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
+
+        if (it->type == Particle::Type::Ring) {
+            float t = it->lifeTime / it->maxTime;
+            float ringScale = 0.25f + 1.8f * t;
+            it->transform.scale = { ringScale, ringScale, 1.0f };
+        }
         
         // 当たり判定 (StageMapとの衝突判定)
         if (it->type == Particle::Type::Fall && stageMap) {
@@ -134,13 +152,14 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         
         // フェードアウト
         float alpha = 1.0f - (it->lifeTime / it->maxTime);
-        it->color.w = weatherEmitter_.color.w * alpha; // ベースアルファも考慮
+        it->color.w = it->initialAlpha * alpha;
         
         ++it;
     }
 
     // 2. データ書き込み
-    uint32_t index = 0;
+    planeInstanceCount_ = 0;
+    ringInstanceCount_ = 0;
     Matrix4x4 cameraMatrix = Math::Inverse(viewMatrix);
     Matrix4x4 billboardMat = Math::MakeIdentity4x4();
     billboardMat.m[0][0] = cameraMatrix.m[0][0]; billboardMat.m[0][1] = cameraMatrix.m[0][1]; billboardMat.m[0][2] = cameraMatrix.m[0][2];
@@ -148,7 +167,11 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
     billboardMat.m[2][0] = cameraMatrix.m[2][0]; billboardMat.m[2][1] = cameraMatrix.m[2][1]; billboardMat.m[2][2] = cameraMatrix.m[2][2];
 
     for (const auto& particle : particles_) {
-        if (index >= kMaxParticles) break;
+        bool isRing = particle.type == Particle::Type::Ring;
+        uint32_t& index = isRing ? ringInstanceCount_ : planeInstanceCount_;
+        InstanceData* instancingData = isRing ? ringInstancingDataMapped_ : instancingDataMapped_;
+
+        if (index >= kMaxParticles) continue;
 
         Matrix4x4 scaleMat = Math::Matrix4x4MakeScaleMatrix(particle.transform.scale);
         Matrix4x4 rotateMat = Math::MakeRotateZMatrix(particle.transform.rotate.z);
@@ -156,15 +179,15 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         Matrix4x4 worldMat = Math::Multiply(scaleMat, Math::Multiply(rotateMat, Math::Multiply(billboardMat, transMat)));
         Matrix4x4 wvp = Math::Multiply(worldMat, Math::Multiply(viewMatrix, projectionMatrix));
 
-        instancingDataMapped_[index].WVP = wvp;
-        instancingDataMapped_[index].color = particle.color;
+        instancingData[index].WVP = wvp;
+        instancingData[index].color = particle.color;
         index++;
     }
 }
 
 
 void ParticleManager::Draw() {
-    if (particles_.empty()) return;
+    if (planeInstanceCount_ == 0 && ringInstanceCount_ == 0) return;
 
     auto commandList = dxCommon_->GetCommandList();
 
@@ -175,15 +198,20 @@ void ParticleManager::Draw() {
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
-    commandList->IASetVertexBuffers(1, 1, &instancingBufferView_);
-
     auto srvHandle = textureManager_->GetSrvHandleGPU(textureHandle_);
     commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
 
-    uint32_t count = (uint32_t)particles_.size();
-    if (count > kMaxParticles) count = kMaxParticles;
-    commandList->DrawInstanced(6, count, 0, 0);
+    if (planeInstanceCount_ > 0) {
+        commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+        commandList->IASetVertexBuffers(1, 1, &instancingBufferView_);
+        commandList->DrawInstanced(planeVertexCount_, planeInstanceCount_, 0, 0);
+    }
+
+    if (ringInstanceCount_ > 0) {
+        commandList->IASetVertexBuffers(0, 1, &ringVertexBufferView_);
+        commandList->IASetVertexBuffers(1, 1, &ringInstancingBufferView_);
+        commandList->DrawInstanced(ringVertexCount_, ringInstanceCount_, 0, 0);
+    }
 }
 
 void ParticleManager::CreateRootSignature() {
@@ -293,6 +321,7 @@ void ParticleManager::CreateMesh() {
         {{ 0.5f, -0.5f, 0, 1}, {1.0f, 1.0f}, {0, 0, -1}},
     };
 
+    planeVertexCount_ = static_cast<uint32_t>(_countof(vertices));
     UINT size = sizeof(vertices);
 
     D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
@@ -315,6 +344,62 @@ void ParticleManager::CreateMesh() {
     vertexBufferView_.StrideInBytes = sizeof(VertexData);
 }
 
+void ParticleManager::CreateRingMesh() {
+    constexpr uint32_t kRingDivide = 64;
+    constexpr float kOuterRadius = 0.5f;
+    constexpr float kInnerRadius = 0.34f;
+    constexpr float kPi = 3.14159265f;
+
+    std::vector<VertexData> vertices;
+    vertices.reserve(kRingDivide * 6);
+
+    for (uint32_t index = 0; index < kRingDivide; ++index) {
+        float t0 = static_cast<float>(index) / static_cast<float>(kRingDivide);
+        float t1 = static_cast<float>(index + 1) / static_cast<float>(kRingDivide);
+        float angle0 = t0 * 2.0f * kPi;
+        float angle1 = t1 * 2.0f * kPi;
+
+        float sin0 = std::sin(angle0);
+        float cos0 = std::cos(angle0);
+        float sin1 = std::sin(angle1);
+        float cos1 = std::cos(angle1);
+
+        VertexData outer0 = { { sin0 * kOuterRadius, cos0 * kOuterRadius, 0.0f, 1.0f }, { 0.5f, 0.5f }, { 0, 0, -1 } };
+        VertexData outer1 = { { sin1 * kOuterRadius, cos1 * kOuterRadius, 0.0f, 1.0f }, { 0.5f, 0.5f }, { 0, 0, -1 } };
+        VertexData inner0 = { { sin0 * kInnerRadius, cos0 * kInnerRadius, 0.0f, 1.0f }, { 0.5f, 0.5f }, { 0, 0, -1 } };
+        VertexData inner1 = { { sin1 * kInnerRadius, cos1 * kInnerRadius, 0.0f, 1.0f }, { 0.5f, 0.5f }, { 0, 0, -1 } };
+
+        vertices.push_back(outer0);
+        vertices.push_back(outer1);
+        vertices.push_back(inner0);
+        vertices.push_back(inner0);
+        vertices.push_back(outer1);
+        vertices.push_back(inner1);
+    }
+
+    ringVertexCount_ = static_cast<uint32_t>(vertices.size());
+    UINT size = static_cast<UINT>(sizeof(VertexData) * vertices.size());
+
+    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_RESOURCE_DESC resDesc = {};
+    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resDesc.Width = size;
+    resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+
+    HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&ringVertexBuffer_));
+    assert(SUCCEEDED(hr));
+
+    VertexData* data = nullptr;
+    ringVertexBuffer_->Map(0, nullptr, (void**)&data);
+    memcpy(data, vertices.data(), size);
+    ringVertexBuffer_->Unmap(0, nullptr);
+
+    ringVertexBufferView_.BufferLocation = ringVertexBuffer_->GetGPUVirtualAddress();
+    ringVertexBufferView_.SizeInBytes = size;
+    ringVertexBufferView_.StrideInBytes = sizeof(VertexData);
+}
+
 void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     constexpr int kSplashCount = 8;
     constexpr float kPi = 3.14159265f;
@@ -323,6 +408,20 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     std::uniform_real_distribution<float> distScale(0.4f, 1.5f);
     std::uniform_real_distribution<float> distOffset(-0.08f, 0.08f);
     std::uniform_real_distribution<float> distLife(0.18f, 0.28f);
+
+    if (particles_.size() < kMaxParticles) {
+        Particle ring;
+        ring.type = Particle::Type::Ring;
+        ring.transform.translate = { pos.x, pos.y + 0.22f, pos.z };
+        ring.transform.scale = { 0.25f, 0.25f, 1.0f };
+        ring.transform.rotate = { 0.0f, 0.0f, distRotate(engine) };
+        ring.velocity = { 0.0f, 0.0f, 0.0f };
+        ring.color = { color.x, color.y, color.z, 0.75f };
+        ring.initialAlpha = ring.color.w;
+        ring.lifeTime = 0.0f;
+        ring.maxTime = 0.35f;
+        particles_.push_back(ring);
+    }
 
     for (int i = 0; i < kSplashCount; ++i) {
         if (particles_.size() >= kMaxParticles) break;
@@ -339,6 +438,7 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
 
         p.velocity = { 0.0f, 0.0f, 0.0f };
         p.color = color;
+        p.initialAlpha = p.color.w;
         p.lifeTime = 0.0f;
         p.maxTime = distLife(engine);
 
@@ -352,6 +452,20 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
     std::uniform_real_distribution<float> distColor(0.7f, 1.0f);
     std::uniform_real_distribution<float> distTime(0.18f, 0.35f);
     std::uniform_real_distribution<float> distOffset(-0.2f, 0.2f);
+
+    if (particles_.size() < kMaxParticles) {
+        Particle ring;
+        ring.type = Particle::Type::Ring;
+        ring.transform.scale = { 0.25f, 0.25f, 1.0f };
+        ring.transform.rotate = { 0.0f, 0.0f, distRotate(engine) };
+        ring.transform.translate = pos;
+        ring.velocity = { 0.0f, 0.0f, 0.0f };
+        ring.color = { 1.0f, 0.9f, 0.45f, 0.75f };
+        ring.initialAlpha = ring.color.w;
+        ring.lifeTime = 0.0f;
+        ring.maxTime = 0.35f;
+        particles_.push_back(ring);
+    }
 
     for (uint32_t i = 0; i < count; ++i) {
         if (particles_.size() >= kMaxParticles) return;
@@ -367,6 +481,7 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
         };
         p.velocity = { 0.0f, 0.0f, 0.0f };
         p.color = { distColor(engine), distColor(engine), distColor(engine), 1.0f };
+        p.initialAlpha = p.color.w;
         p.lifeTime = 0.0f;
         p.maxTime = distTime(engine);
         particles_.push_back(p);
