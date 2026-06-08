@@ -23,6 +23,42 @@ namespace {
         result.m[3][2] *= -1.0f;
         return result;
     }
+
+    Joint MakeJointFromNode(const tinygltf::Node& node, const std::string& fallbackName) {
+        Joint joint{};
+        joint.name = node.name.empty() ? fallbackName : node.name;
+        joint.parentIndex = -1;
+        joint.translation = { 0.0f, 0.0f, 0.0f };
+        joint.rotationQuat = { 0.0f, 0.0f, 0.0f, 1.0f };
+        joint.scale = { 1.0f, 1.0f, 1.0f };
+
+        if (node.translation.size() == 3) {
+            joint.translation.x = static_cast<float>(node.translation[0]);
+            joint.translation.y = static_cast<float>(node.translation[1]);
+            joint.translation.z = static_cast<float>(node.translation[2]);
+        }
+        if (node.rotation.size() == 4) {
+            joint.rotationQuat.x = static_cast<float>(node.rotation[0]);
+            joint.rotationQuat.y = static_cast<float>(node.rotation[1]);
+            joint.rotationQuat.z = static_cast<float>(node.rotation[2]);
+            joint.rotationQuat.w = static_cast<float>(node.rotation[3]);
+        }
+        if (node.scale.size() == 3) {
+            joint.scale.x = static_cast<float>(node.scale[0]);
+            joint.scale.y = static_cast<float>(node.scale[1]);
+            joint.scale.z = static_cast<float>(node.scale[2]);
+        }
+
+        joint.translation.z *= -1.0f;
+        joint.rotationQuat.x *= -1.0f;
+        joint.rotationQuat.y *= -1.0f;
+        joint.rotation = Math::ToEuler(joint.rotationQuat);
+        joint.isQuaternion = true;
+        joint.localMatrix = Math::MakeAffineMatrix(joint.scale, joint.rotationQuat, joint.translation);
+        joint.globalMatrix = joint.localMatrix;
+        joint.offsetMatrix = Math::MakeIdentity4x4();
+        return joint;
+    }
 }
 
 bool GltfLoader::LoadGltfModel(
@@ -167,17 +203,44 @@ bool GltfLoader::LoadGltfModel(
             }
         }
     } else {
-        // スキンがない場合はルートジョイントをダミーで1つ作成
-        Joint root{};
-        root.name = "Root";
-        root.parentIndex = -1;
-        root.translation = { 0.0f, 0.0f, 0.0f };
-        root.rotation = { 0.0f, 0.0f, 0.0f };
-        root.scale = { 1.0f, 1.0f, 1.0f };
-        root.localMatrix = Math::MakeIdentity4x4();
-        root.globalMatrix = Math::MakeIdentity4x4();
-        root.offsetMatrix = Math::MakeIdentity4x4();
-        outJoints.push_back(root);
+        int animatedNodeIndex = -1;
+        for (const auto& anim : model.animations) {
+            for (const auto& channel : anim.channels) {
+                if (channel.target_node >= 0) {
+                    animatedNodeIndex = channel.target_node;
+                    break;
+                }
+            }
+            if (animatedNodeIndex >= 0) {
+                break;
+            }
+        }
+
+        if (animatedNodeIndex < 0) {
+            for (size_t i = 0; i < model.nodes.size(); ++i) {
+                if (model.nodes[i].mesh >= 0) {
+                    animatedNodeIndex = static_cast<int>(i);
+                    break;
+                }
+            }
+        }
+
+        if (animatedNodeIndex >= 0 && animatedNodeIndex < static_cast<int>(model.nodes.size())) {
+            outJoints.push_back(MakeJointFromNode(model.nodes[animatedNodeIndex], "NodeRoot"));
+        } else {
+            Joint root{};
+            root.name = "Root";
+            root.parentIndex = -1;
+            root.translation = { 0.0f, 0.0f, 0.0f };
+            root.rotation = { 0.0f, 0.0f, 0.0f };
+            root.rotationQuat = { 0.0f, 0.0f, 0.0f, 1.0f };
+            root.scale = { 1.0f, 1.0f, 1.0f };
+            root.isQuaternion = true;
+            root.localMatrix = Math::MakeIdentity4x4();
+            root.globalMatrix = Math::MakeIdentity4x4();
+            root.offsetMatrix = Math::MakeIdentity4x4();
+            outJoints.push_back(root);
+        }
     }
 
     // 3. メッシュ（頂点・インデックス・スキンウェイト）のパース
@@ -415,6 +478,86 @@ bool GltfLoader::LoadGltfModel(
                 });
             }
             outMotions.push_back(motionData);
+        }
+    } else if (!model.animations.empty() && model.skins.empty() && !outJoints.empty()) {
+        for (size_t aIdx = 0; aIdx < model.animations.size(); ++aIdx) {
+            const tinygltf::Animation& anim = model.animations[aIdx];
+            MotionData motionData;
+            motionData.name = anim.name.empty() ? ("NodeAnimation_" + std::to_string(aIdx)) : anim.name;
+            motionData.duration = 0.0f;
+            motionData.jointAnimations.resize(1);
+            motionData.jointAnimations[0].name = outJoints[0].name;
+
+            auto& jointAnim = motionData.jointAnimations[0];
+
+            for (const auto& channel : anim.channels) {
+                if (channel.target_node < 0) {
+                    continue;
+                }
+
+                const tinygltf::AnimationSampler& sampler = anim.samplers[channel.sampler];
+                const tinygltf::Accessor& timeAccessor = model.accessors[sampler.input];
+                const tinygltf::BufferView& timeBufferView = model.bufferViews[timeAccessor.bufferView];
+                const tinygltf::Buffer& timeBuffer = model.buffers[timeBufferView.buffer];
+                const float* times = reinterpret_cast<const float*>(&timeBuffer.data[timeBufferView.byteOffset + timeAccessor.byteOffset]);
+
+                if (timeAccessor.count > 0) {
+                    motionData.duration = (std::max)(motionData.duration, times[timeAccessor.count - 1]);
+                }
+
+                const tinygltf::Accessor& valueAccessor = model.accessors[sampler.output];
+                const tinygltf::BufferView& valueBufferView = model.bufferViews[valueAccessor.bufferView];
+                const tinygltf::Buffer& valueBuffer = model.buffers[valueBufferView.buffer];
+                const float* values = reinterpret_cast<const float*>(&valueBuffer.data[valueBufferView.byteOffset + valueAccessor.byteOffset]);
+
+                for (size_t k = 0; k < timeAccessor.count; ++k) {
+                    float time = times[k];
+
+                    JointKeyframe* kf = nullptr;
+                    auto kfIt = std::find_if(jointAnim.keyframes.begin(), jointAnim.keyframes.end(), [&](const JointKeyframe& item) {
+                        return std::abs(item.time - time) < 1e-4f;
+                    });
+
+                    if (kfIt != jointAnim.keyframes.end()) {
+                        kf = &(*kfIt);
+                    } else {
+                        JointKeyframe newKf;
+                        newKf.time = time;
+                        newKf.translation = outJoints[0].translation;
+                        newKf.rotation = outJoints[0].rotation;
+                        newKf.rotationQuat = outJoints[0].rotationQuat;
+                        newKf.isQuaternion = true;
+                        newKf.scale = outJoints[0].scale;
+                        jointAnim.keyframes.push_back(newKf);
+                        kf = &jointAnim.keyframes.back();
+                    }
+
+                    if (channel.target_path == "translation") {
+                        kf->translation.x = values[k * 3 + 0];
+                        kf->translation.y = values[k * 3 + 1];
+                        kf->translation.z = values[k * 3 + 2] * -1.0f;
+                    } else if (channel.target_path == "rotation") {
+                        kf->rotationQuat.x = values[k * 4 + 0] * -1.0f;
+                        kf->rotationQuat.y = values[k * 4 + 1] * -1.0f;
+                        kf->rotationQuat.z = values[k * 4 + 2];
+                        kf->rotationQuat.w = values[k * 4 + 3];
+                        kf->rotation = Math::ToEuler(kf->rotationQuat);
+                        kf->isQuaternion = true;
+                    } else if (channel.target_path == "scale") {
+                        kf->scale.x = values[k * 3 + 0];
+                        kf->scale.y = values[k * 3 + 1];
+                        kf->scale.z = values[k * 3 + 2];
+                    }
+                }
+
+                std::sort(jointAnim.keyframes.begin(), jointAnim.keyframes.end(), [](const JointKeyframe& a, const JointKeyframe& b) {
+                    return a.time < b.time;
+                });
+            }
+
+            if (!jointAnim.keyframes.empty()) {
+                outMotions.push_back(motionData);
+            }
         }
     }
 
