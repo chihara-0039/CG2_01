@@ -638,7 +638,10 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
     if (selectedJoint >= 0 && selectedJoint < static_cast<int>(joints.size())) {
         auto& joint = joints[selectedJoint];
 
-        ImGui::Text("Index: %d | Parent: %d", selectedJoint, joint.parentIndex);
+        ImGui::Text("Index: %d | Parent: %d | Children: %d",
+                    selectedJoint,
+                    joint.parentIndex,
+                    static_cast<int>(joint.childIndices.size()));
         ImGui::Separator();
 
         // 回転スライダー (ラジアン ↔ 度数法 で変換して表示)

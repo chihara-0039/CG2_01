@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <unordered_map>
 
 // スキニング用頂点データ (GPUへ転送する構造体)
 struct SkinnedVertexData {
@@ -28,6 +29,7 @@ struct Joint {
     Matrix4x4 offsetMatrix; // Bind Poseのグローバル行列の逆行列
 
     int parentIndex = -1;
+    std::vector<int> childIndices;
 };
 
 // キーフレームアニメーション用構造体
@@ -66,6 +68,8 @@ public:
 
     // ゲッター群
     const std::vector<Joint>& GetJoints() const { return joints_; }
+    int GetRootJointIndex() const { return rootJointIndex_; }
+    const std::unordered_map<std::string, int>& GetJointIndexMap() const { return jointIndexMap_; }
     uint32_t GetTextureHandle() const { return textureHandle_; }
 
     // D3D12 描画用バッファビュー
@@ -118,12 +122,15 @@ public:
 
 private:
     void CreateHumanoidSkeleton();
+    void BuildJointMetadata();
     void GenerateHumanoidMesh();
     void AddCubeMesh(const Vector3& center, const Vector3& size, int jointIndex);
     void SmoothWeights();
 
 private:
     std::vector<Joint> joints_;
+    int rootJointIndex_ = -1;
+    std::unordered_map<std::string, int> jointIndexMap_;
     std::vector<SkinnedVertexData> skinnedVertices_; // GPUに転送するスキニング用頂点データ
 
     // GPU バッファ

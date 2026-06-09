@@ -42,6 +42,8 @@ void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureMa
     // 3. 
     SmoothWeights();
 
+    BuildJointMetadata();
+
     // 4. 
     if (textureManager) {
         textureHandle_ = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
@@ -93,6 +95,8 @@ void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string
         joint.rotationQuat = Math::MakeQuaternionFromEuler(joint.rotation);
         joint.isQuaternion = true;
     }
+
+    BuildJointMetadata();
 }
 
 void SkinnedModel::ResetPose() {
@@ -180,6 +184,28 @@ void SkinnedModel::CreateHumanoidSkeleton() {
 
         //  (Inverse Bind Pose Matrix)
         joints_[i].offsetMatrix = Math::Inverse(joints_[i].globalMatrix);
+    }
+
+    BuildJointMetadata();
+}
+
+void SkinnedModel::BuildJointMetadata() {
+    rootJointIndex_ = -1;
+    jointIndexMap_.clear();
+
+    for (auto& joint : joints_) {
+        joint.childIndices.clear();
+    }
+
+    for (size_t i = 0; i < joints_.size(); ++i) {
+        Joint& joint = joints_[i];
+        jointIndexMap_[joint.name] = static_cast<int>(i);
+
+        if (joint.parentIndex >= 0 && joint.parentIndex < static_cast<int>(joints_.size())) {
+            joints_[joint.parentIndex].childIndices.push_back(static_cast<int>(i));
+        } else if (rootJointIndex_ == -1) {
+            rootJointIndex_ = static_cast<int>(i);
+        }
     }
 }
 
