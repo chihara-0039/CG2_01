@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <cstdint>
 
 // ==============================================================
 //  ModelVertexData 構造体
@@ -111,6 +112,9 @@ public:
     /// <summary>頂点数 (デバッグ・確認用)</summary>
     size_t GetVertexCount() const { return vertices_.size(); }
 
+    /// <summary>インデックス数 (デバッグ・確認用)</summary>
+    size_t GetIndexCount() const { return indices_.size(); }
+
 private:
     // ── OBJ/MTL ファイルの読み込み ─────────────────────────
 
@@ -129,6 +133,7 @@ private:
 private:
     // ── メッシュデータ (CPU 側) ────────────────────────────
     std::vector<ModelVertexData> vertices_; // 頂点の配列 (OBJ 解析結果)
+    std::vector<uint32_t> indices_;         // インデックスの配列 (OBJ 解析結果)
     uint32_t textureHandle_ = 0;            // TextureManager に登録されたテクスチャの ID
 
     // ── GPU リソース ──────────────────────────────────────
@@ -136,5 +141,7 @@ private:
     // Map したまま保持することで CPU からの書き換えを高速化している。
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW               vertexBufferView_{}; // バッファの場所・サイズ・ストライドを GPU に教えるビュー
-};
 
+    Microsoft::WRL::ComPtr<ID3D12Resource> indexBuffer_;
+    D3D12_INDEX_BUFFER_VIEW                indexBufferView_{};
+};
