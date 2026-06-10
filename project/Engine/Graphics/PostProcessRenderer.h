@@ -40,6 +40,14 @@ public:
         int32_t sampleCount;
     };
 
+    struct DissolveParams {
+        float threshold;
+        float edgeWidth;
+        int32_t maskIndex;
+        float padding;
+        Vector4 edgeColor;
+    };
+
     PostProcessRenderer() = default;
     ~PostProcessRenderer() = default;
 
@@ -112,10 +120,15 @@ private:
         DXGI_FORMAT format,
         const Vector4& clearColor);
 
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResourceFromFile(
+        ID3D12Device* device,
+        const wchar_t* filePath);
+
 private:
     // ========== DirectX12 リソース ==========
 
     Microsoft::WRL::ComPtr<ID3D12Resource>       renderTexture_;          ///< オフスクリーン用レンダーテクスチャ (1280x720)
+    Microsoft::WRL::ComPtr<ID3D12Resource>       dissolveMaskTextures_[2];
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;               ///< RTV ヒープ (RenderTexture を RT として使うため)
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_;               ///< SRV ヒープ (コピーパスでシェーダーから参照するため SHADER_VISIBLE)
     ID3D12Resource*                               depthStencilResource_ = nullptr;
@@ -130,12 +143,15 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  luminanceOutlinePipelineState_; ///< LuminanceBasedOutline PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  depthOutlinePipelineState_; ///< DepthBasedOutline PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  radialBlurPipelineState_; ///< RadialBlur PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>  dissolvePipelineState_; ///< Dissolve PSO
     Microsoft::WRL::ComPtr<ID3D12Resource>       vignetteConstantBuffer_; ///< ヴィネット用定数バッファ (Upload ヒープ)
     Microsoft::WRL::ComPtr<ID3D12Resource>       outlineConstantBuffer_; ///< Outline用定数バッファ (Upload ヒープ)
     Microsoft::WRL::ComPtr<ID3D12Resource>       radialBlurConstantBuffer_; ///< RadialBlur用定数バッファ
+    Microsoft::WRL::ComPtr<ID3D12Resource>       dissolveConstantBuffer_; ///< Dissolve用定数バッファ
     VignetteParams*                              vignetteParamsData_ = nullptr; ///< 定数バッファのマップ済みポインタ
     OutlineParams*                               outlineParamsData_ = nullptr;
     RadialBlurParams*                            radialBlurParamsData_ = nullptr;
+    DissolveParams*                              dissolveParamsData_ = nullptr;
 
     /// <summary>
     /// renderTexture_ の現在のリソース状態 (遷移前後の整合を取るために保持)。
