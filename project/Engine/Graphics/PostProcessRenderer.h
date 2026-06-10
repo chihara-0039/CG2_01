@@ -113,6 +113,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  vignettePipelineState_;  ///< ヴィネッティング PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  boxFilter3x3PipelineState_; ///< 3x3 BoxFilter PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  boxFilter5x5PipelineState_; ///< 5x5 BoxFilter PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>  gaussianFilterPipelineState_; ///< GaussianFilter PSO
     Microsoft::WRL::ComPtr<ID3D12Resource>       vignetteConstantBuffer_; ///< ヴィネット用定数バッファ (Upload ヒープ)
     VignetteParams*                              vignetteParamsData_ = nullptr; ///< 定数バッファのマップ済みポインタ
 

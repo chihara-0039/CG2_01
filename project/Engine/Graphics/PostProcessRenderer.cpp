@@ -118,6 +118,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     Microsoft::WRL::ComPtr<IDxcBlob> psVigBlob   = dxCommon->CompileShader(L"Resources/shaders/hlsl/Vignette.PS.hlsl",   L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psBox3Blob  = dxCommon->CompileShader(L"Resources/shaders/hlsl/BoxFilter3x3.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psBox5Blob  = dxCommon->CompileShader(L"Resources/shaders/hlsl/BoxFilter5x5.PS.hlsl", L"ps_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psGaussianBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/GaussianFilter.PS.hlsl", L"ps_6_0");
 
     // PSO の共通設定 (入力レイアウトなし・深度テストなし・三角形リスト)
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -166,6 +167,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     // F. BoxFilter 5x5
     psoDesc.PS = { psBox5Blob->GetBufferPointer(), psBox5Blob->GetBufferSize() };
     hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&boxFilter5x5PipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // G. GaussianFilter
+    psoDesc.PS = { psGaussianBlob->GetBufferPointer(), psGaussianBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&gaussianFilterPipelineState_));
     assert(SUCCEEDED(hr));
 
     // ----------------------------------------------------------
@@ -277,6 +283,9 @@ void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList) {
     case 5: // BoxFilter 5x5
         cmdList->SetPipelineState(boxFilter5x5PipelineState_.Get());
         break;
+    case 6: // GaussianFilter
+        cmdList->SetPipelineState(gaussianFilterPipelineState_.Get());
+        break;
     default: // 通常コピー (エフェクトなし)
         cmdList->SetPipelineState(copyPipelineState_.Get());
         break;
@@ -305,7 +314,7 @@ void PostProcessRenderer::DrawImGui() {
         const char* skyboxModes[] = { "Ignore", "Link (Multiply)" };
         ImGui::Combo("Skybox Color Link", &skyboxLinkMode_, skyboxModes, IM_ARRAYSIZE(skyboxModes));
 
-        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5" };
+        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter" };
         ImGui::Combo("Post Effect", &postEffectMode_, effectNames, IM_ARRAYSIZE(effectNames));
 
         // ヴィネット選択時のみパラメータスライダーを表示
