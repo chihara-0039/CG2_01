@@ -79,7 +79,7 @@ public:
     //  - 画面をクリア (塗りつぶし色は SkyColor)
     //  - ビューポートとシザー矩形をセット
     // -------------------------------------------------------
-    void PreDraw();
+    void PreDraw(bool clearDepth = true);
 
     // -------------------------------------------------------
     //  描画後処理 (フレームの終了)
@@ -123,6 +123,7 @@ public:
 
     /// <summary>深度バッファの書き込み口 (ShadowMap の DSV 生成などに使う)</summary>
     ID3D12DescriptorHeap* GetDsvHeap() const { return dsvDescriptorHeap_.Get(); }
+    ID3D12Resource* GetDepthStencilResource() const { return depthStencilResource_.Get(); }
 
 private:
     // -------------------------------------------------------

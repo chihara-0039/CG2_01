@@ -28,6 +28,12 @@ public:
         float padding[2]; ///< 16バイトアライメントのためのパディング (使用しない)
     };
 
+    struct OutlineParams {
+        Matrix4x4 projectionInverse;
+        float depthStrength;
+        float padding[3];
+    };
+
     PostProcessRenderer() = default;
     ~PostProcessRenderer() = default;
 
@@ -62,7 +68,7 @@ public:
     /// postEffectMode_ に応じた PSO を選択し、画面全体をカバーする三角形を描画する。
     /// dxCommon->PreDraw() 後 (バックバッファが RT になった後) に呼ぶこと。
     /// </summary>
-    void DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList);
+    void DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList, const Matrix4x4& projectionMatrix);
 
     /// <summary>ImGui による設定パネルの描画 (CollapsingHeader 内に収まる形式)</summary>
     void DrawImGui();
@@ -106,6 +112,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource>       renderTexture_;          ///< オフスクリーン用レンダーテクスチャ (1280x720)
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;               ///< RTV ヒープ (RenderTexture を RT として使うため)
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_;               ///< SRV ヒープ (コピーパスでシェーダーから参照するため SHADER_VISIBLE)
+    ID3D12Resource*                               depthStencilResource_ = nullptr;
     Microsoft::WRL::ComPtr<ID3D12RootSignature>  copyRootSignature_;      ///< コピー/エフェクト用 RootSignature (SRV t0, CBV b0)
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  copyPipelineState_;      ///< 通常コピー PSO (エフェクトなし)
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  grayscalePipelineState_; ///< グレースケール PSO
@@ -114,8 +121,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  boxFilter3x3PipelineState_; ///< 3x3 BoxFilter PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  boxFilter5x5PipelineState_; ///< 5x5 BoxFilter PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  gaussianFilterPipelineState_; ///< GaussianFilter PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>  luminanceOutlinePipelineState_; ///< LuminanceBasedOutline PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>  depthOutlinePipelineState_; ///< DepthBasedOutline PSO
     Microsoft::WRL::ComPtr<ID3D12Resource>       vignetteConstantBuffer_; ///< ヴィネット用定数バッファ (Upload ヒープ)
+    Microsoft::WRL::ComPtr<ID3D12Resource>       outlineConstantBuffer_; ///< Outline用定数バッファ (Upload ヒープ)
     VignetteParams*                              vignetteParamsData_ = nullptr; ///< 定数バッファのマップ済みポインタ
+    OutlineParams*                               outlineParamsData_ = nullptr;
 
     /// <summary>
     /// renderTexture_ の現在のリソース状態 (遷移前後の整合を取るために保持)。
