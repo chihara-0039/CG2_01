@@ -820,8 +820,8 @@ void MyGame::Draw() {
         postProcess_.BeginRender(commandList, dxCommon.get()); // RenderTexture を RT にセット
         RenderScene(commandList, lightVP);
         postProcess_.EndRender(commandList);                   // RenderTexture を SRV に遷移
-        dxCommon->PreDraw();                                   // バックバッファを RT にセット
-        postProcess_.DrawToBackBuffer(commandList);            // 全画面コピー描画
+        dxCommon->PreDraw(false);                              // バックバッファを RT にセット
+        postProcess_.DrawToBackBuffer(commandList, camera->GetProjectionMatrix()); // 全画面コピー描画
     } else {
         // ビューポートとシザー矩形を設定
         // Debug 時は左 320px が ImGui パネルのため、描画領域をずらす

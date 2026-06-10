@@ -9,6 +9,7 @@
 void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& clearColor) {
     clearColor_ = clearColor;
     auto device = dxCommon->GetDevice();
+    depthStencilResource_ = dxCommon->GetDepthStencilResource();
 
     // ----------------------------------------------------------
     // 1. RenderTexture リソースの生成 (1280x720 / RGBA8 / RT 可)
@@ -37,7 +38,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     // ----------------------------------------------------------
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc{};
     srvHeapDesc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srvHeapDesc.NumDescriptors = 1;
+    srvHeapDesc.NumDescriptors = 2;
     srvHeapDesc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     hr = device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap_));
     assert(SUCCEEDED(hr));
@@ -51,6 +52,16 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
         renderTexture_.Get(), &srvDesc,
         srvHeap_->GetCPUDescriptorHandleForHeapStart());
 
+    D3D12_SHADER_RESOURCE_VIEW_DESC depthSrvDesc{};
+    depthSrvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    depthSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    depthSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    depthSrvDesc.Texture2D.MipLevels = 1;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE depthSrvHandle = srvHeap_->GetCPUDescriptorHandleForHeapStart();
+    depthSrvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    device->CreateShaderResourceView(depthStencilResource_, &depthSrvDesc, depthSrvHandle);
+
     // ----------------------------------------------------------
     // 4. コピー用 RootSignature の生成
     //    スロット構成：
@@ -60,11 +71,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     // ----------------------------------------------------------
     D3D12_DESCRIPTOR_RANGE descriptorRange{};
     descriptorRange.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    descriptorRange.NumDescriptors                    = 1;
+    descriptorRange.NumDescriptors                    = 2;
     descriptorRange.BaseShaderRegister                = 0; // t0
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[2]{};
+    D3D12_ROOT_PARAMETER rootParameters[3]{};
     // スロット 0 : SRV テーブル (Pixel Shader のみ参照)
     rootParameters[0].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -75,22 +86,30 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     rootParameters[1].ShaderVisibility                  = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[1].Descriptor.ShaderRegister         = 0; // b0
     rootParameters[1].Descriptor.RegisterSpace          = 0;
+    // スロット 2 : CBV (Outline用定数、Pixel Shader のみ参照)
+    rootParameters[2].ParameterType                     = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[2].ShaderVisibility                  = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[2].Descriptor.ShaderRegister         = 1; // b1
+    rootParameters[2].Descriptor.RegisterSpace          = 0;
 
-    D3D12_STATIC_SAMPLER_DESC staticSampler{};
-    staticSampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER;
-    staticSampler.MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSampler.ShaderRegister   = 0; // s0
-    staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2]{};
+    staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplers[0].MaxLOD           = D3D12_FLOAT32_MAX;
+    staticSamplers[0].ShaderRegister   = 0; // s0
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    staticSamplers[1] = staticSamplers[0];
+    staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    staticSamplers[1].ShaderRegister = 1; // s1
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
-    rootSignatureDesc.NumParameters     = 2;
+    rootSignatureDesc.NumParameters     = 3;
     rootSignatureDesc.pParameters       = rootParameters;
-    rootSignatureDesc.NumStaticSamplers = 1;
-    rootSignatureDesc.pStaticSamplers   = &staticSampler;
+    rootSignatureDesc.NumStaticSamplers = 2;
+    rootSignatureDesc.pStaticSamplers   = staticSamplers;
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
@@ -119,6 +138,8 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     Microsoft::WRL::ComPtr<IDxcBlob> psBox3Blob  = dxCommon->CompileShader(L"Resources/shaders/hlsl/BoxFilter3x3.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psBox5Blob  = dxCommon->CompileShader(L"Resources/shaders/hlsl/BoxFilter5x5.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psGaussianBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/GaussianFilter.PS.hlsl", L"ps_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psLuminanceOutlineBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/LuminanceBasedOutline.PS.hlsl", L"ps_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psDepthOutlineBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/DepthBasedOutline.PS.hlsl", L"ps_6_0");
 
     // PSO の共通設定 (入力レイアウトなし・深度テストなし・三角形リスト)
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -174,6 +195,16 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&gaussianFilterPipelineState_));
     assert(SUCCEEDED(hr));
 
+    // H. LuminanceBasedOutline
+    psoDesc.PS = { psLuminanceOutlineBlob->GetBufferPointer(), psLuminanceOutlineBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&luminanceOutlinePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // I. DepthBasedOutline
+    psoDesc.PS = { psDepthOutlineBlob->GetBufferPointer(), psDepthOutlineBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&depthOutlinePipelineState_));
+    assert(SUCCEEDED(hr));
+
     // ----------------------------------------------------------
     // 6. ヴィネッティング用定数バッファの生成
     //    Upload ヒープで CPU から毎フレーム書き換え可能にする
@@ -204,6 +235,16 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     // 初期値の設定
     vignetteParamsData_->scale    = 16.0f;
     vignetteParamsData_->exponent = 0.8f;
+
+    cbResDesc.Width = (sizeof(OutlineParams) + 0xff) & ~0xff;
+    hr = device->CreateCommittedResource(
+        &cbHeapProps, D3D12_HEAP_FLAG_NONE, &cbResDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        IID_PPV_ARGS(&outlineConstantBuffer_));
+    assert(SUCCEEDED(hr));
+    outlineConstantBuffer_->Map(0, nullptr, (void**)&outlineParamsData_);
+    outlineParamsData_->projectionInverse = Math::MakeIdentity4x4();
+    outlineParamsData_->depthStrength = 0.05f;
 }
 
 // ==========================================================
@@ -262,8 +303,24 @@ void PostProcessRenderer::EndRender(ID3D12GraphicsCommandList* cmdList) {
 //  PostProcessRenderer::DrawToBackBuffer
 //  選択されたポストエフェクト PSO でバックバッファに全画面コピー描画する
 // ==========================================================
-void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList) {
+void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList, const Matrix4x4& projectionMatrix) {
     // RootSignature とエフェクトに対応した PSO をバインド
+    if (outlineParamsData_) {
+        outlineParamsData_->projectionInverse = Math::Inverse(projectionMatrix);
+    }
+
+    const bool usesDepth = postEffectMode_ == 8 && depthStencilResource_;
+    if (usesDepth) {
+        D3D12_RESOURCE_BARRIER depthBarrier{};
+        depthBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        depthBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        depthBarrier.Transition.pResource = depthStencilResource_;
+        depthBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        depthBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        depthBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        cmdList->ResourceBarrier(1, &depthBarrier);
+    }
+
     cmdList->SetGraphicsRootSignature(copyRootSignature_.Get());
     switch (postEffectMode_) {
     case 1: // グレースケール
@@ -286,6 +343,16 @@ void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList) {
     case 6: // GaussianFilter
         cmdList->SetPipelineState(gaussianFilterPipelineState_.Get());
         break;
+    case 7: // LuminanceBasedOutline
+        cmdList->SetPipelineState(luminanceOutlinePipelineState_.Get());
+        break;
+    case 8: // DepthBasedOutline
+        cmdList->SetPipelineState(depthOutlinePipelineState_.Get());
+        if (outlineConstantBuffer_) {
+            cmdList->SetGraphicsRootConstantBufferView(
+                2, outlineConstantBuffer_->GetGPUVirtualAddress());
+        }
+        break;
     default: // 通常コピー (エフェクトなし)
         cmdList->SetPipelineState(copyPipelineState_.Get());
         break;
@@ -300,6 +367,17 @@ void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList) {
     // 全画面三角形を描画 (Fullscreen.VS.hlsl が SV_VertexID から頂点を内部生成するため VB 不要)
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     cmdList->DrawInstanced(3, 1, 0, 0);
+
+    if (usesDepth) {
+        D3D12_RESOURCE_BARRIER depthBarrier{};
+        depthBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        depthBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        depthBarrier.Transition.pResource = depthStencilResource_;
+        depthBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        depthBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        depthBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        cmdList->ResourceBarrier(1, &depthBarrier);
+    }
 }
 
 // ==========================================================
@@ -314,13 +392,16 @@ void PostProcessRenderer::DrawImGui() {
         const char* skyboxModes[] = { "Ignore", "Link (Multiply)" };
         ImGui::Combo("Skybox Color Link", &skyboxLinkMode_, skyboxModes, IM_ARRAYSIZE(skyboxModes));
 
-        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter" };
+        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter", "Luminance Outline", "Depth Outline" };
         ImGui::Combo("Post Effect", &postEffectMode_, effectNames, IM_ARRAYSIZE(effectNames));
 
         // ヴィネット選択時のみパラメータスライダーを表示
         if (postEffectMode_ == 3 && vignetteParamsData_) {
             ImGui::DragFloat("Vignette Scale",    &vignetteParamsData_->scale,    0.1f, 0.0f, 100.0f, "%.1f");
             ImGui::DragFloat("Vignette Exponent", &vignetteParamsData_->exponent, 0.05f, 0.0f, 10.0f, "%.2f");
+        }
+        if (postEffectMode_ == 8 && outlineParamsData_) {
+            ImGui::DragFloat("Depth Outline Strength", &outlineParamsData_->depthStrength, 0.005f, 0.0f, 1.0f, "%.3f");
         }
     }
 }
