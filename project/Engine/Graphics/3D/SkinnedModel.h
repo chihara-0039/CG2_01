@@ -15,6 +15,11 @@ struct SkinnedVertexData {
     float   weights[4];      // ウェイト
 };
 
+struct VertexInfluence {
+    float weights[4];
+    int32_t jointIndices[4];
+};
+
 // ボーン (ジョイント) 構造体
 struct Joint {
     std::string name;
@@ -53,6 +58,11 @@ struct MotionData {
     std::vector<JointAnimation> jointAnimations;
 };
 
+struct WellForGPU {
+    Matrix4x4 skeletonSpaceMatrix;
+    Matrix4x4 skeletonSpaceInverseTransposeMatrix;
+};
+
 // スキニング可能な人型モデルクラス
 class SkinnedModel {
 public:
@@ -74,6 +84,7 @@ public:
 
     // D3D12 描画用バッファビュー
     const D3D12_VERTEX_BUFFER_VIEW& GetVertexBufferView() const { return vertexBufferView_; }
+    const D3D12_VERTEX_BUFFER_VIEW& GetInfluenceBufferView() const { return influenceBufferView_; }
     ID3D12Resource* GetJointBuffer() const { return jointBuffer_.Get(); }
     size_t GetVertexCount() const { return skinnedVertices_.size(); }
 
@@ -135,8 +146,11 @@ private:
 
     // GPU バッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> influenceBuffer_;
     Microsoft::WRL::ComPtr<ID3D12Resource> jointBuffer_;
+    WellForGPU* mappedPalette_ = nullptr;
     D3D12_VERTEX_BUFFER_VIEW               vertexBufferView_{};
+    D3D12_VERTEX_BUFFER_VIEW               influenceBufferView_{};
 
     std::string name_ = "SkinnedModel";
     std::unique_ptr<Model> model_;                  // デバッグ描画や互換性のために保持

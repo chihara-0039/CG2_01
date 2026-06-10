@@ -16,38 +16,60 @@ struct TransformationMatrix
 
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
 
-StructuredBuffer<float4x4> gJointMatrices : register(t2);
+struct Well
+{
+    float4x4 skeletonSpaceMatrix;
+    float4x4 skeletonSpaceInverseTransposeMatrix;
+};
+
+StructuredBuffer<Well> gMatrixPalette : register(t2);
 
 struct VertexShaderInput
 {
     float4 position : POSITION0;
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL0;
-    int4 jointIndices : BLENDINDICES0;
-    float4 weights : BLENDWEIGHT0;
+    float4 weight : WEIGHT0;
+    int4 index : INDEX0;
 };
+
+struct Skinned
+{
+    float4 position;
+    float3 normal;
+};
+
+Skinned Skinning(VertexShaderInput input)
+{
+    Skinned skinned;
+    
+    skinned.position =
+        mul(input.position, gMatrixPalette[input.index.x].skeletonSpaceMatrix) * input.weight.x +
+        mul(input.position, gMatrixPalette[input.index.y].skeletonSpaceMatrix) * input.weight.y +
+        mul(input.position, gMatrixPalette[input.index.z].skeletonSpaceMatrix) * input.weight.z +
+        mul(input.position, gMatrixPalette[input.index.w].skeletonSpaceMatrix) * input.weight.w;
+    skinned.position.w = 1.0f;
+
+    skinned.normal =
+        mul(input.normal, (float3x3)gMatrixPalette[input.index.x].skeletonSpaceInverseTransposeMatrix) * input.weight.x +
+        mul(input.normal, (float3x3)gMatrixPalette[input.index.y].skeletonSpaceInverseTransposeMatrix) * input.weight.y +
+        mul(input.normal, (float3x3)gMatrixPalette[input.index.z].skeletonSpaceInverseTransposeMatrix) * input.weight.z +
+        mul(input.normal, (float3x3)gMatrixPalette[input.index.w].skeletonSpaceInverseTransposeMatrix) * input.weight.w;
+    skinned.normal = normalize(skinned.normal);
+
+    return skinned;
+}
 
 VertexShaderOutput main(VertexShaderInput input)
 {
     VertexShaderOutput output;
+    Skinned skinned = Skinning(input);
     
-    // Skinning deformation
-    float4x4 skinningMatrix = 
-        gJointMatrices[input.jointIndices.x] * input.weights.x +
-        gJointMatrices[input.jointIndices.y] * input.weights.y +
-        gJointMatrices[input.jointIndices.z] * input.weights.z +
-        gJointMatrices[input.jointIndices.w] * input.weights.w;
-        
-    // Deform position and normal
-    float4 deformedPosition = mul(input.position, skinningMatrix);
-    float3 deformedNormal = normalize(mul(input.normal, (float3x3)skinningMatrix));
-    
-    // Standard transformations
-    output.position = mul(deformedPosition, gTransformationMatrix.WVP);
+    output.position = mul(skinned.position, gTransformationMatrix.WVP);
     output.texcoord = input.texcoord;
-    output.normal = normalize(mul(deformedNormal, (float3x3)gTransformationMatrix.World));
+    output.normal = normalize(mul(skinned.normal, (float3x3)gTransformationMatrix.World));
     
-    float4 worldPos = mul(deformedPosition, gTransformationMatrix.World);
+    float4 worldPos = mul(skinned.position, gTransformationMatrix.World);
     output.lightSpacePosition = mul(worldPos, gTransformationMatrix.lightViewProjection);
     output.worldPosition = worldPos.xyz;
     
