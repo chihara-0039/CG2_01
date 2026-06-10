@@ -34,6 +34,12 @@ public:
         float padding[3];
     };
 
+    struct RadialBlurParams {
+        Vector2 center;
+        float blurWidth;
+        int32_t sampleCount;
+    };
+
     PostProcessRenderer() = default;
     ~PostProcessRenderer() = default;
 
@@ -123,10 +129,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  gaussianFilterPipelineState_; ///< GaussianFilter PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  luminanceOutlinePipelineState_; ///< LuminanceBasedOutline PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  depthOutlinePipelineState_; ///< DepthBasedOutline PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>  radialBlurPipelineState_; ///< RadialBlur PSO
     Microsoft::WRL::ComPtr<ID3D12Resource>       vignetteConstantBuffer_; ///< ヴィネット用定数バッファ (Upload ヒープ)
     Microsoft::WRL::ComPtr<ID3D12Resource>       outlineConstantBuffer_; ///< Outline用定数バッファ (Upload ヒープ)
+    Microsoft::WRL::ComPtr<ID3D12Resource>       radialBlurConstantBuffer_; ///< RadialBlur用定数バッファ
     VignetteParams*                              vignetteParamsData_ = nullptr; ///< 定数バッファのマップ済みポインタ
     OutlineParams*                               outlineParamsData_ = nullptr;
+    RadialBlurParams*                            radialBlurParamsData_ = nullptr;
 
     /// <summary>
     /// renderTexture_ の現在のリソース状態 (遷移前後の整合を取るために保持)。
