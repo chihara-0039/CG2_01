@@ -84,7 +84,7 @@ public:
     /// <summary>スカイボックス連動モードを返す (0: なし / 1: Link-Multiply)</summary>
     int GetSkyboxLinkMode() const { return skyboxLinkMode_; }
 
-    /// <summary>ポストエフェクトモードを返す (0: Normal / 1: Grayscale / 2: Sepia / 3: Vignette)</summary>
+    /// <summary>ポストエフェクトモードを返す (0: Normal / 1: Grayscale / 2: Sepia / 3: Vignette / 4: BoxFilter3x3 / 5: BoxFilter5x5)</summary>
     int GetPostEffectMode() const { return postEffectMode_; }
 
 private:
@@ -111,6 +111,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  grayscalePipelineState_; ///< グレースケール PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  sepiaPipelineState_;     ///< セピア調 PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  vignettePipelineState_;  ///< ヴィネッティング PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>  boxFilter3x3PipelineState_; ///< 3x3 BoxFilter PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>  boxFilter5x5PipelineState_; ///< 5x5 BoxFilter PSO
     Microsoft::WRL::ComPtr<ID3D12Resource>       vignetteConstantBuffer_; ///< ヴィネット用定数バッファ (Upload ヒープ)
     VignetteParams*                              vignetteParamsData_ = nullptr; ///< 定数バッファのマップ済みポインタ
 
@@ -123,6 +125,6 @@ private:
 
     bool    enabled_        = false;                       ///< オフスクリーン有効フラグ (false 時は通常バックバッファへ直接描画)
     Vector4 clearColor_     = { 0.1f, 0.1f, 0.1f, 1.0f }; ///< RenderTexture のクリアカラー (初期値: ほぼ黒)
-    int     postEffectMode_ = 0; ///< ポストエフェクトモード (0:Normal / 1:Grayscale / 2:Sepia / 3:Vignette)
+    int     postEffectMode_ = 0; ///< ポストエフェクトモード (0:Normal / 1:Grayscale / 2:Sepia / 3:Vignette / 4:BoxFilter3x3 / 5:BoxFilter5x5)
     int     skyboxLinkMode_ = 0; ///< スカイボックス色連動モード (0:なし / 1:Link-Multiply)
 };
