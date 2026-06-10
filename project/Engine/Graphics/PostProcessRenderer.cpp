@@ -75,7 +75,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     descriptorRange.BaseShaderRegister                = 0; // t0
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[3]{};
+    D3D12_ROOT_PARAMETER rootParameters[4]{};
     // スロット 0 : SRV テーブル (Pixel Shader のみ参照)
     rootParameters[0].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -91,6 +91,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     rootParameters[2].ShaderVisibility                  = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[2].Descriptor.ShaderRegister         = 1; // b1
     rootParameters[2].Descriptor.RegisterSpace          = 0;
+    // スロット 3 : CBV (RadialBlur用定数、Pixel Shader のみ参照)
+    rootParameters[3].ParameterType                     = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[3].ShaderVisibility                  = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[3].Descriptor.ShaderRegister         = 2; // b2
+    rootParameters[3].Descriptor.RegisterSpace          = 0;
 
     D3D12_STATIC_SAMPLER_DESC staticSamplers[2]{};
     staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -106,7 +111,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     staticSamplers[1].ShaderRegister = 1; // s1
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
-    rootSignatureDesc.NumParameters     = 3;
+    rootSignatureDesc.NumParameters     = 4;
     rootSignatureDesc.pParameters       = rootParameters;
     rootSignatureDesc.NumStaticSamplers = 2;
     rootSignatureDesc.pStaticSamplers   = staticSamplers;
@@ -140,6 +145,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     Microsoft::WRL::ComPtr<IDxcBlob> psGaussianBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/GaussianFilter.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psLuminanceOutlineBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/LuminanceBasedOutline.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psDepthOutlineBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/DepthBasedOutline.PS.hlsl", L"ps_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psRadialBlurBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/RadialBlur.PS.hlsl", L"ps_6_0");
 
     // PSO の共通設定 (入力レイアウトなし・深度テストなし・三角形リスト)
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -205,6 +211,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&depthOutlinePipelineState_));
     assert(SUCCEEDED(hr));
 
+    // J. RadialBlur
+    psoDesc.PS = { psRadialBlurBlob->GetBufferPointer(), psRadialBlurBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&radialBlurPipelineState_));
+    assert(SUCCEEDED(hr));
+
     // ----------------------------------------------------------
     // 6. ヴィネッティング用定数バッファの生成
     //    Upload ヒープで CPU から毎フレーム書き換え可能にする
@@ -245,6 +256,17 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     outlineConstantBuffer_->Map(0, nullptr, (void**)&outlineParamsData_);
     outlineParamsData_->projectionInverse = Math::MakeIdentity4x4();
     outlineParamsData_->depthStrength = 0.05f;
+
+    cbResDesc.Width = (sizeof(RadialBlurParams) + 0xff) & ~0xff;
+    hr = device->CreateCommittedResource(
+        &cbHeapProps, D3D12_HEAP_FLAG_NONE, &cbResDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        IID_PPV_ARGS(&radialBlurConstantBuffer_));
+    assert(SUCCEEDED(hr));
+    radialBlurConstantBuffer_->Map(0, nullptr, (void**)&radialBlurParamsData_);
+    radialBlurParamsData_->center = { 0.5f, 0.5f };
+    radialBlurParamsData_->blurWidth = 0.01f;
+    radialBlurParamsData_->sampleCount = 10;
 }
 
 // ==========================================================
@@ -353,6 +375,13 @@ void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList, c
                 2, outlineConstantBuffer_->GetGPUVirtualAddress());
         }
         break;
+    case 9: // RadialBlur
+        cmdList->SetPipelineState(radialBlurPipelineState_.Get());
+        if (radialBlurConstantBuffer_) {
+            cmdList->SetGraphicsRootConstantBufferView(
+                3, radialBlurConstantBuffer_->GetGPUVirtualAddress());
+        }
+        break;
     default: // 通常コピー (エフェクトなし)
         cmdList->SetPipelineState(copyPipelineState_.Get());
         break;
@@ -392,7 +421,7 @@ void PostProcessRenderer::DrawImGui() {
         const char* skyboxModes[] = { "Ignore", "Link (Multiply)" };
         ImGui::Combo("Skybox Color Link", &skyboxLinkMode_, skyboxModes, IM_ARRAYSIZE(skyboxModes));
 
-        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter", "Luminance Outline", "Depth Outline" };
+        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter", "Luminance Outline", "Depth Outline", "RadialBlur" };
         ImGui::Combo("Post Effect", &postEffectMode_, effectNames, IM_ARRAYSIZE(effectNames));
 
         // ヴィネット選択時のみパラメータスライダーを表示
@@ -402,6 +431,11 @@ void PostProcessRenderer::DrawImGui() {
         }
         if (postEffectMode_ == 8 && outlineParamsData_) {
             ImGui::DragFloat("Depth Outline Strength", &outlineParamsData_->depthStrength, 0.005f, 0.0f, 1.0f, "%.3f");
+        }
+        if (postEffectMode_ == 9 && radialBlurParamsData_) {
+            ImGui::DragFloat2("Radial Center", &radialBlurParamsData_->center.x, 0.005f, 0.0f, 1.0f, "%.3f");
+            ImGui::DragFloat("Radial Blur Width", &radialBlurParamsData_->blurWidth, 0.001f, 0.0f, 0.2f, "%.3f");
+            ImGui::SliderInt("Radial Samples", &radialBlurParamsData_->sampleCount, 1, 32);
         }
     }
 }
