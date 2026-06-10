@@ -82,9 +82,12 @@ void SkinnedObject::Draw() {
         commandList->SetGraphicsRootShaderResourceView(5, skinnedModel_->GetJointBuffer()->GetGPUVirtualAddress());
     }
     
-    // 頂点バッファをバインドして描画
-    D3D12_VERTEX_BUFFER_VIEW vbView = skinnedModel_->GetVertexBufferView();
-    commandList->IASetVertexBuffers(0, 1, &vbView);
+    // 頂点情報とInfluence情報を別スロットのVBとしてバインドする
+    D3D12_VERTEX_BUFFER_VIEW vbViews[2] = {
+        skinnedModel_->GetVertexBufferView(),
+        skinnedModel_->GetInfluenceBufferView()
+    };
+    commandList->IASetVertexBuffers(0, 2, vbViews);
     commandList->DrawInstanced(static_cast<UINT>(skinnedModel_->GetVertexCount()), 1, 0, 0);
     
     // パイプラインを元に戻す

@@ -332,14 +332,11 @@ void SkinnedModel::Update(DirectXCommon* dxCommon) {
         }
     }
     
-    // Update jointBuffer_
-    if (jointBuffer_ && !joints_.empty()) {
-        Matrix4x4* mappedMatrices = nullptr;
-        if (SUCCEEDED(jointBuffer_->Map(0, nullptr, (void**)&mappedMatrices))) {
-            for (size_t i = 0; i < joints_.size(); ++i) {
-                mappedMatrices[i] = Math::Multiply(joints_[i].offsetMatrix, joints_[i].globalMatrix);
-            }
-            jointBuffer_->Unmap(0, nullptr);
+    if (mappedPalette_ && !joints_.empty()) {
+        for (size_t i = 0; i < joints_.size(); ++i) {
+            Matrix4x4 skeletonSpaceMatrix = Math::Multiply(joints_[i].offsetMatrix, joints_[i].globalMatrix);
+            mappedPalette_[i].skeletonSpaceMatrix = skeletonSpaceMatrix;
+            mappedPalette_[i].skeletonSpaceInverseTransposeMatrix = Math::Transpose(Math::Inverse(skeletonSpaceMatrix));
         }
     }
 }
@@ -347,8 +344,14 @@ void SkinnedModel::Update(DirectXCommon* dxCommon) {
 void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
     if (skinnedVertices_.empty()) return;
 
+    if (jointBuffer_) {
+        jointBuffer_->Unmap(0, nullptr);
+        mappedPalette_ = nullptr;
+    }
+
     auto device = dxCommon->GetDevice();
-    UINT sizeVB = static_cast<UINT>(sizeof(SkinnedVertexData) * skinnedVertices_.size());
+    UINT sizeVB = static_cast<UINT>(sizeof(ModelVertexData) * skinnedVertices_.size());
+    UINT sizeInfluence = static_cast<UINT>(sizeof(VertexInfluence) * skinnedVertices_.size());
 
     D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
     D3D12_RESOURCE_DESC resDesc = {};
@@ -362,21 +365,59 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer_));
 
     if (SUCCEEDED(hr)) {
-        SkinnedVertexData* vertMap = nullptr;
-        vertexBuffer_->Map(0, nullptr, (void**)&vertMap);
-        std::copy(skinnedVertices_.begin(), skinnedVertices_.end(), vertMap);
+        ModelVertexData* vertMap = nullptr;
+        vertexBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&vertMap));
+        for (size_t i = 0; i < skinnedVertices_.size(); ++i) {
+            vertMap[i].position = skinnedVertices_[i].position;
+            vertMap[i].texcoord = skinnedVertices_[i].texcoord;
+            vertMap[i].normal = skinnedVertices_[i].normal;
+        }
         vertexBuffer_->Unmap(0, nullptr);
 
         vertexBufferView_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
         vertexBufferView_.SizeInBytes = sizeVB;
-        vertexBufferView_.StrideInBytes = sizeof(SkinnedVertexData);
+        vertexBufferView_.StrideInBytes = sizeof(ModelVertexData);
+    }
+
+    resDesc.Width = sizeInfluence;
+    hr = device->CreateCommittedResource(
+        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&influenceBuffer_));
+
+    if (SUCCEEDED(hr)) {
+        VertexInfluence* influenceMap = nullptr;
+        influenceBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&influenceMap));
+        for (size_t i = 0; i < skinnedVertices_.size(); ++i) {
+            for (int influenceIndex = 0; influenceIndex < 4; ++influenceIndex) {
+                influenceMap[i].weights[influenceIndex] = skinnedVertices_[i].weights[influenceIndex];
+                influenceMap[i].jointIndices[influenceIndex] = skinnedVertices_[i].jointIndices[influenceIndex];
+            }
+        }
+        influenceBuffer_->Unmap(0, nullptr);
+
+        influenceBufferView_.BufferLocation = influenceBuffer_->GetGPUVirtualAddress();
+        influenceBufferView_.SizeInBytes = sizeInfluence;
+        influenceBufferView_.StrideInBytes = sizeof(VertexInfluence);
     }
     
-    // Create jointBuffer_
+    // Create matrix palette buffer.
     if (!joints_.empty()) {
-        UINT sizeJoints = static_cast<UINT>(sizeof(Matrix4x4) * joints_.size());
+        UINT sizeJoints = static_cast<UINT>(sizeof(WellForGPU) * joints_.size());
         resDesc.Width = sizeJoints;
-        device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&jointBuffer_));
+        HRESULT paletteHr = device->CreateCommittedResource(
+            &heapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &resDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&jointBuffer_));
+        if (SUCCEEDED(paletteHr)) {
+            jointBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&mappedPalette_));
+            for (size_t i = 0; i < joints_.size(); ++i) {
+                mappedPalette_[i].skeletonSpaceMatrix = Math::MakeIdentity4x4();
+                mappedPalette_[i].skeletonSpaceInverseTransposeMatrix = Math::MakeIdentity4x4();
+            }
+        }
     }
 }
 
