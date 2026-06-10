@@ -1,5 +1,6 @@
 #include "PostProcessRenderer.h"
 #include "externals/imgui/imgui.h"
+#include <DirectXTex.h>
 #include <cassert>
 
 // ==========================================================
@@ -38,7 +39,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     // ----------------------------------------------------------
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc{};
     srvHeapDesc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srvHeapDesc.NumDescriptors = 2;
+    srvHeapDesc.NumDescriptors = 4;
     srvHeapDesc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     hr = device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap_));
     assert(SUCCEEDED(hr));
@@ -62,6 +63,20 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     depthSrvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     device->CreateShaderResourceView(depthStencilResource_, &depthSrvDesc, depthSrvHandle);
 
+    dissolveMaskTextures_[0] = CreateTextureResourceFromFile(device, L"Resources/Models/Work/noise0.png");
+    dissolveMaskTextures_[1] = CreateTextureResourceFromFile(device, L"Resources/Models/Work/noise1.png");
+    for (int32_t index = 0; index < 2; ++index) {
+        D3D12_SHADER_RESOURCE_VIEW_DESC maskSrvDesc{};
+        maskSrvDesc.Format = dissolveMaskTextures_[index]->GetDesc().Format;
+        maskSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        maskSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        maskSrvDesc.Texture2D.MipLevels = 1;
+
+        D3D12_CPU_DESCRIPTOR_HANDLE maskSrvHandle = srvHeap_->GetCPUDescriptorHandleForHeapStart();
+        maskSrvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) * (2 + index);
+        device->CreateShaderResourceView(dissolveMaskTextures_[index].Get(), &maskSrvDesc, maskSrvHandle);
+    }
+
     // ----------------------------------------------------------
     // 4. コピー用 RootSignature の生成
     //    スロット構成：
@@ -71,11 +86,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     // ----------------------------------------------------------
     D3D12_DESCRIPTOR_RANGE descriptorRange{};
     descriptorRange.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    descriptorRange.NumDescriptors                    = 2;
+    descriptorRange.NumDescriptors                    = 4;
     descriptorRange.BaseShaderRegister                = 0; // t0
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[4]{};
+    D3D12_ROOT_PARAMETER rootParameters[5]{};
     // スロット 0 : SRV テーブル (Pixel Shader のみ参照)
     rootParameters[0].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -96,6 +111,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     rootParameters[3].ShaderVisibility                  = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[3].Descriptor.ShaderRegister         = 2; // b2
     rootParameters[3].Descriptor.RegisterSpace          = 0;
+    // スロット 4 : CBV (Dissolve用定数、Pixel Shader のみ参照)
+    rootParameters[4].ParameterType                     = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[4].ShaderVisibility                  = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[4].Descriptor.ShaderRegister         = 3; // b3
+    rootParameters[4].Descriptor.RegisterSpace          = 0;
 
     D3D12_STATIC_SAMPLER_DESC staticSamplers[2]{};
     staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -111,7 +131,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     staticSamplers[1].ShaderRegister = 1; // s1
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
-    rootSignatureDesc.NumParameters     = 4;
+    rootSignatureDesc.NumParameters     = 5;
     rootSignatureDesc.pParameters       = rootParameters;
     rootSignatureDesc.NumStaticSamplers = 2;
     rootSignatureDesc.pStaticSamplers   = staticSamplers;
@@ -146,6 +166,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     Microsoft::WRL::ComPtr<IDxcBlob> psLuminanceOutlineBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/LuminanceBasedOutline.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psDepthOutlineBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/DepthBasedOutline.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psRadialBlurBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/RadialBlur.PS.hlsl", L"ps_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psDissolveBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Dissolve.PS.hlsl", L"ps_6_0");
 
     // PSO の共通設定 (入力レイアウトなし・深度テストなし・三角形リスト)
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -216,6 +237,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&radialBlurPipelineState_));
     assert(SUCCEEDED(hr));
 
+    // K. Dissolve
+    psoDesc.PS = { psDissolveBlob->GetBufferPointer(), psDissolveBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&dissolvePipelineState_));
+    assert(SUCCEEDED(hr));
+
     // ----------------------------------------------------------
     // 6. ヴィネッティング用定数バッファの生成
     //    Upload ヒープで CPU から毎フレーム書き換え可能にする
@@ -267,6 +293,19 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     radialBlurParamsData_->center = { 0.5f, 0.5f };
     radialBlurParamsData_->blurWidth = 0.01f;
     radialBlurParamsData_->sampleCount = 10;
+
+    cbResDesc.Width = (sizeof(DissolveParams) + 0xff) & ~0xff;
+    hr = device->CreateCommittedResource(
+        &cbHeapProps, D3D12_HEAP_FLAG_NONE, &cbResDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        IID_PPV_ARGS(&dissolveConstantBuffer_));
+    assert(SUCCEEDED(hr));
+    dissolveConstantBuffer_->Map(0, nullptr, (void**)&dissolveParamsData_);
+    dissolveParamsData_->threshold = 0.0f;
+    dissolveParamsData_->edgeWidth = 0.03f;
+    dissolveParamsData_->maskIndex = 0;
+    dissolveParamsData_->padding = 0.0f;
+    dissolveParamsData_->edgeColor = { 1.0f, 0.4f, 0.3f, 1.0f };
 }
 
 // ==========================================================
@@ -382,6 +421,13 @@ void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList, c
                 3, radialBlurConstantBuffer_->GetGPUVirtualAddress());
         }
         break;
+    case 10: // Dissolve
+        cmdList->SetPipelineState(dissolvePipelineState_.Get());
+        if (dissolveConstantBuffer_) {
+            cmdList->SetGraphicsRootConstantBufferView(
+                4, dissolveConstantBuffer_->GetGPUVirtualAddress());
+        }
+        break;
     default: // 通常コピー (エフェクトなし)
         cmdList->SetPipelineState(copyPipelineState_.Get());
         break;
@@ -421,7 +467,7 @@ void PostProcessRenderer::DrawImGui() {
         const char* skyboxModes[] = { "Ignore", "Link (Multiply)" };
         ImGui::Combo("Skybox Color Link", &skyboxLinkMode_, skyboxModes, IM_ARRAYSIZE(skyboxModes));
 
-        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter", "Luminance Outline", "Depth Outline", "RadialBlur" };
+        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter", "Luminance Outline", "Depth Outline", "RadialBlur", "Dissolve" };
         ImGui::Combo("Post Effect", &postEffectMode_, effectNames, IM_ARRAYSIZE(effectNames));
 
         // ヴィネット選択時のみパラメータスライダーを表示
@@ -436,6 +482,13 @@ void PostProcessRenderer::DrawImGui() {
             ImGui::DragFloat2("Radial Center", &radialBlurParamsData_->center.x, 0.005f, 0.0f, 1.0f, "%.3f");
             ImGui::DragFloat("Radial Blur Width", &radialBlurParamsData_->blurWidth, 0.001f, 0.0f, 0.2f, "%.3f");
             ImGui::SliderInt("Radial Samples", &radialBlurParamsData_->sampleCount, 1, 32);
+        }
+        if (postEffectMode_ == 10 && dissolveParamsData_) {
+            const char* maskNames[] = { "noise0", "noise1" };
+            ImGui::Combo("Dissolve Mask", &dissolveParamsData_->maskIndex, maskNames, IM_ARRAYSIZE(maskNames));
+            ImGui::DragFloat("Dissolve Threshold", &dissolveParamsData_->threshold, 0.005f, 0.0f, 1.0f, "%.3f");
+            ImGui::DragFloat("Dissolve Edge Width", &dissolveParamsData_->edgeWidth, 0.001f, 0.0f, 0.2f, "%.3f");
+            ImGui::ColorEdit4("Dissolve Edge Color", &dissolveParamsData_->edgeColor.x);
         }
     }
 }
@@ -478,5 +531,56 @@ Microsoft::WRL::ComPtr<ID3D12Resource> PostProcessRenderer::CreateRenderTextureR
         D3D12_RESOURCE_STATE_RENDER_TARGET, &clearValue,
         IID_PPV_ARGS(&resource));
     assert(SUCCEEDED(hr));
+    return resource;
+}
+
+Microsoft::WRL::ComPtr<ID3D12Resource> PostProcessRenderer::CreateTextureResourceFromFile(
+    ID3D12Device* device,
+    const wchar_t* filePath)
+{
+    DirectX::ScratchImage image;
+    HRESULT hr = DirectX::LoadFromWICFile(filePath, DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+    assert(SUCCEEDED(hr));
+
+    const DirectX::Image* firstImage = image.GetImage(0, 0, 0);
+    const DirectX::TexMetadata& metadata = image.GetMetadata();
+    assert(firstImage);
+
+    D3D12_RESOURCE_DESC textureDesc{};
+    textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    textureDesc.Width = static_cast<UINT>(metadata.width);
+    textureDesc.Height = static_cast<UINT>(metadata.height);
+    textureDesc.DepthOrArraySize = 1;
+    textureDesc.MipLevels = 1;
+    textureDesc.Format = metadata.format;
+    textureDesc.SampleDesc.Count = 1;
+    textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+    D3D12_HEAP_PROPERTIES heapProps{
+        D3D12_HEAP_TYPE_CUSTOM,
+        D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        D3D12_MEMORY_POOL_L0,
+        1,
+        1
+    };
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    hr = device->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &textureDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&resource));
+    assert(SUCCEEDED(hr));
+
+    hr = resource->WriteToSubresource(
+        0,
+        nullptr,
+        firstImage->pixels,
+        static_cast<UINT>(firstImage->rowPitch),
+        static_cast<UINT>(firstImage->slicePitch));
+    assert(SUCCEEDED(hr));
+
     return resource;
 }
