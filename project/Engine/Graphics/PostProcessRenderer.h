@@ -48,6 +48,13 @@ public:
         Vector4 edgeColor;
     };
 
+    struct RandomParams {
+        float time;
+        int32_t mode;
+        float strength;
+        float padding;
+    };
+
     PostProcessRenderer() = default;
     ~PostProcessRenderer() = default;
 
@@ -144,14 +151,17 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  depthOutlinePipelineState_; ///< DepthBasedOutline PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  radialBlurPipelineState_; ///< RadialBlur PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  dissolvePipelineState_; ///< Dissolve PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>  randomPipelineState_; ///< Random PSO
     Microsoft::WRL::ComPtr<ID3D12Resource>       vignetteConstantBuffer_; ///< ヴィネット用定数バッファ (Upload ヒープ)
     Microsoft::WRL::ComPtr<ID3D12Resource>       outlineConstantBuffer_; ///< Outline用定数バッファ (Upload ヒープ)
     Microsoft::WRL::ComPtr<ID3D12Resource>       radialBlurConstantBuffer_; ///< RadialBlur用定数バッファ
     Microsoft::WRL::ComPtr<ID3D12Resource>       dissolveConstantBuffer_; ///< Dissolve用定数バッファ
+    Microsoft::WRL::ComPtr<ID3D12Resource>       randomConstantBuffer_; ///< Random用定数バッファ
     VignetteParams*                              vignetteParamsData_ = nullptr; ///< 定数バッファのマップ済みポインタ
     OutlineParams*                               outlineParamsData_ = nullptr;
     RadialBlurParams*                            radialBlurParamsData_ = nullptr;
     DissolveParams*                              dissolveParamsData_ = nullptr;
+    RandomParams*                                randomParamsData_ = nullptr;
 
     /// <summary>
     /// renderTexture_ の現在のリソース状態 (遷移前後の整合を取るために保持)。

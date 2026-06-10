@@ -90,7 +90,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     descriptorRange.BaseShaderRegister                = 0; // t0
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[5]{};
+    D3D12_ROOT_PARAMETER rootParameters[6]{};
     // スロット 0 : SRV テーブル (Pixel Shader のみ参照)
     rootParameters[0].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -116,6 +116,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     rootParameters[4].ShaderVisibility                  = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[4].Descriptor.ShaderRegister         = 3; // b3
     rootParameters[4].Descriptor.RegisterSpace          = 0;
+    // スロット 5 : CBV (Random用定数、Pixel Shader のみ参照)
+    rootParameters[5].ParameterType                     = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[5].ShaderVisibility                  = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[5].Descriptor.ShaderRegister         = 4; // b4
+    rootParameters[5].Descriptor.RegisterSpace          = 0;
 
     D3D12_STATIC_SAMPLER_DESC staticSamplers[2]{};
     staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -131,7 +136,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     staticSamplers[1].ShaderRegister = 1; // s1
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
-    rootSignatureDesc.NumParameters     = 5;
+    rootSignatureDesc.NumParameters     = 6;
     rootSignatureDesc.pParameters       = rootParameters;
     rootSignatureDesc.NumStaticSamplers = 2;
     rootSignatureDesc.pStaticSamplers   = staticSamplers;
@@ -167,6 +172,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     Microsoft::WRL::ComPtr<IDxcBlob> psDepthOutlineBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/DepthBasedOutline.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psRadialBlurBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/RadialBlur.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psDissolveBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Dissolve.PS.hlsl", L"ps_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psRandomBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Random.PS.hlsl", L"ps_6_0");
 
     // PSO の共通設定 (入力レイアウトなし・深度テストなし・三角形リスト)
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -242,6 +248,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&dissolvePipelineState_));
     assert(SUCCEEDED(hr));
 
+    // L. Random
+    psoDesc.PS = { psRandomBlob->GetBufferPointer(), psRandomBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&randomPipelineState_));
+    assert(SUCCEEDED(hr));
+
     // ----------------------------------------------------------
     // 6. ヴィネッティング用定数バッファの生成
     //    Upload ヒープで CPU から毎フレーム書き換え可能にする
@@ -306,6 +317,18 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     dissolveParamsData_->maskIndex = 0;
     dissolveParamsData_->padding = 0.0f;
     dissolveParamsData_->edgeColor = { 1.0f, 0.4f, 0.3f, 1.0f };
+
+    cbResDesc.Width = (sizeof(RandomParams) + 0xff) & ~0xff;
+    hr = device->CreateCommittedResource(
+        &cbHeapProps, D3D12_HEAP_FLAG_NONE, &cbResDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        IID_PPV_ARGS(&randomConstantBuffer_));
+    assert(SUCCEEDED(hr));
+    randomConstantBuffer_->Map(0, nullptr, (void**)&randomParamsData_);
+    randomParamsData_->time = 0.0f;
+    randomParamsData_->mode = 0;
+    randomParamsData_->strength = 0.5f;
+    randomParamsData_->padding = 0.0f;
 }
 
 // ==========================================================
@@ -369,6 +392,9 @@ void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList, c
     if (outlineParamsData_) {
         outlineParamsData_->projectionInverse = Math::Inverse(projectionMatrix);
     }
+    if (randomParamsData_) {
+        randomParamsData_->time += 1.0f / 60.0f;
+    }
 
     const bool usesDepth = postEffectMode_ == 8 && depthStencilResource_;
     if (usesDepth) {
@@ -428,6 +454,13 @@ void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList, c
                 4, dissolveConstantBuffer_->GetGPUVirtualAddress());
         }
         break;
+    case 11: // Random
+        cmdList->SetPipelineState(randomPipelineState_.Get());
+        if (randomConstantBuffer_) {
+            cmdList->SetGraphicsRootConstantBufferView(
+                5, randomConstantBuffer_->GetGPUVirtualAddress());
+        }
+        break;
     default: // 通常コピー (エフェクトなし)
         cmdList->SetPipelineState(copyPipelineState_.Get());
         break;
@@ -467,7 +500,7 @@ void PostProcessRenderer::DrawImGui() {
         const char* skyboxModes[] = { "Ignore", "Link (Multiply)" };
         ImGui::Combo("Skybox Color Link", &skyboxLinkMode_, skyboxModes, IM_ARRAYSIZE(skyboxModes));
 
-        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter", "Luminance Outline", "Depth Outline", "RadialBlur", "Dissolve" };
+        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter", "Luminance Outline", "Depth Outline", "RadialBlur", "Dissolve", "Random" };
         ImGui::Combo("Post Effect", &postEffectMode_, effectNames, IM_ARRAYSIZE(effectNames));
 
         // ヴィネット選択時のみパラメータスライダーを表示
@@ -489,6 +522,12 @@ void PostProcessRenderer::DrawImGui() {
             ImGui::DragFloat("Dissolve Threshold", &dissolveParamsData_->threshold, 0.005f, 0.0f, 1.0f, "%.3f");
             ImGui::DragFloat("Dissolve Edge Width", &dissolveParamsData_->edgeWidth, 0.001f, 0.0f, 0.2f, "%.3f");
             ImGui::ColorEdit4("Dissolve Edge Color", &dissolveParamsData_->edgeColor.x);
+        }
+        if (postEffectMode_ == 11 && randomParamsData_) {
+            const char* randomModes[] = { "Grayscale Noise", "Multiply Image" };
+            ImGui::Combo("Random Mode", &randomParamsData_->mode, randomModes, IM_ARRAYSIZE(randomModes));
+            ImGui::DragFloat("Random Strength", &randomParamsData_->strength, 0.01f, 0.0f, 1.0f, "%.2f");
+            ImGui::Text("Random Time: %.2f", randomParamsData_->time);
         }
     }
 }
