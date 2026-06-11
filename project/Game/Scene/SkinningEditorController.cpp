@@ -577,6 +577,10 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
         }
     }
 
+    if (ImGui::InputText("Motion Name", motionName_, IM_ARRAYSIZE(motionName_))) {
+        skinnedObject_->GetModel()->SetActiveMotionName(motionName_);
+    }
+
     float duration = skinnedObject_->GetModel()->GetMotionDuration();
     if (ImGui::InputFloat("Motion Duration", &duration, 0.1f, 1.0f, "%.2f")) {
         if (duration < 0.1f) { duration = 0.1f; }
@@ -593,27 +597,58 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 
     if (ImGui::Button("Add Keyframe (Current Pose)", ImVec2(-FLT_MIN, 24))) {
         skinnedObject_->AddKeyframe(curTime);
+        motionStatus_ = "Keyframe added at " + std::to_string(curTime) + " sec";
     }
     if (ImGui::Button("Clear All Keyframes", ImVec2(-FLT_MIN, 24))) {
         skinnedObject_->ClearKeyframes();
+        motionStatus_ = "Cleared all keyframes";
+    }
+    if (ImGui::Button("New Empty Motion", ImVec2(-FLT_MIN, 24))) {
+        skinnedObject_->ClearKeyframes();
+        skinnedObject_->GetModel()->SetActiveMotionName(motionName_);
+        skinnedObject_->SetCurrentKeyframeTime(0.0f);
+        skinnedObject_->ApplyMotion(0.0f);
+        motionStatus_ = "Started a new empty motion";
     }
     if (ImGui::Button("Generate Walk Preset", ImVec2(-FLT_MIN, 24))) {
         skinnedObject_->GenerateWalkPreset();
+        strncpy_s(motionName_, "WalkPreset", _TRUNCATE);
+        skinnedObject_->GetModel()->SetActiveMotionName(motionName_);
+        motionStatus_ = "Generated walk preset";
     }
     if (ImGui::Button("Generate Run Preset", ImVec2(-FLT_MIN, 24))) {
         skinnedObject_->GenerateRunPreset();
+        strncpy_s(motionName_, "RunPreset", _TRUNCATE);
+        skinnedObject_->GetModel()->SetActiveMotionName(motionName_);
+        motionStatus_ = "Generated run preset";
     }
 
-    static char motionPath[256] = "Resources/Animations/test_motion.txt";
-    ImGui::InputText("Motion Path", motionPath, IM_ARRAYSIZE(motionPath));
+    ImGui::InputText("Motion Path", motionPath_, IM_ARRAYSIZE(motionPath_));
 
     float saveLoadW = ImGui::GetContentRegionAvail().x * 0.5f;
     if (ImGui::Button("Save Motion to File", ImVec2(saveLoadW, 24))) {
-        skinnedObject_->SaveMotion(motionPath);
+        skinnedObject_->GetModel()->SetActiveMotionName(motionName_);
+        if (skinnedObject_->SaveMotion(motionPath_)) {
+            hasCustomMotionFile_ = true;
+            motionStatus_ = std::string("Saved: ") + motionPath_;
+        } else {
+            motionStatus_ = std::string("Save failed: ") + motionPath_;
+        }
     }
     ImGui::SameLine();
     if (ImGui::Button("Load Motion from File", ImVec2(-FLT_MIN, 24))) {
-        skinnedObject_->LoadMotion(motionPath);
+        if (skinnedObject_->LoadMotion(motionPath_)) {
+            hasCustomMotionFile_ = true;
+            const std::string& loadedName = skinnedObject_->GetModel()->GetActiveMotionName();
+            strncpy_s(motionName_, loadedName.c_str(), _TRUNCATE);
+            skinnedObject_->SetCurrentKeyframeTime(0.0f);
+            motionStatus_ = std::string("Loaded: ") + motionPath_;
+        } else {
+            motionStatus_ = std::string("Load failed: ") + motionPath_;
+        }
+    }
+    if (!motionStatus_.empty()) {
+        ImGui::TextWrapped("%s", motionStatus_.c_str());
     }
 
     // ----------------------------------------------------------
@@ -811,6 +846,16 @@ void SkinningEditorController::ApplyModelToPlayer(Player* player, Model* default
         // ----------------------------------------------------------
         player->InitializeWithSkinnedGltf(
             object3dCommon_, dxCommon_, modelPaths_[activeGameModelIndex_], textureManager_);
+    }
+
+    if (hasCustomMotionFile_ && player->IsSkinned() && player->GetSkinnedObject()) {
+        if (player->GetSkinnedObject()->LoadMotion(motionPath_)) {
+            player->GetSkinnedObject()->SetPlayAnimation(false);
+            player->GetSkinnedObject()->SetPlayCustomAnimation(true);
+            motionStatus_ = std::string("Applied model and motion to player: ") + motionPath_;
+        } else {
+            motionStatus_ = std::string("Applied model, but motion load failed: ") + motionPath_;
+        }
     }
 
     // プレイヤーをデフォルトのスタート位置に配置

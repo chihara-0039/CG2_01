@@ -8,6 +8,9 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
+#include "json.hpp"
+
+using json = nlohmann::json;
 
 namespace {
     // 
@@ -30,9 +33,47 @@ namespace {
         };
         return Math::Normalize(res);
     }
+
+    json ToJson(const Vector3& value) {
+        return json::array({ value.x, value.y, value.z });
+    }
+
+    json ToJson(const Quaternion& value) {
+        return json::array({ value.x, value.y, value.z, value.w });
+    }
+
+    Vector3 ReadVector3(const json& value, const Vector3& fallback) {
+        if (!value.is_array() || value.size() < 3) {
+            return fallback;
+        }
+        return {
+            value.at(0).get<float>(),
+            value.at(1).get<float>(),
+            value.at(2).get<float>()
+        };
+    }
+
+    Quaternion ReadQuaternion(const json& value, const Quaternion& fallback) {
+        if (!value.is_array() || value.size() < 4) {
+            return fallback;
+        }
+        return {
+            value.at(0).get<float>(),
+            value.at(1).get<float>(),
+            value.at(2).get<float>(),
+            value.at(3).get<float>()
+        };
+    }
+
+    void SortKeyframes(JointAnimation& animation) {
+        std::sort(animation.keyframes.begin(), animation.keyframes.end(), [](const JointKeyframe& a, const JointKeyframe& b) {
+            return a.time < b.time;
+        });
+    }
 }
 
 void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager) {
+    restPoseCaptured_ = false;
     // 1. 
     CreateHumanoidSkeleton();
 
@@ -58,9 +99,11 @@ void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureMa
 
     // 7.  ()
     ResetPose();
+    CaptureRestPose();
 }
 
 void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager) {
+    restPoseCaptured_ = false;
     std::string texturePath;
     
     // glTF
@@ -90,16 +133,22 @@ void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string
 
     model_ = std::make_unique<Model>();
 
-
-    for (auto& joint : joints_) {
-        joint.rotationQuat = Math::MakeQuaternionFromEuler(joint.rotation);
-        joint.isQuaternion = true;
-    }
-
     BuildJointMetadata();
+    CaptureRestPose();
 }
 
 void SkinnedModel::ResetPose() {
+    if (restPoseCaptured_) {
+        for (auto& joint : joints_) {
+            joint.translation = joint.restTranslation;
+            joint.rotation = joint.restRotation;
+            joint.scale = joint.restScale;
+            joint.rotationQuat = joint.restRotationQuat;
+            joint.isQuaternion = joint.restIsQuaternion;
+        }
+        return;
+    }
+
     for (size_t i = 0; i < joints_.size(); ++i) {
         joints_[i].scale = { 1.0f, 1.0f, 1.0f };
         
@@ -111,6 +160,8 @@ void SkinnedModel::ResetPose() {
         } else {
             joints_[i].rotation = { 0.0f, 0.0f, 0.0f };
         }
+        joints_[i].rotationQuat = Math::MakeQuaternionFromEuler(joints_[i].rotation);
+        joints_[i].isQuaternion = false;
     }
 }
 
@@ -155,6 +206,7 @@ void SkinnedModel::CreateHumanoidSkeleton() {
         joints_[i].scale = { 1.0f, 1.0f, 1.0f };
         joints_[i].rotation = { 0.0f, 0.0f, 0.0f };
         joints_[i].parentIndex = defs[i].parentIndex;
+        joints_[i].externalParentMatrix = Math::MakeIdentity4x4();
 
         // ( translation) 
         if (defs[i].parentIndex == -1) {
@@ -207,6 +259,17 @@ void SkinnedModel::BuildJointMetadata() {
             rootJointIndex_ = static_cast<int>(i);
         }
     }
+}
+
+void SkinnedModel::CaptureRestPose() {
+    for (auto& joint : joints_) {
+        joint.restTranslation = joint.translation;
+        joint.restRotation = joint.rotation;
+        joint.restScale = joint.scale;
+        joint.restRotationQuat = joint.rotationQuat;
+        joint.restIsQuaternion = joint.isQuaternion;
+    }
+    restPoseCaptured_ = true;
 }
 
 void SkinnedModel::GenerateHumanoidMesh() {
@@ -323,6 +386,7 @@ void SkinnedModel::Update(DirectXCommon* dxCommon) {
         } else {
             joints_[i].localMatrix = Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotation, joints_[i].translation);
         }
+        joints_[i].localMatrix = Math::Multiply(joints_[i].localMatrix, joints_[i].externalParentMatrix);
 
         if (joints_[i].parentIndex == -1) {
             joints_[i].globalMatrix = joints_[i].localMatrix;
@@ -438,6 +502,16 @@ void SkinnedModel::ApplyTestAnimation(float time, float speed) {
 void SkinnedModel::ApplyMotion(float time) {
     const auto& activeMotion = GetMotionData();
     if (activeMotion.jointAnimations.empty()) return;
+
+    if (restPoseCaptured_) {
+        for (auto& joint : joints_) {
+            joint.translation = joint.restTranslation;
+            joint.rotation = joint.restRotation;
+            joint.scale = joint.restScale;
+            joint.rotationQuat = joint.restRotationQuat;
+            joint.isQuaternion = joint.restIsQuaternion;
+        }
+    }
 
     // Duration 
     float loopedTime = std::fmod(time, activeMotion.duration);
@@ -634,20 +708,15 @@ float SkinnedModel::GetMotionDuration() const {
 }
 
 void SkinnedModel::SetMotionDuration(float duration) {
-    if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
-        motions_[activeMotionIndex_].duration = duration;
-    }
+    GetMotionData().duration = duration;
 }
 
 void SkinnedModel::ClearKeyframes() {
-    if (activeMotionIndex_ >= 0 && activeMotionIndex_ < motions_.size()) {
-        motions_[activeMotionIndex_].jointAnimations.clear();
-    }
+    GetMotionData().jointAnimations.clear();
 }
 
 void SkinnedModel::AddKeyframe(float time) {
-    if (activeMotionIndex_ < 0 || activeMotionIndex_ >= motions_.size()) return;
-    auto& motionData = motions_[activeMotionIndex_];
+    auto& motionData = GetMotionData();
     
     if (motionData.jointAnimations.empty()) {
         motionData.jointAnimations.resize(joints_.size());
@@ -656,6 +725,14 @@ void SkinnedModel::AddKeyframe(float time) {
         }
     }
     for (size_t i = 0; i < joints_.size(); ++i) {
+        if (i >= motionData.jointAnimations.size()) {
+            motionData.jointAnimations.resize(joints_.size());
+        }
+        JointAnimation& jointAnimation = motionData.jointAnimations[i];
+        if (jointAnimation.name.empty()) {
+            jointAnimation.name = joints_[i].name;
+        }
+
         JointKeyframe kf;
         kf.time = time;
         kf.translation = joints_[i].translation;
@@ -663,16 +740,151 @@ void SkinnedModel::AddKeyframe(float time) {
         kf.scale = joints_[i].scale;
         kf.rotationQuat = joints_[i].rotationQuat;
         kf.isQuaternion = joints_[i].isQuaternion;
-        motionData.jointAnimations[i].keyframes.push_back(kf);
+
+        auto existing = std::find_if(jointAnimation.keyframes.begin(), jointAnimation.keyframes.end(), [time](const JointKeyframe& item) {
+            return std::abs(item.time - time) < 1.0e-4f;
+        });
+        if (existing != jointAnimation.keyframes.end()) {
+            *existing = kf;
+        } else {
+            jointAnimation.keyframes.push_back(kf);
+        }
+        SortKeyframes(jointAnimation);
     }
 }
 
 bool SkinnedModel::SaveMotion(const std::string& filePath) {
-    return true;
+    try {
+        const MotionData& motionData = GetMotionData();
+
+        std::filesystem::path outputPath(filePath);
+        if (outputPath.has_parent_path()) {
+            std::filesystem::create_directories(outputPath.parent_path());
+        }
+
+        json root;
+        root["version"] = 1;
+        root["type"] = "CG2Motion";
+        root["modelName"] = name_;
+        root["motion"]["name"] = motionData.name;
+        root["motion"]["duration"] = motionData.duration;
+        root["motion"]["active"] = activeMotionIndex_;
+
+        json jointsJson = json::array();
+        for (const auto& joint : joints_) {
+            jointsJson.push_back({
+                { "name", joint.name },
+                { "parent", joint.parentIndex }
+            });
+        }
+        root["skeleton"]["joints"] = jointsJson;
+
+        json animationsJson = json::array();
+        for (const auto& jointAnimation : motionData.jointAnimations) {
+            json jointJson;
+            jointJson["name"] = jointAnimation.name;
+            jointJson["keyframes"] = json::array();
+
+            for (const auto& keyframe : jointAnimation.keyframes) {
+                jointJson["keyframes"].push_back({
+                    { "time", keyframe.time },
+                    { "translation", ToJson(keyframe.translation) },
+                    { "rotation", ToJson(keyframe.rotation) },
+                    { "scale", ToJson(keyframe.scale) },
+                    { "rotationQuat", ToJson(keyframe.rotationQuat) },
+                    { "isQuaternion", keyframe.isQuaternion }
+                });
+            }
+            animationsJson.push_back(jointJson);
+        }
+        root["motion"]["joints"] = animationsJson;
+
+        std::ofstream file(filePath);
+        if (!file.is_open()) {
+            OutputDebugStringA(("Failed to open motion file for write: " + filePath + "\n").c_str());
+            return false;
+        }
+
+        file << root.dump(4);
+        return true;
+    } catch (const std::exception& e) {
+        OutputDebugStringA(("SaveMotion failed: " + std::string(e.what()) + "\n").c_str());
+        return false;
+    }
 }
 
 bool SkinnedModel::LoadMotion(const std::string& filePath) {
-    return true;
+    try {
+        std::ifstream file(filePath);
+        if (!file.is_open()) {
+            OutputDebugStringA(("Failed to open motion file for read: " + filePath + "\n").c_str());
+            return false;
+        }
+
+        json root;
+        file >> root;
+
+        const json& motionJson = root.contains("motion") ? root.at("motion") : root;
+
+        MotionData loadedMotion;
+        loadedMotion.name = motionJson.value("name", std::filesystem::path(filePath).stem().string());
+        loadedMotion.duration = motionJson.value("duration", 2.0f);
+        loadedMotion.jointAnimations.resize(joints_.size());
+        for (size_t i = 0; i < joints_.size(); ++i) {
+            loadedMotion.jointAnimations[i].name = joints_[i].name;
+        }
+
+        if (motionJson.contains("joints") && motionJson.at("joints").is_array()) {
+            for (const auto& jointJson : motionJson.at("joints")) {
+                std::string jointName = jointJson.value("name", "");
+                auto jointIt = jointIndexMap_.find(jointName);
+                if (jointIt == jointIndexMap_.end()) {
+                    continue;
+                }
+
+                int jointIndex = jointIt->second;
+                if (jointIndex < 0 || jointIndex >= static_cast<int>(loadedMotion.jointAnimations.size())) {
+                    continue;
+                }
+
+                JointAnimation& jointAnimation = loadedMotion.jointAnimations[static_cast<size_t>(jointIndex)];
+                jointAnimation.name = jointName;
+                jointAnimation.keyframes.clear();
+
+                if (!jointJson.contains("keyframes") || !jointJson.at("keyframes").is_array()) {
+                    continue;
+                }
+
+                for (const auto& keyframeJson : jointJson.at("keyframes")) {
+                    JointKeyframe keyframe;
+                    keyframe.time = keyframeJson.value("time", 0.0f);
+                    keyframe.translation = ReadVector3(keyframeJson.value("translation", json::array()), joints_[static_cast<size_t>(jointIndex)].translation);
+                    keyframe.rotation = ReadVector3(keyframeJson.value("rotation", json::array()), joints_[static_cast<size_t>(jointIndex)].rotation);
+                    keyframe.scale = ReadVector3(keyframeJson.value("scale", json::array()), joints_[static_cast<size_t>(jointIndex)].scale);
+                    keyframe.rotationQuat = ReadQuaternion(keyframeJson.value("rotationQuat", json::array()), joints_[static_cast<size_t>(jointIndex)].rotationQuat);
+                    keyframe.isQuaternion = keyframeJson.value("isQuaternion", false);
+                    jointAnimation.keyframes.push_back(keyframe);
+                }
+                SortKeyframes(jointAnimation);
+            }
+        }
+
+        if (motions_.empty()) {
+            motions_.push_back(loadedMotion);
+            activeMotionIndex_ = 0;
+        } else if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
+            motions_[static_cast<size_t>(activeMotionIndex_)] = loadedMotion;
+        } else {
+            motions_.push_back(loadedMotion);
+            activeMotionIndex_ = static_cast<int>(motions_.size()) - 1;
+        }
+
+        ApplyMotion(0.0f);
+        return true;
+    } catch (const std::exception& e) {
+        OutputDebugStringA(("LoadMotion failed: " + std::string(e.what()) + "\n").c_str());
+        return false;
+    }
 }
 
 MotionData& SkinnedModel::GetMotionData() {
@@ -680,11 +892,43 @@ MotionData& SkinnedModel::GetMotionData() {
         motions_.push_back(MotionData{"Motion_0", 2.0f, {}});
         activeMotionIndex_ = 0;
     }
+    if (activeMotionIndex_ < 0 || activeMotionIndex_ >= static_cast<int>(motions_.size())) {
+        activeMotionIndex_ = 0;
+    }
     return motions_[activeMotionIndex_];
 }
 
+const MotionData& SkinnedModel::GetMotionData() const {
+    static const MotionData emptyMotion{ "Motion_0", 2.0f, {} };
+    if (motions_.empty()) {
+        return emptyMotion;
+    }
+    if (activeMotionIndex_ < 0 || activeMotionIndex_ >= static_cast<int>(motions_.size())) {
+        return motions_.front();
+    }
+    return motions_[static_cast<size_t>(activeMotionIndex_)];
+}
+
 void SkinnedModel::SetActiveMotionIndex(int index) {
-    if (index >= 0 && index < motions_.size()) {
+    if (index >= 0 && index < static_cast<int>(motions_.size())) {
         activeMotionIndex_ = index;
     }
+}
+
+void SkinnedModel::SetActiveMotionName(const std::string& name) {
+    GetMotionData().name = name.empty() ? "CustomMotion" : name;
+}
+
+void SkinnedModel::PlayAnimation(const std::string& animationName) {
+    for (size_t i = 0; i < motions_.size(); ++i) {
+        if (motions_[i].name == animationName) {
+            activeMotionIndex_ = static_cast<int>(i);
+            ApplyMotion(0.0f);
+            return;
+        }
+    }
+}
+
+void SkinnedModel::EvaluateAnimation(float time) {
+    ApplyMotion(time);
 }

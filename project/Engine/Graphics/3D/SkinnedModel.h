@@ -29,9 +29,16 @@ struct Joint {
     Quaternion rotationQuat = { 0.0f, 0.0f, 0.0f, 1.0f }; // クォータニオン回転
     bool isQuaternion = false; // クォータニオンでの更新を行うか
 
+    Vector3 restTranslation = { 0.0f, 0.0f, 0.0f };
+    Vector3 restRotation = { 0.0f, 0.0f, 0.0f };
+    Vector3 restScale = { 1.0f, 1.0f, 1.0f };
+    Quaternion restRotationQuat = { 0.0f, 0.0f, 0.0f, 1.0f };
+    bool restIsQuaternion = false;
+
     Matrix4x4 localMatrix;
     Matrix4x4 globalMatrix;
     Matrix4x4 offsetMatrix; // Bind Poseのグローバル行列の逆行列
+    Matrix4x4 externalParentMatrix; // skin外の親Node変換
 
     int parentIndex = -1;
     std::vector<int> childIndices;
@@ -113,6 +120,7 @@ public:
     void SetActiveMotionIndex(int index);
     const std::vector<MotionData>& GetMotions() const { return motions_; }
     const std::string& GetActiveMotionName() const { return GetMotionData().name; }
+    void SetActiveMotionName(const std::string& name);
     float GetMotionDuration() const;
     void SetMotionDuration(float duration);
 
@@ -134,6 +142,7 @@ public:
 private:
     void CreateHumanoidSkeleton();
     void BuildJointMetadata();
+    void CaptureRestPose();
     void GenerateHumanoidMesh();
     void AddCubeMesh(const Vector3& center, const Vector3& size, int jointIndex);
     void SmoothWeights();
@@ -158,6 +167,7 @@ private:
 
     std::vector<MotionData> motions_;               // 読み込まれたアニメーションデータ
     int activeMotionIndex_ = -1;                    // 現在再生中のアニメーションインデックス
+    bool restPoseCaptured_ = false;
 };
 
 

@@ -194,6 +194,9 @@ public:
         }
     }
 
+    SkinnedObject* GetSkinnedObject() const { return skinnedObject_.get(); }
+    bool IsSkinned() const { return isSkinned_; }
+
     // リスポーン位置 (public: StageRespawnController から直接セットされる)
     Vector3 respawnPosition = { 0.0f, 1.5f, 0.0f };
 

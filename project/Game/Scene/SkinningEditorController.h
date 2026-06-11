@@ -147,6 +147,10 @@ private:
     int gltfStartIndex_ = 0;  ///< glTF ファイルが始まるインデックス (スキャン後に確定)
     int selectedModelIndex_   = 0; ///< 現在プレビュー中のモデルインデックス
     int activeGameModelIndex_ = 0; ///< ゲームに反映済みのモデルインデックス
+    char motionName_[128] = "CustomMotion";
+    char motionPath_[256] = "Resources/Animations/custom_motion.json";
+    std::string motionStatus_;
+    bool hasCustomMotionFile_ = false;
 
     // ========== 非所有ポインタ (依存参照) ==========
 

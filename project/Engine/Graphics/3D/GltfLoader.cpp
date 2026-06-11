@@ -57,7 +57,117 @@ namespace {
         joint.localMatrix = Math::MakeAffineMatrix(joint.scale, joint.rotationQuat, joint.translation);
         joint.globalMatrix = joint.localMatrix;
         joint.offsetMatrix = Math::MakeIdentity4x4();
+        joint.externalParentMatrix = Math::MakeIdentity4x4();
         return joint;
+    }
+
+    int FindParentNodeIndex(const tinygltf::Model& model, int childNodeIndex) {
+        for (int nodeIndex = 0; nodeIndex < static_cast<int>(model.nodes.size()); ++nodeIndex) {
+            const auto& parentNode = model.nodes[static_cast<size_t>(nodeIndex)];
+            if (std::find(parentNode.children.begin(), parentNode.children.end(), childNodeIndex) != parentNode.children.end()) {
+                return nodeIndex;
+            }
+        }
+        return -1;
+    }
+
+    bool IsSkinJointNode(const tinygltf::Skin& skin, int nodeIndex) {
+        return std::find(skin.joints.begin(), skin.joints.end(), nodeIndex) != skin.joints.end();
+    }
+
+    Vector3 ReadNodeScale(const tinygltf::Node& node) {
+        if (node.scale.size() == 3) {
+            return {
+                static_cast<float>(node.scale[0]),
+                static_cast<float>(node.scale[1]),
+                static_cast<float>(node.scale[2])
+            };
+        }
+        return { 1.0f, 1.0f, 1.0f };
+    }
+
+    Vector3 ReadNodeTranslation(const tinygltf::Node& node) {
+        if (node.translation.size() == 3) {
+            return {
+                static_cast<float>(node.translation[0]),
+                static_cast<float>(node.translation[1]),
+                static_cast<float>(node.translation[2]) * -1.0f
+            };
+        }
+        return { 0.0f, 0.0f, 0.0f };
+    }
+
+    Quaternion NormalizeQuaternion(const Quaternion& q) {
+        float length = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+        if (length <= 0.0f) {
+            return { 0.0f, 0.0f, 0.0f, 1.0f };
+        }
+        return { q.x / length, q.y / length, q.z / length, q.w / length };
+    }
+
+    Quaternion ReadNodeRotation(const tinygltf::Node& node) {
+        Quaternion rotation{ 0.0f, 0.0f, 0.0f, 1.0f };
+        if (node.rotation.size() == 4) {
+            rotation.x = static_cast<float>(node.rotation[0]);
+            rotation.y = static_cast<float>(node.rotation[1]);
+            rotation.z = static_cast<float>(node.rotation[2]);
+            rotation.w = static_cast<float>(node.rotation[3]);
+            rotation.x *= -1.0f;
+            rotation.y *= -1.0f;
+        }
+        return NormalizeQuaternion(rotation);
+    }
+
+    Matrix4x4 MakeNodeLocalMatrixRtL(const tinygltf::Node& node) {
+        return Math::MakeAffineMatrix(ReadNodeScale(node), ReadNodeRotation(node), ReadNodeTranslation(node));
+    }
+
+    Vector3 GetExternalParentScale(const tinygltf::Model& model, const tinygltf::Skin& skin, int jointNodeIndex) {
+        Vector3 scale{ 1.0f, 1.0f, 1.0f };
+        int parentNodeIndex = FindParentNodeIndex(model, jointNodeIndex);
+        while (parentNodeIndex >= 0 && !IsSkinJointNode(skin, parentNodeIndex)) {
+            Vector3 parentScale = ReadNodeScale(model.nodes[static_cast<size_t>(parentNodeIndex)]);
+            scale.x *= parentScale.x;
+            scale.y *= parentScale.y;
+            scale.z *= parentScale.z;
+            parentNodeIndex = FindParentNodeIndex(model, parentNodeIndex);
+        }
+        return scale;
+    }
+
+    Quaternion GetExternalParentRotation(const tinygltf::Model& model, const tinygltf::Skin& skin, int jointNodeIndex) {
+        Quaternion rotation{ 0.0f, 0.0f, 0.0f, 1.0f };
+        int parentNodeIndex = FindParentNodeIndex(model, jointNodeIndex);
+        while (parentNodeIndex >= 0 && !IsSkinJointNode(skin, parentNodeIndex)) {
+            Quaternion parentRotation = ReadNodeRotation(model.nodes[static_cast<size_t>(parentNodeIndex)]);
+            rotation = NormalizeQuaternion(Math::Multiply(rotation, parentRotation));
+            parentNodeIndex = FindParentNodeIndex(model, parentNodeIndex);
+        }
+        return rotation;
+    }
+
+    Matrix4x4 GetExternalParentMatrix(const tinygltf::Model& model, const tinygltf::Skin& skin, int jointNodeIndex) {
+        Matrix4x4 matrix = Math::MakeIdentity4x4();
+        int parentNodeIndex = FindParentNodeIndex(model, jointNodeIndex);
+        while (parentNodeIndex >= 0 && !IsSkinJointNode(skin, parentNodeIndex)) {
+            Matrix4x4 parentMatrix = MakeNodeLocalMatrixRtL(model.nodes[static_cast<size_t>(parentNodeIndex)]);
+            matrix = Math::Multiply(matrix, parentMatrix);
+            parentNodeIndex = FindParentNodeIndex(model, parentNodeIndex);
+        }
+        return matrix;
+    }
+
+    bool HasExternalScale(const Vector3& scale) {
+        return std::abs(scale.x - 1.0f) > 1.0e-5f ||
+               std::abs(scale.y - 1.0f) > 1.0e-5f ||
+               std::abs(scale.z - 1.0f) > 1.0e-5f;
+    }
+
+    bool HasExternalRotation(const Quaternion& rotation) {
+        return std::abs(rotation.x) > 1.0e-5f ||
+               std::abs(rotation.y) > 1.0e-5f ||
+               std::abs(rotation.z) > 1.0e-5f ||
+               std::abs(rotation.w - 1.0f) > 1.0e-5f;
     }
 }
 
@@ -171,7 +281,10 @@ bool GltfLoader::LoadGltfModel(
             rotQuat.y *= -1.0f;
 
             joint.rotation = Math::ToEuler(rotQuat);
+            joint.rotationQuat = rotQuat;
+            joint.isQuaternion = true;
             joint.localMatrix = Math::MakeAffineMatrix(joint.scale, rotQuat, joint.translation);
+            joint.externalParentMatrix = GetExternalParentMatrix(model, skin, nodeIdx);
 
             // 親インデックスの検索
             joint.parentIndex = -1;
@@ -443,7 +556,8 @@ bool GltfLoader::LoadGltfModel(
                         newKf.time = time;
                         // デフォルト初期化
                         newKf.translation = outJoints[jointIdx].translation;
-                        newKf.rotationQuat = { 0.0f, 0.0f, 0.0f, 1.0f };
+                        newKf.rotation = outJoints[jointIdx].rotation;
+                        newKf.rotationQuat = outJoints[jointIdx].rotationQuat;
                         newKf.isQuaternion = true;
                         newKf.scale = outJoints[jointIdx].scale;
                         jointAnim.keyframes.push_back(newKf);
@@ -464,6 +578,7 @@ bool GltfLoader::LoadGltfModel(
                         // Z反転
                         kf->rotationQuat.x *= -1.0f;
                         kf->rotationQuat.y *= -1.0f;
+                        kf->rotation = Math::ToEuler(kf->rotationQuat);
                         kf->isQuaternion = true;
                     } else if (channel.target_path == "scale") {
                         kf->scale.x = values[k * 3 + 0];
