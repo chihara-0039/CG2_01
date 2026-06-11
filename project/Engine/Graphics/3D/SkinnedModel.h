@@ -70,6 +70,10 @@ struct WellForGPU {
     Matrix4x4 skeletonSpaceInverseTransposeMatrix;
 };
 
+struct SkinningInformationForGPU {
+    uint32_t numVertices = 0;
+};
+
 // スキニング可能な人型モデルクラス
 class SkinnedModel {
 public:
@@ -92,11 +96,13 @@ public:
     // D3D12 描画用バッファビュー
     const D3D12_VERTEX_BUFFER_VIEW& GetVertexBufferView() const { return vertexBufferView_; }
     const D3D12_VERTEX_BUFFER_VIEW& GetInfluenceBufferView() const { return influenceBufferView_; }
+    const D3D12_VERTEX_BUFFER_VIEW& GetSkinnedVertexBufferView() const { return skinnedVertexBufferView_; }
     ID3D12Resource* GetJointBuffer() const { return jointBuffer_.Get(); }
     size_t GetVertexCount() const { return skinnedVertices_.size(); }
 
     // アニメーション/ポーズの更新とスキニング計算
     void Update(DirectXCommon* dxCommon);
+    void DispatchSkinning(DirectXCommon* dxCommon);
 
     // 描画
     void Draw(ID3D12GraphicsCommandList* commandList);
@@ -146,6 +152,8 @@ private:
     void GenerateHumanoidMesh();
     void AddCubeMesh(const Vector3& center, const Vector3& size, int jointIndex);
     void SmoothWeights();
+    void CreateComputeSkinningPipeline(DirectXCommon* dxCommon);
+    void TransitionSkinnedVertexBuffer(ID3D12GraphicsCommandList* commandList, D3D12_RESOURCE_STATES stateAfter);
 
 private:
     std::vector<Joint> joints_;
@@ -157,9 +165,17 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     Microsoft::WRL::ComPtr<ID3D12Resource> influenceBuffer_;
     Microsoft::WRL::ComPtr<ID3D12Resource> jointBuffer_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> skinnedVertexBuffer_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> skinningInformationBuffer_;
     WellForGPU* mappedPalette_ = nullptr;
+    SkinningInformationForGPU* mappedSkinningInformation_ = nullptr;
     D3D12_VERTEX_BUFFER_VIEW               vertexBufferView_{};
     D3D12_VERTEX_BUFFER_VIEW               influenceBufferView_{};
+    D3D12_VERTEX_BUFFER_VIEW               skinnedVertexBufferView_{};
+    D3D12_RESOURCE_STATES                  skinnedVertexBufferState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;
 
     std::string name_ = "SkinnedModel";
     std::unique_ptr<Model> model_;                  // デバッグ描画や互換性のために保持
