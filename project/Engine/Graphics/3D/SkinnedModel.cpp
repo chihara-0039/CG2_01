@@ -380,6 +380,7 @@ void SkinnedModel::SmoothWeights() {
 }
 
 void SkinnedModel::Update(DirectXCommon* dxCommon) {
+    (void)dxCommon;
     for (size_t i = 0; i < joints_.size(); ++i) {
         if (joints_[i].isQuaternion) {
             joints_[i].localMatrix = Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotationQuat, joints_[i].translation);
@@ -405,12 +406,47 @@ void SkinnedModel::Update(DirectXCommon* dxCommon) {
     }
 }
 
+void SkinnedModel::DispatchSkinning(DirectXCommon* dxCommon) {
+    if (!dxCommon || skinnedVertices_.empty()) {
+        return;
+    }
+
+    if (!computeRootSignature_ || !computePipelineState_) {
+        CreateComputeSkinningPipeline(dxCommon);
+    }
+    if (!computeRootSignature_ || !computePipelineState_ || !skinnedVertexBuffer_ ||
+        !vertexBuffer_ || !influenceBuffer_ || !jointBuffer_ || !skinningInformationBuffer_) {
+        return;
+    }
+
+    auto* commandList = dxCommon->GetCommandList();
+    TransitionSkinnedVertexBuffer(commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+    commandList->SetComputeRootSignature(computeRootSignature_.Get());
+    commandList->SetPipelineState(computePipelineState_.Get());
+    commandList->SetComputeRootShaderResourceView(0, jointBuffer_->GetGPUVirtualAddress());
+    commandList->SetComputeRootShaderResourceView(1, vertexBuffer_->GetGPUVirtualAddress());
+    commandList->SetComputeRootShaderResourceView(2, influenceBuffer_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(3, skinnedVertexBuffer_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(4, skinningInformationBuffer_->GetGPUVirtualAddress());
+
+    constexpr UINT kNumThreads = 1024;
+    UINT threadGroupCount = static_cast<UINT>((skinnedVertices_.size() + kNumThreads - 1) / kNumThreads);
+    commandList->Dispatch(threadGroupCount, 1, 1);
+
+    TransitionSkinnedVertexBuffer(commandList, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+}
+
 void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
     if (skinnedVertices_.empty()) return;
 
     if (jointBuffer_) {
         jointBuffer_->Unmap(0, nullptr);
         mappedPalette_ = nullptr;
+    }
+    if (skinningInformationBuffer_) {
+        skinningInformationBuffer_->Unmap(0, nullptr);
+        mappedSkinningInformation_ = nullptr;
     }
 
     auto device = dxCommon->GetDevice();
@@ -483,6 +519,132 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
             }
         }
     }
+
+    D3D12_HEAP_PROPERTIES defaultHeapProps = {};
+    defaultHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+    defaultHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    defaultHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    defaultHeapProps.CreationNodeMask = 1;
+    defaultHeapProps.VisibleNodeMask = 1;
+
+    D3D12_RESOURCE_DESC skinnedVertexDesc = resDesc;
+    skinnedVertexDesc.Width = sizeVB;
+    skinnedVertexDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+    hr = device->CreateCommittedResource(
+        &defaultHeapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &skinnedVertexDesc,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        nullptr,
+        IID_PPV_ARGS(&skinnedVertexBuffer_));
+
+    if (SUCCEEDED(hr)) {
+        skinnedVertexBufferState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        skinnedVertexBufferView_.BufferLocation = skinnedVertexBuffer_->GetGPUVirtualAddress();
+        skinnedVertexBufferView_.SizeInBytes = sizeVB;
+        skinnedVertexBufferView_.StrideInBytes = sizeof(ModelVertexData);
+    }
+
+    D3D12_RESOURCE_DESC skinningInfoDesc = resDesc;
+    skinningInfoDesc.Width = (sizeof(SkinningInformationForGPU) + 0xff) & ~0xff;
+    skinningInfoDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+    hr = device->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &skinningInfoDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&skinningInformationBuffer_));
+
+    if (SUCCEEDED(hr)) {
+        skinningInformationBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&mappedSkinningInformation_));
+        mappedSkinningInformation_->numVertices = static_cast<uint32_t>(skinnedVertices_.size());
+    }
+    
+    CreateComputeSkinningPipeline(dxCommon);
+}
+
+void SkinnedModel::CreateComputeSkinningPipeline(DirectXCommon* dxCommon) {
+    if (!dxCommon || computeRootSignature_ || computePipelineState_) {
+        return;
+    }
+
+    auto* device = dxCommon->GetDevice();
+
+    D3D12_ROOT_PARAMETER rootParameters[5] = {};
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameters[0].Descriptor.ShaderRegister = 0;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameters[1].Descriptor.ShaderRegister = 1;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameters[2].Descriptor.ShaderRegister = 2;
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    rootParameters[3].Descriptor.ShaderRegister = 0;
+    rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+    rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[4].Descriptor.ShaderRegister = 0;
+    rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+    rootSignatureDesc.NumParameters = _countof(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
+
+    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+    HRESULT hr = D3D12SerializeRootSignature(
+        &rootSignatureDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &signatureBlob,
+        &errorBlob);
+    if (FAILED(hr)) {
+        if (errorBlob) {
+            OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
+        }
+        assert(false);
+        return;
+    }
+
+    hr = device->CreateRootSignature(
+        0,
+        signatureBlob->GetBufferPointer(),
+        signatureBlob->GetBufferSize(),
+        IID_PPV_ARGS(&computeRootSignature_));
+    assert(SUCCEEDED(hr));
+
+    auto csBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Skinning.CS.hlsl", L"cs_6_0");
+    assert(csBlob);
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC computePipelineStateDesc = {};
+    computePipelineStateDesc.pRootSignature = computeRootSignature_.Get();
+    computePipelineStateDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
+
+    hr = device->CreateComputePipelineState(&computePipelineStateDesc, IID_PPV_ARGS(&computePipelineState_));
+    assert(SUCCEEDED(hr));
+}
+
+void SkinnedModel::TransitionSkinnedVertexBuffer(ID3D12GraphicsCommandList* commandList, D3D12_RESOURCE_STATES stateAfter) {
+    if (!commandList || !skinnedVertexBuffer_ || skinnedVertexBufferState_ == stateAfter) {
+        return;
+    }
+
+    D3D12_RESOURCE_BARRIER barrier = {};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = skinnedVertexBuffer_.Get();
+    barrier.Transition.StateBefore = skinnedVertexBufferState_;
+    barrier.Transition.StateAfter = stateAfter;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    commandList->ResourceBarrier(1, &barrier);
+
+    skinnedVertexBufferState_ = stateAfter;
 }
 
 void SkinnedModel::ApplyTestAnimation(float time, float speed) {

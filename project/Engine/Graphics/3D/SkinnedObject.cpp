@@ -56,11 +56,17 @@ void SkinnedObject::Draw() {
     if (!skinnedModel_ || !object3d_) return;
     
     auto commandList = object3d_->GetObject3dCommon()->GetDxCommon()->GetCommandList();
+
+    skinnedModel_->DispatchSkinning(object3d_->GetObject3dCommon()->GetDxCommon());
     
-    // パイプライン設定
-    if (object3d_->GetObject3dCommon()->GetSkinnedPipelineState()) {
-        commandList->SetPipelineState(object3d_->GetObject3dCommon()->GetSkinnedPipelineState());
+    auto* object3dCommon = object3d_->GetObject3dCommon();
+    if (object3dCommon->GetRootSignature()) {
+        commandList->SetGraphicsRootSignature(object3dCommon->GetRootSignature());
     }
+    if (object3dCommon->GetPipelineState()) {
+        commandList->SetPipelineState(object3dCommon->GetPipelineState());
+    }
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // 0. マテリアル
     commandList->SetGraphicsRootConstantBufferView(0, object3d_->GetMaterialResource()->GetGPUVirtualAddress());
@@ -76,24 +82,10 @@ void SkinnedObject::Draw() {
         auto environmentHandle = object3d_->GetObject3dCommon()->GetTextureManager()->GetSrvHandleGPU(object3d_->GetObject3dCommon()->GetEnvironmentTextureHandle());
         commandList->SetGraphicsRootDescriptorTable(6, environmentHandle);
     }
-    
-    // 5. ジョイント行列バッファ
-    if (skinnedModel_->GetJointBuffer()) {
-        commandList->SetGraphicsRootShaderResourceView(5, skinnedModel_->GetJointBuffer()->GetGPUVirtualAddress());
-    }
-    
-    // 頂点情報とInfluence情報を別スロットのVBとしてバインドする
-    D3D12_VERTEX_BUFFER_VIEW vbViews[2] = {
-        skinnedModel_->GetVertexBufferView(),
-        skinnedModel_->GetInfluenceBufferView()
-    };
-    commandList->IASetVertexBuffers(0, 2, vbViews);
+
+    const D3D12_VERTEX_BUFFER_VIEW& vbView = skinnedModel_->GetSkinnedVertexBufferView();
+    commandList->IASetVertexBuffers(0, 1, &vbView);
     commandList->DrawInstanced(static_cast<UINT>(skinnedModel_->GetVertexCount()), 1, 0, 0);
-    
-    // パイプラインを元に戻す
-    if (object3d_->GetObject3dCommon()->GetPipelineState()) {
-        commandList->SetPipelineState(object3d_->GetObject3dCommon()->GetPipelineState());
-    }
 }
 
 void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {    if (!skinnedModel_ || !object3d_) return;
