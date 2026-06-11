@@ -46,6 +46,19 @@ public: // サブクラスなど
         Vector3 normal;
     };
 
+    struct GPUParticle {
+        Vector3 translate;
+        Vector3 scale;
+        float lifeTime;
+        float currentTime;
+        Vector4 color;
+    };
+
+    struct PerView {
+        Matrix4x4 viewProjection;
+        Matrix4x4 billboardMatrix;
+    };
+
     struct WeatherEmitter {
         bool active = false;
         Vector3 center = {0,0,0};
@@ -95,6 +108,11 @@ private: // 内部処理
     void CreateMesh(); // 板ポリゴンの作成
     void CreateRingMesh();
     void CreateCylinderMesh();
+    void CreateGPUParticleResources();
+    void CreateGPUParticlePipeline();
+    void InitializeGPUParticles();
+    void DrawGPUParticles();
+    void TransitionGPUParticleResource(D3D12_RESOURCE_STATES stateAfter);
 
 private: // メンバ変数
     DirectXCommon* dxCommon_ = nullptr;
@@ -104,6 +122,9 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> primitivePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> gpuParticlePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> initializeParticleRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> initializeParticlePipelineState_;
 
     // モデルデータ（板ポリ）
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
@@ -119,6 +140,14 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12Resource> cylinderVertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW cylinderVertexBufferView_{};
     uint32_t cylinderVertexCount_ = 0;
+
+    // GPU Particle
+    static const uint32_t kMaxGPUParticles = 1024;
+    Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> perViewResource_;
+    PerView* perViewData_ = nullptr;
+    D3D12_RESOURCE_STATES gpuParticleResourceState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    bool gpuParticlesInitialized_ = false;
 
     // インスタンシング用データ
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingBuffer_;
