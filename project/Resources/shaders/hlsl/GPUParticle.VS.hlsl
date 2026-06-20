@@ -10,6 +10,7 @@ struct VertexShaderOutput
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
     float4 color : COLOR0;
+    nointerpolation float shape : TEXCOORD1;
 };
 
 struct Particle
@@ -46,5 +47,6 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
     output.position = mul(worldPosition, gPerView.viewProjection);
     output.texcoord = input.texcoord;
     output.color = particle.color;
+    output.shape = 0.0f;
     return output;
 }

@@ -16,7 +16,11 @@ struct Particle {
         Fall,
         Splash,
         Ring,
-        Cylinder
+        Cylinder,
+        Lightning,
+        StormCloud,
+        StormRain,
+        StormWind
     };
     Type type = Type::Fall;
     Transform transform; // 位置、回転、スケール
@@ -37,6 +41,7 @@ public: // サブクラスなど
     struct InstanceData {
         Matrix4x4 WVP;
         Vector4 color;
+        float shape = 0.0f;
     };
 
     // 頂点データ構造（板ポリゴン用）
@@ -72,6 +77,116 @@ public: // サブクラスなど
         Vector4 color = {1,1,1,1};
     };
 
+    struct HitEffectSettings {
+        float size = 1.0f;
+        float brightness = 1.0f;
+        float lifeScale = 1.0f;
+        float slashAngle = -0.2f;
+        float slashSpread = 1.48f;
+        int slashCount = 11;
+        int sparkCount = 48;
+        float sparkSpeed = 1.0f;
+        float sparkLength = 1.0f;
+        float scatterRadius = 1.0f;
+        float blueRatio = 0.62f;
+        float ringPower = 1.0f;
+        float corePower = 1.0f;
+        float crossPower = 1.0f;
+        float pillarPower = 1.0f;
+        int lightningCount = 0;
+        int lightningSegments = 4;
+        float lightningLength = 1.0f;
+        float lightningSpread = 1.0f;
+        float lightningPower = 1.0f;
+        float lightningWidth = 1.0f;
+        float lightningGlowWidth = 3.0f;
+        float lightningGlowOpacity = 0.22f;
+        int lightningBranchCount = 3;
+        float lightningBranchLength = 0.4f;
+        float lightningBranchSpread = 0.8f;
+        float lightningBranchWidth = 0.42f;
+        int lightningMode = 0;
+        float lightningDirection = 0.0f;
+        float lightningDirectionSpread = 0.35f;
+        bool randomizePosition = true;
+        bool randomizeDirection = true;
+        bool randomizeAngle = false;
+        float angleRandomRange = 0.5f;
+        bool randomizeScale = true;
+        bool randomizeLifetime = true;
+        bool randomizeColor = true;
+        Vector4 coreColor = { 0.78f, 0.92f, 1.0f, 1.0f };
+        Vector4 slashColor = { 0.55f, 0.85f, 1.0f, 1.0f };
+        Vector4 sparkColor = { 0.55f, 0.85f, 1.0f, 1.0f };
+        Vector4 sparkSecondaryColor = { 1.0f, 0.55f, 0.18f, 1.0f };
+        Vector4 ringColor = { 0.42f, 0.78f, 1.0f, 1.0f };
+        Vector4 crossColor = { 0.72f, 0.90f, 1.0f, 1.0f };
+        Vector4 pillarColor = { 0.35f, 0.68f, 1.0f, 1.0f };
+        Vector4 lightningColor = { 0.48f, 0.88f, 1.0f, 1.0f };
+        Vector4 lightningGlowColor = { 0.20f, 0.34f, 1.0f, 1.0f };
+        // Legacy palette fields retained for loading older preset files.
+        Vector4 coolColor = { 0.55f, 0.85f, 1.0f, 1.0f };
+        Vector4 warmColor = { 1.0f, 0.55f, 0.18f, 1.0f };
+    };
+
+    struct StormEffectSettings {
+        float cloudAreaX = 6.5f;
+        float cloudAreaZ = 4.5f;
+        float cloudHeight = 4.2f;
+        float cloudEmitRate = 5.5f;
+        float cloudLife = 5.5f;
+        float cloudSize = 1.0f;
+        Vector4 cloudColor = { 0.015f, 0.025f, 0.075f, 0.72f };
+        bool randomizeCloudPosition = true;
+        bool randomizeCloudSize = true;
+
+        float rainAreaX = 6.5f;
+        float rainAreaZ = 4.5f;
+        float rainEmitRate = 72.0f;
+        float rainSpeed = 1.0f;
+        float rainLength = 1.0f;
+        Vector4 rainColor = { 0.32f, 0.52f, 0.82f, 0.48f };
+        bool randomizeRainPosition = true;
+        bool randomizeRainSpeed = true;
+
+        float windEmitRate = 12.5f;
+        float windSpeed = 1.0f;
+        float windLength = 1.0f;
+        Vector4 windColor = { 0.46f, 0.68f, 0.90f, 0.25f };
+
+        float lightningIntervalMin = 0.65f;
+        float lightningIntervalMax = 2.10f;
+        float lightningFrequency = 1.0f;
+        float lightningAreaX = 3.3f;
+        float lightningAreaZ = 1.8f;
+        float lightningStrikeSize = 1.0f;
+        int lightningSimultaneousCount = 1;
+        float lightningSimultaneousSpread = 2.0f;
+        int lightningBurstCount = 2;
+        float lightningBurstInterval = 0.12f;
+        int lightningCount = 3;
+        int lightningSegments = 8;
+        float lightningLength = 5.2f;
+        float lightningSpread = 0.7f;
+        float lightningPower = 1.6f;
+        float lightningWidth = 1.35f;
+        float lightningGlowWidth = 5.0f;
+        float lightningGlowOpacity = 0.22f;
+        int lightningBranchCount = 5;
+        float lightningBranchLength = 0.42f;
+        float lightningBranchSpread = 0.85f;
+        float lightningBranchWidth = 0.45f;
+        Vector4 lightningColor = { 0.62f, 0.82f, 1.0f, 1.0f };
+        Vector4 lightningGlowColor = { 0.18f, 0.30f, 1.0f, 1.0f };
+        float pointLightPower = 11.0f;
+        bool randomizeLightningPosition = true;
+        bool randomizeLightningInterval = true;
+        bool randomizeLightningDirection = true;
+        bool randomizeLightningSize = true;
+        bool randomizeLightningBurstCount = true;
+        bool randomizeLightningBranchCount = true;
+    };
+
 public: // メンバ関数
     // 初期化
     void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager);
@@ -89,8 +204,22 @@ public: // メンバ関数
     // 飛沫を生成する（ブロック衝突時など）
     void EmitSplash(const Vector3& pos, const Vector4& color);
 
+    // 評価課題用: ヒット時のフラッシュ・スパーク・衝撃波をまとめて生成する
+    void EmitHitEffect(const Vector3& pos);
+    void EmitHitEffect(const Vector3& pos, const HitEffectSettings& settings);
+
+    void SetStormActive(bool active, const Vector3& center = { 0.0f, 0.0f, 0.0f });
+    bool IsStormActive() const { return stormActive_; }
+    bool ConsumeStormLightningFlash();
+    const Vector3& GetStormLightningPosition() const { return stormLightningPosition_; }
+    StormEffectSettings& GetStormSettings() { return stormSettings_; }
+    const StormEffectSettings& GetStormSettings() const { return stormSettings_; }
+
     // テクスチャ設定
     void SetTexture(uint32_t textureHandle) { textureHandle_ = textureHandle; }
+
+    void SetDrawGPUParticleSphere(bool draw) { drawGPUParticleSphere_ = draw; }
+    bool GetDrawGPUParticleSphere() const { return drawGPUParticleSphere_; }
 
     // 天候エミッターの取得・設定
     WeatherEmitter& GetWeatherEmitter() { return weatherEmitter_; }
@@ -98,6 +227,7 @@ public: // メンバ関数
     void ClearParticles() {
         particles_.clear();
         planeInstanceCount_ = 0;
+        cloudInstanceCount_ = 0;
         ringInstanceCount_ = 0;
         cylinderInstanceCount_ = 0;
     }
@@ -108,6 +238,7 @@ private: // 内部処理
     void CreateMesh(); // 板ポリゴンの作成
     void CreateRingMesh();
     void CreateCylinderMesh();
+    void EmitStormRainSplash(const Vector3& pos, const Vector4& color);
     void CreateGPUParticleResources();
     void CreateGPUParticlePipeline();
     void InitializeGPUParticles();
@@ -122,6 +253,7 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> primitivePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> cloudPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> gpuParticlePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> initializeParticleRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> initializeParticlePipelineState_;
@@ -148,12 +280,18 @@ private: // メンバ変数
     PerView* perViewData_ = nullptr;
     D3D12_RESOURCE_STATES gpuParticleResourceState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     bool gpuParticlesInitialized_ = false;
+    bool drawGPUParticleSphere_ = true;
 
     // インスタンシング用データ
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingBuffer_;
     D3D12_VERTEX_BUFFER_VIEW instancingBufferView_{};
     InstanceData* instancingDataMapped_ = nullptr;
     uint32_t planeInstanceCount_ = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> cloudInstancingBuffer_;
+    D3D12_VERTEX_BUFFER_VIEW cloudInstancingBufferView_{};
+    InstanceData* cloudInstancingDataMapped_ = nullptr;
+    uint32_t cloudInstanceCount_ = 0;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> ringInstancingBuffer_;
     D3D12_VERTEX_BUFFER_VIEW ringInstancingBufferView_{};
@@ -173,5 +311,17 @@ private: // メンバ変数
 
     // 天候用エミッター
     WeatherEmitter weatherEmitter_;
+
+    bool stormActive_ = false;
+    bool stormLightningFlash_ = false;
+    Vector3 stormCenter_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 stormLightningPosition_ = { 0.0f, 0.5f, 0.0f };
+    float stormCloudEmitTimer_ = 0.0f;
+    float stormRainEmitTimer_ = 0.0f;
+    float stormWindEmitTimer_ = 0.0f;
+    float stormLightningTimer_ = 1.0f;
+    float stormLightningBurstTimer_ = 0.0f;
+    int stormLightningBurstsRemaining_ = 0;
+    StormEffectSettings stormSettings_{};
 };
 

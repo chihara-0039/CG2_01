@@ -80,6 +80,9 @@ public:
     //  - ビューポートとシザー矩形をセット
     // -------------------------------------------------------
     void PreDraw(bool clearDepth = true);
+    void SetClearColor(float r, float g, float b, float a = 1.0f) {
+        clearColor_[0] = r; clearColor_[1] = g; clearColor_[2] = b; clearColor_[3] = a;
+    }
 
     // -------------------------------------------------------
     //  描画後処理 (フレームの終了)
@@ -144,6 +147,7 @@ private:
 
 private:
     WinApp* winApp_ = nullptr;
+    float clearColor_[4] = { 0.1f, 0.25f, 0.5f, 1.0f };
 
     // ── DirectX 主要オブジェクト ──────────────────────────
     ComPtr<IDXGIFactory7>              dxgiFactory_;      // GPU の列挙と SwapChain 生成に使う

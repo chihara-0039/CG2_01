@@ -5,6 +5,8 @@
 #include "BlockInventory.h"
 #include "MyMath.h"
 
+#include <functional>
+
 // シャボン玉取得処理専用クラス
 class BubblePickupController {
 public:
@@ -17,6 +19,8 @@ public:
     // プレイヤー位置を渡して、近くのシャボン玉を取得する
     void Update(const Vector3& playerPosition);
 
+    void SetCollectCallback(std::function<void(const Vector3&)> callback);
+
 private:
     // ワールド座標から近いマス座標を作る
     Int3 ToGridIndex(const Vector3& position) const;
@@ -28,4 +32,5 @@ private:
     StageMap* stageMap_ = nullptr;
     StageRenderer* stageRenderer_ = nullptr;
     BlockInventory* inventory_ = nullptr;
+    std::function<void(const Vector3&)> collectCallback_;
 };

@@ -1,5 +1,6 @@
 ﻿#include "ParticleManager.h"
 #include "StageMap.h"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <random>
@@ -48,6 +49,13 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
         instancingBufferView_.SizeInBytes = size;
         instancingBufferView_.StrideInBytes = sizeof(InstanceData);
 
+        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&cloudInstancingBuffer_));
+        assert(SUCCEEDED(hr));
+        cloudInstancingBuffer_->Map(0, nullptr, (void**)&cloudInstancingDataMapped_);
+        cloudInstancingBufferView_.BufferLocation = cloudInstancingBuffer_->GetGPUVirtualAddress();
+        cloudInstancingBufferView_.SizeInBytes = size;
+        cloudInstancingBufferView_.StrideInBytes = sizeof(InstanceData);
+
         hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&ringInstancingBuffer_));
         assert(SUCCEEDED(hr));
 
@@ -69,6 +77,36 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
 
     CreateGPUParticleResources();
     CreateGPUParticlePipeline();
+}
+
+void ParticleManager::SetStormActive(bool active, const Vector3& center) {
+    if (stormActive_ == active && (!active ||
+        (stormCenter_.x == center.x && stormCenter_.y == center.y && stormCenter_.z == center.z))) {
+        return;
+    }
+    stormActive_ = active;
+    stormCenter_ = center;
+    stormCloudEmitTimer_ = 0.18f;
+    stormRainEmitTimer_ = 0.0f;
+    stormWindEmitTimer_ = 0.0f;
+    stormLightningTimer_ = 0.35f;
+    stormLightningBurstTimer_ = 0.0f;
+    stormLightningBurstsRemaining_ = 0;
+    stormLightningFlash_ = false;
+
+    if (!active) {
+        particles_.remove_if([](const Particle& particle) {
+            return particle.type == Particle::Type::StormCloud ||
+                   particle.type == Particle::Type::StormRain ||
+                   particle.type == Particle::Type::StormWind;
+        });
+    }
+}
+
+bool ParticleManager::ConsumeStormLightningFlash() {
+    const bool flashed = stormLightningFlash_;
+    stormLightningFlash_ = false;
+    return flashed;
 }
 
 void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const Vector3& playerPos, StageMap* stageMap) {
@@ -114,6 +152,152 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         }
     }
 
+    // 暴風雷: 雲・雨・風を継続生成し、間欠的に枝分かれ雷を落とす。
+    if (stormActive_) {
+        auto pushStormParticle = [&](Particle::Type type, const Vector3& position, const Vector3& scale,
+                                     const Vector3& velocity, const Vector4& color, float life, float rotateZ = 0.0f) {
+            if (particles_.size() >= kMaxParticles) return;
+            Particle particle;
+            particle.type = type;
+            particle.transform.translate = position;
+            particle.transform.scale = scale;
+            particle.transform.rotate = { 0.0f, 0.0f, rotateZ };
+            particle.velocity = velocity;
+            particle.color = color;
+            particle.initialAlpha = color.w;
+            particle.lifeTime = 0.0f;
+            particle.maxTime = life;
+            particles_.push_back(particle);
+        };
+
+        std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
+        std::uniform_real_distribution<float> zeroOne(0.0f, 1.0f);
+        const StormEffectSettings& storm = stormSettings_;
+
+        stormCloudEmitTimer_ += deltaTime;
+        const float cloudInterval = 1.0f / (std::max)(storm.cloudEmitRate, 0.1f);
+        while (stormCloudEmitTimer_ >= cloudInterval) {
+            stormCloudEmitTimer_ -= cloudInterval;
+            const float cloudScale = storm.randomizeCloudSize ? 0.75f + zeroOne(engine) * 0.8f : 1.0f;
+            const float cloudX = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaX : 0.0f;
+            const float cloudZ = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaZ : 0.0f;
+            pushStormParticle(Particle::Type::StormCloud,
+                { stormCenter_.x + cloudX, stormCenter_.y + storm.cloudHeight + zeroOne(engine) * 2.2f, stormCenter_.z + cloudZ },
+                { (2.6f + zeroOne(engine) * 2.6f) * cloudScale * storm.cloudSize, (1.1f + zeroOne(engine) * 1.2f) * cloudScale * storm.cloudSize, 1.0f },
+                { 0.004f + zeroOne(engine) * 0.006f, unit(engine) * 0.0007f, unit(engine) * 0.001f },
+                storm.cloudColor,
+                storm.cloudLife * (0.82f + zeroOne(engine) * 0.36f), unit(engine) * 0.16f);
+        }
+
+        stormRainEmitTimer_ += deltaTime;
+        const float rainInterval = 1.0f / (std::max)(storm.rainEmitRate, 0.1f);
+        while (stormRainEmitTimer_ >= rainInterval) {
+            stormRainEmitTimer_ -= rainInterval;
+            const float rainX = storm.randomizeRainPosition ? unit(engine) * storm.rainAreaX : 0.0f;
+            const float rainZ = storm.randomizeRainPosition ? unit(engine) * storm.rainAreaZ : 0.0f;
+            const float rainSpeedVariation = storm.randomizeRainSpeed ? 0.78f + zeroOne(engine) * 0.44f : 1.0f;
+            pushStormParticle(Particle::Type::StormRain,
+                { stormCenter_.x + rainX, stormCenter_.y + 2.0f + zeroOne(engine) * 5.5f, stormCenter_.z + rainZ },
+                { 0.018f, (0.42f + zeroOne(engine) * 0.48f) * storm.rainLength, 1.0f },
+                { (0.027f + zeroOne(engine) * 0.009f) * storm.rainSpeed * rainSpeedVariation, -0.132f * storm.rainSpeed * rainSpeedVariation, unit(engine) * 0.004f },
+                storm.rainColor,
+                0.9f + zeroOne(engine) * 0.65f, -0.14f);
+        }
+
+        stormWindEmitTimer_ += deltaTime;
+        const float windInterval = 1.0f / (std::max)(storm.windEmitRate, 0.1f);
+        while (stormWindEmitTimer_ >= windInterval) {
+            stormWindEmitTimer_ -= windInterval;
+            pushStormParticle(Particle::Type::StormWind,
+                { stormCenter_.x - storm.rainAreaX + zeroOne(engine) * 2.0f, stormCenter_.y + 0.4f + zeroOne(engine) * 3.8f, stormCenter_.z + unit(engine) * storm.rainAreaZ },
+                { 0.026f + zeroOne(engine) * 0.025f, (1.2f + zeroOne(engine) * 2.2f) * storm.windLength, 1.0f },
+                { (0.075f + zeroOne(engine) * 0.055f) * storm.windSpeed, 0.002f + unit(engine) * 0.003f, unit(engine) * 0.003f },
+                storm.windColor,
+                1.1f + zeroOne(engine) * 0.7f, 1.5707963f);
+        }
+
+        stormLightningTimer_ -= deltaTime;
+        stormLightningBurstTimer_ -= deltaTime;
+        bool emitLightningGroup = false;
+        if (stormLightningBurstsRemaining_ > 0 && stormLightningBurstTimer_ <= 0.0f) {
+            emitLightningGroup = true;
+            --stormLightningBurstsRemaining_;
+            stormLightningBurstTimer_ = (std::max)(storm.lightningBurstInterval, 0.02f);
+        } else if (stormLightningTimer_ <= 0.0f) {
+            emitLightningGroup = true;
+            const int configuredBurstCount = std::clamp(storm.lightningBurstCount, 1, 12);
+            const int burstCount = storm.randomizeLightningBurstCount
+                ? (std::min)(configuredBurstCount,
+                    1 + static_cast<int>(zeroOne(engine) * static_cast<float>(configuredBurstCount)))
+                : configuredBurstCount;
+            stormLightningBurstsRemaining_ = burstCount - 1;
+            stormLightningBurstTimer_ = (std::max)(storm.lightningBurstInterval, 0.02f);
+
+            const float minInterval = (std::min)(storm.lightningIntervalMin, storm.lightningIntervalMax);
+            const float maxInterval = (std::max)(storm.lightningIntervalMin, storm.lightningIntervalMax);
+            const float frequency = (std::max)(storm.lightningFrequency, 0.05f);
+            const float nextInterval = storm.randomizeLightningInterval
+                ? minInterval + zeroOne(engine) * (maxInterval - minInterval)
+                : (minInterval + maxInterval) * 0.5f;
+            stormLightningTimer_ = nextInterval / frequency + storm.lightningBurstInterval * static_cast<float>(burstCount - 1);
+        }
+
+        if (emitLightningGroup) {
+            const int simultaneousCount = std::clamp(storm.lightningSimultaneousCount, 1, 8);
+            for (int strikeIndex = 0; strikeIndex < simultaneousCount; ++strikeIndex) {
+                HitEffectSettings lightning;
+            lightning.brightness = 2.4f;
+            lightning.lifeScale = 1.15f;
+            lightning.size = storm.lightningStrikeSize * (storm.randomizeLightningSize ? 0.72f + zeroOne(engine) * 0.56f : 1.0f);
+            lightning.slashCount = 1;
+            lightning.slashSpread = 0.2f;
+            lightning.sparkCount = 18;
+            lightning.sparkSpeed = 1.8f;
+            lightning.sparkLength = 1.4f;
+            lightning.ringPower = 0.0f;
+            lightning.corePower = 0.18f;
+            lightning.crossPower = 0.0f;
+            lightning.pillarPower = 0.0f;
+            lightning.lightningCount = storm.lightningCount;
+            lightning.lightningSegments = storm.lightningSegments;
+            lightning.lightningLength = storm.lightningLength;
+            lightning.lightningSpread = storm.lightningSpread;
+            lightning.lightningPower = storm.lightningPower;
+            lightning.lightningWidth = storm.lightningWidth;
+            lightning.lightningGlowWidth = storm.lightningGlowWidth;
+            lightning.lightningGlowOpacity = storm.lightningGlowOpacity;
+            lightning.lightningBranchCount = storm.lightningBranchCount;
+            if (storm.randomizeLightningBranchCount && storm.lightningBranchCount > 0) {
+                lightning.lightningBranchCount = (std::min)(storm.lightningBranchCount,
+                    1 + static_cast<int>(zeroOne(engine) * static_cast<float>(storm.lightningBranchCount)));
+            }
+            lightning.lightningBranchLength = storm.lightningBranchLength;
+            lightning.lightningBranchSpread = storm.lightningBranchSpread;
+            lightning.lightningBranchWidth = storm.lightningBranchWidth;
+            lightning.lightningMode = 3;
+            lightning.lightningDirection = -1.5707963f;
+            lightning.lightningDirectionSpread = 0.16f;
+            lightning.randomizeDirection = storm.randomizeLightningDirection;
+            lightning.lightningColor = storm.lightningColor;
+            lightning.lightningGlowColor = storm.lightningGlowColor;
+            lightning.coreColor = storm.lightningColor;
+            lightning.sparkColor = storm.lightningColor;
+            lightning.sparkSecondaryColor = { 0.88f, 0.94f, 1.0f, 1.0f };
+
+            const float groupOffsetX = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
+            const float groupOffsetZ = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
+            const Vector3 lightningOrigin = {
+                stormCenter_.x + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaX : 0.0f) + groupOffsetX,
+                stormCenter_.y + storm.cloudHeight + 1.2f + zeroOne(engine) * 0.8f,
+                stormCenter_.z + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaZ : 0.0f) + groupOffsetZ
+            };
+            stormLightningPosition_ = { lightningOrigin.x, stormCenter_.y + 0.45f, lightningOrigin.z };
+            EmitHitEffect(lightningOrigin, lightning);
+            stormLightningFlash_ = true;
+            }
+        }
+    }
+
     // 1. パーティクル更新
     for (auto it = particles_.begin(); it != particles_.end();) {
         it->lifeTime += deltaTime;
@@ -127,6 +311,14 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         it->transform.translate.x += it->velocity.x * deltaTime * 60.0f;
         it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
         it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
+
+        if (it->type == Particle::Type::StormRain && it->transform.translate.y <= stormCenter_.y + 0.12f) {
+            Vector3 splashPosition = it->transform.translate;
+            splashPosition.y = stormCenter_.y + 0.14f;
+            EmitStormRainSplash(splashPosition, it->color);
+            it = particles_.erase(it);
+            continue;
+        }
 
         if (it->type == Particle::Type::Ring) {
             float t = it->lifeTime / it->maxTime;
@@ -169,7 +361,10 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         }
         
         // フェードアウト
-        float alpha = 1.0f - (it->lifeTime / it->maxTime);
+        float normalizedLife = it->lifeTime / it->maxTime;
+        float alpha = it->type == Particle::Type::StormCloud
+            ? std::sin(normalizedLife * 3.14159265f)
+            : 1.0f - normalizedLife;
         it->color.w = it->initialAlpha * alpha;
         
         ++it;
@@ -177,6 +372,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
 
     // 2. データ書き込み
     planeInstanceCount_ = 0;
+    cloudInstanceCount_ = 0;
     ringInstanceCount_ = 0;
     cylinderInstanceCount_ = 0;
     Matrix4x4 cameraMatrix = Math::Inverse(viewMatrix);
@@ -195,7 +391,10 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         InstanceData* instancingData = instancingDataMapped_;
         bool useBillboard = true;
 
-        if (particle.type == Particle::Type::Ring) {
+        if (particle.type == Particle::Type::StormCloud) {
+            indexPtr = &cloudInstanceCount_;
+            instancingData = cloudInstancingDataMapped_;
+        } else if (particle.type == Particle::Type::Ring) {
             indexPtr = &ringInstanceCount_;
             instancingData = ringInstancingDataMapped_;
         } else if (particle.type == Particle::Type::Cylinder) {
@@ -218,14 +417,17 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
 
         instancingData[index].WVP = wvp;
         instancingData[index].color = particle.color;
+        instancingData[index].shape = particle.type == Particle::Type::Lightning ? 1.0f : 0.0f;
         index++;
     }
 }
 
 
 void ParticleManager::Draw() {
-    if (planeInstanceCount_ == 0 && ringInstanceCount_ == 0 && cylinderInstanceCount_ == 0) {
-        DrawGPUParticles();
+    if (planeInstanceCount_ == 0 && cloudInstanceCount_ == 0 && ringInstanceCount_ == 0 && cylinderInstanceCount_ == 0) {
+        if (drawGPUParticleSphere_) {
+            DrawGPUParticles();
+        }
         return;
     }
 
@@ -240,6 +442,13 @@ void ParticleManager::Draw() {
 
     auto srvHandle = textureManager_->GetSrvHandleGPU(textureHandle_);
     commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
+
+    if (cloudInstanceCount_ > 0) {
+        commandList->SetPipelineState(cloudPipelineState_.Get());
+        commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+        commandList->IASetVertexBuffers(1, 1, &cloudInstancingBufferView_);
+        commandList->DrawInstanced(planeVertexCount_, cloudInstanceCount_, 0, 0);
+    }
 
     if (planeInstanceCount_ > 0) {
         commandList->SetPipelineState(pipelineState_.Get());
@@ -262,7 +471,9 @@ void ParticleManager::Draw() {
         commandList->DrawInstanced(cylinderVertexCount_, cylinderInstanceCount_, 0, 0);
     }
 
-    DrawGPUParticles();
+    if (drawGPUParticleSphere_) {
+        DrawGPUParticles();
+    }
 }
 
 void ParticleManager::CreateRootSignature() {
@@ -324,6 +535,7 @@ void ParticleManager::CreatePipelineState() {
 
         // Color
         { "INSTANCE_COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 64, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INSTANCE_SHAPE", 0, DXGI_FORMAT_R32_FLOAT, 1, 80, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
     };
 
     // シェーダーコンパイル (パスにhlsl/を追加済み)
@@ -370,6 +582,21 @@ void ParticleManager::CreatePipelineState() {
         OutputDebugStringA("Failed to create GraphicsPipelineState for Particles!\n");
         assert(false);
     }
+
+    // 黒雲は加算合成だと黒が消えるため、通常のアルファ合成で別描画する。
+    blend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    blend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    blend.SrcBlendAlpha = D3D12_BLEND_ONE;
+    blend.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&cloudPipelineState_));
+    if (FAILED(hr)) {
+        OutputDebugStringA("Failed to create GraphicsPipelineState for Storm Clouds!\n");
+        assert(false);
+    }
+
+    // リング・柱・通常パーティクルは従来どおり加算合成。
+    blend.DestBlend = D3D12_BLEND_ONE;
+    blend.DestBlendAlpha = D3D12_BLEND_ZERO;
 
     psoDesc.PS = { primitivePsBlob->GetBufferPointer(), primitivePsBlob->GetBufferSize() };
     hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&primitivePipelineState_));
@@ -678,6 +905,33 @@ void ParticleManager::CreateCylinderMesh() {
     cylinderVertexBufferView_.StrideInBytes = sizeof(VertexData);
 }
 
+void ParticleManager::EmitStormRainSplash(const Vector3& pos, const Vector4& color) {
+    constexpr int kDropCount = 3;
+    std::uniform_real_distribution<float> angleDistribution(0.0f, 6.2831853f);
+    std::uniform_real_distribution<float> speedDistribution(0.010f, 0.024f);
+    std::uniform_real_distribution<float> lifeDistribution(0.10f, 0.20f);
+
+    for (int i = 0; i < kDropCount && particles_.size() < kMaxParticles; ++i) {
+        const float angle = angleDistribution(engine);
+        const float speed = speedDistribution(engine);
+        Particle splash;
+        splash.type = Particle::Type::Splash;
+        splash.transform.translate = pos;
+        splash.transform.scale = { 0.025f, 0.055f, 1.0f };
+        splash.transform.rotate = { 0.0f, 0.0f, -angle };
+        splash.velocity = {
+            std::cos(angle) * speed,
+            0.018f + speed * 0.45f,
+            std::sin(angle) * speed
+        };
+        splash.color = { color.x * 1.25f, color.y * 1.25f, color.z * 1.25f, (std::max)(color.w, 0.32f) };
+        splash.initialAlpha = splash.color.w;
+        splash.lifeTime = 0.0f;
+        splash.maxTime = lifeDistribution(engine);
+        particles_.push_back(splash);
+    }
+}
+
 void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     constexpr int kSplashCount = 8;
     constexpr float kPi = 3.14159265f;
@@ -686,6 +940,8 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     std::uniform_real_distribution<float> distScale(0.4f, 1.5f);
     std::uniform_real_distribution<float> distOffset(-0.08f, 0.08f);
     std::uniform_real_distribution<float> distLife(0.18f, 0.28f);
+    std::uniform_real_distribution<float> distSplashSpeed(0.018f, 0.060f);
+    std::uniform_real_distribution<float> distUnit(-1.0f, 1.0f);
 
     if (particles_.size() < kMaxParticles) {
         Particle cylinder;
@@ -718,6 +974,17 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     for (int i = 0; i < kSplashCount; ++i) {
         if (particles_.size() >= kMaxParticles) break;
 
+        const float speed = distSplashSpeed(engine);
+        Vector3 direction = {};
+        float lengthSquared = 0.0f;
+        do {
+            direction = { distUnit(engine), distUnit(engine), distUnit(engine) };
+            lengthSquared = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
+        } while (lengthSquared < 0.0001f || lengthSquared > 1.0f);
+        const float inverseLength = 1.0f / std::sqrt(lengthSquared);
+        direction.x *= inverseLength;
+        direction.y *= inverseLength;
+        direction.z *= inverseLength;
         Particle p;
         p.type = Particle::Type::Splash;
         p.transform.translate = {
@@ -726,15 +993,279 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
             pos.z + distOffset(engine)
         };
         p.transform.scale = { 0.05f, distScale(engine), 1.0f };
-        p.transform.rotate = { 0.0f, 0.0f, distRotate(engine) };
+        p.transform.rotate = { distRotate(engine), distRotate(engine), distRotate(engine) };
 
-        p.velocity = { 0.0f, 0.0f, 0.0f };
+        p.velocity = {
+            direction.x * speed,
+            direction.y * speed,
+            direction.z * speed
+        };
         p.color = color;
         p.initialAlpha = p.color.w;
         p.lifeTime = 0.0f;
         p.maxTime = distLife(engine);
 
         particles_.push_back(p);
+    }
+}
+
+void ParticleManager::EmitHitEffect(const Vector3& pos) {
+    EmitHitEffect(pos, HitEffectSettings{});
+}
+
+void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings& settings) {
+    constexpr float kPi = 3.14159265f;
+    std::uniform_real_distribution<float> distAngle(-0.18f, 0.18f);
+    std::uniform_real_distribution<float> distOffset(-0.12f, 0.12f);
+    std::uniform_real_distribution<float> distSparkLife(0.13f, 0.28f);
+    std::uniform_real_distribution<float> distSparkSpeed(0.035f * settings.sparkSpeed, 0.105f * settings.sparkSpeed);
+    std::uniform_real_distribution<float> distSparkTone(0.0f, 1.0f);
+    std::uniform_real_distribution<float> distDirection(-1.0f, 1.0f);
+    const float size = settings.size < 0.1f ? 0.1f : settings.size;
+    const float brightness = settings.brightness < 0.0f ? 0.0f : settings.brightness;
+    const float lifeScale = settings.lifeScale < 0.05f ? 0.05f : settings.lifeScale;
+    const float alphaScale = brightness < 1.0f ? brightness : 1.0f;
+    const float sparkLength = settings.sparkLength < 0.1f ? 0.1f : settings.sparkLength;
+    const float scatterRadius = settings.scatterRadius < 0.0f ? 0.0f : settings.scatterRadius;
+    const float corePower = settings.corePower < 0.0f ? 0.0f : settings.corePower;
+    const float crossPower = settings.crossPower < 0.0f ? 0.0f : settings.crossPower;
+    const float pillarPower = settings.pillarPower < 0.0f ? 0.0f : settings.pillarPower;
+    const float lightningLength = settings.lightningLength < 0.1f ? 0.1f : settings.lightningLength;
+    const float lightningSpread = settings.lightningSpread < 0.0f ? 0.0f : settings.lightningSpread;
+    const float lightningPower = settings.lightningPower < 0.0f ? 0.0f : settings.lightningPower;
+
+    auto tintColor = [&](const Vector4& color, float r, float g, float b, float a) {
+        return Vector4{
+            color.x * r * brightness,
+            color.y * g * brightness,
+            color.z * b * brightness,
+            color.w * a * alphaScale
+        };
+    };
+
+    auto pushParticle = [&](const Particle& particle) {
+        if (particles_.size() < kMaxParticles) {
+            particles_.push_back(particle);
+        }
+    };
+
+    auto pushPlane = [&](const Vector3& translate, const Vector3& scale, float rotateZ, const Vector4& color, float lifeTime, const Vector3& velocity = { 0.0f, 0.0f, 0.0f }, Particle::Type type = Particle::Type::Splash) {
+        Particle particle;
+        particle.type = type;
+        particle.transform.translate = translate;
+        particle.transform.scale = scale;
+        particle.transform.rotate = { 0.0f, 0.0f, rotateZ };
+        particle.velocity = velocity;
+        particle.color = color;
+        particle.initialAlpha = color.w;
+        particle.lifeTime = 0.0f;
+        particle.maxTime = lifeTime;
+        pushParticle(particle);
+    };
+
+    // 斬撃が当たった瞬間の白い芯
+    Particle core;
+    core.type = Particle::Type::Splash;
+    core.transform.translate = pos;
+    core.transform.scale = { 1.15f * size * corePower, 1.15f * size * corePower, 1.0f };
+    core.transform.rotate = { 0.0f, 0.0f, 0.0f };
+    core.velocity = { 0.0f, 0.0f, 0.0f };
+    core.color = tintColor(settings.coreColor, 1.35f, 1.25f, 1.15f, 1.0f);
+    core.initialAlpha = core.color.w;
+    core.lifeTime = 0.0f;
+    core.maxTime = 0.13f * lifeScale;
+    if (corePower > 0.01f) {
+        pushParticle(core);
+    }
+
+    // ビームサーベルの軌跡。少しずつ角度と位置をずらして厚みを出す。
+    int slashCount = std::clamp(settings.slashCount, 1, 32);
+    for (int i = 0; i < slashCount; ++i) {
+        float t = slashCount <= 1 ? 0.5f : static_cast<float>(i) / static_cast<float>(slashCount - 1);
+        float angle = settings.slashAngle - settings.slashSpread * 0.5f + t * settings.slashSpread;
+        if (settings.randomizeDirection) {
+            angle += distAngle(engine) * 0.35f;
+        }
+        float side = t - 0.5f;
+        const float positionJitter = settings.randomizePosition ? distOffset(engine) * size * 0.35f : 0.0f;
+        const float scaleJitter = settings.randomizeScale ? 0.88f + distSparkTone(engine) * 0.24f : 1.0f;
+        const float lifeJitter = settings.randomizeLifetime ? 0.85f + distSparkTone(engine) * 0.30f : 1.0f;
+        Vector3 slashPos = {
+            pos.x + side * 0.30f * size + positionJitter,
+            pos.y + (0.05f + std::sin(t * kPi) * 0.12f) * size + positionJitter,
+            pos.z + side * 0.10f * size + positionJitter
+        };
+        Vector4 slashColor = (!settings.randomizeColor || i % 2 == 0)
+            ? tintColor(settings.slashColor, 1.0f, 1.0f, 1.0f, 0.82f)
+            : tintColor(settings.slashColor, 0.58f, 0.80f, 1.0f, 0.62f);
+        pushPlane(slashPos, { (0.11f + 0.04f * std::sin(t * kPi)) * size * scaleJitter, (2.85f - 0.45f * std::abs(side)) * size * scaleJitter, 1.0f }, angle, slashColor, (0.18f + 0.04f * t) * lifeScale * lifeJitter);
+    }
+
+    int lightningCount = std::clamp(settings.lightningCount, 0, 12);
+    if (lightningCount > 0 && lightningPower > 0.01f) {
+        std::uniform_real_distribution<float> distLightningAngle(-kPi, kPi);
+        std::uniform_real_distribution<float> distLightningRadius(0.0f, 1.0f);
+        std::uniform_real_distribution<float> distLightningLife(0.07f, 0.16f);
+
+        const int lightningSegments = std::clamp(settings.lightningSegments, 2, 16);
+        for (int i = 0; i < lightningCount; ++i) {
+            float angle = 0.0f;
+            switch (settings.lightningMode) {
+            case 1: // Slash Forward
+                angle = settings.slashAngle + kPi * 0.5f;
+                break;
+            case 2: // Slash Axis
+                angle = settings.slashAngle + kPi * 0.5f + (i % 2 == 0 ? 0.0f : kPi);
+                break;
+            case 3: // Custom
+                angle = settings.lightningDirection;
+                break;
+            default: // Radial
+                angle = settings.randomizeDirection
+                    ? distLightningAngle(engine)
+                    : (static_cast<float>(i) / static_cast<float>(lightningCount)) * kPi * 2.0f;
+                break;
+            }
+            if (settings.lightningMode != 0 && settings.randomizeDirection) {
+                angle += distDirection(engine) * settings.lightningDirectionSpread;
+            }
+            const float distance = settings.randomizePosition ? distLightningRadius(engine) * 0.12f * size * lightningSpread : 0.0f;
+            Vector3 boltCursor = {
+                pos.x + std::cos(angle) * distance,
+                pos.y + (settings.randomizePosition ? distOffset(engine) * size : 0.0f),
+                pos.z + (settings.randomizePosition ? distOffset(engine) * size * 0.35f : 0.0f)
+            };
+            std::vector<Vector3> mainBoltPoints;
+            std::vector<float> mainBoltAngles;
+            mainBoltPoints.reserve(static_cast<size_t>(lightningSegments) + 1);
+            mainBoltAngles.reserve(lightningSegments);
+            mainBoltPoints.push_back(boltCursor);
+            const float boltTone = settings.randomizeColor ? distSparkTone(engine) : 0.35f;
+            const float boltWidth = (0.018f + 0.016f * boltTone) * size * lightningPower * settings.lightningWidth;
+            const float boltLife = (settings.randomizeLifetime ? distLightningLife(engine) : 0.115f) * lifeScale;
+            const float colorVariation = settings.randomizeColor ? 0.82f + boltTone * 0.36f : 1.0f;
+            const Vector4 boltColor = tintColor(settings.lightningColor, 1.45f * colorVariation, 1.35f * colorVariation, 1.20f * colorVariation, 0.68f * lightningPower);
+            const Vector4 glowColor = tintColor(settings.lightningGlowColor, 1.0f, 1.0f, 1.0f, settings.lightningGlowOpacity * lightningPower);
+
+            for (int segment = 0; segment < lightningSegments; ++segment) {
+                const float segmentScale = settings.randomizeScale ? 0.72f + distSparkTone(engine) * 0.56f : 1.0f;
+                const float segmentLength = size * lightningLength * segmentScale / static_cast<float>(lightningSegments);
+                const float jitter = settings.randomizeDirection ? distAngle(engine) * (1.8f + lightningSpread) : 0.0f;
+                angle += jitter;
+
+                const Vector3 direction = { std::cos(angle), std::sin(angle), 0.0f };
+                const Vector3 segmentCenter = {
+                    boltCursor.x + direction.x * segmentLength * 0.5f,
+                    boltCursor.y + direction.y * segmentLength * 0.5f,
+                    boltCursor.z
+                };
+                if (settings.lightningGlowOpacity > 0.001f) {
+                    pushPlane(segmentCenter, { boltWidth * settings.lightningGlowWidth, segmentLength * 1.34f, 1.0f }, angle - kPi * 0.5f, glowColor, boltLife * 1.15f, { 0.0f, 0.0f, 0.0f }, Particle::Type::Lightning);
+                }
+                pushPlane(segmentCenter, { boltWidth, segmentLength * 1.30f, 1.0f }, angle - kPi * 0.5f, boltColor, boltLife, { 0.0f, 0.0f, 0.0f }, Particle::Type::Lightning);
+
+                boltCursor.x += direction.x * segmentLength;
+                boltCursor.y += direction.y * segmentLength;
+                mainBoltPoints.push_back(boltCursor);
+                mainBoltAngles.push_back(angle);
+            }
+
+            const int branchCount = std::clamp(settings.lightningBranchCount, 0, 12);
+            const int branchSegments = std::clamp(lightningSegments / 2, 2, 4);
+            for (int branch = 0; branch < branchCount; ++branch) {
+                const int pointIndex = 1 + (branch * (lightningSegments - 1)) / (branchCount > 0 ? branchCount : 1);
+                Vector3 branchCursor = mainBoltPoints[pointIndex];
+                const float branchSide = branch % 2 == 0 ? 1.0f : -1.0f;
+                float branchAngle = mainBoltAngles[pointIndex - 1] + branchSide * (0.35f + settings.lightningBranchSpread * (0.45f + 0.35f * distSparkTone(engine)));
+                const float branchTotalLength = size * lightningLength * settings.lightningBranchLength * (0.72f + 0.38f * distSparkTone(engine));
+                const float branchWidth = 0.022f * size * lightningPower * settings.lightningWidth * settings.lightningBranchWidth;
+                const float branchLife = (settings.randomizeLifetime ? distLightningLife(engine) : 0.10f) * lifeScale * 0.9f;
+                const Vector4 branchColor = tintColor(settings.lightningColor, 1.15f, 1.25f, 1.25f, 0.48f * lightningPower);
+                const Vector4 branchGlowColor = tintColor(settings.lightningGlowColor, 1.0f, 1.0f, 1.0f, settings.lightningGlowOpacity * lightningPower * 0.65f);
+
+                for (int segment = 0; segment < branchSegments; ++segment) {
+                    if (settings.randomizeDirection) {
+                        branchAngle += distAngle(engine) * (1.2f + settings.lightningBranchSpread);
+                    }
+                    const float segmentLength = branchTotalLength / static_cast<float>(branchSegments);
+                    const Vector3 direction = { std::cos(branchAngle), std::sin(branchAngle), 0.0f };
+                    const Vector3 segmentCenter = {
+                        branchCursor.x + direction.x * segmentLength * 0.5f,
+                        branchCursor.y + direction.y * segmentLength * 0.5f,
+                        branchCursor.z
+                    };
+                    if (settings.lightningGlowOpacity > 0.001f) {
+                        pushPlane(segmentCenter, { branchWidth * settings.lightningGlowWidth, segmentLength * 1.34f, 1.0f }, branchAngle - kPi * 0.5f, branchGlowColor, branchLife * 1.15f, { 0.0f, 0.0f, 0.0f }, Particle::Type::Lightning);
+                    }
+                    pushPlane(segmentCenter, { branchWidth, segmentLength * 1.30f, 1.0f }, branchAngle - kPi * 0.5f, branchColor, branchLife, { 0.0f, 0.0f, 0.0f }, Particle::Type::Lightning);
+                    branchCursor.x += direction.x * segmentLength;
+                    branchCursor.y += direction.y * segmentLength;
+                }
+            }
+        }
+    }
+
+    // 交差する鋭い閃光。画面で一目わかる派手さ用。
+    if (crossPower > 0.01f) {
+        pushPlane({ pos.x, pos.y + 0.02f * size, pos.z }, { 0.055f * size, 3.45f * size * crossPower, 1.0f }, settings.slashAngle - 0.72f, tintColor(settings.crossColor, 1.35f, 1.2f, 1.0f, 0.95f), 0.16f * lifeScale);
+        pushPlane({ pos.x, pos.y + 0.02f * size, pos.z }, { 0.050f * size, 2.55f * size * crossPower, 1.0f }, settings.slashAngle + 0.78f, tintColor(settings.crossColor, 0.76f, 0.96f, 1.0f, 0.70f), 0.14f * lifeScale);
+        pushPlane({ pos.x, pos.y + 0.03f * size, pos.z }, { 0.30f * size, 1.55f * size * crossPower, 1.0f }, settings.slashAngle + 0.04f, tintColor(settings.crossColor, 1.15f, 1.05f, 1.0f, 0.52f), 0.20f * lifeScale);
+    }
+
+    for (int ringIndex = 0; ringIndex < 3; ++ringIndex) {
+        Particle ring;
+        ring.type = Particle::Type::Ring;
+        ring.transform.translate = { pos.x, pos.y + 0.04f * ringIndex, pos.z };
+        ring.transform.scale = { 0.18f * size * settings.ringPower, 0.18f * size * settings.ringPower, 1.0f };
+        ring.transform.rotate = { 0.0f, 0.0f, -0.35f + ringIndex * 0.38f };
+        ring.velocity = { 0.0f, 0.0f, 0.0f };
+        ring.color = ringIndex == 0 ? tintColor(settings.ringColor, 1.4f, 1.25f, 1.1f, 0.72f)
+            : ringIndex == 1 ? tintColor(settings.ringColor, 0.65f, 0.90f, 1.0f, 0.55f)
+            : tintColor(settings.ringColor, 1.0f, 1.0f, 1.0f, 0.42f);
+        ring.initialAlpha = ring.color.w;
+        ring.lifeTime = 0.0f;
+        ring.maxTime = (0.20f + 0.08f * ringIndex) * lifeScale;
+        pushParticle(ring);
+    }
+
+    Particle pillar;
+    pillar.type = Particle::Type::Cylinder;
+    pillar.transform.translate = { pos.x, pos.y - 0.16f * size, pos.z };
+    pillar.transform.scale = { 0.42f * size, 1.0f * size * pillarPower, 0.42f * size };
+    pillar.transform.rotate = { 0.0f, 0.0f, 0.0f };
+    pillar.velocity = { 0.0f, 0.0f, 0.0f };
+    pillar.color = tintColor(settings.pillarColor, 0.45f, 0.85f, 1.0f, 0.34f * pillarPower);
+    pillar.initialAlpha = pillar.color.w;
+    pillar.lifeTime = 0.0f;
+    pillar.maxTime = 0.22f * lifeScale;
+    if (pillarPower > 0.01f) {
+        pushParticle(pillar);
+    }
+
+    int sparkCount = std::clamp(settings.sparkCount, 0, 160);
+    for (int i = 0; i < sparkCount; ++i) {
+        float baseAngle = (static_cast<float>(i) / static_cast<float>(sparkCount)) * kPi * 2.0f;
+        float angle = baseAngle + (settings.randomizeDirection ? distAngle(engine) : 0.0f);
+        float tone = settings.randomizeColor || settings.randomizeScale ? distSparkTone(engine) : 0.5f;
+        float speed = settings.randomizeScale ? distSparkSpeed(engine) : 0.07f * settings.sparkSpeed;
+        const float offsetX = settings.randomizePosition ? distOffset(engine) * size * scatterRadius : 0.0f;
+        const float offsetY = settings.randomizePosition ? distOffset(engine) * size * scatterRadius : 0.0f;
+        const float offsetZ = settings.randomizePosition ? distOffset(engine) * size * scatterRadius : 0.0f;
+        Vector3 sparkPos = {
+            pos.x + offsetX,
+            pos.y + offsetY,
+            pos.z + offsetZ
+        };
+        Vector3 sparkVelocity = {
+            std::cos(angle) * speed,
+            std::sin(angle) * speed * 0.35f,
+            std::sin(angle * 1.7f) * speed
+        };
+        Vector4 sparkColor = (!settings.randomizeColor || tone < settings.blueRatio)
+            ? tintColor(settings.sparkColor, 1.05f, 1.0f, 1.0f, 0.88f)
+            : tintColor(settings.sparkSecondaryColor, 1.0f, 1.0f, 1.0f, 0.88f);
+        const float sparkLife = (settings.randomizeLifetime ? distSparkLife(engine) : 0.205f) * lifeScale;
+        pushPlane(sparkPos, { (0.025f + 0.02f * tone) * size, (0.62f + 0.72f * tone) * size * sparkLength, 1.0f }, angle, sparkColor, sparkLife, sparkVelocity);
     }
 }
 

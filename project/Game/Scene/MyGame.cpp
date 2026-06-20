@@ -7,15 +7,105 @@
 //        各サブシステムの実装詳細は専用クラスに委譲する。
 // ==========================================================
 #include <filesystem>
+#include <cmath>
+#include <fstream>
+#include <cstring>
+#include <random>
 #include "MyGame.h"
 #include "../Environment/WeatherPresetManager.h"
 #include "Goal.h"
 #include "ModelManager.h"
 #include <memory>
+#include "json.hpp"
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
+
+using json = nlohmann::json;
+
+namespace {
+const char* kEffectPresetPath = "Resources/presets/effect_presets.json";
+const char* kStormPresetPath = "Resources/presets/storm_effect_presets.json";
+const char* kStormShowcaseName = "Tempest Storm";
+
+json ToJson(const ParticleManager::HitEffectSettings& settings, const char* name, bool showGpuSphere, bool mirrorSlash, int burstCount, float burstRadius, bool includeInShowcase) {
+    json item;
+    item["name"] = name;
+    item["showGpuSphere"] = showGpuSphere;
+    item["mirrorSlash"] = mirrorSlash;
+    item["burstCount"] = burstCount;
+    item["burstRadius"] = burstRadius;
+    item["showcase"] = includeInShowcase;
+    item["size"] = settings.size;
+    item["brightness"] = settings.brightness;
+    item["lifeScale"] = settings.lifeScale;
+    item["slashAngle"] = settings.slashAngle;
+    item["slashSpread"] = settings.slashSpread;
+    item["slashCount"] = settings.slashCount;
+    item["sparkCount"] = settings.sparkCount;
+    item["sparkSpeed"] = settings.sparkSpeed;
+    item["sparkLength"] = settings.sparkLength;
+    item["scatterRadius"] = settings.scatterRadius;
+    item["blueRatio"] = settings.blueRatio;
+    item["ringPower"] = settings.ringPower;
+    item["corePower"] = settings.corePower;
+    item["crossPower"] = settings.crossPower;
+    item["pillarPower"] = settings.pillarPower;
+    item["lightningCount"] = settings.lightningCount;
+    item["lightningSegments"] = settings.lightningSegments;
+    item["lightningLength"] = settings.lightningLength;
+    item["lightningSpread"] = settings.lightningSpread;
+    item["lightningPower"] = settings.lightningPower;
+    item["lightningWidth"] = settings.lightningWidth;
+    item["lightningGlowWidth"] = settings.lightningGlowWidth;
+    item["lightningGlowOpacity"] = settings.lightningGlowOpacity;
+    item["lightningBranchCount"] = settings.lightningBranchCount;
+    item["lightningBranchLength"] = settings.lightningBranchLength;
+    item["lightningBranchSpread"] = settings.lightningBranchSpread;
+    item["lightningBranchWidth"] = settings.lightningBranchWidth;
+    item["lightningMode"] = settings.lightningMode;
+    item["lightningDirection"] = settings.lightningDirection;
+    item["lightningDirectionSpread"] = settings.lightningDirectionSpread;
+    item["randomizePosition"] = settings.randomizePosition;
+    item["randomizeDirection"] = settings.randomizeDirection;
+    item["randomizeAngle"] = settings.randomizeAngle;
+    item["angleRandomRange"] = settings.angleRandomRange;
+    item["randomizeScale"] = settings.randomizeScale;
+    item["randomizeLifetime"] = settings.randomizeLifetime;
+    item["randomizeColor"] = settings.randomizeColor;
+    item["coolColor_r"] = settings.coolColor.x;
+    item["coolColor_g"] = settings.coolColor.y;
+    item["coolColor_b"] = settings.coolColor.z;
+    item["coolColor_a"] = settings.coolColor.w;
+    item["warmColor_r"] = settings.warmColor.x;
+    item["warmColor_g"] = settings.warmColor.y;
+    item["warmColor_b"] = settings.warmColor.z;
+    item["warmColor_a"] = settings.warmColor.w;
+    auto writeColor = [&item](const char* name, const Vector4& color) {
+        const std::string prefix = name;
+        item[prefix + "_r"] = color.x;
+        item[prefix + "_g"] = color.y;
+        item[prefix + "_b"] = color.z;
+        item[prefix + "_a"] = color.w;
+    };
+    writeColor("coreColor", settings.coreColor);
+    writeColor("slashColor", settings.slashColor);
+    writeColor("sparkColor", settings.sparkColor);
+    writeColor("sparkSecondaryColor", settings.sparkSecondaryColor);
+    writeColor("ringColor", settings.ringColor);
+    writeColor("crossColor", settings.crossColor);
+    writeColor("pillarColor", settings.pillarColor);
+    writeColor("lightningColor", settings.lightningColor);
+    writeColor("lightningGlowColor", settings.lightningGlowColor);
+    return item;
+}
+
+void CopyPresetName(std::array<char, 64>& buffer, const std::string& name) {
+    buffer.fill('\0');
+    strncpy_s(buffer.data(), buffer.size(), name.c_str(), _TRUNCATE);
+}
+}
 
 // ==========================================================
 //  MyGame::Initialize
@@ -28,6 +118,7 @@
 // ==========================================================
 void MyGame::Initialize() {
     WeatherPresetManager::GetInstance().LoadPresets();
+    LoadEffectPresetNames();
 
     // --------------------------------------------------------
     // 1. エンジン基盤システムの生成と初期化
@@ -148,8 +239,8 @@ void MyGame::Initialize() {
         playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #elif defined(NDEBUG)
-    currentMode_           = AppMode::StageSelect;
-    debugFlags_.showSkybox = true;
+    currentMode_           = AppMode::EffectShowcase;
+    debugFlags_.showSkybox = false;
     postProcess_.SetEnabled(false);
 #else
     currentMode_           = AppMode::StageSelect;
@@ -160,6 +251,11 @@ void MyGame::Initialize() {
         playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #endif
+
+    if (currentMode_ == AppMode::EffectShowcase && !effectShowcasePresetNames_.empty()) {
+        effectShowcaseSelectedIndex_ = 0;
+        effectPreviewShowGPUParticleSphere_ = false;
+    }
 
     // --------------------------------------------------------
     // 11. スカイドーム・スカイボックスの初期化
@@ -268,6 +364,8 @@ void MyGame::Initialize() {
     terrainObject_->SetScale({ 1.0f, 1.0f, 1.0f });
     terrainObject_->SetRotation({ 0.0f, 0.0f, 0.0f });
     terrainObject_->SetEnvironmentCoefficient(terrainEnvironmentCoefficient_);
+    terrainObject_->SetShininess(0.38f);
+    terrainObject_->SetMetallic(0.08f);
 
     // --------------------------------------------------------
     // 19. オフスクリーンレンダリング (PostProcessRenderer) の初期化
@@ -316,10 +414,20 @@ void MyGame::Update() {
     if (currentMode_ != prevMode_) {
         UpdateBGM();
 
+        const bool leftEffectPresentation =
+            (prevMode_ == AppMode::EffectPreview || prevMode_ == AppMode::EffectShowcase) &&
+            (currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase);
+        if (leftEffectPresentation && particleManager) {
+            particleManager->SetStormActive(false);
+        }
+
 
         if (currentMode_ == AppMode::SkinningEditor) {
             // モデル正面に強制リセット
             camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
+        } else if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
+            camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
+            effectShowcaseFirstPlay_ = true;
         }
         prevMode_ = currentMode_;
     }
@@ -328,8 +436,8 @@ void MyGame::Update() {
     // 2. ImGui の更新 (Debug ビルドのみ)
     //    BeginImGui() はフレームの先頭で必ず呼ぶこと
     // --------------------------------------------------------
-#ifndef NDEBUG
     dxCommon->BeginImGui();
+#ifndef NDEBUG
     UpdateImGui();
 #endif
 
@@ -355,6 +463,30 @@ void MyGame::Update() {
         lightCamera_->Update({ 0.2f, -1.0f, 0.5f }, targetPos);
     }
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
+
+    if (input->TriggerKey(DIK_H) && particleManager) {
+        Vector3 effectPos = effectPreviewPosition_;
+        if (currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
+            effectPos = player_ ? player_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f };
+            effectPos.y += 0.9f;
+        }
+        if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
+            const bool showcaseStorm = currentMode_ == AppMode::EffectShowcase &&
+                effectShowcaseSelectedIndex_ >= 0 &&
+                effectShowcaseSelectedIndex_ < static_cast<int>(effectShowcasePresetNames_.size()) &&
+                std::find(stormPresetNames_.begin(), stormPresetNames_.end(),
+                    effectShowcasePresetNames_[effectShowcaseSelectedIndex_]) != stormPresetNames_.end();
+            if ((currentMode_ == AppMode::EffectPreview && effectPreviewStormMode_) || showcaseStorm) {
+                particleManager->SetStormActive(false);
+                particleManager->ClearParticles();
+                particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+            } else {
+                EmitEffectPreviewBurst();
+            }
+        } else {
+            particleManager->EmitHitEffect(effectPos);
+        }
+    }
 
     // --------------------------------------------------------
     // 5. カメラの更新
@@ -401,6 +533,10 @@ void MyGame::Update() {
     // 8. AppMode に応じた更新処理
     //    各 Update メソッドにモード固有のロジックを分離している
     // --------------------------------------------------------
+    if (particleManager && currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
+        particleManager->SetDrawGPUParticleSphere(true);
+    }
+
     switch (currentMode_) {
 
     case AppMode::StageSelect:
@@ -409,6 +545,15 @@ void MyGame::Update() {
 
     case AppMode::DebugView:
         UpdateDebugView();
+        break;
+
+    case AppMode::EffectPreview:
+        UpdateEffectPreview();
+        break;
+
+    case AppMode::EffectShowcase:
+        UpdateEffectShowcase();
+        DrawEffectShowcaseImGui();
         break;
 
     case AppMode::StageEditor:
@@ -470,6 +615,10 @@ void MyGame::Update() {
             terrainObject_->Update(lightVP);
         }
     }
+    if ((currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) && terrainObject_) {
+        terrainObject_->SetCamera(view, proj);
+        terrainObject_->Update(lightVP);
+    }
 
     // --------------------------------------------------------
     // 11. ステージレンダラーの更新
@@ -523,6 +672,10 @@ void MyGame::Update() {
         }
         
         particleManager->Update(1.0f / 60.0f, view, proj, player_ ? player_->GetPosition() : Vector3{0, 0, 0}, &stageMap_);
+        if ((currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) &&
+            particleManager->ConsumeStormLightningFlash()) {
+            effectShowcaseLightTimer_ = kEffectShowcaseLightDuration_;
+        }
     }
 
     // --------------------------------------------------------
@@ -536,11 +689,57 @@ void MyGame::Update() {
         stageMap_.GetLightColor().x,
         stageMap_.GetLightColor().y,
         stageMap_.GetLightColor().z, 1.0f));
-    object3dCommon->SetLightIntensity(stageMap_.GetLightIntensity());
+    const bool isEffectPresentation = currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase;
+    object3dCommon->SetLightIntensity(isEffectPresentation ? 0.18f : stageMap_.GetLightIntensity());
     object3dCommon->SetCameraPosition(camera->GetPosition()); // スペキュラー計算用
+
+    if (isEffectPresentation) {
+        const bool showcaseStorm = currentMode_ == AppMode::EffectShowcase &&
+            effectShowcaseSelectedIndex_ >= 0 &&
+            effectShowcaseSelectedIndex_ < static_cast<int>(effectShowcasePresetNames_.size()) &&
+            std::find(stormPresetNames_.begin(), stormPresetNames_.end(),
+                effectShowcasePresetNames_[effectShowcaseSelectedIndex_]) != stormPresetNames_.end();
+        const bool isStorm = (currentMode_ == AppMode::EffectPreview && effectPreviewStormMode_) || showcaseStorm;
+        const float remaining = std::clamp(
+            effectShowcaseLightTimer_ / kEffectShowcaseLightDuration_, 0.0f, 1.0f);
+        const float lightEnvelope = remaining * remaining;
+        const Vector4 sourceColor = isStorm && particleManager
+            ? particleManager->GetStormSettings().lightningColor
+            : effectPreviewHitSettings_.lightningCount > 0
+            ? effectPreviewHitSettings_.lightningColor
+            : effectPreviewHitSettings_.coreColor;
+        const Vector4 lightColor = {
+            std::clamp(sourceColor.x, 0.0f, 1.0f),
+            std::clamp(sourceColor.y, 0.0f, 1.0f),
+            std::clamp(sourceColor.z, 0.0f, 1.0f),
+            1.0f
+        };
+        const float lightIntensity = isStorm && particleManager
+            ? particleManager->GetStormSettings().pointLightPower * lightEnvelope
+            : (1.8f + effectPreviewHitSettings_.brightness * 2.8f) * lightEnvelope;
+        const Vector3 lightPosition = isStorm && particleManager
+            ? particleManager->GetStormLightningPosition()
+            : effectPreviewPosition_;
+        object3dCommon->SetPointLight(lightPosition, lightIntensity, lightColor);
+    } else {
+        object3dCommon->SetPointLight({ 0.0f, 0.0f, 0.0f }, 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f });
+    }
 
     // クリアカラーをステージ設定と同期 (PostProcessRenderer のオフスクリーン背景色)
     postProcess_.SetClearColor(stageMap_.GetClearColor());
+    const bool stormBackdrop =
+        (currentMode_ == AppMode::EffectPreview && effectPreviewStormMode_) ||
+        (currentMode_ == AppMode::EffectShowcase &&
+         effectShowcaseSelectedIndex_ >= 0 &&
+         effectShowcaseSelectedIndex_ < static_cast<int>(effectShowcasePresetNames_.size()) &&
+         std::find(stormPresetNames_.begin(), stormPresetNames_.end(),
+             effectShowcasePresetNames_[effectShowcaseSelectedIndex_]) != stormPresetNames_.end());
+    if (stormBackdrop) {
+        dxCommon->SetClearColor(0.012f, 0.018f, 0.045f, 1.0f);
+    } else {
+        const Vector4& clear = stageMap_.GetClearColor();
+        dxCommon->SetClearColor(clear.x, clear.y, clear.z, clear.w);
+    }
 
     // --------------------------------------------------------
     // 15. ゲームプレイ UI の更新
@@ -583,6 +782,463 @@ void MyGame::Update() {
 //    下パネル (高さ 360px)   : Tools & Controls (モード別コンテンツ)
 // ==========================================================
 #ifndef NDEBUG
+void MyGame::DrawStormEffectEditorImGui() {
+    if (!particleManager) return;
+    auto& storm = particleManager->GetStormSettings();
+
+    ImGui::TextColored(ImVec4(0.48f, 0.70f, 1.0f, 1.0f), "[ Storm Editor ]");
+    if (ImGui::Button("Restart Storm", ImVec2(-1, 26))) {
+        particleManager->SetStormActive(false);
+        particleManager->ClearParticles();
+        particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+    }
+
+    if (ImGui::CollapsingHeader("Dark Clouds", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SliderFloat("Cloud Area X", &storm.cloudAreaX, 0.0f, 15.0f);
+        ImGui::SliderFloat("Cloud Area Z", &storm.cloudAreaZ, 0.0f, 12.0f);
+        ImGui::SliderFloat("Cloud Height", &storm.cloudHeight, 1.5f, 10.0f);
+        ImGui::SliderFloat("Cloud Emit Rate", &storm.cloudEmitRate, 0.5f, 20.0f);
+        ImGui::SliderFloat("Cloud Life", &storm.cloudLife, 1.0f, 12.0f);
+        ImGui::SliderFloat("Cloud Size", &storm.cloudSize, 0.2f, 3.0f);
+        ImGui::ColorEdit4("Cloud Color", &storm.cloudColor.x);
+        ImGui::Checkbox("Random Cloud Position", &storm.randomizeCloudPosition);
+        ImGui::Checkbox("Random Cloud Size", &storm.randomizeCloudSize);
+    }
+    if (ImGui::CollapsingHeader("Rain", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SliderFloat("Rain Area X", &storm.rainAreaX, 0.0f, 15.0f);
+        ImGui::SliderFloat("Rain Area Z", &storm.rainAreaZ, 0.0f, 12.0f);
+        ImGui::SliderFloat("Rain Emit Rate", &storm.rainEmitRate, 1.0f, 180.0f);
+        ImGui::SliderFloat("Rain Speed", &storm.rainSpeed, 0.1f, 3.0f);
+        ImGui::SliderFloat("Rain Length", &storm.rainLength, 0.2f, 3.0f);
+        ImGui::ColorEdit4("Rain Color", &storm.rainColor.x);
+        ImGui::Checkbox("Random Rain Position", &storm.randomizeRainPosition);
+        ImGui::Checkbox("Random Rain Speed", &storm.randomizeRainSpeed);
+    }
+    if (ImGui::CollapsingHeader("Wind", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SliderFloat("Wind Emit Rate", &storm.windEmitRate, 0.5f, 40.0f);
+        ImGui::SliderFloat("Wind Speed", &storm.windSpeed, 0.1f, 3.0f);
+        ImGui::SliderFloat("Wind Length", &storm.windLength, 0.2f, 4.0f);
+        ImGui::ColorEdit4("Wind Color", &storm.windColor.x);
+    }
+    if (ImGui::CollapsingHeader("Lightning", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SliderFloat("Lightning Area X", &storm.lightningAreaX, 0.0f, 12.0f);
+        ImGui::SliderFloat("Lightning Area Z", &storm.lightningAreaZ, 0.0f, 10.0f);
+        ImGui::SliderFloat("Lightning Frequency", &storm.lightningFrequency, 0.1f, 5.0f, "%.2fx");
+        ImGui::SliderFloat("Interval Min", &storm.lightningIntervalMin, 0.15f, 5.0f);
+        ImGui::SliderFloat("Interval Max", &storm.lightningIntervalMax, 0.2f, 8.0f);
+        ImGui::SliderFloat("Strike Size", &storm.lightningStrikeSize, 0.25f, 3.0f, "%.2fx");
+        ImGui::Checkbox("Random Strike Size", &storm.randomizeLightningSize);
+        ImGui::SliderInt("Simultaneous Strikes", &storm.lightningSimultaneousCount, 1, 8);
+        ImGui::SliderFloat("Simultaneous Spread", &storm.lightningSimultaneousSpread, 0.0f, 8.0f);
+        ImGui::SliderInt("Burst Count", &storm.lightningBurstCount, 1, 12);
+        ImGui::SliderFloat("Burst Interval", &storm.lightningBurstInterval, 0.02f, 0.8f, "%.2f sec");
+        ImGui::Checkbox("Random Burst Count", &storm.randomizeLightningBurstCount);
+        ImGui::Checkbox("Random Lightning Position", &storm.randomizeLightningPosition);
+        ImGui::Checkbox("Random Lightning Interval", &storm.randomizeLightningInterval);
+        ImGui::Checkbox("Random Lightning Direction", &storm.randomizeLightningDirection);
+        ImGui::SliderInt("Bolt Count", &storm.lightningCount, 1, 12);
+        ImGui::SliderInt("Segments", &storm.lightningSegments, 2, 16);
+        ImGui::SliderFloat("Bolt Length", &storm.lightningLength, 1.0f, 10.0f);
+        ImGui::SliderFloat("Bolt Spread", &storm.lightningSpread, 0.0f, 3.0f);
+        ImGui::SliderFloat("Bolt Power", &storm.lightningPower, 0.1f, 3.0f);
+        ImGui::SliderFloat("Bolt Width", &storm.lightningWidth, 0.1f, 4.0f);
+        ImGui::SliderFloat("Glow Width", &storm.lightningGlowWidth, 1.0f, 8.0f);
+        ImGui::SliderFloat("Glow Opacity", &storm.lightningGlowOpacity, 0.0f, 1.0f);
+        ImGui::SliderInt("Branch Count", &storm.lightningBranchCount, 0, 12);
+        ImGui::Checkbox("Random Branch Count", &storm.randomizeLightningBranchCount);
+        ImGui::SliderFloat("Branch Length", &storm.lightningBranchLength, 0.05f, 1.0f);
+        ImGui::SliderFloat("Branch Spread", &storm.lightningBranchSpread, 0.0f, 1.57f);
+        ImGui::SliderFloat("Branch Width", &storm.lightningBranchWidth, 0.1f, 1.5f);
+        ImGui::ColorEdit4("Lightning Color", &storm.lightningColor.x);
+        ImGui::ColorEdit4("Lightning Glow", &storm.lightningGlowColor.x);
+        ImGui::SliderFloat("Ground Light Power", &storm.pointLightPower, 0.0f, 24.0f);
+    }
+
+    if (ImGui::CollapsingHeader("Storm Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Include in Showcase", &stormPresetIncludeInShowcase_);
+        ImGui::InputText("Storm Preset Name", stormPresetNameBuffer_.data(), stormPresetNameBuffer_.size());
+        if (ImGui::Button("Save Storm Preset", ImVec2(-1, 24))) {
+            SaveStormPreset(stormPresetNameBuffer_.data());
+        }
+        const char* selected = stormPresetSelectedIndex_ >= 0 && stormPresetSelectedIndex_ < static_cast<int>(stormPresetNames_.size())
+            ? stormPresetNames_[stormPresetSelectedIndex_].c_str() : "Select storm preset";
+        if (ImGui::BeginCombo("Saved Storms", selected)) {
+            for (int i = 0; i < static_cast<int>(stormPresetNames_.size()); ++i) {
+                const bool isSelected = i == stormPresetSelectedIndex_;
+                if (ImGui::Selectable(stormPresetNames_[i].c_str(), isSelected)) {
+                    stormPresetSelectedIndex_ = i;
+                    CopyPresetName(stormPresetNameBuffer_, stormPresetNames_[i]);
+                }
+                if (isSelected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::Button("Load Storm Preset", ImVec2(-1, 24)) && stormPresetSelectedIndex_ >= 0) {
+            LoadStormPreset(stormPresetNames_[stormPresetSelectedIndex_]);
+            particleManager->SetStormActive(false);
+            particleManager->ClearParticles();
+            particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+        }
+        if (ImGui::Button("Reset Storm Defaults", ImVec2(-1, 24))) {
+            storm = ParticleManager::StormEffectSettings{};
+        }
+        ImGui::TextWrapped("%s", stormPresetStatus_.c_str());
+    }
+}
+
+void MyGame::DrawEffectPreviewEditorImGui() {
+    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Editor ]");
+    int effectType = effectPreviewStormMode_ ? 1 : 0;
+    const char* effectTypes[] = { "Hit Effect", "Tempest Storm" };
+    if (ImGui::Combo("Effect Type", &effectType, effectTypes, IM_ARRAYSIZE(effectTypes))) {
+        effectPreviewStormMode_ = effectType == 1;
+        if (particleManager) {
+            particleManager->SetStormActive(false);
+            particleManager->ClearParticles();
+            if (effectPreviewStormMode_) {
+                particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+            }
+        }
+    }
+    if (effectPreviewStormMode_) {
+        ImGui::TextColored(ImVec4(0.52f, 0.72f, 1.0f, 1.0f), "Persistent preview: clouds / wind / rain / lightning");
+        DrawStormEffectEditorImGui();
+        return;
+    }
+    ImGui::Text("SPACE / H : Trigger");
+    ImGui::Checkbox("Auto Trigger", &effectPreviewAutoPlay_);
+    ImGui::Checkbox("Show GPU Sphere", &effectPreviewShowGPUParticleSphere_);
+    ImGui::SliderFloat("Interval", &effectPreviewInterval_, 0.2f, 3.0f);
+
+    if (ImGui::Button(effectPreviewStormMode_ ? "Restart Tempest Storm" : "Trigger Saber Hit", ImVec2(-1, 24)) && particleManager) {
+        if (effectPreviewStormMode_) {
+            particleManager->SetStormActive(false);
+            particleManager->ClearParticles();
+            particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+        } else {
+            EmitEffectPreviewBurst();
+        }
+    }
+    if (ImGui::Button("Clear Particles", ImVec2(-1, 24)) && particleManager) {
+        particleManager->ClearParticles();
+    }
+
+    if (ImGui::CollapsingHeader("Core Shape", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SliderFloat("Size", &effectPreviewHitSettings_.size, 0.2f, 3.0f);
+        ImGui::SliderFloat("Brightness", &effectPreviewHitSettings_.brightness, 0.1f, 2.5f);
+        ImGui::SliderFloat("Life Scale", &effectPreviewHitSettings_.lifeScale, 0.2f, 3.0f);
+        ImGui::SliderFloat("Slash Angle", &effectPreviewHitSettings_.slashAngle, -3.14f, 3.14f);
+        ImGui::SliderFloat("Slash Spread", &effectPreviewHitSettings_.slashSpread, 0.2f, 3.14f);
+        ImGui::Checkbox("Mirror Slash", &effectPreviewMirrorSlash_);
+        ImGui::SliderInt("Burst Count", &effectPreviewBurstCount_, 1, 8);
+        ImGui::SliderFloat("Burst Radius", &effectPreviewBurstRadius_, 0.0f, 2.0f);
+    }
+
+    if (ImGui::CollapsingHeader("Detail", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SliderInt("Slash Count", &effectPreviewHitSettings_.slashCount, 1, 32);
+        ImGui::SliderInt("Spark Count", &effectPreviewHitSettings_.sparkCount, 0, 160);
+        ImGui::SliderFloat("Spark Speed", &effectPreviewHitSettings_.sparkSpeed, 0.1f, 3.0f);
+        ImGui::SliderFloat("Spark Length", &effectPreviewHitSettings_.sparkLength, 0.1f, 3.0f);
+        ImGui::SliderFloat("Scatter Radius", &effectPreviewHitSettings_.scatterRadius, 0.0f, 3.0f);
+        ImGui::SliderFloat("Blue Ratio", &effectPreviewHitSettings_.blueRatio, 0.0f, 1.0f);
+        ImGui::SliderFloat("Ring Power", &effectPreviewHitSettings_.ringPower, 0.0f, 3.0f);
+        ImGui::SliderFloat("Core Power", &effectPreviewHitSettings_.corePower, 0.0f, 3.0f);
+        ImGui::SliderFloat("Cross Power", &effectPreviewHitSettings_.crossPower, 0.0f, 3.0f);
+        ImGui::SliderFloat("Pillar Power", &effectPreviewHitSettings_.pillarPower, 0.0f, 3.0f);
+        ImGui::SliderInt("Main Bolt Count", &effectPreviewHitSettings_.lightningCount, 0, 12);
+        ImGui::SliderInt("Lightning Segments", &effectPreviewHitSettings_.lightningSegments, 2, 8);
+        ImGui::SliderFloat("Lightning Length", &effectPreviewHitSettings_.lightningLength, 0.1f, 4.0f);
+        ImGui::SliderFloat("Lightning Spread", &effectPreviewHitSettings_.lightningSpread, 0.0f, 3.0f);
+        ImGui::SliderFloat("Lightning Power", &effectPreviewHitSettings_.lightningPower, 0.0f, 3.0f);
+        ImGui::SliderFloat("Main Bolt Width", &effectPreviewHitSettings_.lightningWidth, 0.1f, 4.0f);
+        ImGui::SliderFloat("Glow Width", &effectPreviewHitSettings_.lightningGlowWidth, 1.0f, 8.0f);
+        ImGui::SliderFloat("Glow Opacity", &effectPreviewHitSettings_.lightningGlowOpacity, 0.0f, 1.0f);
+        ImGui::SliderInt("Branch Count", &effectPreviewHitSettings_.lightningBranchCount, 0, 12);
+        ImGui::SliderFloat("Branch Length", &effectPreviewHitSettings_.lightningBranchLength, 0.05f, 1.0f);
+        ImGui::SliderFloat("Branch Spread", &effectPreviewHitSettings_.lightningBranchSpread, 0.0f, 1.57f);
+        ImGui::SliderFloat("Branch Width", &effectPreviewHitSettings_.lightningBranchWidth, 0.1f, 1.0f);
+        const char* lightningModes[] = { "Radial", "Slash Forward", "Slash Axis", "Custom" };
+        ImGui::Combo("Lightning Mode", &effectPreviewHitSettings_.lightningMode, lightningModes, 4);
+        if (effectPreviewHitSettings_.lightningMode == 3) {
+            ImGui::SliderFloat("Lightning Direction", &effectPreviewHitSettings_.lightningDirection, -3.14f, 3.14f);
+        }
+        if (effectPreviewHitSettings_.lightningMode != 0) {
+            ImGui::SliderFloat("Direction Spread", &effectPreviewHitSettings_.lightningDirectionSpread, 0.0f, 1.57f);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Colors", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::ColorEdit4("Core Color", &effectPreviewHitSettings_.coreColor.x);
+        ImGui::ColorEdit4("Slash Color", &effectPreviewHitSettings_.slashColor.x);
+        ImGui::ColorEdit4("Spark Primary", &effectPreviewHitSettings_.sparkColor.x);
+        ImGui::ColorEdit4("Spark Secondary", &effectPreviewHitSettings_.sparkSecondaryColor.x);
+        ImGui::ColorEdit4("Ring Color", &effectPreviewHitSettings_.ringColor.x);
+        ImGui::ColorEdit4("Cross Color", &effectPreviewHitSettings_.crossColor.x);
+        ImGui::ColorEdit4("Pillar Color", &effectPreviewHitSettings_.pillarColor.x);
+        ImGui::ColorEdit4("Lightning Color", &effectPreviewHitSettings_.lightningColor.x);
+        ImGui::ColorEdit4("Lightning Glow", &effectPreviewHitSettings_.lightningGlowColor.x);
+    }
+
+    if (ImGui::CollapsingHeader("Randomization", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Random Position", &effectPreviewHitSettings_.randomizePosition);
+        ImGui::Checkbox("Random Direction", &effectPreviewHitSettings_.randomizeDirection);
+        ImGui::Checkbox("Random Angle", &effectPreviewHitSettings_.randomizeAngle);
+        if (effectPreviewHitSettings_.randomizeAngle) {
+            ImGui::SliderFloat("Angle Random Range", &effectPreviewHitSettings_.angleRandomRange, 0.0f, 3.14f);
+        }
+        ImGui::Checkbox("Random Scale", &effectPreviewHitSettings_.randomizeScale);
+        ImGui::Checkbox("Random Lifetime", &effectPreviewHitSettings_.randomizeLifetime);
+        ImGui::Checkbox("Random Color", &effectPreviewHitSettings_.randomizeColor);
+    }
+
+    if (ImGui::CollapsingHeader("Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::Button("Saber Impact", ImVec2(140, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 1.25f;
+            effectPreviewHitSettings_.brightness = 1.55f;
+            effectPreviewHitSettings_.slashCount = 18;
+            effectPreviewHitSettings_.sparkCount = 84;
+            effectPreviewHitSettings_.ringPower = 1.35f;
+            effectPreviewHitSettings_.corePower = 1.15f;
+            effectPreviewHitSettings_.crossPower = 1.3f;
+            effectPreviewHitSettings_.pillarPower = 0.8f;
+            effectPreviewBurstCount_ = 2;
+            effectPreviewBurstRadius_ = 0.18f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Blue Flash", ImVec2(120, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.brightness = 1.9f;
+            effectPreviewHitSettings_.lifeScale = 0.85f;
+            effectPreviewHitSettings_.slashSpread = 2.2f;
+            effectPreviewHitSettings_.sparkCount = 112;
+            effectPreviewHitSettings_.blueRatio = 0.95f;
+            effectPreviewHitSettings_.corePower = 1.6f;
+            effectPreviewHitSettings_.crossPower = 1.8f;
+            effectPreviewHitSettings_.pillarPower = 1.2f;
+            effectPreviewHitSettings_.slashColor = { 0.42f, 0.78f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.sparkColor = { 0.42f, 0.78f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.crossColor = { 0.55f, 0.82f, 1.0f, 1.0f };
+            effectPreviewBurstCount_ = 1;
+            effectPreviewBurstRadius_ = 0.0f;
+        }
+        if (ImGui::Button("Spark Burst", ImVec2(140, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 0.9f;
+            effectPreviewHitSettings_.brightness = 1.35f;
+            effectPreviewHitSettings_.lifeScale = 1.45f;
+            effectPreviewHitSettings_.slashCount = 7;
+            effectPreviewHitSettings_.sparkCount = 150;
+            effectPreviewHitSettings_.sparkSpeed = 2.15f;
+            effectPreviewHitSettings_.sparkLength = 1.6f;
+            effectPreviewHitSettings_.scatterRadius = 1.6f;
+            effectPreviewHitSettings_.blueRatio = 0.25f;
+            effectPreviewHitSettings_.ringPower = 0.65f;
+            effectPreviewHitSettings_.corePower = 0.8f;
+            effectPreviewHitSettings_.crossPower = 0.55f;
+            effectPreviewHitSettings_.pillarPower = 0.2f;
+            effectPreviewBurstCount_ = 3;
+            effectPreviewBurstRadius_ = 0.35f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Heavy Hit", ImVec2(120, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 1.85f;
+            effectPreviewHitSettings_.brightness = 1.25f;
+            effectPreviewHitSettings_.lifeScale = 2.0f;
+            effectPreviewHitSettings_.slashSpread = 1.05f;
+            effectPreviewHitSettings_.slashCount = 13;
+            effectPreviewHitSettings_.sparkCount = 44;
+            effectPreviewHitSettings_.ringPower = 2.2f;
+            effectPreviewHitSettings_.corePower = 1.35f;
+            effectPreviewHitSettings_.crossPower = 0.85f;
+            effectPreviewHitSettings_.pillarPower = 1.65f;
+            effectPreviewBurstCount_ = 1;
+            effectPreviewBurstRadius_ = 0.0f;
+        }
+        if (ImGui::Button("Cinematic Finisher", ImVec2(-1, 28))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 2.15f;
+            effectPreviewHitSettings_.brightness = 2.15f;
+            effectPreviewHitSettings_.lifeScale = 1.55f;
+            effectPreviewHitSettings_.slashAngle = -0.42f;
+            effectPreviewHitSettings_.slashSpread = 2.75f;
+            effectPreviewHitSettings_.slashCount = 30;
+            effectPreviewHitSettings_.sparkCount = 160;
+            effectPreviewHitSettings_.sparkSpeed = 2.45f;
+            effectPreviewHitSettings_.sparkLength = 2.2f;
+            effectPreviewHitSettings_.scatterRadius = 1.35f;
+            effectPreviewHitSettings_.blueRatio = 0.72f;
+            effectPreviewHitSettings_.ringPower = 2.8f;
+            effectPreviewHitSettings_.corePower = 2.25f;
+            effectPreviewHitSettings_.crossPower = 2.65f;
+            effectPreviewHitSettings_.pillarPower = 1.45f;
+            effectPreviewHitSettings_.slashColor = { 0.38f, 0.78f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.sparkColor = { 0.38f, 0.78f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.sparkSecondaryColor = { 1.0f, 0.48f, 0.10f, 1.0f };
+            effectPreviewHitSettings_.ringColor = { 0.38f, 0.78f, 1.0f, 1.0f };
+            effectPreviewMirrorSlash_ = false;
+            effectPreviewBurstCount_ = 4;
+            effectPreviewBurstRadius_ = 0.28f;
+            EmitEffectPreviewBurst();
+        }
+        if (ImGui::Button("Lightning Slash", ImVec2(-1, 28))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 1.55f;
+            effectPreviewHitSettings_.brightness = 2.05f;
+            effectPreviewHitSettings_.lifeScale = 0.95f;
+            effectPreviewHitSettings_.slashAngle = -0.28f;
+            effectPreviewHitSettings_.slashSpread = 0.55f;
+            effectPreviewHitSettings_.slashCount = 1;
+            effectPreviewHitSettings_.sparkCount = 92;
+            effectPreviewHitSettings_.sparkSpeed = 1.85f;
+            effectPreviewHitSettings_.sparkLength = 1.75f;
+            effectPreviewHitSettings_.scatterRadius = 1.05f;
+            effectPreviewHitSettings_.blueRatio = 0.88f;
+            effectPreviewHitSettings_.ringPower = 1.25f;
+            effectPreviewHitSettings_.corePower = 1.55f;
+            effectPreviewHitSettings_.crossPower = 1.35f;
+            effectPreviewHitSettings_.pillarPower = 0.45f;
+            effectPreviewHitSettings_.lightningCount = 3;
+            effectPreviewHitSettings_.lightningSegments = 5;
+            effectPreviewHitSettings_.lightningLength = 2.15f;
+            effectPreviewHitSettings_.lightningSpread = 1.55f;
+            effectPreviewHitSettings_.lightningPower = 1.55f;
+            effectPreviewHitSettings_.lightningWidth = 2.2f;
+            effectPreviewHitSettings_.lightningGlowWidth = 3.6f;
+            effectPreviewHitSettings_.lightningGlowOpacity = 0.28f;
+            effectPreviewHitSettings_.lightningBranchCount = 4;
+            effectPreviewHitSettings_.lightningBranchLength = 0.38f;
+            effectPreviewHitSettings_.lightningBranchSpread = 0.72f;
+            effectPreviewHitSettings_.lightningBranchWidth = 0.38f;
+            effectPreviewHitSettings_.lightningMode = 2;
+            effectPreviewHitSettings_.lightningDirectionSpread = 0.28f;
+            effectPreviewHitSettings_.lightningColor = { 0.40f, 0.86f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.lightningGlowColor = { 0.24f, 0.28f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.sparkColor = { 0.40f, 0.86f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.sparkSecondaryColor = { 1.0f, 0.86f, 0.40f, 1.0f };
+            effectPreviewMirrorSlash_ = false;
+            effectPreviewBurstCount_ = 2;
+            effectPreviewBurstRadius_ = 0.16f;
+            EmitEffectPreviewBurst();
+        }
+        if (ImGui::Button("Shock Ring", ImVec2(140, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 1.35f;
+            effectPreviewHitSettings_.brightness = 1.75f;
+            effectPreviewHitSettings_.lifeScale = 1.35f;
+            effectPreviewHitSettings_.slashCount = 1;
+            effectPreviewHitSettings_.slashSpread = 0.2f;
+            effectPreviewHitSettings_.sparkCount = 32;
+            effectPreviewHitSettings_.sparkSpeed = 0.75f;
+            effectPreviewHitSettings_.sparkLength = 0.9f;
+            effectPreviewHitSettings_.scatterRadius = 0.45f;
+            effectPreviewHitSettings_.ringPower = 3.0f;
+            effectPreviewHitSettings_.corePower = 1.25f;
+            effectPreviewHitSettings_.crossPower = 0.15f;
+            effectPreviewHitSettings_.pillarPower = 0.15f;
+            effectPreviewHitSettings_.lightningCount = 6;
+            effectPreviewHitSettings_.lightningSegments = 6;
+            effectPreviewHitSettings_.lightningLength = 0.8f;
+            effectPreviewHitSettings_.lightningSpread = 2.4f;
+            effectPreviewHitSettings_.lightningPower = 0.75f;
+            effectPreviewHitSettings_.lightningMode = 0;
+            effectPreviewHitSettings_.lightningColor = { 0.52f, 0.92f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.ringColor = { 0.52f, 0.92f, 1.0f, 1.0f };
+            effectPreviewBurstCount_ = 1;
+            effectPreviewBurstRadius_ = 0.0f;
+            EmitEffectPreviewBurst();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Thin Cut", ImVec2(120, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 1.2f;
+            effectPreviewHitSettings_.brightness = 2.2f;
+            effectPreviewHitSettings_.lifeScale = 0.62f;
+            effectPreviewHitSettings_.slashAngle = -0.64f;
+            effectPreviewHitSettings_.slashSpread = 0.2f;
+            effectPreviewHitSettings_.slashCount = 1;
+            effectPreviewHitSettings_.sparkCount = 24;
+            effectPreviewHitSettings_.sparkSpeed = 1.25f;
+            effectPreviewHitSettings_.sparkLength = 1.25f;
+            effectPreviewHitSettings_.scatterRadius = 0.25f;
+            effectPreviewHitSettings_.blueRatio = 1.0f;
+            effectPreviewHitSettings_.ringPower = 0.35f;
+            effectPreviewHitSettings_.corePower = 0.75f;
+            effectPreviewHitSettings_.crossPower = 0.25f;
+            effectPreviewHitSettings_.pillarPower = 0.0f;
+            effectPreviewHitSettings_.lightningCount = 2;
+            effectPreviewHitSettings_.lightningSegments = 3;
+            effectPreviewHitSettings_.lightningLength = 1.15f;
+            effectPreviewHitSettings_.lightningSpread = 0.55f;
+            effectPreviewHitSettings_.lightningPower = 0.55f;
+            effectPreviewHitSettings_.lightningMode = 1;
+            effectPreviewHitSettings_.lightningDirectionSpread = 0.12f;
+            effectPreviewBurstCount_ = 1;
+            effectPreviewBurstRadius_ = 0.0f;
+            EmitEffectPreviewBurst();
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Saved Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Include in Showcase", &effectPresetIncludeInShowcase_);
+        ImGui::InputText("Preset Name", effectPresetNameBuffer_.data(), effectPresetNameBuffer_.size());
+        if (ImGui::Button("Save Preset", ImVec2(135, 24))) {
+            SaveEffectPreset(effectPresetNameBuffer_.data());
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Refresh", ImVec2(100, 24))) {
+            LoadEffectPresetNames();
+        }
+
+        const char* selectedPresetName = effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())
+            ? effectPresetNames_[effectPresetSelectedIndex_].c_str()
+            : "Select saved preset";
+        if (ImGui::BeginCombo("Saved", selectedPresetName)) {
+            for (int i = 0; i < static_cast<int>(effectPresetNames_.size()); ++i) {
+                bool selected = effectPresetSelectedIndex_ == i;
+                if (ImGui::Selectable(effectPresetNames_[i].c_str(), selected)) {
+                    effectPresetSelectedIndex_ = i;
+                    CopyPresetName(effectPresetNameBuffer_, effectPresetNames_[i]);
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::Button("Load Selected", ImVec2(135, 24))) {
+            if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
+                LoadEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
+            } else {
+                effectPresetStatus_ = "Preset: nothing selected";
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Save Over", ImVec2(100, 24))) {
+            if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
+                SaveEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
+            } else {
+                SaveEffectPreset(effectPresetNameBuffer_.data());
+            }
+        }
+        ImGui::TextWrapped("%s", effectPresetStatus_.c_str());
+    }
+
+    if (ImGui::CollapsingHeader("Spawn", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat3("Position", &effectPreviewPosition_.x, 0.05f, -20.0f, 20.0f);
+        if (ImGui::Button("Focus Camera", ImVec2(-1, 24))) {
+            camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
+        }
+        if (ImGui::Button("Reset Tuning", ImVec2(-1, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewMirrorSlash_ = false;
+            effectPreviewBurstCount_ = 1;
+            effectPreviewBurstRadius_ = 0.0f;
+        }
+    }
+}
+
 void MyGame::UpdateImGui() {
     ImGuiIO& io        = ImGui::GetIO();
     const float panelW = 320.0f;
@@ -603,6 +1259,9 @@ void MyGame::UpdateImGui() {
     }
     ImGui::Separator();
 
+    const bool isStageToolMode = (currentMode_ == AppMode::StageEditor ||
+                                  currentMode_ == AppMode::GamePlay_BlockPlace);
+
     // AppMode の選択 (コンボボックス)
     if (ImGui::CollapsingHeader("Hierarchy / Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
         int modeIndex = 0;
@@ -611,9 +1270,11 @@ void MyGame::UpdateImGui() {
         case AppMode::StageEditor:    modeIndex = 1; break;
         case AppMode::GamePlay:       modeIndex = 2; break;
         case AppMode::SkinningEditor: modeIndex = 3; break;
+        case AppMode::EffectPreview:  modeIndex = 4; break;
+        case AppMode::EffectShowcase: modeIndex = 5; break;
         default:                                     break;
         }
-        const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay", "SkinningEditor" };
+        const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay", "SkinningEditor", "EffectPreview", "EffectShowcase" };
         if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
             switch (modeIndex) {
             case 0: currentMode_ = AppMode::DebugView;      break;
@@ -623,15 +1284,30 @@ void MyGame::UpdateImGui() {
                 currentMode_ = AppMode::SkinningEditor;
                 camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
                 break;
+            case 4:
+                currentMode_ = AppMode::EffectPreview;
+                camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
+                break;
+            case 5:
+                currentMode_ = AppMode::EffectShowcase;
+                camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
+                break;
             }
         }
-        // デバッグ表示のオン/オフ切り替え
-        ImGui::Checkbox("Show 3D Objects",      &debugFlags_.show3DObjects);
-        ImGui::Checkbox("Show Terrain",          &debugFlags_.showTerrain);
-        ImGui::Checkbox("Show Skybox",           &debugFlags_.showSkybox);
-        ImGui::Checkbox("Show Skybox (Cubemap)", &showSkyboxCubemap_);
-        ImGui::Checkbox("Show Sprite",           &debugFlags_.showSprite);
-        ImGui::Checkbox("Show Particles",        &debugFlags_.showParticles);
+        if (currentMode_ == AppMode::EffectPreview) {
+            ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "Effect only viewport");
+            ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
+        } else {
+            // デバッグ表示のオン/オフ切り替え
+            ImGui::Checkbox("Show 3D Objects",      &debugFlags_.show3DObjects);
+            ImGui::Checkbox("Show Terrain",          &debugFlags_.showTerrain);
+            ImGui::Checkbox("Show Skybox",           &debugFlags_.showSkybox);
+            ImGui::Checkbox("Show Skybox (Cubemap)", &showSkyboxCubemap_);
+            if (currentMode_ == AppMode::DebugView) {
+                ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
+            }
+            ImGui::Checkbox("Show Particles",        &debugFlags_.showParticles);
+        }
     }
 
     // オフスクリーン / ポストエフェクト設定
@@ -651,11 +1327,13 @@ void MyGame::UpdateImGui() {
         }
     }
 
-    if (ImGui::CollapsingHeader("StageMap Info")) {
-        stageMap_.DrawImGui();
-    }
-    if (ImGui::CollapsingHeader("Cursor Info")) {
-        mapCursor_->DrawImGui();
+    if (isStageToolMode) {
+        if (ImGui::CollapsingHeader("StageMap Info")) {
+            stageMap_.DrawImGui();
+        }
+        if (ImGui::CollapsingHeader("Cursor Info")) {
+            mapCursor_->DrawImGui();
+        }
     }
 
     ImGui::End(); // 左パネルここまで
@@ -663,7 +1341,18 @@ void MyGame::UpdateImGui() {
     // ========================================================
     // 右パネル (Stage Editor) - StageEditorController に委譲
     // ========================================================
-    stageEditorController_.DrawImGui(stageMap_, stageRenderer_.get(), mapCursor_.get(), player_.get());
+    if (isStageToolMode) {
+        stageEditorController_.DrawImGui(stageMap_, stageRenderer_.get(), mapCursor_.get(), player_.get());
+    }
+
+    if (currentMode_ == AppMode::EffectPreview) {
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panelW, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(panelW, io.DisplaySize.y - botH), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(1.0f);
+        ImGui::Begin("Effect Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        DrawEffectPreviewEditorImGui();
+        ImGui::End();
+    }
 
     // ========================================================
     // 下パネル: Tools & Controls
@@ -676,6 +1365,206 @@ void MyGame::UpdateImGui() {
     if (currentMode_ == AppMode::SkinningEditor && skinningEditor_.HasPreviewObject()) {
         // タイムライン UI を SkinningEditorController に委譲
         skinningEditor_.DrawImGuiTimeline();
+
+    } else if (currentMode_ == AppMode::EffectPreview) {
+        ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Preview ]");
+        ImGui::Text("Effect Type: %s", effectPreviewStormMode_ ? "Tempest Storm" : "Hit Effect");
+        ImGui::Text("Editor controls are on the right panel.");
+        ImGui::Text("SPACE / H : Trigger Saber Hit");
+        ImGui::Text("Saved preset: %s", effectPresetNameBuffer_.data());
+        ImGui::Text("GPU Sphere: %s", effectPreviewShowGPUParticleSphere_ ? "ON" : "OFF");
+        if (ImGui::Button("Trigger Saber Hit", ImVec2(180, 24)) && particleManager) {
+            EmitEffectPreviewBurst();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Clear Particles", ImVec2(140, 24)) && particleManager) {
+            particleManager->ClearParticles();
+        }
+
+    } else if (false && currentMode_ == AppMode::EffectPreview) {
+        ImGui::Columns(2, "EffectPreviewColumns", false);
+        ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Preview ]");
+        ImGui::Text("SPACE / H : Trigger Saber Hit");
+        ImGui::Checkbox("Auto Trigger", &effectPreviewAutoPlay_);
+        ImGui::Checkbox("Show GPU Particle Sphere", &effectPreviewShowGPUParticleSphere_);
+        ImGui::SliderFloat("Interval", &effectPreviewInterval_, 0.2f, 3.0f);
+        if (ImGui::Button("Trigger Saber Hit", ImVec2(180, 24)) && particleManager) {
+            EmitEffectPreviewBurst();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Clear Particles", ImVec2(140, 24)) && particleManager) {
+            particleManager->ClearParticles();
+        }
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.55f, 0.9f, 1.0f, 1.0f), "[ Hit Effect Tuning ]");
+        ImGui::SliderFloat("Size", &effectPreviewHitSettings_.size, 0.2f, 3.0f);
+        ImGui::SliderFloat("Brightness", &effectPreviewHitSettings_.brightness, 0.1f, 2.5f);
+        ImGui::SliderFloat("Life Scale", &effectPreviewHitSettings_.lifeScale, 0.2f, 3.0f);
+        ImGui::SliderFloat("Slash Angle", &effectPreviewHitSettings_.slashAngle, -3.14f, 3.14f);
+        ImGui::SliderFloat("Slash Spread", &effectPreviewHitSettings_.slashSpread, 0.2f, 3.14f);
+        ImGui::Checkbox("Mirror Slash", &effectPreviewMirrorSlash_);
+        ImGui::SliderInt("Burst Count", &effectPreviewBurstCount_, 1, 8);
+        ImGui::SliderFloat("Burst Radius", &effectPreviewBurstRadius_, 0.0f, 2.0f);
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.95f, 0.95f, 0.35f, 1.0f), "[ Presets ]");
+        if (ImGui::Button("Saber Impact", ImVec2(120, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 1.25f;
+            effectPreviewHitSettings_.brightness = 1.55f;
+            effectPreviewHitSettings_.slashCount = 18;
+            effectPreviewHitSettings_.sparkCount = 84;
+            effectPreviewHitSettings_.ringPower = 1.35f;
+            effectPreviewHitSettings_.corePower = 1.15f;
+            effectPreviewHitSettings_.crossPower = 1.3f;
+            effectPreviewHitSettings_.pillarPower = 0.8f;
+            effectPreviewBurstCount_ = 2;
+            effectPreviewBurstRadius_ = 0.18f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Blue Flash", ImVec2(110, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.brightness = 1.9f;
+            effectPreviewHitSettings_.lifeScale = 0.85f;
+            effectPreviewHitSettings_.slashSpread = 2.2f;
+            effectPreviewHitSettings_.sparkCount = 112;
+            effectPreviewHitSettings_.blueRatio = 0.95f;
+            effectPreviewHitSettings_.corePower = 1.6f;
+            effectPreviewHitSettings_.crossPower = 1.8f;
+            effectPreviewHitSettings_.pillarPower = 1.2f;
+            effectPreviewHitSettings_.coolColor = { 0.42f, 0.78f, 1.0f, 1.0f };
+            effectPreviewBurstCount_ = 1;
+            effectPreviewBurstRadius_ = 0.0f;
+        }
+        if (ImGui::Button("Spark Burst", ImVec2(120, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 0.9f;
+            effectPreviewHitSettings_.brightness = 1.35f;
+            effectPreviewHitSettings_.lifeScale = 1.45f;
+            effectPreviewHitSettings_.slashCount = 7;
+            effectPreviewHitSettings_.sparkCount = 150;
+            effectPreviewHitSettings_.sparkSpeed = 2.15f;
+            effectPreviewHitSettings_.sparkLength = 1.6f;
+            effectPreviewHitSettings_.scatterRadius = 1.6f;
+            effectPreviewHitSettings_.blueRatio = 0.25f;
+            effectPreviewHitSettings_.ringPower = 0.65f;
+            effectPreviewHitSettings_.corePower = 0.8f;
+            effectPreviewHitSettings_.crossPower = 0.55f;
+            effectPreviewHitSettings_.pillarPower = 0.2f;
+            effectPreviewBurstCount_ = 3;
+            effectPreviewBurstRadius_ = 0.35f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Heavy Hit", ImVec2(110, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 1.85f;
+            effectPreviewHitSettings_.brightness = 1.25f;
+            effectPreviewHitSettings_.lifeScale = 2.0f;
+            effectPreviewHitSettings_.slashSpread = 1.05f;
+            effectPreviewHitSettings_.slashCount = 13;
+            effectPreviewHitSettings_.sparkCount = 44;
+            effectPreviewHitSettings_.ringPower = 2.2f;
+            effectPreviewHitSettings_.corePower = 1.35f;
+            effectPreviewHitSettings_.crossPower = 0.85f;
+            effectPreviewHitSettings_.pillarPower = 1.65f;
+            effectPreviewBurstCount_ = 1;
+            effectPreviewBurstRadius_ = 0.0f;
+        }
+        if (ImGui::Button("Cinematic Finisher", ImVec2(240, 28))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewHitSettings_.size = 2.15f;
+            effectPreviewHitSettings_.brightness = 2.15f;
+            effectPreviewHitSettings_.lifeScale = 1.55f;
+            effectPreviewHitSettings_.slashAngle = -0.42f;
+            effectPreviewHitSettings_.slashSpread = 2.75f;
+            effectPreviewHitSettings_.slashCount = 30;
+            effectPreviewHitSettings_.sparkCount = 160;
+            effectPreviewHitSettings_.sparkSpeed = 2.45f;
+            effectPreviewHitSettings_.sparkLength = 2.2f;
+            effectPreviewHitSettings_.scatterRadius = 1.35f;
+            effectPreviewHitSettings_.blueRatio = 0.72f;
+            effectPreviewHitSettings_.ringPower = 2.8f;
+            effectPreviewHitSettings_.corePower = 2.25f;
+            effectPreviewHitSettings_.crossPower = 2.65f;
+            effectPreviewHitSettings_.pillarPower = 1.45f;
+            effectPreviewHitSettings_.coolColor = { 0.38f, 0.78f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.warmColor = { 1.0f, 0.48f, 0.10f, 1.0f };
+            effectPreviewMirrorSlash_ = false;
+            effectPreviewBurstCount_ = 4;
+            effectPreviewBurstRadius_ = 0.28f;
+            EmitEffectPreviewBurst();
+        }
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.50f, 1.0f, 0.55f, 1.0f), "[ Saved Presets ]");
+        ImGui::InputText("Preset Name", effectPresetNameBuffer_.data(), effectPresetNameBuffer_.size());
+        if (ImGui::Button("Save Preset", ImVec2(120, 24))) {
+            SaveEffectPreset(effectPresetNameBuffer_.data());
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Refresh List", ImVec2(120, 24))) {
+            LoadEffectPresetNames();
+        }
+
+        const char* selectedPresetName = effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())
+            ? effectPresetNames_[effectPresetSelectedIndex_].c_str()
+            : "Select saved preset";
+        if (ImGui::BeginCombo("Saved Presets", selectedPresetName)) {
+            for (int i = 0; i < static_cast<int>(effectPresetNames_.size()); ++i) {
+                bool selected = effectPresetSelectedIndex_ == i;
+                if (ImGui::Selectable(effectPresetNames_[i].c_str(), selected)) {
+                    effectPresetSelectedIndex_ = i;
+                    CopyPresetName(effectPresetNameBuffer_, effectPresetNames_[i]);
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::Button("Load Selected", ImVec2(120, 24))) {
+            if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
+                LoadEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
+            } else {
+                effectPresetStatus_ = "Preset: nothing selected";
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Save Over", ImVec2(120, 24))) {
+            if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
+                SaveEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
+            } else {
+                SaveEffectPreset(effectPresetNameBuffer_.data());
+            }
+        }
+        ImGui::TextUnformatted(effectPresetStatus_.c_str());
+
+        ImGui::NextColumn();
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.25f, 1.0f), "[ Spawn Transform ]");
+        ImGui::DragFloat3("Position", &effectPreviewPosition_.x, 0.05f, -20.0f, 20.0f);
+        if (ImGui::Button("Focus Camera", ImVec2(160, 24))) {
+            camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
+        }
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.35f, 1.0f), "[ Detail ]");
+        ImGui::SliderInt("Slash Count", &effectPreviewHitSettings_.slashCount, 3, 32);
+        ImGui::SliderInt("Spark Count", &effectPreviewHitSettings_.sparkCount, 0, 160);
+        ImGui::SliderFloat("Spark Speed", &effectPreviewHitSettings_.sparkSpeed, 0.1f, 3.0f);
+        ImGui::SliderFloat("Spark Length", &effectPreviewHitSettings_.sparkLength, 0.1f, 3.0f);
+        ImGui::SliderFloat("Scatter Radius", &effectPreviewHitSettings_.scatterRadius, 0.0f, 3.0f);
+        ImGui::SliderFloat("Blue Ratio", &effectPreviewHitSettings_.blueRatio, 0.0f, 1.0f);
+        ImGui::SliderFloat("Ring Power", &effectPreviewHitSettings_.ringPower, 0.0f, 3.0f);
+        ImGui::SliderFloat("Core Power", &effectPreviewHitSettings_.corePower, 0.0f, 3.0f);
+        ImGui::SliderFloat("Cross Power", &effectPreviewHitSettings_.crossPower, 0.0f, 3.0f);
+        ImGui::SliderFloat("Pillar Power", &effectPreviewHitSettings_.pillarPower, 0.0f, 3.0f);
+        ImGui::ColorEdit3("Cool Color", &effectPreviewHitSettings_.coolColor.x);
+        ImGui::ColorEdit3("Warm Color", &effectPreviewHitSettings_.warmColor.x);
+        if (ImGui::Button("Reset Tuning", ImVec2(160, 24))) {
+            effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
+            effectPreviewMirrorSlash_ = false;
+            effectPreviewBurstCount_ = 1;
+            effectPreviewBurstRadius_ = 0.0f;
+        }
+        ImGui::Text("Particles are forced visible in this mode.");
+        ImGui::Columns(1);
 
     } else if (currentMode_ == AppMode::GamePlay && player_) {
         ImGui::Columns(2, "GameplayColumns", false);
@@ -719,10 +1608,49 @@ void MyGame::UpdateImGui() {
         ImGui::Text("Stock: %d", blockInventory_.GetBlockCount());
         ImGui::Columns(1);
 
-    } else {
-        // DebugView
-        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Application Status ]");
-        ImGui::Text("Scene: DEBUG VIEW");
+    } else if (currentMode_ == AppMode::GamePlay_BlockPlace) {
+        ImGui::Columns(2, "BlockPlaceColumns", false);
+
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Block Placement ]");
+        ImGui::Text("W/A/S/D : Move Cursor");
+        ImGui::Text("Q/E     : Cursor Up/Down");
+        ImGui::Text("ENTER   : Place Block");
+        ImGui::Text("R       : Rotate Block");
+        ImGui::Text("ESC / B : Cancel");
+
+        ImGui::NextColumn();
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Placement State ]");
+        const Int3& cursor = mapCursor_->GetIndex();
+        ImGui::Text("Cursor: X:%d Y:%d Z:%d", cursor.x, cursor.y, cursor.z);
+        if (blockInventoryUI_) {
+            ImGui::Text("Selected: %s", BlockTypeToString(blockInventoryUI_->GetSelectedBlockType()));
+        }
+        ImGui::Text("Rotation Y: %.1f deg", placeRotationY_ * 57.29578f);
+        ImGui::Columns(1);
+
+    } else if (currentMode_ == AppMode::EffectShowcase) {
+        const int presetCount = static_cast<int>(effectShowcasePresetNames_.size());
+        const int safeIndex = presetCount > 0
+            ? std::clamp(effectShowcaseSelectedIndex_, 0, presetCount - 1)
+            : 0;
+        const char* presetName = presetCount > 0
+            ? effectShowcasePresetNames_[safeIndex].c_str()
+            : "No showcase presets";
+
+        ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Showcase ]");
+        ImGui::Text("Preset: %02d / %02d  %s", presetCount > 0 ? safeIndex + 1 : 0, presetCount, presetName);
+        ImGui::Text("LEFT / RIGHT : Select    SPACE : Replay    A : Auto Play [%s]    TAB : Game",
+            effectShowcaseAutoPlay_ ? "ON" : "OFF");
+        ImGui::Text("MMB Drag : Orbit    Shift + MMB : Pan    Mouse Wheel : Zoom");
+
+    } else if (currentMode_ == AppMode::StageSelect) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "[ Stage Select ]");
+        ImGui::Text("Choose a stage from the center view.");
+        ImGui::Text("Only stage selection UI is active in this mode.");
+
+    } else if (currentMode_ == AppMode::DebugView) {
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Debug View ]");
+        ImGui::Text("General object, terrain, sprite, and particle checks.");
 
         // --- Player Options ---
         if (ImGui::CollapsingHeader("Player Settings")) {
@@ -747,6 +1675,10 @@ void MyGame::UpdateImGui() {
                 player_->SetEnvironmentCoefficient(playerEnvironmentCoefficient_);
             }
         }
+
+    } else {
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Application Status ]");
+        ImGui::Text("No mode-specific tools.");
     }
 
     ImGui::End(); // 下パネルここまで
@@ -841,9 +1773,7 @@ void MyGame::Draw() {
     // ========================================================
     // パス3: ImGui の描画コマンドを CommandList に追加して Present
     // ========================================================
-#ifndef NDEBUG
     dxCommon->EndImGui();
-#endif
     dxCommon->PostDraw(); // コマンドを GPU に送信し SwapChain を Present
 }
 
@@ -859,7 +1789,7 @@ void MyGame::Draw() {
 // ==========================================================
 void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4& lightVP) {
     // show3DObjects が OFF のときは何も描画しない (ImGui のみ表示)
-    if (!debugFlags_.show3DObjects) {
+    if (!debugFlags_.show3DObjects && currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
         return;
     }
 
@@ -868,6 +1798,18 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
     commandList->SetDescriptorHeaps(1, heaps);
     object3dCommon->PreDraw(); // 通常描画用 RootSignature / PSO をバインド
     commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+
+    if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
+        if (terrainObject_) {
+            terrainObject_->Draw();
+        }
+        if (debugFlags_.showParticles) {
+            ID3D12DescriptorHeap* ph[] = { textureManager->GetSrvHeap() };
+            commandList->SetDescriptorHeaps(1, ph);
+            particleManager->Draw();
+        }
+        return;
+    }
 
     // ---- シーン別描画ルーティング ----
     // 全シーン共通でスカイボックスを描画（最背面）
@@ -884,7 +1826,8 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
 
         bool isGameMode = (currentMode_ == AppMode::StageEditor ||
                            currentMode_ == AppMode::GamePlay     ||
-                           currentMode_ == AppMode::GamePlay_BlockPlace);
+                           currentMode_ == AppMode::GamePlay_BlockPlace ||
+                           currentMode_ == AppMode::EffectPreview);
 
         // ゲーム系モードではステージブロックを描画する
         if (isGameMode && stageRenderer_) {
@@ -895,7 +1838,7 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
             commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
         }
 
-        if (currentMode_ == AppMode::GamePlay) {
+        if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::EffectPreview) {
             // プレイヤー本体の描画 (一人称時はスキップ)
             if (player_ && !useFirstPersonCamera_) {
                 player_->Draw();
@@ -908,7 +1851,7 @@ void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4
                 }
             }
             // 3D UI (ドア・はしごのプロンプトなど)
-            if (gameplayUIManager_) {
+            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_) {
                 gameplayUIManager_->Draw3DPrompts(
                     true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
             }
@@ -982,9 +1925,7 @@ void MyGame::Finalize() {
 
     sound.Finalize();
 
-#ifndef NDEBUG
     dxCommon->FinalizeImGui();
-#endif
 
     // シーン・モデルの解放
     
@@ -1038,6 +1979,620 @@ void MyGame::UpdateDebugView() {
     // カーソル移動処理は StageEditorController に委譲
     stageEditorController_.HandleCursorInput(
         input.get(), stageMap_, mapCursor_.get(), lightCamera_.get(), camera.get());
+}
+
+void MyGame::LoadStormPresetNames() {
+    stormPresetNames_.clear();
+    stormShowcasePresetNames_.clear();
+    stormPresetSelectedIndex_ = -1;
+
+    if (std::filesystem::exists(kStormPresetPath)) {
+        std::ifstream file(kStormPresetPath);
+        try {
+            json presets;
+            file >> presets;
+            if (presets.is_array()) {
+                for (const auto& item : presets) {
+                    const std::string name = item.value("name", "");
+                    if (!name.empty()) {
+                        stormPresetNames_.push_back(name);
+                        if (item.value("showcase", true)) {
+                            stormShowcasePresetNames_.push_back(name);
+                        }
+                    }
+                }
+            }
+        } catch (const std::exception&) {
+            stormPresetStatus_ = "Storm preset: parse failed";
+        }
+    }
+
+    if (stormPresetNames_.empty()) {
+        stormPresetNames_.push_back(kStormShowcaseName);
+        stormShowcasePresetNames_.push_back(kStormShowcaseName);
+    }
+}
+
+bool MyGame::SaveStormPreset(const std::string& name) {
+    if (name.empty() || !particleManager) {
+        stormPresetStatus_ = "Storm preset: invalid name";
+        return false;
+    }
+
+    json presets = json::array();
+    if (std::filesystem::exists(kStormPresetPath)) {
+        std::ifstream input(kStormPresetPath);
+        try { input >> presets; } catch (const std::exception&) { presets = json::array(); }
+        if (!presets.is_array()) presets = json::array();
+    }
+
+    const auto& s = particleManager->GetStormSettings();
+    json item;
+    item["name"] = name;
+    item["showcase"] = stormPresetIncludeInShowcase_;
+    item["cloudAreaX"] = s.cloudAreaX; item["cloudAreaZ"] = s.cloudAreaZ;
+    item["cloudHeight"] = s.cloudHeight; item["cloudEmitRate"] = s.cloudEmitRate;
+    item["cloudLife"] = s.cloudLife; item["cloudSize"] = s.cloudSize;
+    item["randomizeCloudPosition"] = s.randomizeCloudPosition; item["randomizeCloudSize"] = s.randomizeCloudSize;
+    item["rainAreaX"] = s.rainAreaX; item["rainAreaZ"] = s.rainAreaZ;
+    item["rainEmitRate"] = s.rainEmitRate; item["rainSpeed"] = s.rainSpeed; item["rainLength"] = s.rainLength;
+    item["randomizeRainPosition"] = s.randomizeRainPosition; item["randomizeRainSpeed"] = s.randomizeRainSpeed;
+    item["windEmitRate"] = s.windEmitRate; item["windSpeed"] = s.windSpeed; item["windLength"] = s.windLength;
+    item["lightningIntervalMin"] = s.lightningIntervalMin; item["lightningIntervalMax"] = s.lightningIntervalMax;
+    item["lightningFrequency"] = s.lightningFrequency;
+    item["lightningAreaX"] = s.lightningAreaX; item["lightningAreaZ"] = s.lightningAreaZ;
+    item["lightningStrikeSize"] = s.lightningStrikeSize;
+    item["lightningSimultaneousCount"] = s.lightningSimultaneousCount;
+    item["lightningSimultaneousSpread"] = s.lightningSimultaneousSpread;
+    item["lightningBurstCount"] = s.lightningBurstCount;
+    item["lightningBurstInterval"] = s.lightningBurstInterval;
+    item["lightningCount"] = s.lightningCount; item["lightningSegments"] = s.lightningSegments;
+    item["lightningLength"] = s.lightningLength; item["lightningSpread"] = s.lightningSpread;
+    item["lightningPower"] = s.lightningPower; item["lightningWidth"] = s.lightningWidth;
+    item["lightningGlowWidth"] = s.lightningGlowWidth; item["lightningGlowOpacity"] = s.lightningGlowOpacity;
+    item["lightningBranchCount"] = s.lightningBranchCount;
+    item["lightningBranchLength"] = s.lightningBranchLength; item["lightningBranchSpread"] = s.lightningBranchSpread;
+    item["lightningBranchWidth"] = s.lightningBranchWidth;
+    item["pointLightPower"] = s.pointLightPower;
+    item["randomizeLightningPosition"] = s.randomizeLightningPosition;
+    item["randomizeLightningInterval"] = s.randomizeLightningInterval;
+    item["randomizeLightningDirection"] = s.randomizeLightningDirection;
+    item["randomizeLightningSize"] = s.randomizeLightningSize;
+    item["randomizeLightningBurstCount"] = s.randomizeLightningBurstCount;
+    item["randomizeLightningBranchCount"] = s.randomizeLightningBranchCount;
+    auto writeColor = [&item](const char* key, const Vector4& color) {
+        const std::string prefix = key;
+        item[prefix + "_r"] = color.x; item[prefix + "_g"] = color.y;
+        item[prefix + "_b"] = color.z; item[prefix + "_a"] = color.w;
+    };
+    writeColor("cloudColor", s.cloudColor); writeColor("rainColor", s.rainColor);
+    writeColor("windColor", s.windColor); writeColor("lightningColor", s.lightningColor);
+    writeColor("lightningGlowColor", s.lightningGlowColor);
+
+    bool replaced = false;
+    for (auto& preset : presets) {
+        if (preset.value("name", "") == name) { preset = item; replaced = true; break; }
+    }
+    if (!replaced) presets.push_back(item);
+    std::filesystem::create_directories(std::filesystem::path(kStormPresetPath).parent_path());
+    std::ofstream output(kStormPresetPath);
+    if (!output.is_open()) { stormPresetStatus_ = "Storm preset: save failed"; return false; }
+    output << presets.dump(4);
+    output.close();
+    LoadEffectPresetNames();
+    for (int i = 0; i < static_cast<int>(stormPresetNames_.size()); ++i) {
+        if (stormPresetNames_[i] == name) {
+            stormPresetSelectedIndex_ = i;
+            break;
+        }
+    }
+    CopyPresetName(stormPresetNameBuffer_, name);
+    stormPresetStatus_ = "Storm preset saved: " + name;
+    return true;
+}
+
+bool MyGame::LoadStormPreset(const std::string& name) {
+    if (!particleManager) return false;
+    if (!std::filesystem::exists(kStormPresetPath)) {
+        if (name == kStormShowcaseName) {
+            particleManager->GetStormSettings() = ParticleManager::StormEffectSettings{};
+            return true;
+        }
+        return false;
+    }
+    std::ifstream file(kStormPresetPath);
+    try {
+        json presets; file >> presets;
+        for (const auto& item : presets) {
+            if (item.value("name", "") != name) continue;
+            auto& s = particleManager->GetStormSettings();
+            const float legacyAreaX = item.value("areaX", s.cloudAreaX);
+            const float legacyAreaZ = item.value("areaZ", s.cloudAreaZ);
+            s.cloudAreaX = item.value("cloudAreaX", legacyAreaX); s.cloudAreaZ = item.value("cloudAreaZ", legacyAreaZ);
+            s.cloudHeight = item.value("cloudHeight", s.cloudHeight); s.cloudEmitRate = item.value("cloudEmitRate", s.cloudEmitRate);
+            s.cloudLife = item.value("cloudLife", s.cloudLife); s.cloudSize = item.value("cloudSize", s.cloudSize);
+            s.randomizeCloudPosition = item.value("randomizeCloudPosition", s.randomizeCloudPosition);
+            s.randomizeCloudSize = item.value("randomizeCloudSize", s.randomizeCloudSize);
+            s.rainAreaX = item.value("rainAreaX", legacyAreaX); s.rainAreaZ = item.value("rainAreaZ", legacyAreaZ);
+            s.rainEmitRate = item.value("rainEmitRate", s.rainEmitRate); s.rainSpeed = item.value("rainSpeed", s.rainSpeed); s.rainLength = item.value("rainLength", s.rainLength);
+            s.randomizeRainPosition = item.value("randomizeRainPosition", s.randomizeRainPosition);
+            s.randomizeRainSpeed = item.value("randomizeRainSpeed", s.randomizeRainSpeed);
+            s.windEmitRate = item.value("windEmitRate", s.windEmitRate); s.windSpeed = item.value("windSpeed", s.windSpeed); s.windLength = item.value("windLength", s.windLength);
+            s.lightningIntervalMin = item.value("lightningIntervalMin", s.lightningIntervalMin); s.lightningIntervalMax = item.value("lightningIntervalMax", s.lightningIntervalMax);
+            s.lightningFrequency = item.value("lightningFrequency", s.lightningFrequency);
+            s.lightningAreaX = item.value("lightningAreaX", legacyAreaX * 0.5f);
+            s.lightningAreaZ = item.value("lightningAreaZ", legacyAreaZ * 0.4f);
+            s.lightningStrikeSize = item.value("lightningStrikeSize", s.lightningStrikeSize);
+            s.lightningSimultaneousCount = item.value("lightningSimultaneousCount", s.lightningSimultaneousCount);
+            s.lightningSimultaneousSpread = item.value("lightningSimultaneousSpread", s.lightningSimultaneousSpread);
+            s.lightningBurstCount = item.value("lightningBurstCount", s.lightningBurstCount);
+            s.lightningBurstInterval = item.value("lightningBurstInterval", s.lightningBurstInterval);
+            s.lightningCount = item.value("lightningCount", s.lightningCount); s.lightningSegments = item.value("lightningSegments", s.lightningSegments);
+            s.lightningLength = item.value("lightningLength", s.lightningLength); s.lightningSpread = item.value("lightningSpread", s.lightningSpread);
+            s.lightningPower = item.value("lightningPower", s.lightningPower); s.lightningWidth = item.value("lightningWidth", s.lightningWidth);
+            s.lightningGlowWidth = item.value("lightningGlowWidth", s.lightningGlowWidth); s.lightningGlowOpacity = item.value("lightningGlowOpacity", s.lightningGlowOpacity);
+            s.lightningBranchCount = item.value("lightningBranchCount", s.lightningBranchCount);
+            s.lightningBranchLength = item.value("lightningBranchLength", s.lightningBranchLength); s.lightningBranchSpread = item.value("lightningBranchSpread", s.lightningBranchSpread);
+            s.lightningBranchWidth = item.value("lightningBranchWidth", s.lightningBranchWidth);
+            s.pointLightPower = item.value("pointLightPower", s.pointLightPower);
+            s.randomizeLightningPosition = item.value("randomizeLightningPosition", s.randomizeLightningPosition);
+            s.randomizeLightningInterval = item.value("randomizeLightningInterval", s.randomizeLightningInterval);
+            s.randomizeLightningDirection = item.value("randomizeLightningDirection", s.randomizeLightningDirection);
+            s.randomizeLightningSize = item.value("randomizeLightningSize", s.randomizeLightningSize);
+            s.randomizeLightningBurstCount = item.value("randomizeLightningBurstCount", s.randomizeLightningBurstCount);
+            s.randomizeLightningBranchCount = item.value("randomizeLightningBranchCount", s.randomizeLightningBranchCount);
+            auto readColor = [&item](const char* key, Vector4& color) {
+                const std::string prefix = key;
+                color.x = item.value(prefix + "_r", color.x); color.y = item.value(prefix + "_g", color.y);
+                color.z = item.value(prefix + "_b", color.z); color.w = item.value(prefix + "_a", color.w);
+            };
+            readColor("cloudColor", s.cloudColor); readColor("rainColor", s.rainColor);
+            readColor("windColor", s.windColor); readColor("lightningColor", s.lightningColor);
+            readColor("lightningGlowColor", s.lightningGlowColor);
+            stormPresetIncludeInShowcase_ = item.value("showcase", true);
+            CopyPresetName(stormPresetNameBuffer_, name);
+            stormPresetStatus_ = "Storm preset loaded: " + name;
+            return true;
+        }
+    } catch (const std::exception&) { stormPresetStatus_ = "Storm preset: parse failed"; }
+    return false;
+}
+
+void MyGame::LoadEffectPresetNames() {
+    effectPresetNames_.clear();
+    effectShowcasePresetNames_.clear();
+    LoadStormPresetNames();
+    effectShowcasePresetNames_.insert(
+        effectShowcasePresetNames_.end(), stormShowcasePresetNames_.begin(), stormShowcasePresetNames_.end());
+    effectPresetSelectedIndex_ = -1;
+
+    if (!std::filesystem::exists(kEffectPresetPath)) {
+        effectPresetStatus_ = "Preset: no saved file";
+        return;
+    }
+
+    std::ifstream file(kEffectPresetPath);
+    if (!file.is_open()) {
+        effectPresetStatus_ = "Preset: failed to open list";
+        return;
+    }
+
+    try {
+        json presets;
+        file >> presets;
+        if (!presets.is_array()) {
+            effectPresetStatus_ = "Preset: invalid json";
+            return;
+        }
+
+        for (const auto& item : presets) {
+            std::string name = item.value("name", "");
+            if (!name.empty()) {
+                effectPresetNames_.push_back(name);
+                if (item.value("showcase", true)) {
+                    effectShowcasePresetNames_.push_back(name);
+                }
+            }
+        }
+        effectPresetStatus_ = effectPresetNames_.empty() ? "Preset: empty" : "Preset: list loaded";
+    } catch (const std::exception&) {
+        effectPresetStatus_ = "Preset: parse failed";
+    }
+}
+
+bool MyGame::SaveEffectPreset(const std::string& name) {
+    if (name.empty()) {
+        effectPresetStatus_ = "Preset: name is empty";
+        return false;
+    }
+
+    std::filesystem::create_directories(std::filesystem::path(kEffectPresetPath).parent_path());
+
+    json presets = json::array();
+    if (std::filesystem::exists(kEffectPresetPath)) {
+        std::ifstream input(kEffectPresetPath);
+        if (input.is_open()) {
+            try {
+                input >> presets;
+                if (!presets.is_array()) {
+                    presets = json::array();
+                }
+            } catch (const std::exception&) {
+                presets = json::array();
+            }
+        }
+    }
+
+    json saved = ToJson(
+        effectPreviewHitSettings_,
+        name.c_str(),
+        effectPreviewShowGPUParticleSphere_,
+        effectPreviewMirrorSlash_,
+        effectPreviewBurstCount_,
+        effectPreviewBurstRadius_,
+        effectPresetIncludeInShowcase_);
+
+    bool updated = false;
+    for (auto& item : presets) {
+        if (item.value("name", "") == name) {
+            item = saved;
+            updated = true;
+            break;
+        }
+    }
+    if (!updated) {
+        presets.push_back(saved);
+    }
+
+    std::ofstream output(kEffectPresetPath);
+    if (!output.is_open()) {
+        effectPresetStatus_ = "Preset: save failed";
+        return false;
+    }
+    output << presets.dump(4);
+    output.close();
+
+    LoadEffectPresetNames();
+    for (int i = 0; i < static_cast<int>(effectPresetNames_.size()); ++i) {
+        if (effectPresetNames_[i] == name) {
+            effectPresetSelectedIndex_ = i;
+            break;
+        }
+    }
+    effectPresetStatus_ = "Preset saved: " + name;
+    return true;
+}
+
+bool MyGame::LoadEffectPreset(const std::string& name) {
+    if (name.empty() || !std::filesystem::exists(kEffectPresetPath)) {
+        effectPresetStatus_ = "Preset: not found";
+        return false;
+    }
+
+    std::ifstream file(kEffectPresetPath);
+    if (!file.is_open()) {
+        effectPresetStatus_ = "Preset: load failed";
+        return false;
+    }
+
+    try {
+        json presets;
+        file >> presets;
+        if (!presets.is_array()) {
+            effectPresetStatus_ = "Preset: invalid json";
+            return false;
+        }
+
+        for (const auto& item : presets) {
+            if (item.value("name", "") != name) {
+                continue;
+            }
+
+            effectPreviewShowGPUParticleSphere_ = item.value("showGpuSphere", true);
+            effectPreviewMirrorSlash_ = item.value("mirrorSlash", false);
+            effectPreviewBurstCount_ = item.value("burstCount", 1);
+            effectPreviewBurstRadius_ = item.value("burstRadius", 0.0f);
+            effectPresetIncludeInShowcase_ = item.value("showcase", true);
+
+            auto& s = effectPreviewHitSettings_;
+            s.size = item.value("size", s.size);
+            s.brightness = item.value("brightness", s.brightness);
+            s.lifeScale = item.value("lifeScale", s.lifeScale);
+            s.slashAngle = item.value("slashAngle", s.slashAngle);
+            s.slashSpread = item.value("slashSpread", s.slashSpread);
+            s.slashCount = item.value("slashCount", s.slashCount);
+            s.sparkCount = item.value("sparkCount", s.sparkCount);
+            s.sparkSpeed = item.value("sparkSpeed", s.sparkSpeed);
+            s.sparkLength = item.value("sparkLength", s.sparkLength);
+            s.scatterRadius = item.value("scatterRadius", s.scatterRadius);
+            s.blueRatio = item.value("blueRatio", s.blueRatio);
+            s.ringPower = item.value("ringPower", s.ringPower);
+            s.corePower = item.value("corePower", s.corePower);
+            s.crossPower = item.value("crossPower", s.crossPower);
+            s.pillarPower = item.value("pillarPower", s.pillarPower);
+            s.lightningCount = item.value("lightningCount", s.lightningCount);
+            s.lightningSegments = item.value("lightningSegments", s.lightningSegments);
+            s.lightningLength = item.value("lightningLength", s.lightningLength);
+            s.lightningSpread = item.value("lightningSpread", s.lightningSpread);
+            s.lightningPower = item.value("lightningPower", s.lightningPower);
+            s.lightningWidth = item.value("lightningWidth", s.lightningWidth);
+            s.lightningGlowWidth = item.value("lightningGlowWidth", s.lightningGlowWidth);
+            s.lightningGlowOpacity = item.value("lightningGlowOpacity", s.lightningGlowOpacity);
+            s.lightningBranchCount = item.value("lightningBranchCount", s.lightningBranchCount);
+            s.lightningBranchLength = item.value("lightningBranchLength", s.lightningBranchLength);
+            s.lightningBranchSpread = item.value("lightningBranchSpread", s.lightningBranchSpread);
+            s.lightningBranchWidth = item.value("lightningBranchWidth", s.lightningBranchWidth);
+            s.lightningMode = item.value("lightningMode", s.lightningMode);
+            s.lightningDirection = item.value("lightningDirection", s.lightningDirection);
+            s.lightningDirectionSpread = item.value("lightningDirectionSpread", s.lightningDirectionSpread);
+            s.randomizePosition = item.value("randomizePosition", s.randomizePosition);
+            s.randomizeDirection = item.value("randomizeDirection", s.randomizeDirection);
+            s.randomizeAngle = item.value("randomizeAngle", s.randomizeAngle);
+            s.angleRandomRange = item.value("angleRandomRange", s.angleRandomRange);
+            s.randomizeScale = item.value("randomizeScale", s.randomizeScale);
+            s.randomizeLifetime = item.value("randomizeLifetime", s.randomizeLifetime);
+            s.randomizeColor = item.value("randomizeColor", s.randomizeColor);
+            s.coolColor.x = item.value("coolColor_r", s.coolColor.x);
+            s.coolColor.y = item.value("coolColor_g", s.coolColor.y);
+            s.coolColor.z = item.value("coolColor_b", s.coolColor.z);
+            s.coolColor.w = item.value("coolColor_a", s.coolColor.w);
+            s.warmColor.x = item.value("warmColor_r", s.warmColor.x);
+            s.warmColor.y = item.value("warmColor_g", s.warmColor.y);
+            s.warmColor.z = item.value("warmColor_b", s.warmColor.z);
+            s.warmColor.w = item.value("warmColor_a", s.warmColor.w);
+            auto readColor = [&item](const char* name, Vector4& color, const Vector4& fallback) {
+                const std::string prefix = name;
+                color.x = item.value(prefix + "_r", fallback.x);
+                color.y = item.value(prefix + "_g", fallback.y);
+                color.z = item.value(prefix + "_b", fallback.z);
+                color.w = item.value(prefix + "_a", fallback.w);
+            };
+            readColor("coreColor", s.coreColor, s.coolColor);
+            readColor("slashColor", s.slashColor, s.coolColor);
+            readColor("sparkColor", s.sparkColor, s.coolColor);
+            readColor("sparkSecondaryColor", s.sparkSecondaryColor, s.warmColor);
+            readColor("ringColor", s.ringColor, s.coolColor);
+            readColor("crossColor", s.crossColor, s.coolColor);
+            readColor("pillarColor", s.pillarColor, s.coolColor);
+            readColor("lightningColor", s.lightningColor, s.coolColor);
+            readColor("lightningGlowColor", s.lightningGlowColor, s.coolColor);
+
+            if (currentMode_ == AppMode::EffectPreview) {
+                effectPreviewStormMode_ = false;
+                if (particleManager) {
+                    particleManager->SetStormActive(false);
+                }
+            }
+            CopyPresetName(effectPresetNameBuffer_, name);
+            effectPresetStatus_ = "Preset loaded: " + name;
+            return true;
+        }
+    } catch (const std::exception&) {
+        effectPresetStatus_ = "Preset: parse failed";
+        return false;
+    }
+
+    effectPresetStatus_ = "Preset not found: " + name;
+    return false;
+}
+
+void MyGame::EmitEffectPreviewBurst() {
+    if (!particleManager) {
+        return;
+    }
+
+    if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
+        effectShowcaseLightTimer_ = kEffectShowcaseLightDuration_;
+    }
+
+    ParticleManager::HitEffectSettings settings = effectPreviewHitSettings_;
+    if (effectPreviewMirrorSlash_) {
+        settings.slashAngle = -settings.slashAngle;
+    }
+
+    const int burstCount = effectPreviewBurstCount_ < 1 ? 1 : effectPreviewBurstCount_;
+    constexpr float kPi = 3.14159265f;
+    static std::mt19937 randomEngine(std::random_device{}());
+    for (int i = 0; i < burstCount; ++i) {
+        Vector3 pos = effectPreviewPosition_;
+        if (burstCount > 1 && effectPreviewBurstRadius_ > 0.0f) {
+            const float angle = (static_cast<float>(i) / static_cast<float>(burstCount)) * kPi * 2.0f;
+            pos.x += std::cos(angle) * effectPreviewBurstRadius_;
+            pos.y += std::sin(angle * 1.7f) * effectPreviewBurstRadius_ * 0.35f;
+            pos.z += std::sin(angle) * effectPreviewBurstRadius_;
+        }
+
+        ParticleManager::HitEffectSettings burstSettings = settings;
+        if (burstSettings.randomizeAngle && burstSettings.angleRandomRange > 0.0f) {
+            std::uniform_real_distribution<float> angleOffset(-burstSettings.angleRandomRange, burstSettings.angleRandomRange);
+            const float randomAngle = angleOffset(randomEngine);
+            burstSettings.slashAngle += randomAngle;
+            burstSettings.lightningDirection += randomAngle;
+        }
+        const float burstT = burstCount <= 1 ? 0.0f : static_cast<float>(i) / static_cast<float>(burstCount - 1);
+        burstSettings.size *= 1.0f - 0.12f * burstT;
+        burstSettings.brightness *= 1.0f - 0.10f * burstT;
+        burstSettings.slashAngle += (static_cast<float>(i) - static_cast<float>(burstCount - 1) * 0.5f) * 0.22f;
+        burstSettings.slashSpread += 0.18f * burstT;
+        burstSettings.sparkSpeed *= 1.0f + 0.20f * burstT;
+        burstSettings.ringPower *= 1.0f + 0.18f * burstT;
+        particleManager->EmitHitEffect(pos, burstSettings);
+    }
+}
+
+void MyGame::UpdateEffectPreview() {
+    debugFlags_.showParticles = true;
+    effectShowcaseLightTimer_ = (std::max)(0.0f, effectShowcaseLightTimer_ - 1.0f / 60.0f);
+    if (particleManager) {
+        particleManager->SetDrawGPUParticleSphere(effectPreviewStormMode_ ? false : effectPreviewShowGPUParticleSphere_);
+        if (effectPreviewStormMode_ && !particleManager->IsStormActive()) {
+            particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+        } else if (!effectPreviewStormMode_ && particleManager->IsStormActive()) {
+            particleManager->SetStormActive(false);
+        }
+    }
+
+    if (input->TriggerKey(DIK_SPACE) && particleManager) {
+        if (effectPreviewStormMode_) {
+            particleManager->SetStormActive(false);
+            particleManager->ClearParticles();
+            particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+        } else {
+            EmitEffectPreviewBurst();
+        }
+    }
+
+    if (!effectPreviewStormMode_ && effectPreviewAutoPlay_ && particleManager) {
+        constexpr float kDeltaTime = 1.0f / 60.0f;
+        effectPreviewTimer_ += kDeltaTime;
+        if (effectPreviewTimer_ >= effectPreviewInterval_) {
+            effectPreviewTimer_ = 0.0f;
+            EmitEffectPreviewBurst();
+        }
+    } else {
+        effectPreviewTimer_ = 0.0f;
+    }
+}
+
+void MyGame::UpdateEffectShowcase() {
+    debugFlags_.showParticles = true;
+    debugFlags_.showSkybox = false;
+    if (particleManager) {
+        particleManager->SetDrawGPUParticleSphere(false);
+    }
+    effectShowcaseLightTimer_ = (std::max)(0.0f, effectShowcaseLightTimer_ - 1.0f / 60.0f);
+
+    const int presetCount = static_cast<int>(effectShowcasePresetNames_.size());
+    auto isStormIndex = [&](int index) {
+        if (index < 0 || index >= presetCount) return false;
+        return std::find(stormPresetNames_.begin(), stormPresetNames_.end(), effectShowcasePresetNames_[index]) != stormPresetNames_.end();
+    };
+    auto selectPreset = [&](int index, bool play) {
+        if (presetCount <= 0) {
+            return;
+        }
+        effectShowcaseSelectedIndex_ = (index % presetCount + presetCount) % presetCount;
+        effectPreviewShowGPUParticleSphere_ = false;
+        effectShowcaseTimer_ = 0.0f;
+        if (particleManager) {
+            particleManager->SetStormActive(false);
+            particleManager->ClearParticles();
+        }
+        if (isStormIndex(effectShowcaseSelectedIndex_)) {
+            LoadStormPreset(effectShowcasePresetNames_[effectShowcaseSelectedIndex_]);
+            if (particleManager) {
+                particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+            }
+        } else {
+            LoadEffectPreset(effectShowcasePresetNames_[effectShowcaseSelectedIndex_]);
+        }
+        if (play && !isStormIndex(effectShowcaseSelectedIndex_)) {
+            EmitEffectPreviewBurst();
+        }
+    };
+
+    if (effectShowcaseFirstPlay_) {
+        effectShowcaseFirstPlay_ = false;
+        selectPreset(effectShowcaseSelectedIndex_, true);
+    }
+    if (input->TriggerKey(DIK_LEFT)) {
+        selectPreset(effectShowcaseSelectedIndex_ - 1, true);
+    }
+    if (input->TriggerKey(DIK_RIGHT)) {
+        selectPreset(effectShowcaseSelectedIndex_ + 1, true);
+    }
+    if (input->TriggerKey(DIK_SPACE)) {
+        if (particleManager) {
+            particleManager->ClearParticles();
+        }
+        if (isStormIndex(effectShowcaseSelectedIndex_)) {
+            if (particleManager) {
+                particleManager->SetStormActive(false);
+                particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+            }
+        } else {
+            EmitEffectPreviewBurst();
+        }
+        effectShowcaseTimer_ = 0.0f;
+    }
+    if (input->TriggerKey(DIK_A)) {
+        effectShowcaseAutoPlay_ = !effectShowcaseAutoPlay_;
+        effectShowcaseTimer_ = 0.0f;
+    }
+    if (input->TriggerKey(DIK_R)) {
+        LoadEffectPresetNames();
+        effectShowcaseSelectedIndex_ = 0;
+        effectShowcaseFirstPlay_ = true;
+        return;
+    }
+    if (input->TriggerKey(DIK_TAB)) {
+        if (particleManager) {
+            particleManager->SetStormActive(false);
+            particleManager->ClearParticles();
+        }
+        stageSelect_->Initialize(object3dCommon.get(), input.get());
+        currentMode_ = AppMode::StageSelect;
+        return;
+    }
+
+    if (effectShowcaseAutoPlay_ && presetCount > 0) {
+        effectShowcaseTimer_ += 1.0f / 60.0f;
+        const float displayInterval = isStormIndex(effectShowcaseSelectedIndex_)
+            ? 10.0f
+            : effectShowcaseInterval_;
+        if (effectShowcaseTimer_ >= displayInterval) {
+            selectPreset(effectShowcaseSelectedIndex_ + 1, true);
+        }
+    }
+}
+
+void MyGame::DrawEffectShowcaseImGui() {
+    const ImGuiIO& io = ImGui::GetIO();
+    const int presetCount = static_cast<int>(effectShowcasePresetNames_.size());
+    const int safeIndex = presetCount > 0
+        ? std::clamp(effectShowcaseSelectedIndex_, 0, presetCount - 1)
+        : 0;
+    const char* presetName = presetCount > 0
+        ? effectShowcasePresetNames_[safeIndex].c_str()
+        : "No showcase presets";
+
+#ifdef NDEBUG
+    const float headerX = 24.0f;
+    const float headerWidth = io.DisplaySize.x - 48.0f;
+#else
+    // Keep the editor's 320 px information panel intact.
+    const float headerX = 344.0f;
+    const float headerWidth = io.DisplaySize.x - headerX - 24.0f;
+#endif
+    ImGui::SetNextWindowPos(ImVec2(headerX, 20.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(headerWidth, 94.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.72f);
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav;
+    ImGui::Begin("Effect Showcase Header", nullptr, flags);
+    ImGui::SetWindowFontScale(1.45f);
+    ImGui::TextColored(ImVec4(0.42f, 0.86f, 1.0f, 1.0f), "EFFECT SHOWCASE");
+    ImGui::SetWindowFontScale(1.15f);
+    if (presetCount > 0) {
+        ImGui::Text("%02d / %02d    %s", safeIndex + 1, presetCount, presetName);
+    } else {
+        ImGui::TextUnformatted(presetName);
+    }
+    ImGui::End();
+
+#ifdef NDEBUG
+    // Debug builds use the existing Tools & Controls panel for this guide.
+    ImGui::SetNextWindowPos(ImVec2(24.0f, io.DisplaySize.y - 72.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x - 48.0f, 48.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.72f);
+    ImGui::Begin("Effect Showcase Controls", nullptr, flags);
+    ImGui::Text("LEFT / RIGHT : Select     SPACE : Replay     A : Auto Play [%s]     TAB : Game",
+        effectShowcaseAutoPlay_ ? "ON" : "OFF");
+    ImGui::SameLine();
+    ImGui::TextUnformatted("     MMB : Orbit     Shift+MMB : Pan     Wheel : Zoom");
+    ImGui::End();
+#endif
 }
 
 // --------------------------------------------------------
