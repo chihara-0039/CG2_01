@@ -1,100 +1,78 @@
 # CG4 評価課題1「演出王 Part3」
 
-DirectX 12で制作した、ゲーム向けエフェクトの作成・編集・鑑賞アプリケーションです。
+DirectX 12で制作したエフェクト作品です。
 
-一瞬の攻撃演出である **Hit Effect** と、一定時間継続する環境演出 **Tempest Storm（暴風雷）** の2系統を実装しています。作成したプリセットは、Release版のEffect Showcaseで連続鑑賞できます。
+瞬間的に発生する「Hit Effect」と、黒雲・雨・風・雷が継続する「Tempest Storm（暴風雷）」を実装しました。Debug版ではエフェクトの編集、Release版では作成したエフェクトの鑑賞ができます。
 
-## 見どころ
-
-- 斬撃、火花、衝撃波、柱、枝分かれ雷を組み合わせたHit Effect
-- 黒雲、斜めに降る雨、横風、ランダム落雷による持続型の暴風雷
-- 加算合成とアルファ合成を用途ごとに分離
-- エフェクトの発光色に連動する動的ポイントライト
-- 雷光がterrainへ拡散反射・スペキュラー反射する表現
-- CPUパーティクルのインスタンシング描画
-- JSONによるプリセット保存・読込
-- Release版で操作に迷わないEffect Showcase
-
-## エフェクト
+## 実装したエフェクト
 
 ### Hit Effect
 
-攻撃が命中した瞬間を想定した短時間エフェクトです。
+命中した瞬間に発生する短時間のエフェクトです。
 
-- 中心のフラッシュ
+- 中心フラッシュ
 - 斬撃軌跡
 - 放射状の火花
 - 衝撃波リング
-- 交差光
-- 発光する柱
+- 交差光と発光する柱
 - 本線と分岐を持つ雷
-
-サイズ、明るさ、寿命、角度、粒子数、色、ランダム性などをEffect Editorから調整できます。
 
 ### Tempest Storm
 
-戦闘フィールドやボス演出を想定した持続型エフェクトです。
+一定時間継続する暴風雷エフェクトです。
 
-- ゆっくり出現・消滅する黒雲
-- 風向きを感じる雨と光の筋
-- ランダムな間隔で発生する枝分かれ雷
-- 雷の着地点に追従する青白いポイントライト
-- 暴風雷中の暗い背景とterrainへの照明反映
+- ランダムな位置と大きさで発生する黒雲
+- 斜めに降る雨と、地面に当たった際の飛沫
+- 横方向へ流れる風
+- 枝分かれする雷と雷光
+- 同時落雷と時間差による連続落雷
+- 雷の着地点に追従するポイントライト
+- terrainへの雷光の反射
 
-Storm Editorでは、雲・雨・風・雷を別々に調整できます。
+## 技術要素
 
-## Effect Preview / Editor
+- CPUパーティクルのインスタンシング描画
+- 加算合成とアルファ合成の使い分け
+- 複数レイヤーと時間差によるエフェクト構成
+- パーティクルの位置・大きさ・色・寿命・方向のランダム化
+- 動的ポイントライトによる地面への発光反映
+- JSONによるエフェクトプリセットの保存と読み込み
 
-Debugビルドで起動し、左側の `App Mode` から `EffectPreview` を選択します。
+## 操作方法
 
-右側のEffect Editorにある `Effect Type` から編集対象を切り替えます。
+### Effect Showcase
 
-- `Hit Effect`：瞬間系エフェクト用エディター
-- `Tempest Storm`：持続系エフェクト用Storm Editor
-
-### Hit Effectプリセット
-
-1. パラメーターを調整する
-2. `Preset Name`を入力する
-3. `Include in Showcase`を有効にする
-4. `Save Preset`を押す
-
-保存先：`Resources/presets/effect_presets.json`
-
-### Stormプリセット
-
-1. `Effect Type`を`Tempest Storm`へ変更する
-2. Storm Area、Dark Clouds、Rain、Wind、Lightningを調整する
-3. `Storm Preset Name`を入力する
-4. `Include in Showcase`を有効にする
-5. `Save Storm Preset`を押す
-
-保存先：`Resources/presets/storm_effect_presets.json`
-
-## Effect Showcase
-
-ReleaseビルドではEffect Showcaseから起動します。
-
-`Include in Showcase`が有効なHit EffectとStormプリセットを順番に鑑賞できます。通常エフェクトは約2.5秒、暴風雷は約10秒表示されます。
+Release版はEffect Showcaseから起動します。
 
 | 操作 | 内容 |
-|---|---|
+| --- | --- |
 | `←` / `→` | エフェクトを選択 |
-| `Space` / `H` | 再生・再スタート |
+| `Space` / `H` | エフェクトを再生・再スタート |
 | `A` | 自動再生のON/OFF |
-| `R` | プリセット一覧を再読込 |
-| `Tab` | ステージ選択へ移動 |
+| `R` | プリセット一覧を再読み込み |
 | マウス中ボタンドラッグ | カメラ回転 |
 | `Shift` + マウス中ボタンドラッグ | カメラ平行移動 |
 | マウスホイール | ズーム |
 
-## ビルド方法
+### Effect Preview / Editor
+
+Debug版で左側の `App Mode` を `EffectPreview` に変更すると、右側のImGuiから編集できます。
+
+`Effect Type`で編集対象を選択します。
+
+- `Hit Effect`：サイズ、明るさ、寿命、粒子数、形状、色、雷、ランダム性などを調整
+- `Tempest Storm`：雲、雨、風、雷の各パラメーターを調整
+
+Tempest Stormでは、雲・雨・雷の発生範囲、落雷頻度、雷の大きさ、同時落雷数、連続回数、枝の本数・長さ・太さなどを変更できます。各種ランダム設定のON/OFFも可能です。
+
+調整した内容は名前を入力して保存でき、`Include in Showcase`を有効にするとEffect Showcaseの鑑賞対象になります。
+
+## ビルド・実行方法
 
 ### 必要環境
 
 - Windows 10 / 11
 - Visual Studio 2022
-- C++20
 - Windows SDK
 - DirectX 12対応GPU
 
@@ -102,25 +80,7 @@ ReleaseビルドではEffect Showcaseから起動します。
 
 1. Visual Studioで `CG2_01.sln` を開く
 2. プラットフォームを `x64` に設定する
-3. 編集する場合は `Debug`、提出・鑑賞する場合は `Release` を選択する
+3. 編集する場合は `Debug`、鑑賞する場合は `Release` を選択する
 4. ソリューションをビルドして実行する
 
-シェーダーや画像、JSONは相対パスで読み込むため、実行時の作業ディレクトリはプロジェクトフォルダーにしてください。
-
-## 主な構成
-
-```text
-Engine/Graphics/Particle/ParticleManager.*  パーティクル生成・更新・描画
-Engine/Graphics/3D/Object3dCommon.*         ライトと3D描画の共通処理
-Engine/Graphics/PostProcessRenderer.*       ポストエフェクト
-Game/Scene/MyGame.*                         モード・Editor・Showcaseの統合
-Resources/shaders/hlsl/                     HLSLシェーダー
-Resources/presets/                          エフェクト・天候プリセット
-```
-
-## 評価時に確認してほしい点
-
-- **かっこよさ**：複数レイヤーと時間差、色付き雷光による画面の変化
-- **見やすさ**：Showcaseの名称表示、操作ガイド、自動再生
-- **ゲームで使えそう度**：瞬間系と持続系を分けた設計、JSONプリセット、terrainへの照明反映
-
+シェーダー、画像、JSONは相対パスで読み込むため、実行時の作業ディレクトリはプロジェクトフォルダーにしてください。
