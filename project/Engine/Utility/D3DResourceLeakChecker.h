@@ -4,6 +4,6 @@ public:
 	///<summary>
 	///デストラクタ
 	/// </summary>
-	~D3DResourceLeakChecker();
+	~D3DResourceLeakChecker();;
 };
 

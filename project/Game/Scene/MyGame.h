@@ -2,6 +2,8 @@
 #include <vector>
 #include <memory>
 #include <filesystem>
+#include <array>
+#include <string>
 
 // ===== エンジン基盤 =====
 #include "WinApp.h"
@@ -87,15 +89,17 @@ private:
         GamePlay,          ///< ゲームプレイ
         GamePlay_BlockPlace,///< ブロック配置モード (GamePlay のサブモード)
         SkinningEditor,    ///< スキニングエディタ
+        EffectPreview,     ///< エフェクト編集・確認モード
+        EffectShowcase,    ///< Release対応のエフェクト鑑賞モード
     };
 
     /// <summary>DebugView モードで表示するオブジェクトのフラグ群</summary>
     struct DebugDrawFlags {
         bool show3DObjects = true;  ///< 3D オブジェクトを表示するか
-        bool showSkybox    = true;  ///< スカイドーム / スカイボックスを表示するか
-        bool showSprite    = true;  ///< スプライトを表示するか
+        bool showSkybox = true;  ///< スカイドーム / スカイボックスを表示するか
+        bool showSprite = true;  ///< スプライトを表示するか
         bool showParticles = true;  ///< パーティクルを表示するか
-        bool showTerrain   = true;  ///< 地形を表示するか
+        bool showTerrain = true;  ///< 地形を表示するか
     };
 
     // ==========================================================
@@ -126,11 +130,12 @@ private:
     // ==========================================================
     std::unique_ptr<Model>   terrainModel_;    ///< 地形メッシュモデル
     std::unique_ptr<Object3d>terrainObject_;   ///< 地形のオブジェクト
+    std::unique_ptr<Object3d>effectShowcaseGround_; ///< エフェクト鑑賞用の受光床
     std::unique_ptr<Model>   skydomeModel_;    ///< スカイドームモデル
     std::unique_ptr<Object3d>skydomeObject_;   ///< スカイドームのオブジェクト
     std::unique_ptr<Skybox>  skybox_;          ///< キューブマップスカイボックス
     uint32_t skyboxTextureHandle_ = 0;         ///< スカイボックスのテクスチャハンドル
-    bool     showSkyboxCubemap_   = false;     ///< true: Skybox / false: Skydome
+    bool     showSkyboxCubemap_ = false;     ///< true: Skybox / false: Skydome
 
     // ==========================================================
     //  シャドウマップ・ライトカメラ
@@ -150,7 +155,7 @@ private:
     std::unique_ptr<BlockInventoryUI>  blockInventoryUI_;          ///< インベントリ UI
     std::unique_ptr<Sprite>            tutorialSprite_;            ///< 操作チュートリアル画像
     std::unique_ptr<Sprite>            placementTutorialSprite_;   ///< 配置チュートリアル画像
-    
+
     // UIガイド用スプライト
     uint32_t objectiveGuideTexture_ = 0;
     uint32_t stageSelectGuideTexture_ = 0;
@@ -220,22 +225,51 @@ private:
     //  状態変数
     // ==========================================================
     AppMode        currentMode_ = AppMode::DebugView; ///< 現在のアプリモード
-    AppMode        prevMode_    = AppMode::DebugView; ///< 前フレームのモード (変化検知用)
+    AppMode        prevMode_ = AppMode::DebugView; ///< 前フレームのモード (変化検知用)
     DebugDrawFlags debugFlags_;                        ///< DebugView の描画フラグ群
-    bool           isGoalReached_      = false;        ///< ゴール到達フラグ
+    bool           isGoalReached_ = false;        ///< ゴール到達フラグ
     int            placeableBlockCount_ = 0;           ///< 配置可能なブロック数 (現在未使用)
-    float          totalTime_          = 0.0f;         ///< 累積時間 (秒)
+    float          totalTime_ = 0.0f;         ///< 累積時間 (秒)
 
     // 一人称カメラ (FPS Camera) 関連
     bool  useFirstPersonCamera_ = false; ///< FPS カメラフラグ
-    float fpsCameraYaw_         = 0.0f;  ///< FPS カメラの回転角 (Yaw)
-    float fpsCameraPitch_       = 0.0f;  ///< FPS カメラの回転角 (Pitch)
-    float fpsCameraFov_         = 0.9f;
-    float placeRotationY_       = 0.0f;  ///< ブロック配置の回転角
-    float playerGlow_           = 0.0f;  ///< プレイヤー発光量
+    float fpsCameraYaw_ = 0.0f;  ///< FPS カメラの回転角 (Yaw)
+    float fpsCameraPitch_ = 0.0f;  ///< FPS カメラの回転角 (Pitch)
+    float fpsCameraFov_ = 0.9f;
+    float placeRotationY_ = 0.0f;  ///< ブロック配置の回転角
+    float playerGlow_ = 0.0f;  ///< プレイヤー発光量
     float debugObjectEnvironmentCoefficient_ = 0.25f;
     float terrainEnvironmentCoefficient_ = 0.0f;
     float playerEnvironmentCoefficient_ = 0.0f;
+    Vector3 effectPreviewPosition_ = { 0.0f, 1.0f, 0.0f };
+    float effectPreviewTimer_ = 0.0f;
+    float effectPreviewInterval_ = 1.0f;
+    bool effectPreviewAutoPlay_ = false;
+    bool effectPreviewShowGPUParticleSphere_ = true;
+    bool effectPreviewMirrorSlash_ = false;
+    bool effectPreviewStormMode_ = false;
+    bool effectPresetIncludeInShowcase_ = true;
+    bool stormPresetIncludeInShowcase_ = true;
+    int effectPreviewBurstCount_ = 1;
+    float effectPreviewBurstRadius_ = 0.0f;
+    ParticleManager::HitEffectSettings effectPreviewHitSettings_{};
+    std::array<char, 64> effectPresetNameBuffer_{ "CinematicFinisher" };
+    std::vector<std::string> effectPresetNames_;
+    std::vector<std::string> effectShowcasePresetNames_;
+    int effectPresetSelectedIndex_ = -1;
+    int effectShowcaseSelectedIndex_ = 0;
+    bool effectShowcaseAutoPlay_ = true;
+    float effectShowcaseTimer_ = 0.0f;
+    float effectShowcaseInterval_ = 2.5f;
+    bool effectShowcaseFirstPlay_ = true;
+    float effectShowcaseLightTimer_ = 0.0f;
+    static constexpr float kEffectShowcaseLightDuration_ = 0.7f;
+    std::string effectPresetStatus_ = "Preset: not loaded";
+    std::array<char, 64> stormPresetNameBuffer_{ "Tempest Storm" };
+    std::vector<std::string> stormPresetNames_;
+    std::vector<std::string> stormShowcasePresetNames_;
+    int stormPresetSelectedIndex_ = -1;
+    std::string stormPresetStatus_ = "Storm preset: default";
 
     // ==========================================================
     //  内部メソッド
@@ -244,6 +278,9 @@ private:
     // --- 更新サブルーチン ---
     void UpdateImGui();                 ///< ImGui の更新・描画 (Debug ビルドのみ)
     void UpdateDebugView();             ///< DebugView モードの更新
+    void UpdateEffectPreview();         ///< EffectPreview モードの更新
+    void UpdateEffectShowcase();        ///< EffectShowcase モードの更新
+    void EmitEffectPreviewBurst();       ///< EffectPreview のバースト発生
     void UpdateGamePlay();              ///< GamePlay モードの更新
     void UpdateGamePlayBlockPlace();    ///< GamePlay_BlockPlace モードの更新
     void UpdateTitle();                 ///< タイトル画面の更新
@@ -252,6 +289,15 @@ private:
 
     // --- 描画サブルーチン ---
     /// <summary>オフスクリーンパスと直接パスで共通するシーン描画</summary>
+    void LoadEffectPresetNames();
+    bool SaveEffectPreset(const std::string& name);
+    bool LoadEffectPreset(const std::string& name);
+    void DrawEffectPreviewEditorImGui();
+    void DrawStormEffectEditorImGui();
+    void DrawEffectShowcaseImGui();
+    void LoadStormPresetNames();
+    bool SaveStormPreset(const std::string& name);
+    bool LoadStormPreset(const std::string& name);
     void RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4& lightVP);
 
     // --- ヘルパー ---
@@ -264,7 +310,3 @@ private:
     /// <summary>カメラとプレイヤーの間に壁ブロックがあるか判定する (シルエット描画の判定用)</summary>
     bool IsPlayerHiddenByWall() const;
 };
-
-
-
-

@@ -334,8 +334,7 @@ void DirectXCommon::PreDraw(bool clearDepth) {
     }
 
     // クリア処理
-    float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f }; // 背景色
-    commandList_->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+    commandList_->ClearRenderTargetView(rtvHandle, clearColor_, 0, nullptr);
     if (clearDepth) {
         commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
     }

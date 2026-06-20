@@ -25,6 +25,9 @@ struct DirectionalLight
     float intensity;
     float3 cameraPosition; // カメラの位置を追加
     float paddingLight;        // アライメント用パディング
+    float3 pointLightPosition;
+    float pointLightIntensity;
+    float4 pointLightColor;
 };
 
 ConstantBuffer<Material> gMaterial : register(b0);
@@ -86,6 +89,18 @@ PixelShaderOutput main(VertexShaderOutput input)
         
         // 1. 拡散反射光 (Diffuse) - ハーフランバートにソフトシャドウを適用
         float3 diffuseColor = (cos * shadowFactor + ambient) * gMaterial.color.rgb * textureColor.rgb * gDirectionalLight.color.rgb * gDirectionalLight.intensity;
+
+        // エフェクトなど、局所的な発光を周囲のオブジェクトへ反映するポイントライト。
+        float3 toPointLight = gDirectionalLight.pointLightPosition - input.worldPosition;
+        float pointDistance = length(toPointLight);
+        float3 pointDirection = pointDistance > 0.0001f ? toPointLight / pointDistance : float3(0.0f, 1.0f, 0.0f);
+        float pointRange = 3.0f + gDirectionalLight.pointLightIntensity * 0.65f;
+        float pointAttenuation = saturate(1.0f - pointDistance / max(pointRange, 0.001f));
+        pointAttenuation *= pointAttenuation;
+        float pointNdotL = saturate(dot(normalize(input.normal), pointDirection));
+        float3 pointDiffuseColor = gMaterial.color.rgb * textureColor.rgb *
+            gDirectionalLight.pointLightColor.rgb * gDirectionalLight.pointLightIntensity *
+            pointAttenuation * (0.18f + pointNdotL * 0.82f);
         
         // 2. スペキュラー反射光 (Blinn-Phong Specular) - 影の中ではハイライトを減衰して自然に見せる
         float3 viewDir = normalize(gDirectionalLight.cameraPosition - input.worldPosition);
@@ -122,7 +137,12 @@ PixelShaderOutput main(VertexShaderOutput input)
         }
 
         // 最終カラー合成
-        output.color.rgb = diffuseColor + specColor + rimColor + emissiveColor + environmentColor;
+        float3 pointHalfDir = normalize(pointDirection + viewDir);
+        float pointSpecular = pow(saturate(dot(normalize(input.normal), pointHalfDir)), specPower);
+        float3 pointSpecularColor = gDirectionalLight.pointLightColor.rgb *
+            gDirectionalLight.pointLightIntensity * pointAttenuation * pointSpecular * specIntensity;
+
+        output.color.rgb = diffuseColor + pointDiffuseColor + specColor + pointSpecularColor + rimColor + emissiveColor + environmentColor;
         output.color.a = gMaterial.color.a * textureColor.a;
     }
     else

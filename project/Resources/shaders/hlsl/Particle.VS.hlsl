@@ -3,6 +3,7 @@ struct VertexShaderOutput
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
     float4 color : COLOR0;
+    nointerpolation float shape : TEXCOORD1;
 };
 
 struct VertexShaderInput
@@ -20,6 +21,7 @@ struct VertexShaderInput
     float4 wvpRow3 : INSTANCE_WVP3; // Index 3
     
     float4 color : INSTANCE_COLOR;
+    float shape : INSTANCE_SHAPE;
 };
 
 VertexShaderOutput main(VertexShaderInput input)
@@ -37,6 +39,7 @@ VertexShaderOutput main(VertexShaderInput input)
     output.position = mul(input.position, WVP);
     output.texcoord = input.texcoord;
     output.color = input.color;
+    output.shape = input.shape;
     
     return output;
 }

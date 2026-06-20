@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cassert>
+#include <utility>
 #include <Windows.h>
 
 void BubblePickupController::Initialize(
@@ -16,6 +17,10 @@ void BubblePickupController::Initialize(
     stageMap_ = stageMap;
     stageRenderer_ = stageRenderer;
     inventory_ = inventory;
+}
+
+void BubblePickupController::SetCollectCallback(std::function<void(const Vector3&)> callback) {
+    collectCallback_ = std::move(callback);
 }
 
 void BubblePickupController::Update(const Vector3& playerPosition) {
@@ -73,6 +78,14 @@ bool BubblePickupController::TryCollectAt(const Int3& index) {
 
     // 見た目を再構築
     stageRenderer_->BuildFromStageMap(*stageMap_);
+
+    if (collectCallback_) {
+        collectCallback_({
+            static_cast<float>(index.x),
+            static_cast<float>(index.y) + 0.5f,
+            static_cast<float>(index.z)
+        });
+    }
 
     OutputDebugStringA("[BubblePickupController] Bubble collected.\n");
 
