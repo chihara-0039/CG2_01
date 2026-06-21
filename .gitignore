@@ -45,3 +45,7 @@ Thumbs.db
 
 # ImGuiの設定ファイルを無視する
 imgui.ini
+
+# --- Local submission packages ---
+CG2_01_Project_Submission.zip
+CG2_01_Project_Submission/

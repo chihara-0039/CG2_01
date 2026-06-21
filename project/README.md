@@ -2,7 +2,7 @@
 
 DirectX 12で制作したエフェクト作品です。
 
-瞬間的に発生する「Hit Effect」と、黒雲・雨・風・雷が継続する「Tempest Storm（暴風雷）」を実装しました。Debug版ではエフェクトの編集、Release版では作成したエフェクトの鑑賞ができます。
+瞬間的に発生する「Hit Effect」と、黒雲・雨・風・雷が継続する「Tempest Storm（暴風雷）」を実装しました。Development版のImGuiからエフェクトの編集と鑑賞ができます。
 
 ## 実装したエフェクト
 
@@ -40,9 +40,14 @@ DirectX 12で制作したエフェクト作品です。
 
 ## 操作方法
 
-### Effect Showcase
+### モードの切り替え
 
-Release版はEffect Showcaseから起動します。
+Development版を起動し、左側の `App Mode` から使用するモードを選択します。
+
+- `EffectPreview`：エフェクトの編集と動作確認
+- `EffectShowcase`：保存したエフェクトの鑑賞
+
+### Effect Showcase
 
 | 操作 | 内容 |
 | --- | --- |
@@ -56,7 +61,7 @@ Release版はEffect Showcaseから起動します。
 
 ### Effect Preview / Editor
 
-Debug版で左側の `App Mode` を `EffectPreview` に変更すると、右側のImGuiから編集できます。
+左側の `App Mode` を `EffectPreview` に変更すると、右側のImGuiから編集できます。
 
 `Effect Type`で編集対象を選択します。
 
@@ -80,7 +85,7 @@ Tempest Stormでは、雲・雨・雷の発生範囲、落雷頻度、雷の大�
 
 1. Visual Studioで `CG2_01.sln` を開く
 2. プラットフォームを `x64` に設定する
-3. 編集する場合は `Debug`、鑑賞する場合は `Release` を選択する
+3. 構成を `Development` に設定する
 4. ソリューションをビルドして実行する
 
 シェーダー、画像、JSONは相対パスで読み込むため、実行時の作業ディレクトリはプロジェクトフォルダーにしてください。
