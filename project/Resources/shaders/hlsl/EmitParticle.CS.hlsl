@@ -1,4 +1,4 @@
-static const uint kMaxParticles = 1024;
+﻿static const uint kMaxParticles = 1024;
 
 struct Particle
 {
@@ -79,16 +79,18 @@ void main(uint3 DTid : SV_DispatchThreadID)
     for (uint countIndex = 0; countIndex < gEmitter.count; ++countIndex)
     {
         int freeListIndex;
+        // FreeListの末尾を1つ取り出す。複数threadでも重複しないようatomicで操作する。
         InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
 
         if (freeListIndex < 0 || freeListIndex >= kMaxParticles)
         {
-            // 空きが無かったので、減らしてしまった分を戻す。
+            // 空きが無かったので、先に減らしたFreeListIndexを戻す。
             int unused;
             InterlockedAdd(gFreeListIndex[0], 1, unused);
             continue;
         }
 
+        // 空いているParticleスロットを再利用して、新しいParticleを書き込む。
         uint particleIndex = gFreeList[freeListIndex];
 
         float32_t3 randomDirection = generator.Generate3d() * 2.0f - 1.0f;

@@ -1,4 +1,4 @@
-static const uint kMaxParticles = 1024;
+﻿static const uint kMaxParticles = 1024;
 
 struct Particle
 {
@@ -32,7 +32,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     Particle particle = gParticles[particleIndex];
 
-    // alphaが0のParticleはまだ使われていない、または寿命切れなので更新しない。
+    // alphaが0のParticleは未使用、または寿命切れなので更新しない。
     if (particle.color.a == 0.0f)
     {
         return;
@@ -47,6 +47,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         particle.scale = float3(0.0f, 0.0f, 0.0f);
 
         int freeListIndex;
+        // 寿命切れになったParticleをFreeListへ戻し、次のEmitで再利用できるようにする。
         InterlockedAdd(gFreeListIndex[0], 1, freeListIndex);
 
         if (freeListIndex + 1 < kMaxParticles)
@@ -55,7 +56,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
         else
         {
-            // 何らかの理由でFreeListが満杯なら、Indexを戻して破綻を防ぐ。
+            // FreeListが満杯ならIndexだけ戻して、リストの破綻を防ぐ。
             int unused;
             InterlockedAdd(gFreeListIndex[0], -1, unused);
         }
