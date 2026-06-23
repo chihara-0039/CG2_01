@@ -800,6 +800,13 @@ void ParticleManager::CreateGPUParticlePipeline() {
     psoDesc.CS = { emitCsBlob->GetBufferPointer(), emitCsBlob->GetBufferSize() };
     hr = dxCommon_->GetDevice()->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&emitParticlePipelineState_));
     assert(SUCCEEDED(hr));
+
+    auto updateCsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/UpdateParticle.CS.hlsl", L"cs_6_0");
+    assert(updateCsBlob != nullptr && "UpdateParticle CS Compile Failed");
+
+    psoDesc.CS = { updateCsBlob->GetBufferPointer(), updateCsBlob->GetBufferSize() };
+    hr = dxCommon_->GetDevice()->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&updateParticlePipelineState_));
+    assert(SUCCEEDED(hr));
 }
 
 void ParticleManager::InitializeGPUParticles() {
@@ -844,6 +851,32 @@ void ParticleManager::EmitGPUParticles() {
     commandList->SetComputeRootConstantBufferView(2, gpuParticleEmitterResource_->GetGPUVirtualAddress());
     commandList->SetComputeRootConstantBufferView(3, gpuParticlePerFrameResource_->GetGPUVirtualAddress());
     commandList->Dispatch(1, 1, 1);
+
+    D3D12_RESOURCE_BARRIER barrier = {};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+    barrier.UAV.pResource = gpuParticleResource_.Get();
+    commandList->ResourceBarrier(1, &barrier);
+}
+
+void ParticleManager::UpdateGPUParticles() {
+    if (!gpuParticlesInitialized_ || !updateParticlePipelineState_ || !gpuParticleResource_ ||
+        !gpuParticleFreeCounterResource_ || !gpuParticleEmitterResource_ || !gpuParticlePerFrameResource_) {
+        return;
+    }
+
+    if (gpuParticlePerFrameData_) {
+        *gpuParticlePerFrameData_ = gpuParticlePerFrame_;
+    }
+
+    auto commandList = dxCommon_->GetCommandList();
+    TransitionGPUParticleResource(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    commandList->SetComputeRootSignature(initializeParticleRootSignature_.Get());
+    commandList->SetPipelineState(updateParticlePipelineState_.Get());
+    commandList->SetComputeRootUnorderedAccessView(0, gpuParticleResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(1, gpuParticleFreeCounterResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(2, gpuParticleEmitterResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(3, gpuParticlePerFrameResource_->GetGPUVirtualAddress());
+    commandList->Dispatch(1, 1, 1);
 }
 
 void ParticleManager::DrawGPUParticles() {
@@ -853,6 +886,7 @@ void ParticleManager::DrawGPUParticles() {
 
     InitializeGPUParticles();
     EmitGPUParticles();
+    UpdateGPUParticles();
 
     auto commandList = dxCommon_->GetCommandList();
     TransitionGPUParticleResource(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

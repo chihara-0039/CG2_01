@@ -53,6 +53,7 @@ public: // サブクラスなど
 
     struct GPUParticle {
         Vector3 translate;
+        Vector3 velocity;
         Vector3 scale;
         float lifeTime;
         float currentTime;
@@ -257,6 +258,7 @@ private: // 内部処理
     void CreateGPUParticlePipeline();
     void InitializeGPUParticles();
     void EmitGPUParticles();
+    void UpdateGPUParticles();
     void DrawGPUParticles();
     void TransitionGPUParticleResource(D3D12_RESOURCE_STATES stateAfter);
 
@@ -273,6 +275,7 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12RootSignature> initializeParticleRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> initializeParticlePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> emitParticlePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> updateParticlePipelineState_;
 
     // モデルデータ（板ポリ）
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
