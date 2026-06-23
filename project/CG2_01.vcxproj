@@ -167,6 +167,7 @@
     <ClCompile Include="Engine\Graphics\3D\SkinnedObject.cpp" />
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
     <ClCompile Include="Game\Player\PlayerBasePosition.cpp" />
+    <ClCompile Include="Game\Scene\EffectPresetStore.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
     <ClCompile Include="Engine\Graphics\PostProcessRenderer.cpp" />
@@ -296,6 +297,7 @@
     <ClInclude Include="Engine\Graphics\3D\SkinnedObject.h" />
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
     <ClInclude Include="Game\Player\PlayerBasePosition.h" />
+    <ClInclude Include="Game\Scene\EffectPresetStore.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
     <ClInclude Include="Game\Scene\SkinningEditorController.h" />
     <ClInclude Include="Engine\Graphics\PostProcessRenderer.h" />

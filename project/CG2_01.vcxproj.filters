@@ -58,6 +58,7 @@
     <ClCompile Include="Sound\Sound.cpp" />
     <ClCompile Include="Game\Stage\StageRespawnController.cpp" />
     <ClCompile Include="Engine\Graphics\3D\GltfLoader.cpp" />
+    <ClCompile Include="Game\Scene\EffectPresetStore.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
     <ClCompile Include="Engine\Graphics\PostProcessRenderer.cpp" />
     <ClCompile Include="Game\Scene\Skybox.cpp" />
@@ -83,6 +84,7 @@
     <ClInclude Include="Engine\Graphics\3D\SkinnedModel.h" />
     <ClInclude Include="Engine\Graphics\3D\SkinnedObject.h" />
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
+    <ClInclude Include="Game\Scene\EffectPresetStore.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
     <ClInclude Include="Game\UI\GameplayUIManager.h" />
     <ClInclude Include="Game\UI\BlockInventoryUI.h" />

@@ -8,98 +8,23 @@
 // ==========================================================
 #include <filesystem>
 #include <cmath>
-#include <fstream>
 #include <cstring>
 #include <random>
 #include "MyGame.h"
+#include "EffectPresetStore.h"
 #include "../Environment/WeatherPresetManager.h"
 #include "Goal.h"
 #include "ModelManager.h"
 #include <memory>
-#include "json.hpp"
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 
-using json = nlohmann::json;
-
 namespace {
 const char* kEffectPresetPath = "Resources/presets/effect_presets.json";
 const char* kStormPresetPath = "Resources/presets/storm_effect_presets.json";
 const char* kStormShowcaseName = "Tempest Storm";
-
-json ToJson(const ParticleManager::HitEffectSettings& settings, const char* name, bool showGpuSphere, bool mirrorSlash, int burstCount, float burstRadius, bool includeInShowcase) {
-    json item;
-    item["name"] = name;
-    item["showGpuSphere"] = showGpuSphere;
-    item["mirrorSlash"] = mirrorSlash;
-    item["burstCount"] = burstCount;
-    item["burstRadius"] = burstRadius;
-    item["showcase"] = includeInShowcase;
-    item["size"] = settings.size;
-    item["brightness"] = settings.brightness;
-    item["lifeScale"] = settings.lifeScale;
-    item["slashAngle"] = settings.slashAngle;
-    item["slashSpread"] = settings.slashSpread;
-    item["slashCount"] = settings.slashCount;
-    item["sparkCount"] = settings.sparkCount;
-    item["sparkSpeed"] = settings.sparkSpeed;
-    item["sparkLength"] = settings.sparkLength;
-    item["scatterRadius"] = settings.scatterRadius;
-    item["blueRatio"] = settings.blueRatio;
-    item["ringPower"] = settings.ringPower;
-    item["corePower"] = settings.corePower;
-    item["crossPower"] = settings.crossPower;
-    item["pillarPower"] = settings.pillarPower;
-    item["lightningCount"] = settings.lightningCount;
-    item["lightningSegments"] = settings.lightningSegments;
-    item["lightningLength"] = settings.lightningLength;
-    item["lightningSpread"] = settings.lightningSpread;
-    item["lightningPower"] = settings.lightningPower;
-    item["lightningWidth"] = settings.lightningWidth;
-    item["lightningGlowWidth"] = settings.lightningGlowWidth;
-    item["lightningGlowOpacity"] = settings.lightningGlowOpacity;
-    item["lightningBranchCount"] = settings.lightningBranchCount;
-    item["lightningBranchLength"] = settings.lightningBranchLength;
-    item["lightningBranchSpread"] = settings.lightningBranchSpread;
-    item["lightningBranchWidth"] = settings.lightningBranchWidth;
-    item["lightningMode"] = settings.lightningMode;
-    item["lightningDirection"] = settings.lightningDirection;
-    item["lightningDirectionSpread"] = settings.lightningDirectionSpread;
-    item["randomizePosition"] = settings.randomizePosition;
-    item["randomizeDirection"] = settings.randomizeDirection;
-    item["randomizeAngle"] = settings.randomizeAngle;
-    item["angleRandomRange"] = settings.angleRandomRange;
-    item["randomizeScale"] = settings.randomizeScale;
-    item["randomizeLifetime"] = settings.randomizeLifetime;
-    item["randomizeColor"] = settings.randomizeColor;
-    item["coolColor_r"] = settings.coolColor.x;
-    item["coolColor_g"] = settings.coolColor.y;
-    item["coolColor_b"] = settings.coolColor.z;
-    item["coolColor_a"] = settings.coolColor.w;
-    item["warmColor_r"] = settings.warmColor.x;
-    item["warmColor_g"] = settings.warmColor.y;
-    item["warmColor_b"] = settings.warmColor.z;
-    item["warmColor_a"] = settings.warmColor.w;
-    auto writeColor = [&item](const char* name, const Vector4& color) {
-        const std::string prefix = name;
-        item[prefix + "_r"] = color.x;
-        item[prefix + "_g"] = color.y;
-        item[prefix + "_b"] = color.z;
-        item[prefix + "_a"] = color.w;
-    };
-    writeColor("coreColor", settings.coreColor);
-    writeColor("slashColor", settings.slashColor);
-    writeColor("sparkColor", settings.sparkColor);
-    writeColor("sparkSecondaryColor", settings.sparkSecondaryColor);
-    writeColor("ringColor", settings.ringColor);
-    writeColor("crossColor", settings.crossColor);
-    writeColor("pillarColor", settings.pillarColor);
-    writeColor("lightningColor", settings.lightningColor);
-    writeColor("lightningGlowColor", settings.lightningGlowColor);
-    return item;
-}
 
 void CopyPresetName(std::array<char, 64>& buffer, const std::string& name) {
     buffer.fill('\0');
@@ -1982,34 +1907,13 @@ void MyGame::UpdateDebugView() {
 }
 
 void MyGame::LoadStormPresetNames() {
-    stormPresetNames_.clear();
-    stormShowcasePresetNames_.clear();
+    const EffectPresetStore store;
+    const auto result = store.LoadStormPresetNames(kStormPresetPath, kStormShowcaseName);
+    stormPresetNames_ = result.all;
+    stormShowcasePresetNames_ = result.showcase;
     stormPresetSelectedIndex_ = -1;
-
-    if (std::filesystem::exists(kStormPresetPath)) {
-        std::ifstream file(kStormPresetPath);
-        try {
-            json presets;
-            file >> presets;
-            if (presets.is_array()) {
-                for (const auto& item : presets) {
-                    const std::string name = item.value("name", "");
-                    if (!name.empty()) {
-                        stormPresetNames_.push_back(name);
-                        if (item.value("showcase", true)) {
-                            stormShowcasePresetNames_.push_back(name);
-                        }
-                    }
-                }
-            }
-        } catch (const std::exception&) {
-            stormPresetStatus_ = "Storm preset: parse failed";
-        }
-    }
-
-    if (stormPresetNames_.empty()) {
-        stormPresetNames_.push_back(kStormShowcaseName);
-        stormShowcasePresetNames_.push_back(kStormShowcaseName);
+    if (!result.status.empty()) {
+        stormPresetStatus_ = result.status;
     }
 }
 
@@ -2019,66 +1923,15 @@ bool MyGame::SaveStormPreset(const std::string& name) {
         return false;
     }
 
-    json presets = json::array();
-    if (std::filesystem::exists(kStormPresetPath)) {
-        std::ifstream input(kStormPresetPath);
-        try { input >> presets; } catch (const std::exception&) { presets = json::array(); }
-        if (!presets.is_array()) presets = json::array();
+    EffectPresetStore::StormPreset preset;
+    preset.settings = particleManager->GetStormSettings();
+    preset.includeInShowcase = stormPresetIncludeInShowcase_;
+
+    const EffectPresetStore store;
+    if (!store.SaveStormPreset(kStormPresetPath, name, preset, stormPresetStatus_)) {
+        return false;
     }
 
-    const auto& s = particleManager->GetStormSettings();
-    json item;
-    item["name"] = name;
-    item["showcase"] = stormPresetIncludeInShowcase_;
-    item["cloudAreaX"] = s.cloudAreaX; item["cloudAreaZ"] = s.cloudAreaZ;
-    item["cloudHeight"] = s.cloudHeight; item["cloudEmitRate"] = s.cloudEmitRate;
-    item["cloudLife"] = s.cloudLife; item["cloudSize"] = s.cloudSize;
-    item["randomizeCloudPosition"] = s.randomizeCloudPosition; item["randomizeCloudSize"] = s.randomizeCloudSize;
-    item["rainAreaX"] = s.rainAreaX; item["rainAreaZ"] = s.rainAreaZ;
-    item["rainEmitRate"] = s.rainEmitRate; item["rainSpeed"] = s.rainSpeed; item["rainLength"] = s.rainLength;
-    item["randomizeRainPosition"] = s.randomizeRainPosition; item["randomizeRainSpeed"] = s.randomizeRainSpeed;
-    item["windEmitRate"] = s.windEmitRate; item["windSpeed"] = s.windSpeed; item["windLength"] = s.windLength;
-    item["lightningIntervalMin"] = s.lightningIntervalMin; item["lightningIntervalMax"] = s.lightningIntervalMax;
-    item["lightningFrequency"] = s.lightningFrequency;
-    item["lightningAreaX"] = s.lightningAreaX; item["lightningAreaZ"] = s.lightningAreaZ;
-    item["lightningStrikeSize"] = s.lightningStrikeSize;
-    item["lightningSimultaneousCount"] = s.lightningSimultaneousCount;
-    item["lightningSimultaneousSpread"] = s.lightningSimultaneousSpread;
-    item["lightningBurstCount"] = s.lightningBurstCount;
-    item["lightningBurstInterval"] = s.lightningBurstInterval;
-    item["lightningCount"] = s.lightningCount; item["lightningSegments"] = s.lightningSegments;
-    item["lightningLength"] = s.lightningLength; item["lightningSpread"] = s.lightningSpread;
-    item["lightningPower"] = s.lightningPower; item["lightningWidth"] = s.lightningWidth;
-    item["lightningGlowWidth"] = s.lightningGlowWidth; item["lightningGlowOpacity"] = s.lightningGlowOpacity;
-    item["lightningBranchCount"] = s.lightningBranchCount;
-    item["lightningBranchLength"] = s.lightningBranchLength; item["lightningBranchSpread"] = s.lightningBranchSpread;
-    item["lightningBranchWidth"] = s.lightningBranchWidth;
-    item["pointLightPower"] = s.pointLightPower;
-    item["randomizeLightningPosition"] = s.randomizeLightningPosition;
-    item["randomizeLightningInterval"] = s.randomizeLightningInterval;
-    item["randomizeLightningDirection"] = s.randomizeLightningDirection;
-    item["randomizeLightningSize"] = s.randomizeLightningSize;
-    item["randomizeLightningBurstCount"] = s.randomizeLightningBurstCount;
-    item["randomizeLightningBranchCount"] = s.randomizeLightningBranchCount;
-    auto writeColor = [&item](const char* key, const Vector4& color) {
-        const std::string prefix = key;
-        item[prefix + "_r"] = color.x; item[prefix + "_g"] = color.y;
-        item[prefix + "_b"] = color.z; item[prefix + "_a"] = color.w;
-    };
-    writeColor("cloudColor", s.cloudColor); writeColor("rainColor", s.rainColor);
-    writeColor("windColor", s.windColor); writeColor("lightningColor", s.lightningColor);
-    writeColor("lightningGlowColor", s.lightningGlowColor);
-
-    bool replaced = false;
-    for (auto& preset : presets) {
-        if (preset.value("name", "") == name) { preset = item; replaced = true; break; }
-    }
-    if (!replaced) presets.push_back(item);
-    std::filesystem::create_directories(std::filesystem::path(kStormPresetPath).parent_path());
-    std::ofstream output(kStormPresetPath);
-    if (!output.is_open()) { stormPresetStatus_ = "Storm preset: save failed"; return false; }
-    output << presets.dump(4);
-    output.close();
     LoadEffectPresetNames();
     for (int i = 0; i < static_cast<int>(stormPresetNames_.size()); ++i) {
         if (stormPresetNames_[i] == name) {
@@ -2087,170 +1940,52 @@ bool MyGame::SaveStormPreset(const std::string& name) {
         }
     }
     CopyPresetName(stormPresetNameBuffer_, name);
-    stormPresetStatus_ = "Storm preset saved: " + name;
     return true;
 }
 
 bool MyGame::LoadStormPreset(const std::string& name) {
     if (!particleManager) return false;
-    if (!std::filesystem::exists(kStormPresetPath)) {
-        if (name == kStormShowcaseName) {
-            particleManager->GetStormSettings() = ParticleManager::StormEffectSettings{};
-            return true;
-        }
+
+    EffectPresetStore::StormPreset preset;
+    preset.settings = particleManager->GetStormSettings();
+    preset.includeInShowcase = stormPresetIncludeInShowcase_;
+
+    const EffectPresetStore store;
+    if (!store.LoadStormPreset(kStormPresetPath, kStormShowcaseName, name, preset, stormPresetStatus_)) {
         return false;
     }
-    std::ifstream file(kStormPresetPath);
-    try {
-        json presets; file >> presets;
-        for (const auto& item : presets) {
-            if (item.value("name", "") != name) continue;
-            auto& s = particleManager->GetStormSettings();
-            const float legacyAreaX = item.value("areaX", s.cloudAreaX);
-            const float legacyAreaZ = item.value("areaZ", s.cloudAreaZ);
-            s.cloudAreaX = item.value("cloudAreaX", legacyAreaX); s.cloudAreaZ = item.value("cloudAreaZ", legacyAreaZ);
-            s.cloudHeight = item.value("cloudHeight", s.cloudHeight); s.cloudEmitRate = item.value("cloudEmitRate", s.cloudEmitRate);
-            s.cloudLife = item.value("cloudLife", s.cloudLife); s.cloudSize = item.value("cloudSize", s.cloudSize);
-            s.randomizeCloudPosition = item.value("randomizeCloudPosition", s.randomizeCloudPosition);
-            s.randomizeCloudSize = item.value("randomizeCloudSize", s.randomizeCloudSize);
-            s.rainAreaX = item.value("rainAreaX", legacyAreaX); s.rainAreaZ = item.value("rainAreaZ", legacyAreaZ);
-            s.rainEmitRate = item.value("rainEmitRate", s.rainEmitRate); s.rainSpeed = item.value("rainSpeed", s.rainSpeed); s.rainLength = item.value("rainLength", s.rainLength);
-            s.randomizeRainPosition = item.value("randomizeRainPosition", s.randomizeRainPosition);
-            s.randomizeRainSpeed = item.value("randomizeRainSpeed", s.randomizeRainSpeed);
-            s.windEmitRate = item.value("windEmitRate", s.windEmitRate); s.windSpeed = item.value("windSpeed", s.windSpeed); s.windLength = item.value("windLength", s.windLength);
-            s.lightningIntervalMin = item.value("lightningIntervalMin", s.lightningIntervalMin); s.lightningIntervalMax = item.value("lightningIntervalMax", s.lightningIntervalMax);
-            s.lightningFrequency = item.value("lightningFrequency", s.lightningFrequency);
-            s.lightningAreaX = item.value("lightningAreaX", legacyAreaX * 0.5f);
-            s.lightningAreaZ = item.value("lightningAreaZ", legacyAreaZ * 0.4f);
-            s.lightningStrikeSize = item.value("lightningStrikeSize", s.lightningStrikeSize);
-            s.lightningSimultaneousCount = item.value("lightningSimultaneousCount", s.lightningSimultaneousCount);
-            s.lightningSimultaneousSpread = item.value("lightningSimultaneousSpread", s.lightningSimultaneousSpread);
-            s.lightningBurstCount = item.value("lightningBurstCount", s.lightningBurstCount);
-            s.lightningBurstInterval = item.value("lightningBurstInterval", s.lightningBurstInterval);
-            s.lightningCount = item.value("lightningCount", s.lightningCount); s.lightningSegments = item.value("lightningSegments", s.lightningSegments);
-            s.lightningLength = item.value("lightningLength", s.lightningLength); s.lightningSpread = item.value("lightningSpread", s.lightningSpread);
-            s.lightningPower = item.value("lightningPower", s.lightningPower); s.lightningWidth = item.value("lightningWidth", s.lightningWidth);
-            s.lightningGlowWidth = item.value("lightningGlowWidth", s.lightningGlowWidth); s.lightningGlowOpacity = item.value("lightningGlowOpacity", s.lightningGlowOpacity);
-            s.lightningBranchCount = item.value("lightningBranchCount", s.lightningBranchCount);
-            s.lightningBranchLength = item.value("lightningBranchLength", s.lightningBranchLength); s.lightningBranchSpread = item.value("lightningBranchSpread", s.lightningBranchSpread);
-            s.lightningBranchWidth = item.value("lightningBranchWidth", s.lightningBranchWidth);
-            s.pointLightPower = item.value("pointLightPower", s.pointLightPower);
-            s.randomizeLightningPosition = item.value("randomizeLightningPosition", s.randomizeLightningPosition);
-            s.randomizeLightningInterval = item.value("randomizeLightningInterval", s.randomizeLightningInterval);
-            s.randomizeLightningDirection = item.value("randomizeLightningDirection", s.randomizeLightningDirection);
-            s.randomizeLightningSize = item.value("randomizeLightningSize", s.randomizeLightningSize);
-            s.randomizeLightningBurstCount = item.value("randomizeLightningBurstCount", s.randomizeLightningBurstCount);
-            s.randomizeLightningBranchCount = item.value("randomizeLightningBranchCount", s.randomizeLightningBranchCount);
-            auto readColor = [&item](const char* key, Vector4& color) {
-                const std::string prefix = key;
-                color.x = item.value(prefix + "_r", color.x); color.y = item.value(prefix + "_g", color.y);
-                color.z = item.value(prefix + "_b", color.z); color.w = item.value(prefix + "_a", color.w);
-            };
-            readColor("cloudColor", s.cloudColor); readColor("rainColor", s.rainColor);
-            readColor("windColor", s.windColor); readColor("lightningColor", s.lightningColor);
-            readColor("lightningGlowColor", s.lightningGlowColor);
-            stormPresetIncludeInShowcase_ = item.value("showcase", true);
-            CopyPresetName(stormPresetNameBuffer_, name);
-            stormPresetStatus_ = "Storm preset loaded: " + name;
-            return true;
-        }
-    } catch (const std::exception&) { stormPresetStatus_ = "Storm preset: parse failed"; }
-    return false;
+
+    particleManager->GetStormSettings() = preset.settings;
+    stormPresetIncludeInShowcase_ = preset.includeInShowcase;
+    CopyPresetName(stormPresetNameBuffer_, name);
+    return true;
 }
 
 void MyGame::LoadEffectPresetNames() {
-    effectPresetNames_.clear();
-    effectShowcasePresetNames_.clear();
     LoadStormPresetNames();
-    effectShowcasePresetNames_.insert(
-        effectShowcasePresetNames_.end(), stormShowcasePresetNames_.begin(), stormShowcasePresetNames_.end());
+
+    const EffectPresetStore store;
+    const auto result = store.LoadHitPresetNames(kEffectPresetPath);
+    effectPresetNames_ = result.all;
+    effectShowcasePresetNames_ = stormShowcasePresetNames_;
+    effectShowcasePresetNames_.insert(effectShowcasePresetNames_.end(), result.showcase.begin(), result.showcase.end());
     effectPresetSelectedIndex_ = -1;
-
-    if (!std::filesystem::exists(kEffectPresetPath)) {
-        effectPresetStatus_ = "Preset: no saved file";
-        return;
-    }
-
-    std::ifstream file(kEffectPresetPath);
-    if (!file.is_open()) {
-        effectPresetStatus_ = "Preset: failed to open list";
-        return;
-    }
-
-    try {
-        json presets;
-        file >> presets;
-        if (!presets.is_array()) {
-            effectPresetStatus_ = "Preset: invalid json";
-            return;
-        }
-
-        for (const auto& item : presets) {
-            std::string name = item.value("name", "");
-            if (!name.empty()) {
-                effectPresetNames_.push_back(name);
-                if (item.value("showcase", true)) {
-                    effectShowcasePresetNames_.push_back(name);
-                }
-            }
-        }
-        effectPresetStatus_ = effectPresetNames_.empty() ? "Preset: empty" : "Preset: list loaded";
-    } catch (const std::exception&) {
-        effectPresetStatus_ = "Preset: parse failed";
-    }
+    effectPresetStatus_ = result.status;
 }
 
 bool MyGame::SaveEffectPreset(const std::string& name) {
-    if (name.empty()) {
-        effectPresetStatus_ = "Preset: name is empty";
+    EffectPresetStore::HitPreset preset;
+    preset.settings = effectPreviewHitSettings_;
+    preset.showGpuSphere = effectPreviewShowGPUParticleSphere_;
+    preset.mirrorSlash = effectPreviewMirrorSlash_;
+    preset.burstCount = effectPreviewBurstCount_;
+    preset.burstRadius = effectPreviewBurstRadius_;
+    preset.includeInShowcase = effectPresetIncludeInShowcase_;
+
+    const EffectPresetStore store;
+    if (!store.SaveHitPreset(kEffectPresetPath, name, preset, effectPresetStatus_)) {
         return false;
     }
-
-    std::filesystem::create_directories(std::filesystem::path(kEffectPresetPath).parent_path());
-
-    json presets = json::array();
-    if (std::filesystem::exists(kEffectPresetPath)) {
-        std::ifstream input(kEffectPresetPath);
-        if (input.is_open()) {
-            try {
-                input >> presets;
-                if (!presets.is_array()) {
-                    presets = json::array();
-                }
-            } catch (const std::exception&) {
-                presets = json::array();
-            }
-        }
-    }
-
-    json saved = ToJson(
-        effectPreviewHitSettings_,
-        name.c_str(),
-        effectPreviewShowGPUParticleSphere_,
-        effectPreviewMirrorSlash_,
-        effectPreviewBurstCount_,
-        effectPreviewBurstRadius_,
-        effectPresetIncludeInShowcase_);
-
-    bool updated = false;
-    for (auto& item : presets) {
-        if (item.value("name", "") == name) {
-            item = saved;
-            updated = true;
-            break;
-        }
-    }
-    if (!updated) {
-        presets.push_back(saved);
-    }
-
-    std::ofstream output(kEffectPresetPath);
-    if (!output.is_open()) {
-        effectPresetStatus_ = "Preset: save failed";
-        return false;
-    }
-    output << presets.dump(4);
-    output.close();
 
     LoadEffectPresetNames();
     for (int i = 0; i < static_cast<int>(effectPresetNames_.size()); ++i) {
@@ -2259,121 +1994,39 @@ bool MyGame::SaveEffectPreset(const std::string& name) {
             break;
         }
     }
-    effectPresetStatus_ = "Preset saved: " + name;
     return true;
 }
 
 bool MyGame::LoadEffectPreset(const std::string& name) {
-    if (name.empty() || !std::filesystem::exists(kEffectPresetPath)) {
-        effectPresetStatus_ = "Preset: not found";
+    EffectPresetStore::HitPreset preset;
+    preset.settings = effectPreviewHitSettings_;
+    preset.showGpuSphere = effectPreviewShowGPUParticleSphere_;
+    preset.mirrorSlash = effectPreviewMirrorSlash_;
+    preset.burstCount = effectPreviewBurstCount_;
+    preset.burstRadius = effectPreviewBurstRadius_;
+    preset.includeInShowcase = effectPresetIncludeInShowcase_;
+
+    const EffectPresetStore store;
+    if (!store.LoadHitPreset(kEffectPresetPath, name, preset, effectPresetStatus_)) {
         return false;
     }
 
-    std::ifstream file(kEffectPresetPath);
-    if (!file.is_open()) {
-        effectPresetStatus_ = "Preset: load failed";
-        return false;
-    }
+    effectPreviewHitSettings_ = preset.settings;
+    effectPreviewShowGPUParticleSphere_ = preset.showGpuSphere;
+    effectPreviewMirrorSlash_ = preset.mirrorSlash;
+    effectPreviewBurstCount_ = preset.burstCount;
+    effectPreviewBurstRadius_ = preset.burstRadius;
+    effectPresetIncludeInShowcase_ = preset.includeInShowcase;
 
-    try {
-        json presets;
-        file >> presets;
-        if (!presets.is_array()) {
-            effectPresetStatus_ = "Preset: invalid json";
-            return false;
+    if (currentMode_ == AppMode::EffectPreview) {
+        effectPreviewStormMode_ = false;
+        if (particleManager) {
+            particleManager->SetStormActive(false);
         }
-
-        for (const auto& item : presets) {
-            if (item.value("name", "") != name) {
-                continue;
-            }
-
-            effectPreviewShowGPUParticleSphere_ = item.value("showGpuSphere", true);
-            effectPreviewMirrorSlash_ = item.value("mirrorSlash", false);
-            effectPreviewBurstCount_ = item.value("burstCount", 1);
-            effectPreviewBurstRadius_ = item.value("burstRadius", 0.0f);
-            effectPresetIncludeInShowcase_ = item.value("showcase", true);
-
-            auto& s = effectPreviewHitSettings_;
-            s.size = item.value("size", s.size);
-            s.brightness = item.value("brightness", s.brightness);
-            s.lifeScale = item.value("lifeScale", s.lifeScale);
-            s.slashAngle = item.value("slashAngle", s.slashAngle);
-            s.slashSpread = item.value("slashSpread", s.slashSpread);
-            s.slashCount = item.value("slashCount", s.slashCount);
-            s.sparkCount = item.value("sparkCount", s.sparkCount);
-            s.sparkSpeed = item.value("sparkSpeed", s.sparkSpeed);
-            s.sparkLength = item.value("sparkLength", s.sparkLength);
-            s.scatterRadius = item.value("scatterRadius", s.scatterRadius);
-            s.blueRatio = item.value("blueRatio", s.blueRatio);
-            s.ringPower = item.value("ringPower", s.ringPower);
-            s.corePower = item.value("corePower", s.corePower);
-            s.crossPower = item.value("crossPower", s.crossPower);
-            s.pillarPower = item.value("pillarPower", s.pillarPower);
-            s.lightningCount = item.value("lightningCount", s.lightningCount);
-            s.lightningSegments = item.value("lightningSegments", s.lightningSegments);
-            s.lightningLength = item.value("lightningLength", s.lightningLength);
-            s.lightningSpread = item.value("lightningSpread", s.lightningSpread);
-            s.lightningPower = item.value("lightningPower", s.lightningPower);
-            s.lightningWidth = item.value("lightningWidth", s.lightningWidth);
-            s.lightningGlowWidth = item.value("lightningGlowWidth", s.lightningGlowWidth);
-            s.lightningGlowOpacity = item.value("lightningGlowOpacity", s.lightningGlowOpacity);
-            s.lightningBranchCount = item.value("lightningBranchCount", s.lightningBranchCount);
-            s.lightningBranchLength = item.value("lightningBranchLength", s.lightningBranchLength);
-            s.lightningBranchSpread = item.value("lightningBranchSpread", s.lightningBranchSpread);
-            s.lightningBranchWidth = item.value("lightningBranchWidth", s.lightningBranchWidth);
-            s.lightningMode = item.value("lightningMode", s.lightningMode);
-            s.lightningDirection = item.value("lightningDirection", s.lightningDirection);
-            s.lightningDirectionSpread = item.value("lightningDirectionSpread", s.lightningDirectionSpread);
-            s.randomizePosition = item.value("randomizePosition", s.randomizePosition);
-            s.randomizeDirection = item.value("randomizeDirection", s.randomizeDirection);
-            s.randomizeAngle = item.value("randomizeAngle", s.randomizeAngle);
-            s.angleRandomRange = item.value("angleRandomRange", s.angleRandomRange);
-            s.randomizeScale = item.value("randomizeScale", s.randomizeScale);
-            s.randomizeLifetime = item.value("randomizeLifetime", s.randomizeLifetime);
-            s.randomizeColor = item.value("randomizeColor", s.randomizeColor);
-            s.coolColor.x = item.value("coolColor_r", s.coolColor.x);
-            s.coolColor.y = item.value("coolColor_g", s.coolColor.y);
-            s.coolColor.z = item.value("coolColor_b", s.coolColor.z);
-            s.coolColor.w = item.value("coolColor_a", s.coolColor.w);
-            s.warmColor.x = item.value("warmColor_r", s.warmColor.x);
-            s.warmColor.y = item.value("warmColor_g", s.warmColor.y);
-            s.warmColor.z = item.value("warmColor_b", s.warmColor.z);
-            s.warmColor.w = item.value("warmColor_a", s.warmColor.w);
-            auto readColor = [&item](const char* name, Vector4& color, const Vector4& fallback) {
-                const std::string prefix = name;
-                color.x = item.value(prefix + "_r", fallback.x);
-                color.y = item.value(prefix + "_g", fallback.y);
-                color.z = item.value(prefix + "_b", fallback.z);
-                color.w = item.value(prefix + "_a", fallback.w);
-            };
-            readColor("coreColor", s.coreColor, s.coolColor);
-            readColor("slashColor", s.slashColor, s.coolColor);
-            readColor("sparkColor", s.sparkColor, s.coolColor);
-            readColor("sparkSecondaryColor", s.sparkSecondaryColor, s.warmColor);
-            readColor("ringColor", s.ringColor, s.coolColor);
-            readColor("crossColor", s.crossColor, s.coolColor);
-            readColor("pillarColor", s.pillarColor, s.coolColor);
-            readColor("lightningColor", s.lightningColor, s.coolColor);
-            readColor("lightningGlowColor", s.lightningGlowColor, s.coolColor);
-
-            if (currentMode_ == AppMode::EffectPreview) {
-                effectPreviewStormMode_ = false;
-                if (particleManager) {
-                    particleManager->SetStormActive(false);
-                }
-            }
-            CopyPresetName(effectPresetNameBuffer_, name);
-            effectPresetStatus_ = "Preset loaded: " + name;
-            return true;
-        }
-    } catch (const std::exception&) {
-        effectPresetStatus_ = "Preset: parse failed";
-        return false;
     }
 
-    effectPresetStatus_ = "Preset not found: " + name;
-    return false;
+    CopyPresetName(effectPresetNameBuffer_, name);
+    return true;
 }
 
 void MyGame::EmitEffectPreviewBurst() {
