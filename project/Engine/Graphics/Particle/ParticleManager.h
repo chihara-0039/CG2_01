@@ -68,10 +68,10 @@ public: // サブクラスなど
     struct GPUParticleEmitterSphere {
         Vector3 translate = { 0.0f, 0.0f, 0.0f };
         float radius = 1.0f;
-        uint32_t count = 10;
-        float frequency = 0.5f;
+        uint32_t count = 10;       // 1回の射出で生成するParticle数
+        float frequency = 0.5f;    // 射出間隔（秒）
         float frequencyTime = 0.0f;
-        uint32_t emit = 0;
+        uint32_t emit = 0;         // CPU側で判定した「このフレーム射出するか」
     };
 
     struct GPUParticlePerFrame {
@@ -295,7 +295,9 @@ private: // メンバ変数
     // GPU Particle
     static const uint32_t kMaxGPUParticles = 1024;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleResource_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleFreeCounterResource_;
+    // FreeListは「空いているParticleのIndex」をGPU側で使い回すための仕組み。
+    // Index本体とは別に、末尾位置を指す1要素のバッファを持つ。
+    Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleFreeListIndexResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleFreeListResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleEmitterResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticlePerFrameResource_;

@@ -32,10 +32,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
     particle.color = float4(1.0f, 1.0f, 1.0f, 0.0f);
 
     gParticles[particleIndex] = particle;
+
+    // 初期状態では全Particleが未使用なので、全IndexをFreeListへ登録する。
     gFreeList[particleIndex] = particleIndex;
 
     if (particleIndex == 0)
     {
+        // FreeListは末尾から取り出す。末尾Indexは最大数 - 1。
         gFreeListIndex[0] = kMaxParticles - 1;
     }
 }

@@ -7,6 +7,73 @@
 
 using namespace Microsoft::WRL;
 
+namespace {
+    constexpr uint32_t kGPUParticleEmitCount = 10;
+    constexpr float kGPUParticleEmitFrequency = 0.5f;
+
+    enum class GPUParticleComputeRoot : uint32_t {
+        ParticlesUAV = 0,
+        FreeListIndexUAV,
+        EmitterCBV,
+        PerFrameCBV,
+        FreeListUAV,
+        Count
+    };
+
+    constexpr uint32_t ToRootIndex(GPUParticleComputeRoot root) {
+        return static_cast<uint32_t>(root);
+    }
+
+    D3D12_HEAP_PROPERTIES MakeHeapProperties(D3D12_HEAP_TYPE type) {
+        D3D12_HEAP_PROPERTIES heapProps = {};
+        heapProps.Type = type;
+        heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+        heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+        heapProps.CreationNodeMask = 1;
+        heapProps.VisibleNodeMask = 1;
+        return heapProps;
+    }
+
+    D3D12_RESOURCE_DESC MakeBufferDesc(UINT64 width, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE) {
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width = width;
+        desc.Height = 1;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        desc.SampleDesc.Count = 1;
+        desc.Flags = flags;
+        return desc;
+    }
+
+    UINT64 AlignConstantBufferSize(size_t size) {
+        return (static_cast<UINT64>(size) + 0xff) & ~0xffull;
+    }
+
+    ComPtr<ID3D12Resource> CreateBufferResource(
+        ID3D12Device* device,
+        D3D12_HEAP_TYPE heapType,
+        UINT64 byteSize,
+        D3D12_RESOURCE_STATES initialState,
+        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE) {
+
+        auto heapProps = MakeHeapProperties(heapType);
+        auto desc = MakeBufferDesc(byteSize, flags);
+
+        ComPtr<ID3D12Resource> resource;
+        HRESULT hr = device->CreateCommittedResource(
+            &heapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            initialState,
+            nullptr,
+            IID_PPV_ARGS(&resource));
+        assert(SUCCEEDED(hr));
+        return resource;
+    }
+}
+
 // 乱数生成器
 static std::random_device seed_gen;
 static std::mt19937_64 engine(seed_gen());
@@ -632,165 +699,73 @@ void ParticleManager::CreatePipelineState() {
 void ParticleManager::CreateGPUParticleResources() {
     auto device = dxCommon_->GetDevice();
 
-    D3D12_HEAP_PROPERTIES defaultHeapProps = {};
-    defaultHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-    defaultHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-    defaultHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-    defaultHeapProps.CreationNodeMask = 1;
-    defaultHeapProps.VisibleNodeMask = 1;
-
-    D3D12_RESOURCE_DESC particleDesc = {};
-    particleDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    particleDesc.Width = sizeof(GPUParticle) * kMaxGPUParticles;
-    particleDesc.Height = 1;
-    particleDesc.DepthOrArraySize = 1;
-    particleDesc.MipLevels = 1;
-    particleDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    particleDesc.SampleDesc.Count = 1;
-    particleDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-    HRESULT hr = device->CreateCommittedResource(
-        &defaultHeapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &particleDesc,
+    gpuParticleResource_ = CreateBufferResource(
+        device,
+        D3D12_HEAP_TYPE_DEFAULT,
+        sizeof(GPUParticle) * kMaxGPUParticles,
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        nullptr,
-        IID_PPV_ARGS(&gpuParticleResource_));
-    assert(SUCCEEDED(hr));
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     gpuParticleResourceState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
-    D3D12_RESOURCE_DESC counterDesc = {};
-    counterDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    counterDesc.Width = sizeof(int32_t);
-    counterDesc.Height = 1;
-    counterDesc.DepthOrArraySize = 1;
-    counterDesc.MipLevels = 1;
-    counterDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    counterDesc.SampleDesc.Count = 1;
-    counterDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-    hr = device->CreateCommittedResource(
-        &defaultHeapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &counterDesc,
+    gpuParticleFreeListIndexResource_ = CreateBufferResource(
+        device,
+        D3D12_HEAP_TYPE_DEFAULT,
+        sizeof(int32_t),
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        nullptr,
-        IID_PPV_ARGS(&gpuParticleFreeCounterResource_));
-    assert(SUCCEEDED(hr));
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-    D3D12_RESOURCE_DESC freeListDesc = {};
-    freeListDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    freeListDesc.Width = sizeof(uint32_t) * kMaxGPUParticles;
-    freeListDesc.Height = 1;
-    freeListDesc.DepthOrArraySize = 1;
-    freeListDesc.MipLevels = 1;
-    freeListDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    freeListDesc.SampleDesc.Count = 1;
-    freeListDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-    hr = device->CreateCommittedResource(
-        &defaultHeapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &freeListDesc,
+    gpuParticleFreeListResource_ = CreateBufferResource(
+        device,
+        D3D12_HEAP_TYPE_DEFAULT,
+        sizeof(uint32_t) * kMaxGPUParticles,
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        nullptr,
-        IID_PPV_ARGS(&gpuParticleFreeListResource_));
-    assert(SUCCEEDED(hr));
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-    D3D12_HEAP_PROPERTIES uploadHeapProps = {};
-    uploadHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-    uploadHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-    uploadHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-    uploadHeapProps.CreationNodeMask = 1;
-    uploadHeapProps.VisibleNodeMask = 1;
-
-    D3D12_RESOURCE_DESC perViewDesc = {};
-    perViewDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    perViewDesc.Width = (sizeof(PerView) + 0xff) & ~0xff;
-    perViewDesc.Height = 1;
-    perViewDesc.DepthOrArraySize = 1;
-    perViewDesc.MipLevels = 1;
-    perViewDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    perViewDesc.SampleDesc.Count = 1;
-
-    hr = device->CreateCommittedResource(
-        &uploadHeapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &perViewDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&perViewResource_));
-    assert(SUCCEEDED(hr));
+    perViewResource_ = CreateBufferResource(
+        device,
+        D3D12_HEAP_TYPE_UPLOAD,
+        AlignConstantBufferSize(sizeof(PerView)),
+        D3D12_RESOURCE_STATE_GENERIC_READ);
     perViewResource_->Map(0, nullptr, reinterpret_cast<void**>(&perViewData_));
     perViewData_->viewProjection = Math::MakeIdentity4x4();
     perViewData_->billboardMatrix = Math::MakeIdentity4x4();
 
-    D3D12_RESOURCE_DESC emitterDesc = {};
-    emitterDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    emitterDesc.Width = (sizeof(GPUParticleEmitterSphere) + 0xff) & ~0xff;
-    emitterDesc.Height = 1;
-    emitterDesc.DepthOrArraySize = 1;
-    emitterDesc.MipLevels = 1;
-    emitterDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    emitterDesc.SampleDesc.Count = 1;
-
-    hr = device->CreateCommittedResource(
-        &uploadHeapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &emitterDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&gpuParticleEmitterResource_));
-    assert(SUCCEEDED(hr));
+    gpuParticleEmitterResource_ = CreateBufferResource(
+        device,
+        D3D12_HEAP_TYPE_UPLOAD,
+        AlignConstantBufferSize(sizeof(GPUParticleEmitterSphere)),
+        D3D12_RESOURCE_STATE_GENERIC_READ);
     gpuParticleEmitterResource_->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticleEmitterData_));
     gpuParticleEmitter_.translate = { 0.0f, 0.0f, 0.0f };
     gpuParticleEmitter_.radius = 1.0f;
-    gpuParticleEmitter_.count = 10;
-    gpuParticleEmitter_.frequency = 0.5f;
+    gpuParticleEmitter_.count = kGPUParticleEmitCount;
+    gpuParticleEmitter_.frequency = kGPUParticleEmitFrequency;
     *gpuParticleEmitterData_ = gpuParticleEmitter_;
 
-    D3D12_RESOURCE_DESC perFrameDesc = {};
-    perFrameDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    perFrameDesc.Width = (sizeof(GPUParticlePerFrame) + 0xff) & ~0xff;
-    perFrameDesc.Height = 1;
-    perFrameDesc.DepthOrArraySize = 1;
-    perFrameDesc.MipLevels = 1;
-    perFrameDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    perFrameDesc.SampleDesc.Count = 1;
-
-    hr = device->CreateCommittedResource(
-        &uploadHeapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &perFrameDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&gpuParticlePerFrameResource_));
-    assert(SUCCEEDED(hr));
+    gpuParticlePerFrameResource_ = CreateBufferResource(
+        device,
+        D3D12_HEAP_TYPE_UPLOAD,
+        AlignConstantBufferSize(sizeof(GPUParticlePerFrame)),
+        D3D12_RESOURCE_STATE_GENERIC_READ);
     gpuParticlePerFrameResource_->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticlePerFrameData_));
     *gpuParticlePerFrameData_ = gpuParticlePerFrame_;
 }
 
 void ParticleManager::CreateGPUParticlePipeline() {
-    D3D12_ROOT_PARAMETER rootParams[5] = {};
-    rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-    rootParams[0].Descriptor.ShaderRegister = 0;
-    rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_ROOT_PARAMETER rootParams[ToRootIndex(GPUParticleComputeRoot::Count)] = {};
 
-    rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-    rootParams[1].Descriptor.ShaderRegister = 1;
-    rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    auto setRootDescriptor = [&](GPUParticleComputeRoot root, D3D12_ROOT_PARAMETER_TYPE type, UINT shaderRegister) {
+        D3D12_ROOT_PARAMETER& param = rootParams[ToRootIndex(root)];
+        param.ParameterType = type;
+        param.Descriptor.ShaderRegister = shaderRegister;
+        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    };
 
-    rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParams[2].Descriptor.ShaderRegister = 0;
-    rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-    rootParams[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParams[3].Descriptor.ShaderRegister = 1;
-    rootParams[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-    rootParams[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-    rootParams[4].Descriptor.ShaderRegister = 2;
-    rootParams[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    setRootDescriptor(GPUParticleComputeRoot::ParticlesUAV, D3D12_ROOT_PARAMETER_TYPE_UAV, 0);
+    setRootDescriptor(GPUParticleComputeRoot::FreeListIndexUAV, D3D12_ROOT_PARAMETER_TYPE_UAV, 1);
+    setRootDescriptor(GPUParticleComputeRoot::EmitterCBV, D3D12_ROOT_PARAMETER_TYPE_CBV, 0);
+    setRootDescriptor(GPUParticleComputeRoot::PerFrameCBV, D3D12_ROOT_PARAMETER_TYPE_CBV, 1);
+    setRootDescriptor(GPUParticleComputeRoot::FreeListUAV, D3D12_ROOT_PARAMETER_TYPE_UAV, 2);
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = _countof(rootParams);
@@ -841,9 +816,9 @@ void ParticleManager::InitializeGPUParticles() {
     TransitionGPUParticleResource(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandList->SetComputeRootSignature(initializeParticleRootSignature_.Get());
     commandList->SetPipelineState(initializeParticlePipelineState_.Get());
-    commandList->SetComputeRootUnorderedAccessView(0, gpuParticleResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(1, gpuParticleFreeCounterResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(4, gpuParticleFreeListResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::ParticlesUAV), gpuParticleResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListIndexUAV), gpuParticleFreeListIndexResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListUAV), gpuParticleFreeListResource_->GetGPUVirtualAddress());
     commandList->Dispatch(1, 1, 1);
     TransitionGPUParticleResource(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     gpuParticlesInitialized_ = true;
@@ -851,7 +826,7 @@ void ParticleManager::InitializeGPUParticles() {
 
 void ParticleManager::EmitGPUParticles() {
     if (!gpuParticlesInitialized_ || !emitParticlePipelineState_ || !gpuParticleResource_ ||
-        !gpuParticleFreeCounterResource_ || !gpuParticleFreeListResource_ ||
+        !gpuParticleFreeListIndexResource_ || !gpuParticleFreeListResource_ ||
         !gpuParticleEmitterResource_ || !gpuParticlePerFrameResource_) {
         return;
     }
@@ -871,11 +846,11 @@ void ParticleManager::EmitGPUParticles() {
     TransitionGPUParticleResource(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandList->SetComputeRootSignature(initializeParticleRootSignature_.Get());
     commandList->SetPipelineState(emitParticlePipelineState_.Get());
-    commandList->SetComputeRootUnorderedAccessView(0, gpuParticleResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(1, gpuParticleFreeCounterResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootConstantBufferView(2, gpuParticleEmitterResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootConstantBufferView(3, gpuParticlePerFrameResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(4, gpuParticleFreeListResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::ParticlesUAV), gpuParticleResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListIndexUAV), gpuParticleFreeListIndexResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::EmitterCBV), gpuParticleEmitterResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::PerFrameCBV), gpuParticlePerFrameResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListUAV), gpuParticleFreeListResource_->GetGPUVirtualAddress());
     commandList->Dispatch(1, 1, 1);
 
     D3D12_RESOURCE_BARRIER barrier = {};
@@ -886,7 +861,7 @@ void ParticleManager::EmitGPUParticles() {
 
 void ParticleManager::UpdateGPUParticles() {
     if (!gpuParticlesInitialized_ || !updateParticlePipelineState_ || !gpuParticleResource_ ||
-        !gpuParticleFreeCounterResource_ || !gpuParticleFreeListResource_ ||
+        !gpuParticleFreeListIndexResource_ || !gpuParticleFreeListResource_ ||
         !gpuParticleEmitterResource_ || !gpuParticlePerFrameResource_) {
         return;
     }
@@ -899,11 +874,11 @@ void ParticleManager::UpdateGPUParticles() {
     TransitionGPUParticleResource(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandList->SetComputeRootSignature(initializeParticleRootSignature_.Get());
     commandList->SetPipelineState(updateParticlePipelineState_.Get());
-    commandList->SetComputeRootUnorderedAccessView(0, gpuParticleResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(1, gpuParticleFreeCounterResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootConstantBufferView(2, gpuParticleEmitterResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootConstantBufferView(3, gpuParticlePerFrameResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(4, gpuParticleFreeListResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::ParticlesUAV), gpuParticleResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListIndexUAV), gpuParticleFreeListIndexResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::EmitterCBV), gpuParticleEmitterResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::PerFrameCBV), gpuParticlePerFrameResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListUAV), gpuParticleFreeListResource_->GetGPUVirtualAddress());
     commandList->Dispatch(1, 1, 1);
 }
 

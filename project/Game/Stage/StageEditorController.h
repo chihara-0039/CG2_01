@@ -100,7 +100,7 @@ private:
 
     int selectedDoorId_ = 1; // 現在選択中のドア番号 (1〜9など)
 
-    //5/21佐倉追加
+    //
     int selectedPSwitchId_ = 1;
     int selectedTimedGroupId_ = 1;
     int selectedTimedOrderId_ = 0;
