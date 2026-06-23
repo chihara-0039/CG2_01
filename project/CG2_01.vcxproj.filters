@@ -117,6 +117,8 @@
     <ClInclude Include="Game\Player\PlayerBasePosition.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Resources\shaders\hlsl\EmitParticle.CS.hlsl" />
+    <None Include="Resources\shaders\hlsl\InitializeParticle.CS.hlsl" />
     <None Include="Resources\shaders\hlsl\Particle.hlsli" />
     <None Include="Resources\shaders\hlsl\Object3d.hlsli" />
   </ItemGroup>

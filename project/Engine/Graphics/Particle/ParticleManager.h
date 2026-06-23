@@ -64,6 +64,20 @@ public: // サブクラスなど
         Matrix4x4 billboardMatrix;
     };
 
+    struct GPUParticleEmitterSphere {
+        Vector3 translate = { 0.0f, 0.0f, 0.0f };
+        float radius = 1.0f;
+        uint32_t count = 10;
+        float frequency = 0.5f;
+        float frequencyTime = 0.0f;
+        uint32_t emit = 0;
+    };
+
+    struct GPUParticlePerFrame {
+        float time = 0.0f;
+        float deltaTime = 0.0f;
+    };
+
     struct WeatherEmitter {
         bool active = false;
         Vector3 center = {0,0,0};
@@ -242,6 +256,7 @@ private: // 内部処理
     void CreateGPUParticleResources();
     void CreateGPUParticlePipeline();
     void InitializeGPUParticles();
+    void EmitGPUParticles();
     void DrawGPUParticles();
     void TransitionGPUParticleResource(D3D12_RESOURCE_STATES stateAfter);
 
@@ -257,6 +272,7 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12PipelineState> gpuParticlePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> initializeParticleRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> initializeParticlePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> emitParticlePipelineState_;
 
     // モデルデータ（板ポリ）
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
@@ -276,8 +292,15 @@ private: // メンバ変数
     // GPU Particle
     static const uint32_t kMaxGPUParticles = 1024;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleFreeCounterResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleEmitterResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticlePerFrameResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> perViewResource_;
     PerView* perViewData_ = nullptr;
+    GPUParticleEmitterSphere* gpuParticleEmitterData_ = nullptr;
+    GPUParticlePerFrame* gpuParticlePerFrameData_ = nullptr;
+    GPUParticleEmitterSphere gpuParticleEmitter_{};
+    GPUParticlePerFrame gpuParticlePerFrame_{};
     D3D12_RESOURCE_STATES gpuParticleResourceState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     bool gpuParticlesInitialized_ = false;
     bool drawGPUParticleSphere_ = true;
