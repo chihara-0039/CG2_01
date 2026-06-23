@@ -3,6 +3,7 @@ static const uint kMaxParticles = 1024;
 struct Particle
 {
     float3 translate;
+    float3 velocity;
     float3 scale;
     float lifeTime;
     float currentTime;
@@ -87,11 +88,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float32_t3 randomDirection = generator.Generate3d() * 2.0f - 1.0f;
         float32_t3 randomOffset = randomDirection * gEmitter.radius;
         float32_t scale = 0.18f + generator.Generate1d() * 0.45f;
+        float32_t3 velocity = normalize(randomDirection + float32_t3(0.1f, 0.9f, 0.0f));
+        velocity *= 0.35f + generator.Generate1d() * 1.25f;
 
         Particle particle = (Particle)0;
         particle.translate = gEmitter.translate + randomOffset;
+        particle.velocity = velocity;
         particle.scale = float32_t3(scale, scale, scale);
-        particle.lifeTime = 1.0f;
+        particle.lifeTime = 1.2f + generator.Generate1d() * 0.8f;
         particle.currentTime = 0.0f;
         particle.color = float32_t4(1.0f, 0.15f + generator.Generate1d() * 0.45f, 0.05f, 1.0f);
 

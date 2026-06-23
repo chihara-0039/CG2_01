@@ -16,6 +16,7 @@ struct VertexShaderOutput
 struct Particle
 {
     float3 translate;
+    float3 velocity;
     float3 scale;
     float lifeTime;
     float currentTime;

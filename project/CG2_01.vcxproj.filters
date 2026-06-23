@@ -119,6 +119,7 @@
   <ItemGroup>
     <None Include="Resources\shaders\hlsl\EmitParticle.CS.hlsl" />
     <None Include="Resources\shaders\hlsl\InitializeParticle.CS.hlsl" />
+    <None Include="Resources\shaders\hlsl\UpdateParticle.CS.hlsl" />
     <None Include="Resources\shaders\hlsl\Particle.hlsli" />
     <None Include="Resources\shaders\hlsl\Object3d.hlsli" />
   </ItemGroup>
