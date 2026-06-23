@@ -296,6 +296,7 @@ private: // メンバ変数
     static const uint32_t kMaxGPUParticles = 1024;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleFreeCounterResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleFreeListResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleEmitterResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticlePerFrameResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> perViewResource_;

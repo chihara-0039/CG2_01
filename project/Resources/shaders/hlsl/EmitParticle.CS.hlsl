@@ -62,7 +62,8 @@ class RandomGenerator
 ConstantBuffer<EmitterSphere> gEmitter : register(b0);
 ConstantBuffer<PerFrame> gPerFrame : register(b1);
 RWStructuredBuffer<Particle> gParticles : register(u0);
-RWStructuredBuffer<int> gFreeCounter : register(u1);
+RWStructuredBuffer<int> gFreeListIndex : register(u1);
+RWStructuredBuffer<uint> gFreeList : register(u2);
 
 [numthreads(1, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -77,13 +78,18 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     for (uint countIndex = 0; countIndex < gEmitter.count; ++countIndex)
     {
-        int particleIndex;
-        InterlockedAdd(gFreeCounter[0], 1, particleIndex);
+        int freeListIndex;
+        InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
 
-        if (particleIndex >= kMaxParticles)
+        if (freeListIndex < 0 || freeListIndex >= kMaxParticles)
         {
+            // 空きが無かったので、減らしてしまった分を戻す。
+            int unused;
+            InterlockedAdd(gFreeListIndex[0], 1, unused);
             continue;
         }
+
+        uint particleIndex = gFreeList[freeListIndex];
 
         float32_t3 randomDirection = generator.Generate3d() * 2.0f - 1.0f;
         float32_t3 randomOffset = randomDirection * gEmitter.radius;
