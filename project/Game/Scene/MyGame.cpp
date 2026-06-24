@@ -1,16 +1,15 @@
-// ==========================================================
-//  MyGame.cpp
-//  ゲーム全体の統括クラス実装
-//
-//  役割：全サブシステムの生成・接続・破棄、描画パスの制御、
-//        AppMode に応じた画面遷移の管理。
-//        各サブシステムの実装詳細は専用クラスに委譲する。
-// ==========================================================
+﻿//  MyGame.cpp
+//  ゲーム全体の初期化、更新、終了処理をまとめる司令塔クラスの実装。
+//  描画やゲームプレイ固有の処理は専用クラスへ委譲する。
+
+
 #include <filesystem>
 #include <cmath>
 #include <cstring>
 #include <random>
 #include "MyGame.h"
+#include "MyGameGameplay.h"
+#include "MyGameRenderer.h"
 #include "EffectPresetStore.h"
 #include "../Environment/WeatherPresetManager.h"
 #include "Goal.h"
@@ -32,23 +31,14 @@ void CopyPresetName(std::array<char, 64>& buffer, const std::string& name) {
 }
 }
 
-// ==========================================================
 //  MyGame::Initialize
-//  全サブシステムを生成・初期化する
-//
-//  生成順序は依存関係の順を厳守すること:
-//    WinApp → DirectXCommon → Input → TextureManager →
-//    SpriteCommon → Object3dCommon → ParticleManager →
-//    Scene群 → Model群 → Player → Camera → Stage → UI → ...
-// ==========================================================
+//  エンジン基盤、シーン、モデル、UI、ステージ関連の初期化を行う。
+
 void MyGame::Initialize() {
     WeatherPresetManager::GetInstance().LoadPresets();
     LoadEffectPresetNames();
 
-    // --------------------------------------------------------
-    // 1. エンジン基盤システムの生成と初期化
-    //    生成順は依存関係の順 (winApp → dxCommon → input → ...)
-    // --------------------------------------------------------
+    // ウィンドウ、DirectX、入力などエンジン基盤を先に用意する。
     winApp = std::make_unique<WinApp>();
     winApp->Initialize();
 
@@ -73,30 +63,17 @@ void MyGame::Initialize() {
     particleManager = std::make_unique<ParticleManager>();
     particleManager->Initialize(dxCommon.get(), textureManager.get());
 
-    // --------------------------------------------------------
-    // 2. シーン管理の初期化
-    // --------------------------------------------------------
-    
-    
 
     stageSelect_ = std::make_unique<StageSelect>();
     stageSelect_->Initialize(object3dCommon.get(), input.get());
 
-    
-    
-
-    // --------------------------------------------------------
-    // 3. モデルのロード
-    //    index 0: block  / index 1: axis  / index 2: player(OBJ)
-    // --------------------------------------------------------
+    // デバッグ表示やプレイヤーで共有する基本モデルを読み込む。
+    // index 0: block / index 1: axis / index 2: player(OBJ)
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/block",  "block.obj",  textureManager.get())));
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/axis",   "axis.obj",   textureManager.get())));
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/player", "player.obj", textureManager.get())));
 
-    // --------------------------------------------------------
-    // 4. DebugView 用の汎用オブジェクト生成
-    //    ブロックとaxis モデルを DebugView 画面に配置する
-    // --------------------------------------------------------
+
     Object3d* debugFloor = CreateObject(models[0].get(), { -25.0f, 0.0f, 0.0f });
     debugFloor->SetScale({ 10.0f, 1.0f, 10.0f });
     debugFloor->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
@@ -107,54 +84,32 @@ void MyGame::Initialize() {
     Object3d* debugAxisB = CreateObject(models[1].get(), { -27.0f, 0.0f, 0.0f });
     debugAxisB->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
 
-    // --------------------------------------------------------
-    // 5. テストスプライトの初期化
-    //    uvChecker.png を使った UV 確認用スプライト
-    // --------------------------------------------------------
+    // DebugView 用の確認スプライト。
     uint32_t texHandle = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
     sprite = std::make_unique<Sprite>();
     sprite->Initialize(spriteCommon.get(), texHandle);
 
-    // --------------------------------------------------------
-    // 6. サウンドの初期化
-    //    SPACE:WAV / M:MP4 / N:MP3 / UP-DOWN:MP3 音量調整
-    // --------------------------------------------------------
+
     sound.Initialize();
     
     
     gameBgmData = sound.SoundLoadFile("Resources/Sound/gamePlay.mp3");
     
-
-    // --------------------------------------------------------
-    // 7. プレイヤーの生成と初期化
-    // --------------------------------------------------------
+    // プレイヤー本体とメインカメラを生成する。
     player_ = std::make_unique<Player>();
     player_->Initialize(object3dCommon.get(), models[2].get());
     player_->SetPosition({ 0.0f, 1.5f, 0.0f });
 
     
-
-    // --------------------------------------------------------
-    // 8. メインカメラの初期化
-    //    Debug ビルドでは ImGui パネル分だけビューポートが狭いため
-    //    アスペクト比を手動で 1280/720 にセットする
-    // --------------------------------------------------------
     camera = std::make_unique<Camera>();
 #ifndef NDEBUG
     camera->SetAspectRatio(1280.0f / 720.0f);
 #endif
 
-    // --------------------------------------------------------
-    // 9. ステージマップの初期化 (最大 100x100x100 グリッド)
-    // --------------------------------------------------------
+
     stageMap_.Initialize(100, 100, 100);
 
-    // --------------------------------------------------------
-    // 10. ビルド設定による初期モードの分岐
-    //     DEVELOPMENT: DebugView で起動 (エディタ開発用)
-    //     NDEBUG(Release): Title で起動 (製品版)
-    //     それ以外(Debug): Title で起動
-    // --------------------------------------------------------
+    // ビルド設定に応じて初期モードと初期ステージを切り替える。
 #ifdef DEVELOPMENT
     currentMode_           = AppMode::DebugView;
     debugFlags_.showSkybox = false;
@@ -182,18 +137,13 @@ void MyGame::Initialize() {
         effectPreviewShowGPUParticleSphere_ = false;
     }
 
-    // --------------------------------------------------------
-    // 11. スカイドーム・スカイボックスの初期化
-    //     skydomeObject_ : 球体メッシュ上にテクスチャを貼った天球
-    //     skybox_        : キューブマップを使った立方体型スカイボックス
-    //     どちらを使うかは showSkyboxCubemap_ フラグで切り替える
-    // --------------------------------------------------------
+    // 背景用のスカイドームと環境マップ用のスカイボックスを準備する。
     skydomeModel_ = std::unique_ptr<Model>(
         Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/skydome", "skydome.obj", textureManager.get()));
     skydomeObject_ = std::make_unique<Object3d>();
     skydomeObject_->Initialize(object3dCommon.get());
     skydomeObject_->SetModel(skydomeModel_.get());
-    skydomeObject_->SetEnableLighting(false); // 天球は自発光 (ライティング不要)
+    skydomeObject_->SetEnableLighting(false);
     skydomeObject_->SetScale({ 90.0f, 90.0f, 90.0f });
 
     skyboxTextureHandle_ = textureManager->LoadTexture("Resources/dds/rostock_laage_airport_4k.dds");
@@ -202,11 +152,7 @@ void MyGame::Initialize() {
     skybox_->Initialize(object3dCommon.get(), skyboxTextureHandle_);
     skybox_->SetScale({ 50.0f, 50.0f, 50.0f });
 
-    // --------------------------------------------------------
-    // 12. ステージレンダラー・マップカーソルの初期化
-    //     stageRenderer_ : ステージマップの各ブロックを描画する
-    //     mapCursor_     : エディタ・配置モードでブロック選択位置を表示する
-    // --------------------------------------------------------
+    // ステージ描画とブロック選択カーソルを初期化する。
     stageRenderer_ = std::make_unique<StageRenderer>();
     stageRenderer_->Initialize(object3dCommon.get());
     stageRenderer_->SetBlockScale({ 1.0f, 1.0f, 1.0f });
@@ -215,71 +161,51 @@ void MyGame::Initialize() {
     mapCursor_ = std::make_unique<MapCursor>();
     mapCursor_->Initialize(object3dCommon.get());
     mapCursor_->SetIndex({ 0, 0, 0 }, stageMap_);
-    mapCursor_->SetScale({ 0.9f, 0.9f, 0.9f }); // ブロックより少し小さく表示
+    mapCursor_->SetScale({ 0.9f, 0.9f, 0.9f });
 
-    // --------------------------------------------------------
-    // 13. シャドウマップ・ライトカメラの初期化
-    //     shadowMap_   : 影生成用の深度テクスチャ (4096x4096)
-    //     lightCamera_ : ライト視点から見たビュー・プロジェクション行列を生成する
-    // --------------------------------------------------------
+    // シャドウマップ用のライト視点を作る。
     shadowMap_ = std::make_unique<ShadowMap>();
     shadowMap_->Initialize(dxCommon.get(), textureManager.get());
 
     lightCamera_ = std::make_unique<LightCamera>();
     lightCamera_->Initialize();
 
-    // --------------------------------------------------------
-    // 14. ブロック関連コントローラーの初期化
-    //     bubblePickupController_    : バブル (コイン) の取得判定
-    //     blockPlacementController_  : プレイヤーによるブロック設置
-    // --------------------------------------------------------
+    // ステージ上の収集物とブロック配置を管理するコントローラー。
     bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
     blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
 
-    // --------------------------------------------------------
-    // 15. UI・インベントリの初期化
-    //     gameplayUIManager_ : ゲームプレイ中のヘルスバー・ガイドUI等
-    //     blockInventoryUI_  : Bキーで開くブロックインベントリ画面
-    //     tutorialSprite_    : tutorial ステージ用の操作説明画像
-    // --------------------------------------------------------
+
     gameplayUIManager_ = std::make_unique<GameplayUIManager>();
     gameplayUIManager_->Initialize(dxCommon.get(), textureManager.get(), spriteCommon.get(), object3dCommon.get());
 
     blockInventory_.Initialize(0);
 
+    // ゲームプレイ中に使う UI とチュートリアル画像。
     blockInventoryUI_ = std::make_unique<BlockInventoryUI>();
     blockInventoryUI_->Initialize(dxCommon.get(), spriteCommon.get(), textureManager.get(), &blockInventory_);
 
-    // チュートリアル画像 (操作説明: 832x192px → 縮小して表示)
+
     tutorialSprite_ = std::make_unique<Sprite>();
     tutorialSprite_->Initialize(spriteCommon.get(),
         textureManager->LoadTexture("Resources/UI/tutorial/tutorial.png"));
     tutorialSprite_->SetPosition({ 20, 20 });
     tutorialSprite_->SetSize({ 554, 128 });
 
-    // 配置チュートリアル画像 (1024x278px → 縮小して表示)
+
     placementTutorialSprite_ = std::make_unique<Sprite>();
     placementTutorialSprite_->Initialize(spriteCommon.get(),
         textureManager->LoadTexture("Resources/UI/tutorial/placement_tutorial.png"));
     placementTutorialSprite_->SetPosition({ 20, 20 });
     placementTutorialSprite_->SetSize({ 682, 185 });
 
-    // --------------------------------------------------------
-    // 16. カメラ・ステージエディタコントローラーの初期化
-    // --------------------------------------------------------
+
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
 
-    // --------------------------------------------------------
-    // 17. スキニングエディタコントローラーの初期化
-    //     SkinnedObject・グリッド線・モデルリストをここで構築する
-    // --------------------------------------------------------
+    // SkinningEditor と DebugView 用の地形モデル。
     skinningEditor_.Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
 
-    // --------------------------------------------------------
-    // 18. 地形 (Terrain) オブジェクトの初期化
-    //     DebugView での地形確認用。ゲームプレイには影響しない。
-    // --------------------------------------------------------
+
     terrainModel_ = std::unique_ptr<Model>(
         Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/terrain", "terrain.obj", textureManager.get()));
     terrainObject_ = std::make_unique<Object3d>();
@@ -292,18 +218,13 @@ void MyGame::Initialize() {
     terrainObject_->SetShininess(0.38f);
     terrainObject_->SetMetallic(0.08f);
 
-    // --------------------------------------------------------
-    // 19. オフスクリーンレンダリング (PostProcessRenderer) の初期化
-    //     RenderTexture にシーンを描き、ポストエフェクトを掛けてバックバッファに転送する
-    // --------------------------------------------------------
+
     postProcess_.Initialize(dxCommon.get(), stageMap_.GetClearColor());
 }
 
-// --------------------------------------------------------
-//  ヘルパー：モデルと位置を指定して Object3d を生成し objectList に追加する
-//  戻り値の生ポインタは objectList が所有するため、
-//  呼び出し元が delete してはいけない
-// --------------------------------------------------------
+
+//  生成した Object3d は objectList が所有する。
+
 Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
     auto obj = std::make_unique<Object3d>();
     obj->Initialize(object3dCommon.get());
@@ -315,27 +236,14 @@ Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
     return ptr;
 }
 
-// ==========================================================
 //  MyGame::Update
-//  毎フレームの更新処理
-//
-//  処理順:
-//    1. モード切り替え検知 → 初期化
-//    2. ImGui フレーム開始 (Debug のみ)
-//    3. 入力更新・シーン遷移
-//    4. ライトカメラ更新
-//    5. Blender 風カメラ更新 (GamePlay 以外)
-//    6. スカイドーム / スカイボックス追従
-//    7. サウンドキー入力
-//    8. AppMode 別の Update 呼び出し
-//    9. カメラ最終更新
-//   10. 各種サブシステム更新 (ステージ・UI・インベントリ)
-// ==========================================================
+//  モード遷移、入力、カメラ、ライト、UI などフレーム単位の共通更新を行う。
+
+
 void MyGame::Update() {
 
-    // --------------------------------------------------------
-    // 1. モード変化の検知 → SkinningEditor 移行時にカメラリセット
-    // --------------------------------------------------------
+
+    // モードが変わった瞬間だけ、BGM やカメラ初期位置を切り替える。
     if (currentMode_ != prevMode_) {
         UpdateBGM();
 
@@ -348,7 +256,7 @@ void MyGame::Update() {
 
 
         if (currentMode_ == AppMode::SkinningEditor) {
-            // モデル正面に強制リセット
+
             camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
         } else if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
             camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
@@ -357,38 +265,35 @@ void MyGame::Update() {
         prevMode_ = currentMode_;
     }
 
-    // --------------------------------------------------------
-    // 2. ImGui の更新 (Debug ビルドのみ)
-    //    BeginImGui() はフレームの先頭で必ず呼ぶこと
-    // --------------------------------------------------------
+
+    // Debug ビルドでは各モード更新より前に ImGui を組み立てる。
     dxCommon->BeginImGui();
 #ifndef NDEBUG
     UpdateImGui();
 #endif
 
-    // --------------------------------------------------------
-    // 3. 入力の更新とシーン遷移 (ESC でタイトルに戻るなど)
-    // --------------------------------------------------------
+
+    // 入力を取り込み、ゲームプレイ中の ESC 遷移を先に処理する。
     input->Update();
     UpdateSceneTransition();
 
-    // ImGui がマウスをキャプチャしている場合はゲーム側のクリック操作を無効化
+
     bool isGuiCaptured = false;
 #ifndef NDEBUG
+    // ImGui のフレーム情報と表示サイズを取得する。
     isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
 #endif
 
-    // --------------------------------------------------------
-    // 4. ライトカメラの更新
-    //    ライト方向とプレイヤー位置からライト視点 VP 行列を生成する
-    //    この lightVP はシャドウマップ生成と PSO への転送に使う
-    // --------------------------------------------------------
+
+    // ステージ設定のライト方向を使って、シャドウ用のライトカメラを更新する。
+    Vector3 lightDir = stageMap_.GetLightDirection();
     if (lightCamera_) {
-        Vector3 targetPos = player_ ? player_->GetPosition() : camera->GetPosition();
-        lightCamera_->Update({ 0.2f, -1.0f, 0.5f }, targetPos);
+        const Vector3 targetPos = player_ ? player_->GetPosition() : camera->GetPosition();
+        lightCamera_->Update(lightDir, targetPos);
     }
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
+    // H キーは現在のモードに合わせてヒットエフェクトを再生する。
     if (input->TriggerKey(DIK_H) && particleManager) {
         Vector3 effectPos = effectPreviewPosition_;
         if (currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
@@ -396,12 +301,7 @@ void MyGame::Update() {
             effectPos.y += 0.9f;
         }
         if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
-            const bool showcaseStorm = currentMode_ == AppMode::EffectShowcase &&
-                effectShowcaseSelectedIndex_ >= 0 &&
-                effectShowcaseSelectedIndex_ < static_cast<int>(effectShowcasePresetNames_.size()) &&
-                std::find(stormPresetNames_.begin(), stormPresetNames_.end(),
-                    effectShowcasePresetNames_[effectShowcaseSelectedIndex_]) != stormPresetNames_.end();
-            if ((currentMode_ == AppMode::EffectPreview && effectPreviewStormMode_) || showcaseStorm) {
+            if (IsCurrentEffectStorm()) {
                 particleManager->SetStormActive(false);
                 particleManager->ClearParticles();
                 particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
@@ -413,20 +313,14 @@ void MyGame::Update() {
         }
     }
 
-    // --------------------------------------------------------
-    // 5. カメラの更新
-    //    GamePlay 中は GameplayCameraController が制御するため
-    //    Blender 風操作はスキップする
-    // --------------------------------------------------------
+
+    // GamePlay 中のカメラは MyGameGameplay 側で制御する。
     if (currentMode_ != AppMode::GamePlay) {
         camera->UpdateBlenderStyle(input.get(), isGuiCaptured, winApp->GetHwnd());
     }
 
-    // --------------------------------------------------------
-    // 6. スカイドーム / スカイボックスの更新
-    //    カメラ位置に追従させることで「無限遠にある」ように見せる
-    //    showSkyboxCubemap_ フラグで天球メッシュ/キューブマップを切り替える
-    // --------------------------------------------------------
+
+    // 背景オブジェクトは常にカメラ位置へ追従させる。
     if (skydomeObject_ && debugFlags_.showSkybox && !showSkyboxCubemap_) {
         skydomeObject_->SetPosition(camera->GetPosition());
         skydomeObject_->Update(Math::MakeIdentity4x4());
@@ -435,11 +329,6 @@ void MyGame::Update() {
         skybox_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         skybox_->Update(camera->GetPosition());
     }
-
-    // --------------------------------------------------------
-    // 7. サウンドの再生 (キーイベント)
-    //    SPACE:WAV / M:MP4 / N:MP3 / UP-DOWN:MP3 音量調整
-    // --------------------------------------------------------
 
 
    /* if (input->TriggerKey(DIK_P))     { sound.SoundPlay(wavSoundData, wavVolume); }
@@ -454,14 +343,13 @@ void MyGame::Update() {
         OutputDebugStringA("[MyGame] mp3 volume down\n");
     }*/
 
-    // --------------------------------------------------------
-    // 8. AppMode に応じた更新処理
-    //    各 Update メソッドにモード固有のロジックを分離している
-    // --------------------------------------------------------
+
+    // EffectPreview/Showcase 以外では GPU パーティクル確認球を表示可能に戻す。
     if (particleManager && currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
         particleManager->SetDrawGPUParticleSphere(true);
     }
 
+    // AppMode ごとの本体処理はサブルーチンや専用クラスへ委譲する。
     switch (currentMode_) {
 
     case AppMode::StageSelect:
@@ -482,7 +370,7 @@ void MyGame::Update() {
         break;
 
     case AppMode::StageEditor:
-        // StageEditorController に処理を全て委譲
+
         stageEditorController_.Update(
             input.get(), stageMap_, stageRenderer_.get(),
             mapCursor_.get(), lightCamera_.get(), player_.get(), camera.get());
@@ -497,21 +385,19 @@ void MyGame::Update() {
         break;
 
     case AppMode::SkinningEditor:
-        // SkinningEditorController に処理を全て委譲
+
         skinningEditor_.Update(dxCommon.get(), input.get(), camera.get(), lightVP, isGuiCaptured);
         break;
     }
 
-    // --------------------------------------------------------
-    // 9. カメラの最終更新 (View / Projection 行列を確定させる)
-    // --------------------------------------------------------
+
+    // ここで最終的なカメラ行列を確定し、描画対象へ共有する。
     camera->Update();
 
     const Matrix4x4& view = camera->GetViewMatrix();
     const Matrix4x4& proj = camera->GetProjectionMatrix();
 
-    // プレイヤーにカメラ行列をセット
-    // GamePlay 中は Player::Update() 内で行列更新するため UpdateTransform は呼ばない
+
     if (player_) {
         player_->SetCamera(view, proj);
         if (currentMode_ != AppMode::GamePlay) {
@@ -519,14 +405,14 @@ void MyGame::Update() {
         }
     }
 
-    // ウィンドウが最前面にない場合は以降の更新をスキップ
+
+    // ウィンドウが非アクティブなら、ゲーム側の重い更新を止める。
     if (GetActiveWindow() != winApp->GetHwnd()) {
         return;
     }
 
-    // --------------------------------------------------------
-    // 10. 3D オブジェクトの更新 (DebugView モード限定)
-    // --------------------------------------------------------
+
+    // DebugView と Effect 表示では補助 3D オブジェクトも更新する。
     if (debugFlags_.show3DObjects && currentMode_ == AppMode::DebugView) {
         for (auto& obj : objectList) {
             if (obj) {
@@ -534,7 +420,7 @@ void MyGame::Update() {
                 obj->Update(lightVP);
             }
         }
-        // 地形の更新 (DebugView + showTerrain フラグが ON のとき)
+
         if (terrainObject_ && debugFlags_.showTerrain) {
             terrainObject_->SetCamera(view, proj);
             terrainObject_->Update(lightVP);
@@ -545,10 +431,8 @@ void MyGame::Update() {
         terrainObject_->Update(lightVP);
     }
 
-    // --------------------------------------------------------
-    // 11. ステージレンダラーの更新
-    //     ブロックの定数バッファ転送・壁透明化 (カメラとプレイヤーの間)
-    // --------------------------------------------------------
+
+    // ステージメッシュ、壁透過、カーソルなどステージ周りの表示を更新する。
     if (stageRenderer_) {
         stageRenderer_->SetIsEditorMode(currentMode_ == AppMode::StageEditor);
         stageRenderer_->SetCamera(view, proj);
@@ -561,28 +445,35 @@ void MyGame::Update() {
         player_->GetPosition()
     );
 
-    // --------------------------------------------------------
-    // 12. マップカーソルの更新 (エディタ・配置モードのみ)
-    // --------------------------------------------------------
+
     if (mapCursor_ && (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace)) {
         mapCursor_->SetCamera(view, proj);
         mapCursor_->Update(lightVP);
     }
 
-    // --------------------------------------------------------
-    // 13. スプライト・パーティクルの更新
-    // --------------------------------------------------------
+
+    // 天候プリセットに合わせてパーティクル設定を同期する。
     if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
         sprite->Update();
     }
     if (debugFlags_.showParticles) {
-        // 天候プリセットの同期
+
         auto& wpMgr = WeatherPresetManager::GetInstance();
-        WeatherPreset* currentPreset = wpMgr.GetPresetByName(stageMap_.GetWeatherPresetName());
+        const std::string& weatherPresetName = stageMap_.GetWeatherPresetName();
+        WeatherPreset* currentPreset = wpMgr.GetPresetByName(weatherPresetName);
         if (currentPreset) {
             auto& emitter = particleManager->GetWeatherEmitter();
             emitter.active = currentPreset->particleEnabled;
             if (emitter.active) {
+                if (cachedWeatherPresetName_ != weatherPresetName ||
+                    cachedWeatherParticleTexturePath_ != currentPreset->particleTexture) {
+                    cachedWeatherPresetName_ = weatherPresetName;
+                    cachedWeatherParticleTexturePath_ = currentPreset->particleTexture;
+                    cachedWeatherParticleTexture_ = textureManager->LoadTexture(currentPreset->particleTexture);
+                    if (cachedWeatherParticleTexture_ != 0) {
+                        particleManager->SetTexture(cachedWeatherParticleTexture_);
+                    }
+                }
                 emitter.emitRate = currentPreset->emitRate;
                 emitter.size = currentPreset->emitSize;
                 emitter.velocity = currentPreset->velocity;
@@ -590,9 +481,8 @@ void MyGame::Update() {
                 emitter.particleSize = currentPreset->particleSize;
                 emitter.particleLife = currentPreset->particleLife;
                 emitter.color = currentPreset->particleColor;
-                // パーティクルを上空から降らせるため、生成位置をプレイヤーの頭上(+15)に設定
+
                 emitter.center = {0.0f, 15.0f, 0.0f}; 
-                particleManager->SetTexture(textureManager->LoadTexture(currentPreset->particleTexture));
             }
         }
         
@@ -603,12 +493,8 @@ void MyGame::Update() {
         }
     }
 
-    // --------------------------------------------------------
-    // 14. ライト設定をステージマップから取得してエンジンに反映
-    //     ステージごとに異なる光の色・方向・強度をサポートするための仕組み
-    // --------------------------------------------------------
-    Vector3 lightDir = stageMap_.GetLightDirection();
-    lightCamera_->Update(lightDir, player_->GetPosition());
+
+    // ステージライトとエフェクト用ポイントライトを描画共通へ反映する。
     object3dCommon->SetLightDirection(lightDir);
     object3dCommon->SetLightColor(Vector4(
         stageMap_.GetLightColor().x,
@@ -619,12 +505,7 @@ void MyGame::Update() {
     object3dCommon->SetCameraPosition(camera->GetPosition()); // スペキュラー計算用
 
     if (isEffectPresentation) {
-        const bool showcaseStorm = currentMode_ == AppMode::EffectShowcase &&
-            effectShowcaseSelectedIndex_ >= 0 &&
-            effectShowcaseSelectedIndex_ < static_cast<int>(effectShowcasePresetNames_.size()) &&
-            std::find(stormPresetNames_.begin(), stormPresetNames_.end(),
-                effectShowcasePresetNames_[effectShowcaseSelectedIndex_]) != stormPresetNames_.end();
-        const bool isStorm = (currentMode_ == AppMode::EffectPreview && effectPreviewStormMode_) || showcaseStorm;
+        const bool isStorm = IsCurrentEffectStorm();
         const float remaining = std::clamp(
             effectShowcaseLightTimer_ / kEffectShowcaseLightDuration_, 0.0f, 1.0f);
         const float lightEnvelope = remaining * remaining;
@@ -650,15 +531,10 @@ void MyGame::Update() {
         object3dCommon->SetPointLight({ 0.0f, 0.0f, 0.0f }, 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f });
     }
 
-    // クリアカラーをステージ設定と同期 (PostProcessRenderer のオフスクリーン背景色)
+
+    // 背景色はステージ設定を基本に、嵐演出中だけ暗い色へ寄せる。
     postProcess_.SetClearColor(stageMap_.GetClearColor());
-    const bool stormBackdrop =
-        (currentMode_ == AppMode::EffectPreview && effectPreviewStormMode_) ||
-        (currentMode_ == AppMode::EffectShowcase &&
-         effectShowcaseSelectedIndex_ >= 0 &&
-         effectShowcaseSelectedIndex_ < static_cast<int>(effectShowcasePresetNames_.size()) &&
-         std::find(stormPresetNames_.begin(), stormPresetNames_.end(),
-             effectShowcasePresetNames_[effectShowcaseSelectedIndex_]) != stormPresetNames_.end());
+    const bool stormBackdrop = IsCurrentEffectStorm();
     if (stormBackdrop) {
         dxCommon->SetClearColor(0.012f, 0.018f, 0.045f, 1.0f);
     } else {
@@ -666,20 +542,15 @@ void MyGame::Update() {
         dxCommon->SetClearColor(clear.x, clear.y, clear.z, clear.w);
     }
 
-    // --------------------------------------------------------
-    // 15. ゲームプレイ UI の更新
-    // --------------------------------------------------------
+
+    // ゲームプレイ UI とインベントリ UI を更新する。
     if (gameplayUIManager_) {
         gameplayUIManager_->Update(
             currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace,
             player_.get(), camera.get(), lightCamera_.get());
     }
 
-    // --------------------------------------------------------
-    // 16. インベントリ UI の更新 + ブロック配置モード移行
-    //     ConsumeUseRequest() が true のとき GamePlay_BlockPlace に移行し、
-    //     カーソルをプレイヤー位置に初期化する
-    // --------------------------------------------------------
+
     if (blockInventoryUI_) {
         bool isPlayOrPlace = (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
         blockInventoryUI_->Update(input.get(), winApp.get(), isPlayOrPlace, &stageMap_);
@@ -698,123 +569,189 @@ void MyGame::Update() {
     }
 }
 
-// ==========================================================
-//  MyGame::UpdateImGui  [Debug ビルドのみ]
-//
-//  3ペインの ImGui レイアウト:
-//    左パネル (幅 320px)     : Information / Mode 切り替え / Camera
-//    右パネル (幅 320px)     : StageEditor 操作 / SkinningEditor サイドパネル
-//    下パネル (高さ 360px)   : Tools & Controls (モード別コンテンツ)
-// ==========================================================
+//  MyGame::UpdateImGui [Debug ビルドのみ]
+
+
 #ifndef NDEBUG
 void MyGame::DrawStormEffectEditorImGui() {
     if (!particleManager) return;
     auto& storm = particleManager->GetStormSettings();
 
+    // ImGui の UI 要素を表示・更新する。
     ImGui::TextColored(ImVec4(0.48f, 0.70f, 1.0f, 1.0f), "[ Storm Editor ]");
+    // ImGui ボタン「Restart Storm」を表示し、押されたら処理する。
     if (ImGui::Button("Restart Storm", ImVec2(-1, 26))) {
         particleManager->SetStormActive(false);
         particleManager->ClearParticles();
         particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
     }
 
+    // ImGui セクション「Dark Clouds」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Dark Clouds", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui スライダー「Cloud Area X」で小数値を調整する。
         ImGui::SliderFloat("Cloud Area X", &storm.cloudAreaX, 0.0f, 15.0f);
+        // ImGui スライダー「Cloud Area Z」で小数値を調整する。
         ImGui::SliderFloat("Cloud Area Z", &storm.cloudAreaZ, 0.0f, 12.0f);
+        // ImGui スライダー「Cloud Height」で小数値を調整する。
         ImGui::SliderFloat("Cloud Height", &storm.cloudHeight, 1.5f, 10.0f);
+        // ImGui スライダー「Cloud Emit Rate」で小数値を調整する。
         ImGui::SliderFloat("Cloud Emit Rate", &storm.cloudEmitRate, 0.5f, 20.0f);
+        // ImGui スライダー「Cloud Life」で小数値を調整する。
         ImGui::SliderFloat("Cloud Life", &storm.cloudLife, 1.0f, 12.0f);
+        // ImGui スライダー「Cloud Size」で小数値を調整する。
         ImGui::SliderFloat("Cloud Size", &storm.cloudSize, 0.2f, 3.0f);
+        // ImGui カラー編集「Cloud Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Cloud Color", &storm.cloudColor.x);
+        // ImGui チェックボックス「Random Cloud Position」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Cloud Position", &storm.randomizeCloudPosition);
+        // ImGui チェックボックス「Random Cloud Size」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Cloud Size", &storm.randomizeCloudSize);
     }
+    // ImGui セクション「Rain」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Rain", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui スライダー「Rain Area X」で小数値を調整する。
         ImGui::SliderFloat("Rain Area X", &storm.rainAreaX, 0.0f, 15.0f);
+        // ImGui スライダー「Rain Area Z」で小数値を調整する。
         ImGui::SliderFloat("Rain Area Z", &storm.rainAreaZ, 0.0f, 12.0f);
+        // ImGui スライダー「Rain Emit Rate」で小数値を調整する。
         ImGui::SliderFloat("Rain Emit Rate", &storm.rainEmitRate, 1.0f, 180.0f);
+        // ImGui スライダー「Rain Speed」で小数値を調整する。
         ImGui::SliderFloat("Rain Speed", &storm.rainSpeed, 0.1f, 3.0f);
+        // ImGui スライダー「Rain Length」で小数値を調整する。
         ImGui::SliderFloat("Rain Length", &storm.rainLength, 0.2f, 3.0f);
+        // ImGui カラー編集「Rain Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Rain Color", &storm.rainColor.x);
+        // ImGui チェックボックス「Random Rain Position」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Rain Position", &storm.randomizeRainPosition);
+        // ImGui チェックボックス「Random Rain Speed」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Rain Speed", &storm.randomizeRainSpeed);
     }
+    // ImGui セクション「Wind」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Wind", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui スライダー「Wind Emit Rate」で小数値を調整する。
         ImGui::SliderFloat("Wind Emit Rate", &storm.windEmitRate, 0.5f, 40.0f);
+        // ImGui スライダー「Wind Speed」で小数値を調整する。
         ImGui::SliderFloat("Wind Speed", &storm.windSpeed, 0.1f, 3.0f);
+        // ImGui スライダー「Wind Length」で小数値を調整する。
         ImGui::SliderFloat("Wind Length", &storm.windLength, 0.2f, 4.0f);
+        // ImGui カラー編集「Wind Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Wind Color", &storm.windColor.x);
     }
+    // ImGui セクション「Lightning」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Lightning", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui スライダー「Lightning Area X」で小数値を調整する。
         ImGui::SliderFloat("Lightning Area X", &storm.lightningAreaX, 0.0f, 12.0f);
+        // ImGui スライダー「Lightning Area Z」で小数値を調整する。
         ImGui::SliderFloat("Lightning Area Z", &storm.lightningAreaZ, 0.0f, 10.0f);
+        // ImGui スライダー「Lightning Frequency」で小数値を調整する。
         ImGui::SliderFloat("Lightning Frequency", &storm.lightningFrequency, 0.1f, 5.0f, "%.2fx");
+        // ImGui スライダー「Interval Min」で小数値を調整する。
         ImGui::SliderFloat("Interval Min", &storm.lightningIntervalMin, 0.15f, 5.0f);
+        // ImGui スライダー「Interval Max」で小数値を調整する。
         ImGui::SliderFloat("Interval Max", &storm.lightningIntervalMax, 0.2f, 8.0f);
+        // ImGui スライダー「Strike Size」で小数値を調整する。
         ImGui::SliderFloat("Strike Size", &storm.lightningStrikeSize, 0.25f, 3.0f, "%.2fx");
+        // ImGui チェックボックス「Random Strike Size」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Strike Size", &storm.randomizeLightningSize);
+        // ImGui スライダー「Simultaneous Strikes」で整数値を調整する。
         ImGui::SliderInt("Simultaneous Strikes", &storm.lightningSimultaneousCount, 1, 8);
+        // ImGui スライダー「Simultaneous Spread」で小数値を調整する。
         ImGui::SliderFloat("Simultaneous Spread", &storm.lightningSimultaneousSpread, 0.0f, 8.0f);
+        // ImGui スライダー「Burst Count」で整数値を調整する。
         ImGui::SliderInt("Burst Count", &storm.lightningBurstCount, 1, 12);
+        // ImGui スライダー「Burst Interval」で小数値を調整する。
         ImGui::SliderFloat("Burst Interval", &storm.lightningBurstInterval, 0.02f, 0.8f, "%.2f sec");
+        // ImGui チェックボックス「Random Burst Count」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Burst Count", &storm.randomizeLightningBurstCount);
+        // ImGui チェックボックス「Random Lightning Position」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Lightning Position", &storm.randomizeLightningPosition);
+        // ImGui チェックボックス「Random Lightning Interval」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Lightning Interval", &storm.randomizeLightningInterval);
+        // ImGui チェックボックス「Random Lightning Direction」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Lightning Direction", &storm.randomizeLightningDirection);
+        // ImGui スライダー「Bolt Count」で整数値を調整する。
         ImGui::SliderInt("Bolt Count", &storm.lightningCount, 1, 12);
+        // ImGui スライダー「Segments」で整数値を調整する。
         ImGui::SliderInt("Segments", &storm.lightningSegments, 2, 16);
+        // ImGui スライダー「Bolt Length」で小数値を調整する。
         ImGui::SliderFloat("Bolt Length", &storm.lightningLength, 1.0f, 10.0f);
+        // ImGui スライダー「Bolt Spread」で小数値を調整する。
         ImGui::SliderFloat("Bolt Spread", &storm.lightningSpread, 0.0f, 3.0f);
+        // ImGui スライダー「Bolt Power」で小数値を調整する。
         ImGui::SliderFloat("Bolt Power", &storm.lightningPower, 0.1f, 3.0f);
+        // ImGui スライダー「Bolt Width」で小数値を調整する。
         ImGui::SliderFloat("Bolt Width", &storm.lightningWidth, 0.1f, 4.0f);
+        // ImGui スライダー「Glow Width」で小数値を調整する。
         ImGui::SliderFloat("Glow Width", &storm.lightningGlowWidth, 1.0f, 8.0f);
+        // ImGui スライダー「Glow Opacity」で小数値を調整する。
         ImGui::SliderFloat("Glow Opacity", &storm.lightningGlowOpacity, 0.0f, 1.0f);
+        // ImGui スライダー「Branch Count」で整数値を調整する。
         ImGui::SliderInt("Branch Count", &storm.lightningBranchCount, 0, 12);
+        // ImGui チェックボックス「Random Branch Count」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Branch Count", &storm.randomizeLightningBranchCount);
+        // ImGui スライダー「Branch Length」で小数値を調整する。
         ImGui::SliderFloat("Branch Length", &storm.lightningBranchLength, 0.05f, 1.0f);
+        // ImGui スライダー「Branch Spread」で小数値を調整する。
         ImGui::SliderFloat("Branch Spread", &storm.lightningBranchSpread, 0.0f, 1.57f);
+        // ImGui スライダー「Branch Width」で小数値を調整する。
         ImGui::SliderFloat("Branch Width", &storm.lightningBranchWidth, 0.1f, 1.5f);
+        // ImGui カラー編集「Lightning Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Lightning Color", &storm.lightningColor.x);
+        // ImGui カラー編集「Lightning Glow」で RGBA 色を調整する。
         ImGui::ColorEdit4("Lightning Glow", &storm.lightningGlowColor.x);
+        // ImGui スライダー「Ground Light Power」で小数値を調整する。
         ImGui::SliderFloat("Ground Light Power", &storm.pointLightPower, 0.0f, 24.0f);
     }
 
+    // ImGui セクション「Storm Presets」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Storm Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui チェックボックス「Include in Showcase」で ON/OFF を切り替える。
         ImGui::Checkbox("Include in Showcase", &stormPresetIncludeInShowcase_);
+        // ImGui 入力欄「Storm Preset Name」で名前や文字列を編集する。
         ImGui::InputText("Storm Preset Name", stormPresetNameBuffer_.data(), stormPresetNameBuffer_.size());
+        // ImGui ボタン「Save Storm Preset」を表示し、押されたら処理する。
         if (ImGui::Button("Save Storm Preset", ImVec2(-1, 24))) {
             SaveStormPreset(stormPresetNameBuffer_.data());
         }
         const char* selected = stormPresetSelectedIndex_ >= 0 && stormPresetSelectedIndex_ < static_cast<int>(stormPresetNames_.size())
             ? stormPresetNames_[stormPresetSelectedIndex_].c_str() : "Select storm preset";
+        // ImGui コンボ「Saved Storms」の選択リストを開始する。
         if (ImGui::BeginCombo("Saved Storms", selected)) {
             for (int i = 0; i < static_cast<int>(stormPresetNames_.size()); ++i) {
                 const bool isSelected = i == stormPresetSelectedIndex_;
+                // ImGui の選択項目を表示し、選ばれたら選択状態を更新する。
                 if (ImGui::Selectable(stormPresetNames_[i].c_str(), isSelected)) {
                     stormPresetSelectedIndex_ = i;
                     CopyPresetName(stormPresetNameBuffer_, stormPresetNames_[i]);
                 }
+                // 現在選択中の ImGui 項目へ既定フォーカスを当てる。
                 if (isSelected) ImGui::SetItemDefaultFocus();
             }
+            // ImGui コンボの選択リストを閉じる。
             ImGui::EndCombo();
         }
+        // ImGui ボタン「Load Storm Preset」を表示し、押されたら処理する。
         if (ImGui::Button("Load Storm Preset", ImVec2(-1, 24)) && stormPresetSelectedIndex_ >= 0) {
             LoadStormPreset(stormPresetNames_[stormPresetSelectedIndex_]);
             particleManager->SetStormActive(false);
             particleManager->ClearParticles();
             particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
         }
+        // ImGui ボタン「Reset Storm Defaults」を表示し、押されたら処理する。
         if (ImGui::Button("Reset Storm Defaults", ImVec2(-1, 24))) {
             storm = ParticleManager::StormEffectSettings{};
         }
+        // ImGui に折り返し付きのステータス文字列を表示する。
         ImGui::TextWrapped("%s", stormPresetStatus_.c_str());
     }
 }
 
 void MyGame::DrawEffectPreviewEditorImGui() {
+    // ImGui の UI 要素を表示・更新する。
     ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Editor ]");
     int effectType = effectPreviewStormMode_ ? 1 : 0;
     const char* effectTypes[] = { "Hit Effect", "Tempest Storm" };
+    // ImGui コンボ「Effect Type」で候補から選択する。
     if (ImGui::Combo("Effect Type", &effectType, effectTypes, IM_ARRAYSIZE(effectTypes))) {
         effectPreviewStormMode_ = effectType == 1;
         if (particleManager) {
@@ -826,15 +763,21 @@ void MyGame::DrawEffectPreviewEditorImGui() {
         }
     }
     if (effectPreviewStormMode_) {
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.52f, 0.72f, 1.0f, 1.0f), "Persistent preview: clouds / wind / rain / lightning");
         DrawStormEffectEditorImGui();
         return;
     }
+    // ImGui テキスト「SPACE / H : Trigger」を表示する。
     ImGui::Text("SPACE / H : Trigger");
+    // ImGui チェックボックス「Auto Trigger」で ON/OFF を切り替える。
     ImGui::Checkbox("Auto Trigger", &effectPreviewAutoPlay_);
+    // ImGui チェックボックス「Show GPU Sphere」で ON/OFF を切り替える。
     ImGui::Checkbox("Show GPU Sphere", &effectPreviewShowGPUParticleSphere_);
+    // ImGui スライダー「Interval」で小数値を調整する。
     ImGui::SliderFloat("Interval", &effectPreviewInterval_, 0.2f, 3.0f);
 
+    // ImGui ボタンを表示し、押されたら処理する。
     if (ImGui::Button(effectPreviewStormMode_ ? "Restart Tempest Storm" : "Trigger Saber Hit", ImVec2(-1, 24)) && particleManager) {
         if (effectPreviewStormMode_) {
             particleManager->SetStormActive(false);
@@ -844,79 +787,135 @@ void MyGame::DrawEffectPreviewEditorImGui() {
             EmitEffectPreviewBurst();
         }
     }
+    // ImGui ボタン「Clear Particles」を表示し、押されたら処理する。
     if (ImGui::Button("Clear Particles", ImVec2(-1, 24)) && particleManager) {
         particleManager->ClearParticles();
     }
 
+    // ImGui セクション「Core Shape」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Core Shape", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui スライダー「Size」で小数値を調整する。
         ImGui::SliderFloat("Size", &effectPreviewHitSettings_.size, 0.2f, 3.0f);
+        // ImGui スライダー「Brightness」で小数値を調整する。
         ImGui::SliderFloat("Brightness", &effectPreviewHitSettings_.brightness, 0.1f, 2.5f);
+        // ImGui スライダー「Life Scale」で小数値を調整する。
         ImGui::SliderFloat("Life Scale", &effectPreviewHitSettings_.lifeScale, 0.2f, 3.0f);
+        // ImGui スライダー「Slash Angle」で小数値を調整する。
         ImGui::SliderFloat("Slash Angle", &effectPreviewHitSettings_.slashAngle, -3.14f, 3.14f);
+        // ImGui スライダー「Slash Spread」で小数値を調整する。
         ImGui::SliderFloat("Slash Spread", &effectPreviewHitSettings_.slashSpread, 0.2f, 3.14f);
+        // ImGui チェックボックス「Mirror Slash」で ON/OFF を切り替える。
         ImGui::Checkbox("Mirror Slash", &effectPreviewMirrorSlash_);
+        // ImGui スライダー「Burst Count」で整数値を調整する。
         ImGui::SliderInt("Burst Count", &effectPreviewBurstCount_, 1, 8);
+        // ImGui スライダー「Burst Radius」で小数値を調整する。
         ImGui::SliderFloat("Burst Radius", &effectPreviewBurstRadius_, 0.0f, 2.0f);
     }
 
+    // ImGui セクション「Detail」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Detail", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui スライダー「Slash Count」で整数値を調整する。
         ImGui::SliderInt("Slash Count", &effectPreviewHitSettings_.slashCount, 1, 32);
+        // ImGui スライダー「Spark Count」で整数値を調整する。
         ImGui::SliderInt("Spark Count", &effectPreviewHitSettings_.sparkCount, 0, 160);
+        // ImGui スライダー「Spark Speed」で小数値を調整する。
         ImGui::SliderFloat("Spark Speed", &effectPreviewHitSettings_.sparkSpeed, 0.1f, 3.0f);
+        // ImGui スライダー「Spark Length」で小数値を調整する。
         ImGui::SliderFloat("Spark Length", &effectPreviewHitSettings_.sparkLength, 0.1f, 3.0f);
+        // ImGui スライダー「Scatter Radius」で小数値を調整する。
         ImGui::SliderFloat("Scatter Radius", &effectPreviewHitSettings_.scatterRadius, 0.0f, 3.0f);
+        // ImGui スライダー「Blue Ratio」で小数値を調整する。
         ImGui::SliderFloat("Blue Ratio", &effectPreviewHitSettings_.blueRatio, 0.0f, 1.0f);
+        // ImGui スライダー「Ring Power」で小数値を調整する。
         ImGui::SliderFloat("Ring Power", &effectPreviewHitSettings_.ringPower, 0.0f, 3.0f);
+        // ImGui スライダー「Core Power」で小数値を調整する。
         ImGui::SliderFloat("Core Power", &effectPreviewHitSettings_.corePower, 0.0f, 3.0f);
+        // ImGui スライダー「Cross Power」で小数値を調整する。
         ImGui::SliderFloat("Cross Power", &effectPreviewHitSettings_.crossPower, 0.0f, 3.0f);
+        // ImGui スライダー「Pillar Power」で小数値を調整する。
         ImGui::SliderFloat("Pillar Power", &effectPreviewHitSettings_.pillarPower, 0.0f, 3.0f);
+        // ImGui スライダー「Main Bolt Count」で整数値を調整する。
         ImGui::SliderInt("Main Bolt Count", &effectPreviewHitSettings_.lightningCount, 0, 12);
+        // ImGui スライダー「Lightning Segments」で整数値を調整する。
         ImGui::SliderInt("Lightning Segments", &effectPreviewHitSettings_.lightningSegments, 2, 8);
+        // ImGui スライダー「Lightning Length」で小数値を調整する。
         ImGui::SliderFloat("Lightning Length", &effectPreviewHitSettings_.lightningLength, 0.1f, 4.0f);
+        // ImGui スライダー「Lightning Spread」で小数値を調整する。
         ImGui::SliderFloat("Lightning Spread", &effectPreviewHitSettings_.lightningSpread, 0.0f, 3.0f);
+        // ImGui スライダー「Lightning Power」で小数値を調整する。
         ImGui::SliderFloat("Lightning Power", &effectPreviewHitSettings_.lightningPower, 0.0f, 3.0f);
+        // ImGui スライダー「Main Bolt Width」で小数値を調整する。
         ImGui::SliderFloat("Main Bolt Width", &effectPreviewHitSettings_.lightningWidth, 0.1f, 4.0f);
+        // ImGui スライダー「Glow Width」で小数値を調整する。
         ImGui::SliderFloat("Glow Width", &effectPreviewHitSettings_.lightningGlowWidth, 1.0f, 8.0f);
+        // ImGui スライダー「Glow Opacity」で小数値を調整する。
         ImGui::SliderFloat("Glow Opacity", &effectPreviewHitSettings_.lightningGlowOpacity, 0.0f, 1.0f);
+        // ImGui スライダー「Branch Count」で整数値を調整する。
         ImGui::SliderInt("Branch Count", &effectPreviewHitSettings_.lightningBranchCount, 0, 12);
+        // ImGui スライダー「Branch Length」で小数値を調整する。
         ImGui::SliderFloat("Branch Length", &effectPreviewHitSettings_.lightningBranchLength, 0.05f, 1.0f);
+        // ImGui スライダー「Branch Spread」で小数値を調整する。
         ImGui::SliderFloat("Branch Spread", &effectPreviewHitSettings_.lightningBranchSpread, 0.0f, 1.57f);
+        // ImGui スライダー「Branch Width」で小数値を調整する。
         ImGui::SliderFloat("Branch Width", &effectPreviewHitSettings_.lightningBranchWidth, 0.1f, 1.0f);
         const char* lightningModes[] = { "Radial", "Slash Forward", "Slash Axis", "Custom" };
+        // ImGui コンボ「Lightning Mode」で候補から選択する。
         ImGui::Combo("Lightning Mode", &effectPreviewHitSettings_.lightningMode, lightningModes, 4);
         if (effectPreviewHitSettings_.lightningMode == 3) {
+            // ImGui スライダー「Lightning Direction」で小数値を調整する。
             ImGui::SliderFloat("Lightning Direction", &effectPreviewHitSettings_.lightningDirection, -3.14f, 3.14f);
         }
         if (effectPreviewHitSettings_.lightningMode != 0) {
+            // ImGui スライダー「Direction Spread」で小数値を調整する。
             ImGui::SliderFloat("Direction Spread", &effectPreviewHitSettings_.lightningDirectionSpread, 0.0f, 1.57f);
         }
     }
 
+    // ImGui セクション「Colors」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Colors", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui カラー編集「Core Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Core Color", &effectPreviewHitSettings_.coreColor.x);
+        // ImGui カラー編集「Slash Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Slash Color", &effectPreviewHitSettings_.slashColor.x);
+        // ImGui カラー編集「Spark Primary」で RGBA 色を調整する。
         ImGui::ColorEdit4("Spark Primary", &effectPreviewHitSettings_.sparkColor.x);
+        // ImGui カラー編集「Spark Secondary」で RGBA 色を調整する。
         ImGui::ColorEdit4("Spark Secondary", &effectPreviewHitSettings_.sparkSecondaryColor.x);
+        // ImGui カラー編集「Ring Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Ring Color", &effectPreviewHitSettings_.ringColor.x);
+        // ImGui カラー編集「Cross Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Cross Color", &effectPreviewHitSettings_.crossColor.x);
+        // ImGui カラー編集「Pillar Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Pillar Color", &effectPreviewHitSettings_.pillarColor.x);
+        // ImGui カラー編集「Lightning Color」で RGBA 色を調整する。
         ImGui::ColorEdit4("Lightning Color", &effectPreviewHitSettings_.lightningColor.x);
+        // ImGui カラー編集「Lightning Glow」で RGBA 色を調整する。
         ImGui::ColorEdit4("Lightning Glow", &effectPreviewHitSettings_.lightningGlowColor.x);
     }
 
+    // ImGui セクション「Randomization」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Randomization", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui チェックボックス「Random Position」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Position", &effectPreviewHitSettings_.randomizePosition);
+        // ImGui チェックボックス「Random Direction」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Direction", &effectPreviewHitSettings_.randomizeDirection);
+        // ImGui チェックボックス「Random Angle」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Angle", &effectPreviewHitSettings_.randomizeAngle);
         if (effectPreviewHitSettings_.randomizeAngle) {
+            // ImGui スライダー「Angle Random Range」で小数値を調整する。
             ImGui::SliderFloat("Angle Random Range", &effectPreviewHitSettings_.angleRandomRange, 0.0f, 3.14f);
         }
+        // ImGui チェックボックス「Random Scale」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Scale", &effectPreviewHitSettings_.randomizeScale);
+        // ImGui チェックボックス「Random Lifetime」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Lifetime", &effectPreviewHitSettings_.randomizeLifetime);
+        // ImGui チェックボックス「Random Color」で ON/OFF を切り替える。
         ImGui::Checkbox("Random Color", &effectPreviewHitSettings_.randomizeColor);
     }
 
+    // ImGui セクション「Presets」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui ボタン「Saber Impact」を表示し、押されたら処理する。
         if (ImGui::Button("Saber Impact", ImVec2(140, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 1.25f;
@@ -930,7 +929,9 @@ void MyGame::DrawEffectPreviewEditorImGui() {
             effectPreviewBurstCount_ = 2;
             effectPreviewBurstRadius_ = 0.18f;
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Blue Flash」を表示し、押されたら処理する。
         if (ImGui::Button("Blue Flash", ImVec2(120, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.brightness = 1.9f;
@@ -947,6 +948,7 @@ void MyGame::DrawEffectPreviewEditorImGui() {
             effectPreviewBurstCount_ = 1;
             effectPreviewBurstRadius_ = 0.0f;
         }
+        // ImGui ボタン「Spark Burst」を表示し、押されたら処理する。
         if (ImGui::Button("Spark Burst", ImVec2(140, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 0.9f;
@@ -965,7 +967,9 @@ void MyGame::DrawEffectPreviewEditorImGui() {
             effectPreviewBurstCount_ = 3;
             effectPreviewBurstRadius_ = 0.35f;
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Heavy Hit」を表示し、押されたら処理する。
         if (ImGui::Button("Heavy Hit", ImVec2(120, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 1.85f;
@@ -981,6 +985,7 @@ void MyGame::DrawEffectPreviewEditorImGui() {
             effectPreviewBurstCount_ = 1;
             effectPreviewBurstRadius_ = 0.0f;
         }
+        // ImGui ボタン「Cinematic Finisher」を表示し、押されたら処理する。
         if (ImGui::Button("Cinematic Finisher", ImVec2(-1, 28))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 2.15f;
@@ -1007,6 +1012,7 @@ void MyGame::DrawEffectPreviewEditorImGui() {
             effectPreviewBurstRadius_ = 0.28f;
             EmitEffectPreviewBurst();
         }
+        // ImGui ボタン「Lightning Slash」を表示し、押されたら処理する。
         if (ImGui::Button("Lightning Slash", ImVec2(-1, 28))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 1.55f;
@@ -1047,6 +1053,7 @@ void MyGame::DrawEffectPreviewEditorImGui() {
             effectPreviewBurstRadius_ = 0.16f;
             EmitEffectPreviewBurst();
         }
+        // ImGui ボタン「Shock Ring」を表示し、押されたら処理する。
         if (ImGui::Button("Shock Ring", ImVec2(140, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 1.35f;
@@ -1074,7 +1081,9 @@ void MyGame::DrawEffectPreviewEditorImGui() {
             effectPreviewBurstRadius_ = 0.0f;
             EmitEffectPreviewBurst();
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Thin Cut」を表示し、押されたら処理する。
         if (ImGui::Button("Thin Cut", ImVec2(120, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 1.2f;
@@ -1105,13 +1114,19 @@ void MyGame::DrawEffectPreviewEditorImGui() {
         }
     }
 
+    // ImGui セクション「Saved Presets」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Saved Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui チェックボックス「Include in Showcase」で ON/OFF を切り替える。
         ImGui::Checkbox("Include in Showcase", &effectPresetIncludeInShowcase_);
+        // ImGui 入力欄「Preset Name」で名前や文字列を編集する。
         ImGui::InputText("Preset Name", effectPresetNameBuffer_.data(), effectPresetNameBuffer_.size());
+        // ImGui ボタン「Save Preset」を表示し、押されたら処理する。
         if (ImGui::Button("Save Preset", ImVec2(135, 24))) {
             SaveEffectPreset(effectPresetNameBuffer_.data());
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Refresh」を表示し、押されたら処理する。
         if (ImGui::Button("Refresh", ImVec2(100, 24))) {
             LoadEffectPresetNames();
         }
@@ -1119,19 +1134,24 @@ void MyGame::DrawEffectPreviewEditorImGui() {
         const char* selectedPresetName = effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())
             ? effectPresetNames_[effectPresetSelectedIndex_].c_str()
             : "Select saved preset";
+        // ImGui コンボ「Saved」の選択リストを開始する。
         if (ImGui::BeginCombo("Saved", selectedPresetName)) {
             for (int i = 0; i < static_cast<int>(effectPresetNames_.size()); ++i) {
                 bool selected = effectPresetSelectedIndex_ == i;
+                // ImGui の選択項目を表示し、選ばれたら選択状態を更新する。
                 if (ImGui::Selectable(effectPresetNames_[i].c_str(), selected)) {
                     effectPresetSelectedIndex_ = i;
                     CopyPresetName(effectPresetNameBuffer_, effectPresetNames_[i]);
                 }
                 if (selected) {
+                    // 現在選択中の ImGui 項目へ既定フォーカスを当てる。
                     ImGui::SetItemDefaultFocus();
                 }
             }
+            // ImGui コンボの選択リストを閉じる。
             ImGui::EndCombo();
         }
+        // ImGui ボタン「Load Selected」を表示し、押されたら処理する。
         if (ImGui::Button("Load Selected", ImVec2(135, 24))) {
             if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
                 LoadEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
@@ -1139,7 +1159,9 @@ void MyGame::DrawEffectPreviewEditorImGui() {
                 effectPresetStatus_ = "Preset: nothing selected";
             }
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Save Over」を表示し、押されたら処理する。
         if (ImGui::Button("Save Over", ImVec2(100, 24))) {
             if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
                 SaveEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
@@ -1147,14 +1169,19 @@ void MyGame::DrawEffectPreviewEditorImGui() {
                 SaveEffectPreset(effectPresetNameBuffer_.data());
             }
         }
+        // ImGui に折り返し付きのステータス文字列を表示する。
         ImGui::TextWrapped("%s", effectPresetStatus_.c_str());
     }
 
+    // ImGui セクション「Spawn」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Spawn", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui ドラッグ入力「Position」で 3D 座標を調整する。
         ImGui::DragFloat3("Position", &effectPreviewPosition_.x, 0.05f, -20.0f, 20.0f);
+        // ImGui ボタン「Focus Camera」を表示し、押されたら処理する。
         if (ImGui::Button("Focus Camera", ImVec2(-1, 24))) {
             camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
         }
+        // ImGui ボタン「Reset Tuning」を表示し、押されたら処理する。
         if (ImGui::Button("Reset Tuning", ImVec2(-1, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewMirrorSlash_ = false;
@@ -1165,29 +1192,37 @@ void MyGame::DrawEffectPreviewEditorImGui() {
 }
 
 void MyGame::UpdateImGui() {
+    // ImGui のフレーム情報と表示サイズを取得する。
     ImGuiIO& io        = ImGui::GetIO();
     const float panelW = 320.0f;
     const float botH   = 360.0f;
 
-    // ========================================================
     // 左パネル: Information
-    // ========================================================
+    // 次に開く ImGui ウィンドウの表示位置を固定する。
     ImGui::SetNextWindowPos( ImVec2(0, 0), ImGuiCond_Always);
+    // 次に開く ImGui ウィンドウの表示サイズを固定する。
     ImGui::SetNextWindowSize(ImVec2(panelW, io.DisplaySize.y - botH), ImGuiCond_Always);
+    // 次に開く ImGui ウィンドウの背景透明度を設定する。
     ImGui::SetNextWindowBgAlpha(1.0f);
+    // ImGui ウィンドウ「Information」を開始する。
     ImGui::Begin("Information", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
+    // ImGui テキスト「FPS: %.1f (%.3f ms/f)」を表示する。
     ImGui::Text("FPS: %.1f (%.3f ms/f)", io.Framerate, 1000.0f / io.Framerate);
+    // 次の ImGui 項目を同じ行に並べる。
     ImGui::SameLine(panelW - 60.0f);
+    // ImGui ボタン「Exit」を表示し、押されたら処理する。
     if (ImGui::Button("Exit", ImVec2(50, 20))) {
         PostQuitMessage(0);
     }
+    // ImGui 上に区切り線を表示する。
     ImGui::Separator();
 
     const bool isStageToolMode = (currentMode_ == AppMode::StageEditor ||
                                   currentMode_ == AppMode::GamePlay_BlockPlace);
 
-    // AppMode の選択 (コンボボックス)
+
+    // ImGui セクション「Hierarchy / Mode」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Hierarchy / Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
         int modeIndex = 0;
         switch (currentMode_) {
@@ -1200,6 +1235,7 @@ void MyGame::UpdateImGui() {
         default:                                     break;
         }
         const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay", "SkinningEditor", "EffectPreview", "EffectShowcase" };
+        // ImGui コンボ「App Mode」で候補から選択する。
         if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
             switch (modeIndex) {
             case 0: currentMode_ = AppMode::DebugView;      break;
@@ -1220,118 +1256,174 @@ void MyGame::UpdateImGui() {
             }
         }
         if (currentMode_ == AppMode::EffectPreview) {
+            // ImGui の UI 要素を表示・更新する。
             ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "Effect only viewport");
+            // ImGui チェックボックス「Show Particles」で ON/OFF を切り替える。
             ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
         } else {
-            // デバッグ表示のオン/オフ切り替え
+
+            // ImGui チェックボックス「Show 3D Objects」で ON/OFF を切り替える。
             ImGui::Checkbox("Show 3D Objects",      &debugFlags_.show3DObjects);
+            // ImGui チェックボックス「Show Terrain」で ON/OFF を切り替える。
             ImGui::Checkbox("Show Terrain",          &debugFlags_.showTerrain);
+            // ImGui チェックボックス「Show Skybox」で ON/OFF を切り替える。
             ImGui::Checkbox("Show Skybox",           &debugFlags_.showSkybox);
+            // ImGui チェックボックス「Show Skybox (Cubemap)」で ON/OFF を切り替える。
             ImGui::Checkbox("Show Skybox (Cubemap)", &showSkyboxCubemap_);
             if (currentMode_ == AppMode::DebugView) {
+                // ImGui チェックボックス「Show Sprite」で ON/OFF を切り替える。
                 ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
             }
+            // ImGui チェックボックス「Show Particles」で ON/OFF を切り替える。
             ImGui::Checkbox("Show Particles",        &debugFlags_.showParticles);
         }
     }
 
-    // オフスクリーン / ポストエフェクト設定
+
+    // PostProcessRenderer 側の ImGui 設定パネルを描画する。
     postProcess_.DrawImGui();
 
-    // カメラ設定
+
+    // ImGui セクション「Camera Settings」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // ImGui チェックボックス「Use First-Person Camera」で ON/OFF を切り替える。
         ImGui::Checkbox("Use First-Person Camera", &useFirstPersonCamera_);
         if (useFirstPersonCamera_) {
+            // ImGui スライダー「FPS Yaw」で小数値を調整する。
             ImGui::SliderFloat("FPS Yaw",   &fpsCameraYaw_,   -6.28f, 6.28f);
+            // ImGui スライダー「FPS Pitch」で小数値を調整する。
             ImGui::SliderFloat("FPS Pitch", &fpsCameraPitch_, -1.4f,  1.4f);
         }
+        // Camera 側の ImGui 設定パネルを描画する。
         camera->DrawImGui();
-        // GamePlay 中はゲームプレイカメラに FOV を同期する
+
         if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
             gameplayCameraController_.SetFov(*camera->GetFovPtr());
         }
     }
 
     if (isStageToolMode) {
+        // ImGui セクション「StageMap Info」を開閉できる見出しとして表示する。
         if (ImGui::CollapsingHeader("StageMap Info")) {
+            // StageMap 側の ImGui 情報パネルを描画する。
             stageMap_.DrawImGui();
         }
+        // ImGui セクション「Cursor Info」を開閉できる見出しとして表示する。
         if (ImGui::CollapsingHeader("Cursor Info")) {
+            // MapCursor 側の ImGui 情報パネルを描画する。
             mapCursor_->DrawImGui();
         }
     }
 
+    // 現在の ImGui ウィンドウを閉じる。
     ImGui::End(); // 左パネルここまで
 
-    // ========================================================
     // 右パネル (Stage Editor) - StageEditorController に委譲
-    // ========================================================
     if (isStageToolMode) {
+        // StageEditorController 側の ImGui 編集パネルを描画する。
         stageEditorController_.DrawImGui(stageMap_, stageRenderer_.get(), mapCursor_.get(), player_.get());
     }
 
     if (currentMode_ == AppMode::EffectPreview) {
+        // 次に開く ImGui ウィンドウの表示位置を固定する。
         ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panelW, 0), ImGuiCond_Always);
+        // 次に開く ImGui ウィンドウの表示サイズを固定する。
         ImGui::SetNextWindowSize(ImVec2(panelW, io.DisplaySize.y - botH), ImGuiCond_Always);
+        // 次に開く ImGui ウィンドウの背景透明度を設定する。
         ImGui::SetNextWindowBgAlpha(1.0f);
+        // ImGui ウィンドウ「Effect Editor」を開始する。
         ImGui::Begin("Effect Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         DrawEffectPreviewEditorImGui();
+        // 現在の ImGui ウィンドウを閉じる。
         ImGui::End();
     }
 
-    // ========================================================
     // 下パネル: Tools & Controls
-    // ========================================================
+    // 次に開く ImGui ウィンドウの表示位置を固定する。
     ImGui::SetNextWindowPos( ImVec2(0, io.DisplaySize.y - botH), ImGuiCond_Always);
+    // 次に開く ImGui ウィンドウの表示サイズを固定する。
     ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, botH),     ImGuiCond_Always);
+    // 次に開く ImGui ウィンドウの背景透明度を設定する。
     ImGui::SetNextWindowBgAlpha(1.0f);
+    // ImGui ウィンドウ「Tools & Controls」を開始する。
     ImGui::Begin("Tools & Controls", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
     if (currentMode_ == AppMode::SkinningEditor && skinningEditor_.HasPreviewObject()) {
-        // タイムライン UI を SkinningEditorController に委譲
+
         skinningEditor_.DrawImGuiTimeline();
 
     } else if (currentMode_ == AppMode::EffectPreview) {
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Preview ]");
+        // ImGui テキスト「Effect Type: %s」を表示する。
         ImGui::Text("Effect Type: %s", effectPreviewStormMode_ ? "Tempest Storm" : "Hit Effect");
+        // ImGui テキスト「Editor controls are on the right panel.」を表示する。
         ImGui::Text("Editor controls are on the right panel.");
+        // ImGui テキスト「SPACE / H : Trigger Saber Hit」を表示する。
         ImGui::Text("SPACE / H : Trigger Saber Hit");
+        // ImGui テキスト「Saved preset: %s」を表示する。
         ImGui::Text("Saved preset: %s", effectPresetNameBuffer_.data());
+        // ImGui テキスト「GPU Sphere: %s」を表示する。
         ImGui::Text("GPU Sphere: %s", effectPreviewShowGPUParticleSphere_ ? "ON" : "OFF");
+        // ImGui ボタン「Trigger Saber Hit」を表示し、押されたら処理する。
         if (ImGui::Button("Trigger Saber Hit", ImVec2(180, 24)) && particleManager) {
             EmitEffectPreviewBurst();
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Clear Particles」を表示し、押されたら処理する。
         if (ImGui::Button("Clear Particles", ImVec2(140, 24)) && particleManager) {
             particleManager->ClearParticles();
         }
 
     } else if (false && currentMode_ == AppMode::EffectPreview) {
+        // ImGui レイアウトを 2 カラムに切り替える。
         ImGui::Columns(2, "EffectPreviewColumns", false);
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Preview ]");
+        // ImGui テキスト「SPACE / H : Trigger Saber Hit」を表示する。
         ImGui::Text("SPACE / H : Trigger Saber Hit");
+        // ImGui チェックボックス「Auto Trigger」で ON/OFF を切り替える。
         ImGui::Checkbox("Auto Trigger", &effectPreviewAutoPlay_);
+        // ImGui チェックボックス「Show GPU Particle Sphere」で ON/OFF を切り替える。
         ImGui::Checkbox("Show GPU Particle Sphere", &effectPreviewShowGPUParticleSphere_);
+        // ImGui スライダー「Interval」で小数値を調整する。
         ImGui::SliderFloat("Interval", &effectPreviewInterval_, 0.2f, 3.0f);
+        // ImGui ボタン「Trigger Saber Hit」を表示し、押されたら処理する。
         if (ImGui::Button("Trigger Saber Hit", ImVec2(180, 24)) && particleManager) {
             EmitEffectPreviewBurst();
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Clear Particles」を表示し、押されたら処理する。
         if (ImGui::Button("Clear Particles", ImVec2(140, 24)) && particleManager) {
             particleManager->ClearParticles();
         }
+        // ImGui 上に区切り線を表示する。
         ImGui::Separator();
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.55f, 0.9f, 1.0f, 1.0f), "[ Hit Effect Tuning ]");
+        // ImGui スライダー「Size」で小数値を調整する。
         ImGui::SliderFloat("Size", &effectPreviewHitSettings_.size, 0.2f, 3.0f);
+        // ImGui スライダー「Brightness」で小数値を調整する。
         ImGui::SliderFloat("Brightness", &effectPreviewHitSettings_.brightness, 0.1f, 2.5f);
+        // ImGui スライダー「Life Scale」で小数値を調整する。
         ImGui::SliderFloat("Life Scale", &effectPreviewHitSettings_.lifeScale, 0.2f, 3.0f);
+        // ImGui スライダー「Slash Angle」で小数値を調整する。
         ImGui::SliderFloat("Slash Angle", &effectPreviewHitSettings_.slashAngle, -3.14f, 3.14f);
+        // ImGui スライダー「Slash Spread」で小数値を調整する。
         ImGui::SliderFloat("Slash Spread", &effectPreviewHitSettings_.slashSpread, 0.2f, 3.14f);
+        // ImGui チェックボックス「Mirror Slash」で ON/OFF を切り替える。
         ImGui::Checkbox("Mirror Slash", &effectPreviewMirrorSlash_);
+        // ImGui スライダー「Burst Count」で整数値を調整する。
         ImGui::SliderInt("Burst Count", &effectPreviewBurstCount_, 1, 8);
+        // ImGui スライダー「Burst Radius」で小数値を調整する。
         ImGui::SliderFloat("Burst Radius", &effectPreviewBurstRadius_, 0.0f, 2.0f);
+        // ImGui 上に区切り線を表示する。
         ImGui::Separator();
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.95f, 0.95f, 0.35f, 1.0f), "[ Presets ]");
+        // ImGui ボタン「Saber Impact」を表示し、押されたら処理する。
         if (ImGui::Button("Saber Impact", ImVec2(120, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 1.25f;
@@ -1345,7 +1437,9 @@ void MyGame::UpdateImGui() {
             effectPreviewBurstCount_ = 2;
             effectPreviewBurstRadius_ = 0.18f;
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Blue Flash」を表示し、押されたら処理する。
         if (ImGui::Button("Blue Flash", ImVec2(110, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.brightness = 1.9f;
@@ -1360,6 +1454,7 @@ void MyGame::UpdateImGui() {
             effectPreviewBurstCount_ = 1;
             effectPreviewBurstRadius_ = 0.0f;
         }
+        // ImGui ボタン「Spark Burst」を表示し、押されたら処理する。
         if (ImGui::Button("Spark Burst", ImVec2(120, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 0.9f;
@@ -1378,7 +1473,9 @@ void MyGame::UpdateImGui() {
             effectPreviewBurstCount_ = 3;
             effectPreviewBurstRadius_ = 0.35f;
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Heavy Hit」を表示し、押されたら処理する。
         if (ImGui::Button("Heavy Hit", ImVec2(110, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 1.85f;
@@ -1394,6 +1491,7 @@ void MyGame::UpdateImGui() {
             effectPreviewBurstCount_ = 1;
             effectPreviewBurstRadius_ = 0.0f;
         }
+        // ImGui ボタン「Cinematic Finisher」を表示し、押されたら処理する。
         if (ImGui::Button("Cinematic Finisher", ImVec2(240, 28))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewHitSettings_.size = 2.15f;
@@ -1418,13 +1516,19 @@ void MyGame::UpdateImGui() {
             effectPreviewBurstRadius_ = 0.28f;
             EmitEffectPreviewBurst();
         }
+        // ImGui 上に区切り線を表示する。
         ImGui::Separator();
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.50f, 1.0f, 0.55f, 1.0f), "[ Saved Presets ]");
+        // ImGui 入力欄「Preset Name」で名前や文字列を編集する。
         ImGui::InputText("Preset Name", effectPresetNameBuffer_.data(), effectPresetNameBuffer_.size());
+        // ImGui ボタン「Save Preset」を表示し、押されたら処理する。
         if (ImGui::Button("Save Preset", ImVec2(120, 24))) {
             SaveEffectPreset(effectPresetNameBuffer_.data());
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Refresh List」を表示し、押されたら処理する。
         if (ImGui::Button("Refresh List", ImVec2(120, 24))) {
             LoadEffectPresetNames();
         }
@@ -1432,19 +1536,24 @@ void MyGame::UpdateImGui() {
         const char* selectedPresetName = effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())
             ? effectPresetNames_[effectPresetSelectedIndex_].c_str()
             : "Select saved preset";
+        // ImGui コンボ「Saved Presets」の選択リストを開始する。
         if (ImGui::BeginCombo("Saved Presets", selectedPresetName)) {
             for (int i = 0; i < static_cast<int>(effectPresetNames_.size()); ++i) {
                 bool selected = effectPresetSelectedIndex_ == i;
+                // ImGui の選択項目を表示し、選ばれたら選択状態を更新する。
                 if (ImGui::Selectable(effectPresetNames_[i].c_str(), selected)) {
                     effectPresetSelectedIndex_ = i;
                     CopyPresetName(effectPresetNameBuffer_, effectPresetNames_[i]);
                 }
                 if (selected) {
+                    // 現在選択中の ImGui 項目へ既定フォーカスを当てる。
                     ImGui::SetItemDefaultFocus();
                 }
             }
+            // ImGui コンボの選択リストを閉じる。
             ImGui::EndCombo();
         }
+        // ImGui ボタン「Load Selected」を表示し、押されたら処理する。
         if (ImGui::Button("Load Selected", ImVec2(120, 24))) {
             if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
                 LoadEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
@@ -1452,7 +1561,9 @@ void MyGame::UpdateImGui() {
                 effectPresetStatus_ = "Preset: nothing selected";
             }
         }
+        // 次の ImGui 項目を同じ行に並べる。
         ImGui::SameLine();
+        // ImGui ボタン「Save Over」を表示し、押されたら処理する。
         if (ImGui::Button("Save Over", ImVec2(120, 24))) {
             if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
                 SaveEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
@@ -1460,97 +1571,159 @@ void MyGame::UpdateImGui() {
                 SaveEffectPreset(effectPresetNameBuffer_.data());
             }
         }
+        // ImGui に文字列を装飾なしで表示する。
         ImGui::TextUnformatted(effectPresetStatus_.c_str());
 
+        // ImGui の次のカラムへ移動する。
         ImGui::NextColumn();
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.25f, 1.0f), "[ Spawn Transform ]");
+        // ImGui ドラッグ入力「Position」で 3D 座標を調整する。
         ImGui::DragFloat3("Position", &effectPreviewPosition_.x, 0.05f, -20.0f, 20.0f);
+        // ImGui ボタン「Focus Camera」を表示し、押されたら処理する。
         if (ImGui::Button("Focus Camera", ImVec2(160, 24))) {
             camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
         }
+        // ImGui 上に区切り線を表示する。
         ImGui::Separator();
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.35f, 1.0f), "[ Detail ]");
+        // ImGui スライダー「Slash Count」で整数値を調整する。
         ImGui::SliderInt("Slash Count", &effectPreviewHitSettings_.slashCount, 3, 32);
+        // ImGui スライダー「Spark Count」で整数値を調整する。
         ImGui::SliderInt("Spark Count", &effectPreviewHitSettings_.sparkCount, 0, 160);
+        // ImGui スライダー「Spark Speed」で小数値を調整する。
         ImGui::SliderFloat("Spark Speed", &effectPreviewHitSettings_.sparkSpeed, 0.1f, 3.0f);
+        // ImGui スライダー「Spark Length」で小数値を調整する。
         ImGui::SliderFloat("Spark Length", &effectPreviewHitSettings_.sparkLength, 0.1f, 3.0f);
+        // ImGui スライダー「Scatter Radius」で小数値を調整する。
         ImGui::SliderFloat("Scatter Radius", &effectPreviewHitSettings_.scatterRadius, 0.0f, 3.0f);
+        // ImGui スライダー「Blue Ratio」で小数値を調整する。
         ImGui::SliderFloat("Blue Ratio", &effectPreviewHitSettings_.blueRatio, 0.0f, 1.0f);
+        // ImGui スライダー「Ring Power」で小数値を調整する。
         ImGui::SliderFloat("Ring Power", &effectPreviewHitSettings_.ringPower, 0.0f, 3.0f);
+        // ImGui スライダー「Core Power」で小数値を調整する。
         ImGui::SliderFloat("Core Power", &effectPreviewHitSettings_.corePower, 0.0f, 3.0f);
+        // ImGui スライダー「Cross Power」で小数値を調整する。
         ImGui::SliderFloat("Cross Power", &effectPreviewHitSettings_.crossPower, 0.0f, 3.0f);
+        // ImGui スライダー「Pillar Power」で小数値を調整する。
         ImGui::SliderFloat("Pillar Power", &effectPreviewHitSettings_.pillarPower, 0.0f, 3.0f);
+        // ImGui カラー編集「Cool Color」で RGB 色を調整する。
         ImGui::ColorEdit3("Cool Color", &effectPreviewHitSettings_.coolColor.x);
+        // ImGui カラー編集「Warm Color」で RGB 色を調整する。
         ImGui::ColorEdit3("Warm Color", &effectPreviewHitSettings_.warmColor.x);
+        // ImGui ボタン「Reset Tuning」を表示し、押されたら処理する。
         if (ImGui::Button("Reset Tuning", ImVec2(160, 24))) {
             effectPreviewHitSettings_ = ParticleManager::HitEffectSettings{};
             effectPreviewMirrorSlash_ = false;
             effectPreviewBurstCount_ = 1;
             effectPreviewBurstRadius_ = 0.0f;
         }
+        // ImGui テキスト「Particles are forced visible in this mode.」を表示する。
         ImGui::Text("Particles are forced visible in this mode.");
+        // ImGui レイアウトを 1 カラムに切り替える。
         ImGui::Columns(1);
 
     } else if (currentMode_ == AppMode::GamePlay && player_) {
+        // ImGui レイアウトを 2 カラムに切り替える。
         ImGui::Columns(2, "GameplayColumns", false);
 
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Game Controls & Objective ]");
+        // ImGui テキスト「A / D : Move Left / Right」を表示する。
         ImGui::Text("A / D : Move Left / Right");
+        // ImGui テキスト「SPACE : Jump」を表示する。
         ImGui::Text("SPACE : Jump");
+        // ImGui テキスト「B     : Block Inventory」を表示する。
         ImGui::Text("B     : Block Inventory");
+        // ImGui テキスト「ESC   : Return to Stage Select」を表示する。
         ImGui::Text("ESC   : Return to Stage Select");
+        // ImGui 上に区切り線を表示する。
         ImGui::Separator();
+        // ImGui テキスト「Objective: Pick up bubbles and reach the Goal!」を表示する。
         ImGui::Text("Objective: Pick up bubbles and reach the Goal!");
 
+        // ImGui の次のカラムへ移動する。
         ImGui::NextColumn();
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Player Debug ]");
         Vector3 pos = player_->GetPosition();
+        // ImGui テキスト「Pos: X:%.2f Y:%.2f Z:%.2f」を表示する。
         ImGui::Text("Pos: X:%.2f Y:%.2f Z:%.2f", pos.x, pos.y, pos.z);
         if (isGoalReached_) {
+            // ImGui の UI 要素を表示・更新する。
             ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "GOAL REACHED!");
         } else {
+            // ImGui テキスト「Status: Playing」を表示する。
             ImGui::Text("Status: Playing");
         }
+        // ImGui レイアウトを 1 カラムに切り替える。
         ImGui::Columns(1);
 
     } else if (currentMode_ == AppMode::StageEditor) {
+        // ImGui レイアウトを 2 カラムに切り替える。
         ImGui::Columns(2, "EditorColumns", false);
 
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Stage Editor Controls ]");
+        // ImGui テキスト「W/A/S/D : Cursor Horizontal」を表示する。
         ImGui::Text("W/A/S/D : Cursor Horizontal");
+        // ImGui テキスト「Q/E     : Cursor Up/Down」を表示する。
         ImGui::Text("Q/E     : Cursor Up/Down");
+        // ImGui テキスト「ENTER   : Place Block」を表示する。
         ImGui::Text("ENTER   : Place Block");
+        // ImGui テキスト「SPACE   : Erase Block」を表示する。
         ImGui::Text("SPACE   : Erase Block");
+        // ImGui テキスト「R       : Rotate Block」を表示する。
         ImGui::Text("R       : Rotate Block");
 
+        // ImGui の次のカラムへ移動する。
         ImGui::NextColumn();
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Stage Map Data ]");
         const Int3& cursor = mapCursor_->GetIndex();
+        // ImGui テキスト「Cursor: X:%d Y:%d Z:%d」を表示する。
         ImGui::Text("Cursor: X:%d Y:%d Z:%d", cursor.x, cursor.y, cursor.z);
+        // ImGui テキスト「Block: %s (ID:%d)」を表示する。
         ImGui::Text("Block: %s (ID:%d)",
             BlockTypeToString(stageEditorController_.GetSelectedBlockType()),
             stageEditorController_.GetSelectedBlockType());
+        // ImGui テキスト「Stock: %d」を表示する。
         ImGui::Text("Stock: %d", blockInventory_.GetBlockCount());
+        // ImGui レイアウトを 1 カラムに切り替える。
         ImGui::Columns(1);
 
     } else if (currentMode_ == AppMode::GamePlay_BlockPlace) {
+        // ImGui レイアウトを 2 カラムに切り替える。
         ImGui::Columns(2, "BlockPlaceColumns", false);
 
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Block Placement ]");
+        // ImGui テキスト「W/A/S/D : Move Cursor」を表示する。
         ImGui::Text("W/A/S/D : Move Cursor");
+        // ImGui テキスト「Q/E     : Cursor Up/Down」を表示する。
         ImGui::Text("Q/E     : Cursor Up/Down");
+        // ImGui テキスト「ENTER   : Place Block」を表示する。
         ImGui::Text("ENTER   : Place Block");
+        // ImGui テキスト「R       : Rotate Block」を表示する。
         ImGui::Text("R       : Rotate Block");
+        // ImGui テキスト「ESC / B : Cancel」を表示する。
         ImGui::Text("ESC / B : Cancel");
 
+        // ImGui の次のカラムへ移動する。
         ImGui::NextColumn();
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Placement State ]");
         const Int3& cursor = mapCursor_->GetIndex();
+        // ImGui テキスト「Cursor: X:%d Y:%d Z:%d」を表示する。
         ImGui::Text("Cursor: X:%d Y:%d Z:%d", cursor.x, cursor.y, cursor.z);
         if (blockInventoryUI_) {
+            // ImGui テキスト「Selected: %s」を表示する。
             ImGui::Text("Selected: %s", BlockTypeToString(blockInventoryUI_->GetSelectedBlockType()));
         }
+        // ImGui テキスト「Rotation Y: %.1f deg」を表示する。
         ImGui::Text("Rotation Y: %.1f deg", placeRotationY_ * 57.29578f);
+        // ImGui レイアウトを 1 カラムに切り替える。
         ImGui::Columns(1);
 
     } else if (currentMode_ == AppMode::EffectShowcase) {
@@ -1562,30 +1735,45 @@ void MyGame::UpdateImGui() {
             ? effectShowcasePresetNames_[safeIndex].c_str()
             : "No showcase presets";
 
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Showcase ]");
+        // ImGui テキスト「Preset: %02d / %02d  %s」を表示する。
         ImGui::Text("Preset: %02d / %02d  %s", presetCount > 0 ? safeIndex + 1 : 0, presetCount, presetName);
+        // ImGui テキスト「LEFT / RIGHT : Select    SPACE : Replay    A : Auto Play [%s]    TAB : Game」を表示する。
         ImGui::Text("LEFT / RIGHT : Select    SPACE : Replay    A : Auto Play [%s]    TAB : Game",
             effectShowcaseAutoPlay_ ? "ON" : "OFF");
+        // ImGui テキスト「MMB Drag : Orbit    Shift + MMB : Pan    Mouse Wheel : Zoom」を表示する。
         ImGui::Text("MMB Drag : Orbit    Shift + MMB : Pan    Mouse Wheel : Zoom");
 
     } else if (currentMode_ == AppMode::StageSelect) {
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "[ Stage Select ]");
+        // ImGui テキスト「Choose a stage from the center view.」を表示する。
         ImGui::Text("Choose a stage from the center view.");
+        // ImGui テキスト「Only stage selection UI is active in this mode.」を表示する。
         ImGui::Text("Only stage selection UI is active in this mode.");
 
     } else if (currentMode_ == AppMode::DebugView) {
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Debug View ]");
+        // ImGui テキスト「General object, terrain, sprite, and particle checks.」を表示する。
         ImGui::Text("General object, terrain, sprite, and particle checks.");
 
         // --- Player Options ---
+        // ImGui セクション「Player Settings」を開閉できる見出しとして表示する。
         if (ImGui::CollapsingHeader("Player Settings")) {
+            // ImGui スライダー「Player Glow」で小数値を調整する。
             ImGui::SliderFloat("Player Glow", &playerGlow_, 0.0f, 5.0f);
             if (player_) player_->SetGlow(playerGlow_);
         }
 
+        // ImGui セクション「Environment Map」を開閉できる見出しとして表示する。
         if (ImGui::CollapsingHeader("Environment Map", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // ImGui スライダー「Debug Objects」で小数値を調整する。
             ImGui::SliderFloat("Debug Objects", &debugObjectEnvironmentCoefficient_, 0.0f, 1.0f);
+            // ImGui スライダー「Terrain」で小数値を調整する。
             ImGui::SliderFloat("Terrain", &terrainEnvironmentCoefficient_, 0.0f, 1.0f);
+            // ImGui スライダー「Player」で小数値を調整する。
             ImGui::SliderFloat("Player", &playerEnvironmentCoefficient_, 0.0f, 1.0f);
 
             for (auto& obj : objectList) {
@@ -1602,270 +1790,64 @@ void MyGame::UpdateImGui() {
         }
 
     } else {
+        // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Application Status ]");
+        // ImGui テキスト「No mode-specific tools.」を表示する。
         ImGui::Text("No mode-specific tools.");
     }
 
+    // 現在の ImGui ウィンドウを閉じる。
     ImGui::End(); // 下パネルここまで
 
-    // ========================================================
     // 右パネル (Skinning Editor) - SkinningEditor モード時のみ
-    // ========================================================
     if (currentMode_ == AppMode::SkinningEditor && skinningEditor_.HasPreviewObject()) {
+        // 次に開く ImGui ウィンドウの表示位置を固定する。
         ImGui::SetNextWindowPos( ImVec2(io.DisplaySize.x - panelW, 0), ImGuiCond_Always);
+        // 次に開く ImGui ウィンドウの表示サイズを固定する。
         ImGui::SetNextWindowSize(ImVec2(panelW, io.DisplaySize.y - botH), ImGuiCond_Always);
+        // 次に開く ImGui ウィンドウの背景透明度を設定する。
         ImGui::SetNextWindowBgAlpha(1.0f);
+        // ImGui ウィンドウ「Skinning Editor」を開始する。
         ImGui::Begin("Skinning Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         skinningEditor_.DrawImGuiSidePanel(camera.get(), player_.get(), models[2].get());
+        // 現在の ImGui ウィンドウを閉じる。
         ImGui::End();
     }
 }
 #endif // !NDEBUG
 
-// ==========================================================
 //  MyGame::Draw
-//  3パスで描画を行う:
-//    パス1: シャドウマップ生成 (ライト視点で深度のみ書き込む)
-//    パス2: シーン描画 (オフスクリーンまたはバックバッファへ)
-//    パス3: ImGui 出力 & SwapChain Present
-// ==========================================================
+//  描画本体は MyGameRenderer に委譲する。
+
+
 void MyGame::Draw() {
-    auto commandList = dxCommon->GetCommandList();
-
-    // スカイドームのカラーをオフスクリーン設定と同期
-    // skyboxLinkMode_ == 1 のとき、クリアカラーをスカイドームに乗算合成する
-    if (skydomeObject_) {
-        if (postProcess_.GetSkyboxLinkMode() == 1) {
-            skydomeObject_->SetColor(postProcess_.GetClearColor());
-        } else {
-            skydomeObject_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-        }
-    }
-
-    const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
-
-    // ========================================================
-    // パス1: シャドウマップへの書き込み
-    //   ・ShadowMap の DSV をクリアして書き込み準備
-    //   ・影用 PSO (ピクセルシェーダーなし・深度のみ) で描画
-    //   ・PostDraw() でリソースバリアを SRV に遷移
-    // ========================================================
-    shadowMap_->PreDraw(commandList);
-
-    // 影用の RootSignature / PSO をバインドする
-    commandList->SetGraphicsRootSignature(object3dCommon->GetRootSignature());
-    commandList->SetPipelineState(object3dCommon->GetShadowPipelineState());
-    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    for (auto& obj : objectList) {
-        if (obj) { obj->DrawShadow(lightVP); }
-    }
-    if (player_) { player_->DrawShadow(lightVP); }
-    if (currentMode_ == AppMode::SkinningEditor) { skinningEditor_.DrawShadow(lightVP); }
-    if (stageRenderer_) { stageRenderer_->DrawShadow(lightVP); }
-
-    shadowMap_->PostDraw(commandList); // DSV → SRV へバリア遷移
-
-    // ========================================================
-    // パス2: オフスクリーン or 直接バックバッファへ描画
-    //   オフスクリーン有効時:
-    //     BeginRender → RenderScene → EndRender → DrawToBackBuffer
-    //   オフスクリーン無効時:
-    //     dxCommon->PreDraw() → RenderScene (直接バックバッファ)
-    // ========================================================
-    if (postProcess_.IsEnabled()) {
-        postProcess_.BeginRender(commandList, dxCommon.get()); // RenderTexture を RT にセット
-        RenderScene(commandList, lightVP);
-        postProcess_.EndRender(commandList);                   // RenderTexture を SRV に遷移
-        dxCommon->PreDraw(false);                              // バックバッファを RT にセット
-        postProcess_.DrawToBackBuffer(commandList, camera->GetProjectionMatrix()); // 全画面コピー描画
-    } else {
-        // ビューポートとシザー矩形を設定
-        // Debug 時は左 320px が ImGui パネルのため、描画領域をずらす
-#ifdef NDEBUG
-        D3D12_VIEWPORT viewport = { 0.0f, 0.0f, (float)WinApp::kWindowWidth, (float)WinApp::kWindowHeight, 0.0f, 1.0f };
-        D3D12_RECT     scissor  = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
-#else
-        D3D12_VIEWPORT viewport = { 320.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
-        D3D12_RECT     scissor  = { 320, 0, 1600, 720 };
-#endif
-        commandList->RSSetViewports(1, &viewport);
-        commandList->RSSetScissorRects(1, &scissor);
-        dxCommon->PreDraw();
-        RenderScene(commandList, lightVP);
-    }
-
-    // ========================================================
-    // パス3: ImGui の描画コマンドを CommandList に追加して Present
-    // ========================================================
-    dxCommon->EndImGui();
-    dxCommon->PostDraw(); // コマンドを GPU に送信し SwapChain を Present
+    MyGameRenderer{}.Draw(*this);
 }
 
-// ==========================================================
-//  MyGame::RenderScene
-//  パス2 (シーン描画) の共通処理。オフスクリーンと通常パス両方から呼ばれる。
-//
-//  描画ルーティング:
-//    Title / StageSelect / GameClear : 各シーンクラスに委譲
-//    SkinningEditor                  : SkinningEditorController に委譲
-//    その他 (DebugView/StageEditor/GamePlay) :
-//      スカイボックス → ステージ → プレイヤー → カーソル → スプライト の順
-// ==========================================================
-void MyGame::RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4& lightVP) {
-    // show3DObjects が OFF のときは何も描画しない (ImGui のみ表示)
-    if (!debugFlags_.show3DObjects && currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
-        return;
-    }
-
-    // テクスチャ SRV ヒープをバインドし、シャドウマップ SRV をスロット 4 にセット
-    ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
-    commandList->SetDescriptorHeaps(1, heaps);
-    object3dCommon->PreDraw(); // 通常描画用 RootSignature / PSO をバインド
-    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
-
-    if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
-        if (terrainObject_) {
-            terrainObject_->Draw();
-        }
-        if (debugFlags_.showParticles) {
-            ID3D12DescriptorHeap* ph[] = { textureManager->GetSrvHeap() };
-            commandList->SetDescriptorHeaps(1, ph);
-            particleManager->Draw();
-        }
-        return;
-    }
-
-    // ---- シーン別描画ルーティング ----
-    // 全シーン共通でスカイボックスを描画（最背面）
-    DrawSkybox(commandList);
-
-    if (currentMode_ == AppMode::StageSelect) {
-        if (stageSelect_) { stageSelect_->Draw(); }
-
-    } else if (currentMode_ == AppMode::SkinningEditor) {
-        skinningEditor_.Draw(object3dCommon.get(), camera.get());
-
-    } else {
-        // DebugView / StageEditor / GamePlay / GamePlay_BlockPlace の共通描画パス
-
-        bool isGameMode = (currentMode_ == AppMode::StageEditor ||
-                           currentMode_ == AppMode::GamePlay     ||
-                           currentMode_ == AppMode::GamePlay_BlockPlace ||
-                           currentMode_ == AppMode::EffectPreview);
-
-        // ゲーム系モードではステージブロックを描画する
-        if (isGameMode && stageRenderer_) {
-            stageRenderer_->Draw();             // 不透明ブロック
-            stageRenderer_->DrawTransparent();  // 半透明ブロック (壁の透明化など)
-            // DrawTransparent() の後は PSO が変わるため再バインドが必要
-            object3dCommon->PreDraw();
-            commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
-        }
-
-        if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::EffectPreview) {
-            // プレイヤー本体の描画 (一人称時はスキップ)
-            if (player_ && !useFirstPersonCamera_) {
-                player_->Draw();
-                // カメラとプレイヤーの間に壁がある場合はシルエット表示
-                if (IsPlayerHiddenByWall()) {
-                    object3dCommon->PreDrawPlayerHighlight(); // シルエット用 PSO に切り替え
-                    player_->DrawHighlight();
-                    object3dCommon->PreDraw(); // 通常 PSO に戻す
-                    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
-                }
-            }
-            // 3D UI (ドア・はしごのプロンプトなど)
-            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_) {
-                gameplayUIManager_->Draw3DPrompts(
-                    true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
-            }
-        }
-
-        // エディタ・配置モードのカーソル描画
-        if ((currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) && mapCursor_) {
-            mapCursor_->Draw();
-        }
-
-        // DebugView 限定の描画
-        if (currentMode_ == AppMode::DebugView) {
-            if (terrainObject_ && debugFlags_.showTerrain) { terrainObject_->Draw(); }
-            for (auto& obj : objectList) {
-                if (obj) { obj->Draw(); }
-            }
-            if (player_) { player_->Draw(); }
-        }
-    }
-
-    // パーティクルの描画 (SRV ヒープを再バインドしてから描画)
-    if (debugFlags_.showParticles) {
-        ID3D12DescriptorHeap* ph[] = { textureManager->GetSrvHeap() };
-        commandList->SetDescriptorHeaps(1, ph);
-        particleManager->Draw();
-    }
-
-    // スプライトの描画 (DebugView モード + フラグ ON 時のみ)
-    if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
-        spriteCommon->PreDraw();
-        if (sprite) { sprite->Draw(); }
-    }
-
-    // ゲームプレイ UI のスプライト描画 (HP・カメラガイドなど)
-    if (gameplayUIManager_) {
-        gameplayUIManager_->DrawSprites(
-            currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace,
-            gameplayCameraController_.IsFollowPlayerMode());
-    }
-
-    // インベントリ UI の描画 (ゲームプレイ・配置モード中のみ)
-    if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
-        blockInventoryUI_->Draw();
-    }
-
-    // チュートリアルスプライトの描画
-    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-    if (currentMode_ == AppMode::GamePlay && !invOpen && stageSelect_) {
-        if (stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_) {
-            spriteCommon->PreDraw();
-            tutorialSprite_->Draw();
-        }
-    }
-    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
-        spriteCommon->PreDraw();
-        placementTutorialSprite_->Draw();
-    }
-}
-
-// ==========================================================
 //  MyGame::Finalize
-//  全サブシステムを解放する
-//
-//  順序注意: GPU がコマンドを処理し終えるまで待ってからリソースを解放する。
-//  WaitForGpu() を呼ばずに解放すると GPU が使用中のリソースへ
-//  アクセスしてクラッシュする。
-// ==========================================================
+//  GPU 完了を待ってから、UI、ゲームオブジェクト、エンジン基盤の順に解放する。
+
+
 void MyGame::Finalize() {
-    // GPU の全コマンド処理が完了するまで待機 (最重要)
+
     if (dxCommon) { dxCommon->WaitForGpu(); }
 
     sound.Finalize();
 
     dxCommon->FinalizeImGui();
 
-    // シーン・モデルの解放
-    
-    
+
     ModelManager::Finalize();
     objectList.clear();
     models.clear();
 
-    // UI の解放 (Finalize() を持つものは先に呼ぶ)
+    // Finalize() を持つ UI は reset 前に明示的に終了させる。
     if (gameplayUIManager_) { gameplayUIManager_->Finalize(); }
     gameplayUIManager_.reset();
     if (blockInventoryUI_) { blockInventoryUI_->Finalize(); }
     blockInventoryUI_.reset();
 
-    // ゲームオブジェクトの解放
+    // ゲームオブジェクトを解放する。
     player_.reset();
     terrainObject_.reset();
     terrainModel_.reset();
@@ -1878,7 +1860,7 @@ void MyGame::Finalize() {
     shadowMap_.reset();
     lightCamera_.reset();
 
-    // エンジン基盤の解放 (生成の逆順)
+
     particleManager.reset();
     object3dCommon.reset();
     spriteCommon.reset();
@@ -1888,20 +1870,16 @@ void MyGame::Finalize() {
     winApp.reset();
 }
 
-// ==========================================================
 //  更新サブルーチン群
-//  各 AppMode の Update 処理を分割して管理する
-// ==========================================================
 
-// --------------------------------------------------------
+
 //  UpdateDebugView : DebugView モードの更新
-//  SPACE キーでパーティクルを発生させてテスト確認できる
-// --------------------------------------------------------
+
 void MyGame::UpdateDebugView() {
     if (input->TriggerKey(DIK_SPACE)) {
         particleManager->Emit({ 0, 0, 0 }, 10);
     }
-    // カーソル移動処理は StageEditorController に委譲
+
     stageEditorController_.HandleCursorInput(
         input.get(), stageMap_, mapCursor_.get(), lightCamera_.get(), camera.get());
 }
@@ -1917,6 +1895,7 @@ void MyGame::LoadStormPresetNames() {
     }
 }
 
+// 嵐エフェクトの現在値をプリセットとして保存する。
 bool MyGame::SaveStormPreset(const std::string& name) {
     if (name.empty() || !particleManager) {
         stormPresetStatus_ = "Storm preset: invalid name";
@@ -1943,6 +1922,7 @@ bool MyGame::SaveStormPreset(const std::string& name) {
     return true;
 }
 
+// 保存済みの嵐プリセットを読み込み、エディタ用の状態へ反映する。
 bool MyGame::LoadStormPreset(const std::string& name) {
     if (!particleManager) return false;
 
@@ -1961,6 +1941,7 @@ bool MyGame::LoadStormPreset(const std::string& name) {
     return true;
 }
 
+// ヒットエフェクトと嵐エフェクトのプリセット一覧をまとめて更新する。
 void MyGame::LoadEffectPresetNames() {
     LoadStormPresetNames();
 
@@ -1973,6 +1954,7 @@ void MyGame::LoadEffectPresetNames() {
     effectPresetStatus_ = result.status;
 }
 
+// ヒットエフェクトの現在値をプリセットとして保存する。
 bool MyGame::SaveEffectPreset(const std::string& name) {
     EffectPresetStore::HitPreset preset;
     preset.settings = effectPreviewHitSettings_;
@@ -1997,6 +1979,7 @@ bool MyGame::SaveEffectPreset(const std::string& name) {
     return true;
 }
 
+// 保存済みのヒットエフェクトプリセットを読み込む。
 bool MyGame::LoadEffectPreset(const std::string& name) {
     EffectPresetStore::HitPreset preset;
     preset.settings = effectPreviewHitSettings_;
@@ -2029,6 +2012,22 @@ bool MyGame::LoadEffectPreset(const std::string& name) {
     return true;
 }
 
+// 現在表示しているエフェクトが嵐プリセットかを判定する。
+bool MyGame::IsCurrentEffectStorm() const {
+    if (currentMode_ == AppMode::EffectPreview) {
+        return effectPreviewStormMode_;
+    }
+    if (currentMode_ != AppMode::EffectShowcase ||
+        effectShowcaseSelectedIndex_ < 0 ||
+        effectShowcaseSelectedIndex_ >= static_cast<int>(effectShowcasePresetNames_.size())) {
+        return false;
+    }
+
+    const std::string& presetName = effectShowcasePresetNames_[effectShowcaseSelectedIndex_];
+    return std::find(stormPresetNames_.begin(), stormPresetNames_.end(), presetName) != stormPresetNames_.end();
+}
+
+// ヒットエフェクトを単発または扇状に複数発生させる。
 void MyGame::EmitEffectPreviewBurst() {
     if (!particleManager) {
         return;
@@ -2073,6 +2072,7 @@ void MyGame::EmitEffectPreviewBurst() {
     }
 }
 
+// エフェクト調整画面の更新。
 void MyGame::UpdateEffectPreview() {
     debugFlags_.showParticles = true;
     effectShowcaseLightTimer_ = (std::max)(0.0f, effectShowcaseLightTimer_ - 1.0f / 60.0f);
@@ -2107,6 +2107,7 @@ void MyGame::UpdateEffectPreview() {
     }
 }
 
+// 登録済みエフェクトを順番に見せるショーケース画面の更新。
 void MyGame::UpdateEffectShowcase() {
     debugFlags_.showParticles = true;
     debugFlags_.showSkybox = false;
@@ -2199,7 +2200,9 @@ void MyGame::UpdateEffectShowcase() {
     }
 }
 
+// ショーケース中に表示する操作ガイドとプリセット名。
 void MyGame::DrawEffectShowcaseImGui() {
+    // ImGui のフレーム情報と表示サイズを取得する。
     const ImGuiIO& io = ImGui::GetIO();
     const int presetCount = static_cast<int>(effectShowcasePresetNames_.size());
     const int safeIndex = presetCount > 0
@@ -2217,281 +2220,74 @@ void MyGame::DrawEffectShowcaseImGui() {
     const float headerX = 344.0f;
     const float headerWidth = io.DisplaySize.x - headerX - 24.0f;
 #endif
+    // 次に開く ImGui ウィンドウの表示位置を固定する。
     ImGui::SetNextWindowPos(ImVec2(headerX, 20.0f), ImGuiCond_Always);
+    // 次に開く ImGui ウィンドウの表示サイズを固定する。
     ImGui::SetNextWindowSize(ImVec2(headerWidth, 94.0f), ImGuiCond_Always);
+    // 次に開く ImGui ウィンドウの背景透明度を設定する。
     ImGui::SetNextWindowBgAlpha(0.72f);
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav;
+    // ImGui ウィンドウ「Effect Showcase Header」を開始する。
     ImGui::Begin("Effect Showcase Header", nullptr, flags);
+    // 現在の ImGui ウィンドウ内の文字サイズを調整する。
     ImGui::SetWindowFontScale(1.45f);
+    // ImGui の UI 要素を表示・更新する。
     ImGui::TextColored(ImVec4(0.42f, 0.86f, 1.0f, 1.0f), "EFFECT SHOWCASE");
+    // 現在の ImGui ウィンドウ内の文字サイズを調整する。
     ImGui::SetWindowFontScale(1.15f);
     if (presetCount > 0) {
+        // ImGui テキスト「%02d / %02d    %s」を表示する。
         ImGui::Text("%02d / %02d    %s", safeIndex + 1, presetCount, presetName);
     } else {
+        // ImGui に文字列を装飾なしで表示する。
         ImGui::TextUnformatted(presetName);
     }
+    // 現在の ImGui ウィンドウを閉じる。
     ImGui::End();
 
 #ifdef NDEBUG
     // Debug builds use the existing Tools & Controls panel for this guide.
+    // 次に開く ImGui ウィンドウの表示位置を固定する。
     ImGui::SetNextWindowPos(ImVec2(24.0f, io.DisplaySize.y - 72.0f), ImGuiCond_Always);
+    // 次に開く ImGui ウィンドウの表示サイズを固定する。
     ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x - 48.0f, 48.0f), ImGuiCond_Always);
+    // 次に開く ImGui ウィンドウの背景透明度を設定する。
     ImGui::SetNextWindowBgAlpha(0.72f);
+    // ImGui ウィンドウ「Effect Showcase Controls」を開始する。
     ImGui::Begin("Effect Showcase Controls", nullptr, flags);
+    // ImGui テキスト「LEFT / RIGHT : Select     SPACE : Replay     A : Auto Play [%s]     TAB : Game」を表示する。
     ImGui::Text("LEFT / RIGHT : Select     SPACE : Replay     A : Auto Play [%s]     TAB : Game",
         effectShowcaseAutoPlay_ ? "ON" : "OFF");
+    // 次の ImGui 項目を同じ行に並べる。
     ImGui::SameLine();
+    // ImGui テキスト「     MMB : Orbit     Shift+MMB : Pan     Wheel : Zoom」を装飾なしで表示する。
     ImGui::TextUnformatted("     MMB : Orbit     Shift+MMB : Pan     Wheel : Zoom");
+    // 現在の ImGui ウィンドウを閉じる。
     ImGui::End();
 #endif
 }
 
-// --------------------------------------------------------
-//  UpdateGamePlay : ゲームプレイメインの更新
-//
-//  C キー: 三人称 ↔ 一人称カメラ切り替え
-//  V キー: プレイヤー追従 ↔ 固定カメラ切り替え
-// --------------------------------------------------------
+
+// ゲームプレイ本体は MyGameGameplay に委譲する。
 void MyGame::UpdateGamePlay() {
-    const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
-
-    // C キーでカメラモード切り替え
-    if (input->TriggerKey(DIK_C)) {
-        useFirstPersonCamera_ = !useFirstPersonCamera_;
-        if (useFirstPersonCamera_ && player_) {
-            // 一人称に切り替えた瞬間、プレイヤーの向きをカメラ方向に合わせる
-            fpsCameraYaw_   = player_->GetRotation().y;
-            fpsCameraPitch_ = 0.0f;
-        }
-    }
-
-    if (!useFirstPersonCamera_) {
-        // === 三人称カメラ ===
-        // V キーでプレイヤー追従 / 固定カメラを切り替える
-        if (input->TriggerKey(DIK_V)) {
-            bool cur = gameplayCameraController_.IsFollowPlayerMode();
-            gameplayCameraController_.SetFollowPlayerMode(!cur);
-            if (!cur && player_) {
-                // 追従モードに切り替えたらカメラピボットをプレイヤー頭部に合わせる
-                Vector3 pp  = player_->GetPosition();
-                pp.y       += 0.8f;
-                gameplayCameraController_.SetCameraPivot(pp);
-            } else if (cur && stageSelect_) {
-                // 固定モードに切り替えたらステージデフォルト位置にリセット
-                gameplayCameraController_.ResetCamera(
-                    camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
-            }
-        }
-        camera->SetFov(gameplayCameraController_.GetFov());
-        gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
-
-    } else {
-        // === 一人称カメラ (FPS) ===
-        // 画面端へのマウス移動でカメラを回転させる
-        camera->SetFov(0.9f); // FPS は少し狭い FOV が自然に見える
-
-        bool isGuiCaptured = false;
-#ifndef NDEBUG
-        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
-#endif
-        const auto& mouse = input->GetMouseState();
-        if (mouse.buttons[0] && !isGuiCaptured) {
-            RECT rect;
-            GetClientRect(winApp->GetHwnd(), &rect);
-            float cw = static_cast<float>(rect.right  - rect.left);
-            float ch = static_cast<float>(rect.bottom - rect.top);
-            if (cw > 0.0f && ch > 0.0f) {
-                float sx = static_cast<float>(WinApp::kWindowWidth)  / cw;
-                float sy = static_cast<float>(WinApp::kWindowHeight) / ch;
-                float mx = static_cast<float>(mouse.posX) * sx;
-                float my = static_cast<float>(mouse.posY) * sy;
-
-                const float er  = 0.15f; // 画面端の判定領域 (全体の 15%)
-                const float spd = 0.03f; // 1フレームあたりの回転量 (ラジアン)
-                float le = WinApp::kWindowWidth  * er;
-                float re = WinApp::kWindowWidth  * (1.0f - er);
-                float te = WinApp::kWindowHeight * er;
-                float be = WinApp::kWindowHeight * (1.0f - er);
-
-                // マウスが画面左端 → 左を向く / 右端 → 右を向く
-                if (mx < le) {
-                    fpsCameraYaw_ += spd;
-                } else if (mx > re) {
-                    fpsCameraYaw_ -= spd;
-                }
-                // マウスが画面上端 → 上を向く / 下端 → 下を向く
-                if (my < te) {
-                    fpsCameraPitch_ += spd;
-                } else if (my > be) {
-                    fpsCameraPitch_ -= spd;
-                }
-            }
-        }
-
-        // キーボードでもカメラ回転できるようにする
-        const float ks = 0.03f;
-        if (input->PushKey(DIK_LEFT))  { fpsCameraYaw_   += ks; }
-        if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_   -= ks; }
-        if (input->PushKey(DIK_UP))    { fpsCameraPitch_ += ks; }
-        if (input->PushKey(DIK_DOWN))  { fpsCameraPitch_ -= ks; }
-        // 仰角は ±80° (約1.4rad) に制限してひっくり返らないようにする
-        fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
-
-        // カメラをプレイヤーの頭部に配置
-        if (player_) {
-            Vector3 pp = player_->GetPosition();
-            camera->SetPosition({ pp.x, pp.y + 1.2f, pp.z });
-            camera->SetRotation({ fpsCameraPitch_, fpsCameraYaw_, 0.0f });
-        }
-        camera->Update();
-    }
-
-    // カメラガイド UI (コントローラーアイコンなど) の更新
-    if (gameplayUIManager_) {
-        gameplayUIManager_->UpdateCameraGuide(
-            currentMode_ == AppMode::GamePlay, input.get(), winApp.get());
-    }
-
-    // チュートリアルスプライトの更新 (tutorial ステージ + インベントリを閉じているとき)
-    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-    if (stageSelect_ && stageSelect_->GetSelectedFileName() == "tutorial.txt"
-        && tutorialSprite_ && !invOpen) {
-        tutorialSprite_->Update();
-    }
-    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
-        placementTutorialSprite_->Update();
-    }
-
-    // ステージマップの更新 (ギミックの時間経過・アニメーションなど)
-    float dt = 1.0f / 60.0f; // 固定タイムステップ (60fps 前提)
-    totalTime_ += dt;
-    stageMap_.Update(dt, player_ ? player_->GetPosition() : Vector3{ 0,0,0 });
-    stageRenderer_->UpdateEffect(stageMap_); // エフェクト (波紋・光など) の更新
-
-    // プレイヤーの更新 (入力 → 物理 → 衝突判定)
-    if (player_) {
-        float camRot = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
-        player_->Update(input.get(), stageMap_, camRot, lightVP, dxCommon.get());
-    }
-
-    // マップの変化 (爆発・崩壊など) があればレンダラーを再構築
-    if (stageMap_.NeedsRebuild()) {
-        stageRenderer_->BuildFromStageMap(stageMap_);
-        stageMap_.ClearRebuildFlag();
-    }
-
-    // リスポーン・リセット処理 (落下・タイムアウトなど)
-    stageRespawnController_.Update(
-        stageMap_, backupMap_, stageRenderer_.get(), player_.get(),
-        &blockInventory_, &bubblePickupController_,
-        &blockPlacementController_, &stageEditorController_);
-
-    // バブル (コイン) の取得判定
-    Vector3 pPos = player_ ? player_->GetPosition() : Vector3{};
-    if (player_) { bubblePickupController_.Update(pPos); }
-
-    // ゴール判定 → ゴール到達フラグを立てる
-    if (Goal::Check(pPos, { 0.4f, 0.9f, 0.4f }, stageMap_)) {
-        isGoalReached_ = true;
-    }
-
-    // B キーでインベントリの開閉
-    if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
-        if (blockInventoryUI_) { blockInventoryUI_->ToggleOpen(); }
-    }
-
-    // ゴール到達でクリア画面に遷移
-    if (isGoalReached_) {
-        // currentMode_ = AppMode::GameClear;
-    }
+    MyGameGameplay{}.UpdateGamePlay(*this);
 }
 
-// --------------------------------------------------------
-//  UpdateGamePlayBlockPlace : ブロック配置モードの更新
-//
-//  R キー: ブロックの回転 (90° ずつ)
-//  ENTER / 左クリック: ブロックを設置
-//  ESC / B キー: キャンセルしてゲームプレイに戻る
-// --------------------------------------------------------
+// ブロック配置モードも MyGameGameplay に委譲する。
 void MyGame::UpdateGamePlayBlockPlace() {
-    const Int3& cursor = mapCursor_->GetIndex();
-
-    // R キーで配置回転を 90° ずつ更新
-    if (input->TriggerKey(DIK_R)) {
-        placeRotationY_ += 1.5707963f; // π/2 rad = 90°
-        if (placeRotationY_ >= 6.0f) {
-            placeRotationY_ = 0.0f; // 360° を超えたらリセット
-        }
-    }
-
-    // カーソル移動処理 (StageEditorController に委譲)
-    stageEditorController_.HandleCursorInput(
-        input.get(), stageMap_, mapCursor_.get(), lightCamera_.get(), camera.get());
-
-    // インベントリで選択されているブロックタイプを取得して配置コントローラーに渡す
-    BlockType selectedType     = BlockType::Ground;
-    int       selectedCustomId = 0;
-    if (blockInventoryUI_) {
-        selectedType     = blockInventoryUI_->GetSelectedBlockType();
-        selectedCustomId = blockInventoryUI_->GetSelectedCustomId();
-        blockPlacementController_.SetPlaceBlockType(selectedType);
-        blockPlacementController_.SetPlaceCustomId(selectedCustomId);
-    }
-
-    // リアルタイムプレビューの更新 (カーソル位置に半透明ブロックを表示)
-    if (stageRenderer_) {
-        stageRenderer_->SetPlacementPreview(
-            stageMap_, cursor, selectedType, selectedCustomId, placeRotationY_);
-    }
-
-    // マウス左クリックのエッジ検出
-    static bool prevMouse0 = false;
-    bool mouseJustPressed  = input->GetMouseState().buttons[0] && !prevMouse0;
-    prevMouse0             = input->GetMouseState().buttons[0];
-    bool mouseTrigger      = false;
-    // インベントリが開いている間はゲーム側のクリックを無効化
-    if (mouseJustPressed && (!blockInventoryUI_ || !blockInventoryUI_->IsActive())) {
-        mouseTrigger = true;
-    }
-
-    // ブロックの設置確定 (ENTER または 左クリック)
-    if (input->TriggerKey(DIK_RETURN) || mouseTrigger) {
-        if (blockPlacementController_.TryPlace(cursor, placeRotationY_)) {
-            // 在庫が 0 になったら自動でゲームプレイに戻る
-            bool hasRest = (selectedType == BlockType::Ground)
-                || blockInventory_.HasBlock(selectedType, selectedCustomId);
-            if (!hasRest) {
-                currentMode_    = AppMode::GamePlay;
-                placeRotationY_ = 0.0f;
-                if (stageRenderer_) { stageRenderer_->ClearPlacementPreview(); }
-            }
-        }
-    }
-
-    // ESC / B キーでキャンセルしてゲームプレイに戻る
-    if (input->TriggerKey(DIK_ESCAPE) || input->TriggerKey(DIK_B)) {
-        currentMode_    = AppMode::GamePlay;
-        placeRotationY_ = 0.0f;
-        if (stageRenderer_) { stageRenderer_->ClearPlacementPreview(); }
-    }
-
-    // カメラ操作 (StageEditorController に委譲)
-    stageEditorController_.HandleCameraInput(input.get(), camera.get());
+    MyGameGameplay{}.UpdateBlockPlace(*this);
 } 
 
-// --------------------------------------------------------
-//  UpdateStageSelect : ステージ選択画面の更新
-//  ステージを選んだらマップをロードしてゲームプレイに移行
-// --------------------------------------------------------
+// ステージ選択が完了したら、選択ステージを読み込んでゲーム開始状態にする。
 void MyGame::UpdateStageSelect() {
     stageSelect_->Update();
     if (stageSelect_->IsFnished()) {
         std::string path = "Resources/Stages/" + stageSelect_->GetSelectedFileName();
         if (std::filesystem::exists(path)) {
             stageMap_.LoadFromFile(path);
-            backupMap_ = stageMap_; // リスポーン / ESC でこのバックアップに戻す
+            backupMap_ = stageMap_;
             stageRenderer_->BuildFromStageMap(stageMap_);
 
             playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
@@ -2499,23 +2295,21 @@ void MyGame::UpdateStageSelect() {
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
             gameplayCameraController_.ResetCamera(
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
-            blockInventory_.Initialize(0); // インベントリをリセット
+            blockInventory_.Initialize(0);
         }
         currentMode_ = AppMode::GamePlay;
     }
 }
 
-// --------------------------------------------------------
-//  UpdateSceneTransition : ESC によるシーン遷移を処理する
-//  GamePlay / GamePlay_BlockPlace 中に ESC を押すと
-//  マップをバックアップから復元してステージ選択に戻る
-// --------------------------------------------------------
+
+//  GamePlay 中に ESC が押されたらステージ選択へ戻す。
+
 void MyGame::UpdateSceneTransition() {
     if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)
         && input->TriggerKey(DIK_ESCAPE)) {
-        stageMap_ = backupMap_; // バックアップから復元 (ブロック設置も元に戻る)
+        stageMap_ = backupMap_;
         stageRenderer_->BuildFromStageMap(stageMap_);
-        // コントローラーをリセットしてステージ選択に戻る
+
         bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
         stageSelect_->Initialize(object3dCommon.get(), input.get());
         isGoalReached_ = false;
@@ -2527,6 +2321,7 @@ void MyGame::UpdateSceneTransition() {
 void MyGame::UpdateBGM() {
     BgmType nextBgmType = BgmType::None;
 
+    // AppMode ごとの本体処理はサブルーチンや専用クラスへ委譲する。
     switch (currentMode_) {
 
     case AppMode::GamePlay:
@@ -2557,71 +2352,4 @@ void MyGame::UpdateBGM() {
         break;
     }
 }
-
-// ==========================================================
-//  描画ヘルパー
-// ==========================================================
-
-// --------------------------------------------------------
-//  DrawSkybox : スカイドームまたはスカイボックスを描画する
-//  showSkyboxCubemap_ フラグで使うものを切り替える
-//  描画後は PreDraw() + SRV バインドを再実行して
-//  後続の描画が壊れないようにする
-// --------------------------------------------------------
-void MyGame::DrawSkybox(ID3D12GraphicsCommandList* commandList) {
-    if (debugFlags_.showSkybox && showSkyboxCubemap_ && skybox_) {
-        skybox_->Draw();
-        // スカイボックス描画後に PSO / ヒープが変わるため再バインド
-        object3dCommon->PreDraw();
-        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
-    } else if (debugFlags_.showSkybox && skydomeObject_) {
-        skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-        skydomeObject_->Draw();
-    }
-}
-
-// --------------------------------------------------------
-//  IsPlayerHiddenByWall : カメラとプレイヤーの間に壁がある場合 true を返す
-//  レイを 0.8m 間隔でサンプリングして isSolid なブロックに当たれば遮蔽と判定する
-//  戻り値が true のとき PreDrawPlayerHighlight() → DrawHighlight() でシルエット表示する
-// --------------------------------------------------------
-bool MyGame::IsPlayerHiddenByWall() const {
-    if (!player_ || !camera) { return false; }
-
-    Vector3 camPos    = camera->GetPosition();
-    Vector3 playerPos = player_->GetPosition();
-    playerPos.y      += 0.8f; // プレイヤーの胴体中央くらいに調整
-
-    // カメラからプレイヤーへの方向ベクトルを正規化する
-    Vector3 diff = {
-        playerPos.x - camPos.x,
-        playerPos.y - camPos.y,
-        playerPos.z - camPos.z
-    };
-    float len = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
-    if (len <= 0.001f) { return false; }
-
-    Vector3 dir = { diff.x / len, diff.y / len, diff.z / len };
-
-    // レイを 0.8m 間隔でサンプリング (カメラの直近 0.8m と
-    // プレイヤー直前 1.0m はスキップして誤判定を防ぐ)
-    for (float t = 0.8f; t < len - 1.0f; t += 0.8f) {
-        Vector3 cp = { camPos.x + dir.x * t, camPos.y + dir.y * t, camPos.z + dir.z * t };
-        const MapCell* cell = stageMap_.GetCell(
-            static_cast<int>(std::floor(cp.x + 0.5f)),
-            static_cast<int>(std::floor(cp.y)),
-            static_cast<int>(std::floor(cp.z + 0.5f)));
-        if (cell && cell->isSolid) { return true; }
-    }
-    return false;
-}
-
-
-
-
-
-
-
-
-
 

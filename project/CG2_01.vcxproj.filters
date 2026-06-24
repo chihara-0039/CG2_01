@@ -30,6 +30,8 @@
     <ClCompile Include="Engine\Graphics\3D\SkinnedObject.cpp" />
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
+    <ClCompile Include="Game\Scene\MyGameGameplay.cpp" />
+    <ClCompile Include="Game\Scene\MyGameRenderer.cpp" />
     <ClCompile Include="Game\UI\GameplayUIManager.cpp" />
     <ClCompile Include="Game\UI\BlockInventoryUI.cpp" />
     <ClCompile Include="Game\Camera\GameplayCameraController.cpp" />
@@ -86,6 +88,8 @@
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
+    <ClInclude Include="Game\Scene\MyGameGameplay.h" />
+    <ClInclude Include="Game\Scene\MyGameRenderer.h" />
     <ClInclude Include="Game\UI\GameplayUIManager.h" />
     <ClInclude Include="Game\UI\BlockInventoryUI.h" />
     <ClInclude Include="Game\Camera\GameplayCameraController.h" />

@@ -69,6 +69,8 @@
 /// MyGame は「接続役 (オーケストレーター)」として機能する。
 /// </summary>
 class MyGame {
+    friend class MyGameRenderer;
+    friend class MyGameGameplay;
 public:
     void Initialize();
     void Update();
@@ -270,6 +272,9 @@ private:
     std::vector<std::string> stormShowcasePresetNames_;
     int stormPresetSelectedIndex_ = -1;
     std::string stormPresetStatus_ = "Storm preset: default";
+    std::string cachedWeatherPresetName_;
+    std::string cachedWeatherParticleTexturePath_;
+    uint32_t cachedWeatherParticleTexture_ = 0;
 
     // ==========================================================
     //  内部メソッド
@@ -298,15 +303,13 @@ private:
     void LoadStormPresetNames();
     bool SaveStormPreset(const std::string& name);
     bool LoadStormPreset(const std::string& name);
-    void RenderScene(ID3D12GraphicsCommandList* commandList, const Matrix4x4& lightVP);
+    bool IsCurrentEffectStorm() const;
 
     // --- ヘルパー ---
     /// <summary>モデルと位置を指定して Object3d を生成し objectList に追加する (非所有ポインタを返す)</summary>
     Object3d* CreateObject(Model* model, Vector3 pos);
 
     /// <summary>スカイドーム / スカイボックスを描画する内部ヘルパー</summary>
-    void DrawSkybox(ID3D12GraphicsCommandList* commandList);
 
     /// <summary>カメラとプレイヤーの間に壁ブロックがあるか判定する (シルエット描画の判定用)</summary>
-    bool IsPlayerHiddenByWall() const;
 };
