@@ -169,6 +169,8 @@
     <ClCompile Include="Game\Player\PlayerBasePosition.cpp" />
     <ClCompile Include="Game\Scene\EffectPresetStore.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
+    <ClCompile Include="Game\Scene\MyGameGameplay.cpp" />
+    <ClCompile Include="Game\Scene\MyGameRenderer.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
     <ClCompile Include="Engine\Graphics\PostProcessRenderer.cpp" />
     <ClCompile Include="Game\Scene\Skybox.cpp" />
@@ -299,6 +301,8 @@
     <ClInclude Include="Game\Player\PlayerBasePosition.h" />
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
+    <ClInclude Include="Game\Scene\MyGameGameplay.h" />
+    <ClInclude Include="Game\Scene\MyGameRenderer.h" />
     <ClInclude Include="Game\Scene\SkinningEditorController.h" />
     <ClInclude Include="Engine\Graphics\PostProcessRenderer.h" />
     <ClInclude Include="Game\Scene\Skybox.h" />
