@@ -148,10 +148,10 @@ public: // サブクラスなど
         float cloudAreaX = 6.5f;
         float cloudAreaZ = 4.5f;
         float cloudHeight = 4.2f;
-        float cloudEmitRate = 5.5f;
-        float cloudLife = 5.5f;
-        float cloudSize = 1.0f;
-        Vector4 cloudColor = { 0.015f, 0.025f, 0.075f, 0.72f };
+        float cloudEmitRate = 18.0f;
+        float cloudLife = 8.0f;
+        float cloudSize = 2.6f;
+        Vector4 cloudColor = { 0.018f, 0.024f, 0.060f, 0.38f };
         bool randomizeCloudPosition = true;
         bool randomizeCloudSize = true;
 
