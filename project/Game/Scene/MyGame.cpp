@@ -244,33 +244,11 @@ void MyGame::Update() {
 
 
     // モードが変わった瞬間だけ、BGM やカメラ初期位置を切り替える。
-    if (currentMode_ != prevMode_) {
-        UpdateBGM();
-
-        const bool leftEffectPresentation =
-            (prevMode_ == AppMode::EffectPreview || prevMode_ == AppMode::EffectShowcase) &&
-            (currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase);
-        if (leftEffectPresentation && particleManager) {
-            particleManager->SetStormActive(false);
-        }
-
-
-        if (currentMode_ == AppMode::SkinningEditor) {
-
-            camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
-        } else if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
-            camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
-            effectShowcaseFirstPlay_ = true;
-        }
-        prevMode_ = currentMode_;
-    }
+    HandleModeChange();
 
 
     // Debug ビルドでは各モード更新より前に ImGui を組み立てる。
-    dxCommon->BeginImGui();
-#ifndef NDEBUG
-    UpdateImGui();
-#endif
+    BeginFrameImGui();
 
 
     // 入力を取り込み、ゲームプレイ中の ESC 遷移を先に処理する。
@@ -278,117 +256,31 @@ void MyGame::Update() {
     UpdateSceneTransition();
 
 
-    bool isGuiCaptured = false;
-#ifndef NDEBUG
     // ImGui のフレーム情報と表示サイズを取得する。
-    isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
-#endif
+    bool isGuiCaptured = IsGuiCapturingMouse();
 
 
     // ステージ設定のライト方向を使って、シャドウ用のライトカメラを更新する。
-    Vector3 lightDir = stageMap_.GetLightDirection();
-    if (lightCamera_) {
-        const Vector3 targetPos = player_ ? player_->GetPosition() : camera->GetPosition();
-        lightCamera_->Update(lightDir, targetPos);
-    }
+    Vector3 lightDir = UpdateLightCameraForFrame();
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
     // H キーは現在のモードに合わせてヒットエフェクトを再生する。
-    if (input->TriggerKey(DIK_H) && particleManager) {
-        Vector3 effectPos = effectPreviewPosition_;
-        if (currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
-            effectPos = player_ ? player_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f };
-            effectPos.y += 0.9f;
-        }
-        if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
-            if (IsCurrentEffectStorm()) {
-                particleManager->SetStormActive(false);
-                particleManager->ClearParticles();
-                particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
-            } else {
-                EmitEffectPreviewBurst();
-            }
-        } else {
-            particleManager->EmitHitEffect(effectPos);
-        }
-    }
+    UpdateHitEffectShortcut();
 
 
     // GamePlay 中のカメラは MyGameGameplay 側で制御する。
-    if (currentMode_ != AppMode::GamePlay) {
-        camera->UpdateBlenderStyle(input.get(), isGuiCaptured, winApp->GetHwnd());
-    }
+    UpdateSharedCameraControls(isGuiCaptured);
 
 
     // 背景オブジェクトは常にカメラ位置へ追従させる。
-    if (skydomeObject_ && debugFlags_.showSkybox && !showSkyboxCubemap_) {
-        skydomeObject_->SetPosition(camera->GetPosition());
-        skydomeObject_->Update(Math::MakeIdentity4x4());
-    }
-    if (skybox_ && debugFlags_.showSkybox && showSkyboxCubemap_) {
-        skybox_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-        skybox_->Update(camera->GetPosition());
-    }
-
-
-   /* if (input->TriggerKey(DIK_P))     { sound.SoundPlay(wavSoundData, wavVolume); }
-    if (input->TriggerKey(DIK_M))     { sound.SoundPlay(mp4SoundData, mp4Volume); }
-    if (input->TriggerKey(DIK_N))     { sound.SoundPlay(mp3SoundData, mp3Volume); }
-    if (input->TriggerKey(DIK_UP)) {
-        mp3Volume = (mp3Volume + 0.1f < 1.0f) ? mp3Volume + 0.1f : 1.0f;
-        OutputDebugStringA("[MyGame] mp3 volume up\n");
-    }
-    if (input->TriggerKey(DIK_DOWN)) {
-        mp3Volume = (mp3Volume - 0.1f > 0.0f) ? mp3Volume - 0.1f : 0.0f;
-        OutputDebugStringA("[MyGame] mp3 volume down\n");
-    }*/
+    UpdateBackgroundObjects();
 
 
     // EffectPreview/Showcase 以外では GPU パーティクル確認球を表示可能に戻す。
-    if (particleManager && currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
-        particleManager->SetDrawGPUParticleSphere(true);
-    }
+    UpdateParticleDebugVisibility();
 
     // AppMode ごとの本体処理はサブルーチンや専用クラスへ委譲する。
-    switch (currentMode_) {
-
-    case AppMode::StageSelect:
-        UpdateStageSelect();
-        break;
-
-    case AppMode::DebugView:
-        UpdateDebugView();
-        break;
-
-    case AppMode::EffectPreview:
-        UpdateEffectPreview();
-        break;
-
-    case AppMode::EffectShowcase:
-        UpdateEffectShowcase();
-        DrawEffectShowcaseImGui();
-        break;
-
-    case AppMode::StageEditor:
-
-        stageEditorController_.Update(
-            input.get(), stageMap_, stageRenderer_.get(),
-            mapCursor_.get(), lightCamera_.get(), player_.get(), camera.get());
-        break;
-
-    case AppMode::GamePlay:
-        UpdateGamePlay();
-        break;
-
-    case AppMode::GamePlay_BlockPlace:
-        UpdateGamePlayBlockPlace();
-        break;
-
-    case AppMode::SkinningEditor:
-
-        skinningEditor_.Update(dxCommon.get(), input.get(), camera.get(), lightVP, isGuiCaptured);
-        break;
-    }
+    UpdateCurrentMode(lightVP, isGuiCaptured);
 
 
     // ここで最終的なカメラ行列を確定し、描画対象へ共有する。
@@ -398,21 +290,182 @@ void MyGame::Update() {
     const Matrix4x4& proj = camera->GetProjectionMatrix();
 
 
-    if (player_) {
-        player_->SetCamera(view, proj);
-        if (currentMode_ != AppMode::GamePlay) {
-            player_->UpdateTransform(lightVP);
-        }
-    }
+    UpdatePlayerCameraAndTransform(view, proj, lightVP);
 
 
     // ウィンドウが非アクティブなら、ゲーム側の重い更新を止める。
-    if (GetActiveWindow() != winApp->GetHwnd()) {
+    if (IsWindowInactive()) {
         return;
     }
 
 
     // DebugView と Effect 表示では補助 3D オブジェクトも更新する。
+    UpdateDebugAndEffectObjects(view, proj, lightVP);
+
+
+    // ステージメッシュ、壁透過、カーソルなどステージ周りの表示を更新する。
+    UpdateStagePresentation(view, proj, lightVP);
+
+
+    // 天候プリセットに合わせてパーティクル設定を同期する。
+    UpdateWeatherParticles(view, proj);
+
+
+    // ステージライトとエフェクト用ポイントライトを描画共通へ反映する。
+    ApplySceneLighting(lightDir);
+
+
+    // 背景色はステージ設定を基本に、嵐演出中だけ暗い色へ寄せる。
+    UpdateClearColorForFrame();
+
+
+    // ゲームプレイ UI とインベントリ UI を更新する。
+    UpdateGameplayUserInterface();
+}
+
+void MyGame::HandleModeChange() {
+    if (currentMode_ == prevMode_) {
+        return;
+    }
+
+    UpdateBGM();
+
+    const bool leftEffectPresentation =
+        (prevMode_ == AppMode::EffectPreview || prevMode_ == AppMode::EffectShowcase) &&
+        (currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase);
+    if (leftEffectPresentation && particleManager) {
+        particleManager->SetStormActive(false);
+    }
+
+    if (currentMode_ == AppMode::SkinningEditor) {
+        camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
+    } else if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
+        camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
+        effectShowcaseFirstPlay_ = true;
+    }
+
+    prevMode_ = currentMode_;
+}
+
+void MyGame::BeginFrameImGui() {
+    dxCommon->BeginImGui();
+#ifndef NDEBUG
+    UpdateImGui();
+#endif
+}
+
+bool MyGame::IsGuiCapturingMouse() {
+#ifndef NDEBUG
+    return ImGui::GetIO().WantCaptureMouse;
+#else
+    return false;
+#endif
+}
+
+Vector3 MyGame::UpdateLightCameraForFrame() {
+    Vector3 lightDir = stageMap_.GetLightDirection();
+    if (lightCamera_) {
+        const Vector3 targetPos = player_ ? player_->GetPosition() : camera->GetPosition();
+        lightCamera_->Update(lightDir, targetPos);
+    }
+    return lightDir;
+}
+
+void MyGame::UpdateHitEffectShortcut() {
+    if (!input->TriggerKey(DIK_H) || !particleManager) {
+        return;
+    }
+
+    Vector3 effectPos = effectPreviewPosition_;
+    if (currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
+        effectPos = player_ ? player_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f };
+        effectPos.y += 0.9f;
+    }
+
+    if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
+        if (IsCurrentEffectStorm()) {
+            particleManager->SetStormActive(false);
+            particleManager->ClearParticles();
+            particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+        } else {
+            EmitEffectPreviewBurst();
+        }
+    } else {
+        particleManager->EmitHitEffect(effectPos);
+    }
+}
+
+void MyGame::UpdateSharedCameraControls(bool isGuiCaptured) {
+    if (currentMode_ != AppMode::GamePlay) {
+        camera->UpdateBlenderStyle(input.get(), isGuiCaptured, winApp->GetHwnd());
+    }
+}
+
+void MyGame::UpdateBackgroundObjects() {
+    if (skydomeObject_ && debugFlags_.showSkybox && !showSkyboxCubemap_) {
+        skydomeObject_->SetPosition(camera->GetPosition());
+        skydomeObject_->Update(Math::MakeIdentity4x4());
+    }
+    if (skybox_ && debugFlags_.showSkybox && showSkyboxCubemap_) {
+        skybox_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+        skybox_->Update(camera->GetPosition());
+    }
+}
+
+void MyGame::UpdateParticleDebugVisibility() {
+    if (particleManager && currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
+        particleManager->SetDrawGPUParticleSphere(true);
+    }
+}
+
+void MyGame::UpdateCurrentMode(const Matrix4x4& lightVP, bool isGuiCaptured) {
+    switch (currentMode_) {
+    case AppMode::StageSelect:
+        UpdateStageSelect();
+        break;
+    case AppMode::DebugView:
+        UpdateDebugView();
+        break;
+    case AppMode::EffectPreview:
+        UpdateEffectPreview();
+        break;
+    case AppMode::EffectShowcase:
+        UpdateEffectShowcase();
+        DrawEffectShowcaseImGui();
+        break;
+    case AppMode::StageEditor:
+        stageEditorController_.Update(
+            input.get(), stageMap_, stageRenderer_.get(),
+            mapCursor_.get(), lightCamera_.get(), player_.get(), camera.get());
+        break;
+    case AppMode::GamePlay:
+        UpdateGamePlay();
+        break;
+    case AppMode::GamePlay_BlockPlace:
+        UpdateGamePlayBlockPlace();
+        break;
+    case AppMode::SkinningEditor:
+        skinningEditor_.Update(dxCommon.get(), input.get(), camera.get(), lightVP, isGuiCaptured);
+        break;
+    }
+}
+
+void MyGame::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP) {
+    if (!player_) {
+        return;
+    }
+
+    player_->SetCamera(view, proj);
+    if (currentMode_ != AppMode::GamePlay) {
+        player_->UpdateTransform(lightVP);
+    }
+}
+
+bool MyGame::IsWindowInactive() {
+    return GetActiveWindow() != winApp->GetHwnd();
+}
+
+void MyGame::UpdateDebugAndEffectObjects(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP) {
     if (debugFlags_.show3DObjects && currentMode_ == AppMode::DebugView) {
         for (auto& obj : objectList) {
             if (obj) {
@@ -426,75 +479,78 @@ void MyGame::Update() {
             terrainObject_->Update(lightVP);
         }
     }
+
     if ((currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) && terrainObject_) {
         terrainObject_->SetCamera(view, proj);
         terrainObject_->Update(lightVP);
     }
+}
 
-
-    // ステージメッシュ、壁透過、カーソルなどステージ周りの表示を更新する。
+void MyGame::UpdateStagePresentation(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP) {
     if (stageRenderer_) {
         stageRenderer_->SetIsEditorMode(currentMode_ == AppMode::StageEditor);
         stageRenderer_->SetCamera(view, proj);
         stageRenderer_->Update(stageMap_, lightVP);
     }
-    
 
-    stageRenderer_->UpdateCloudTransparency(
-        camera->GetPosition(),
-        player_->GetPosition()
-    );
-
+    if (stageRenderer_ && player_) {
+        stageRenderer_->UpdateCloudTransparency(
+            camera->GetPosition(),
+            player_->GetPosition()
+        );
+    }
 
     if (mapCursor_ && (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace)) {
         mapCursor_->SetCamera(view, proj);
         mapCursor_->Update(lightVP);
     }
+}
 
-
-    // 天候プリセットに合わせてパーティクル設定を同期する。
+void MyGame::UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4& proj) {
     if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
         sprite->Update();
     }
-    if (debugFlags_.showParticles) {
 
-        auto& wpMgr = WeatherPresetManager::GetInstance();
-        const std::string& weatherPresetName = stageMap_.GetWeatherPresetName();
-        WeatherPreset* currentPreset = wpMgr.GetPresetByName(weatherPresetName);
-        if (currentPreset) {
-            auto& emitter = particleManager->GetWeatherEmitter();
-            emitter.active = currentPreset->particleEnabled;
-            if (emitter.active) {
-                if (cachedWeatherPresetName_ != weatherPresetName ||
-                    cachedWeatherParticleTexturePath_ != currentPreset->particleTexture) {
-                    cachedWeatherPresetName_ = weatherPresetName;
-                    cachedWeatherParticleTexturePath_ = currentPreset->particleTexture;
-                    cachedWeatherParticleTexture_ = textureManager->LoadTexture(currentPreset->particleTexture);
-                    if (cachedWeatherParticleTexture_ != 0) {
-                        particleManager->SetTexture(cachedWeatherParticleTexture_);
-                    }
+    if (!debugFlags_.showParticles) {
+        return;
+    }
+
+    auto& wpMgr = WeatherPresetManager::GetInstance();
+    const std::string& weatherPresetName = stageMap_.GetWeatherPresetName();
+    WeatherPreset* currentPreset = wpMgr.GetPresetByName(weatherPresetName);
+    if (currentPreset) {
+        auto& emitter = particleManager->GetWeatherEmitter();
+        emitter.active = currentPreset->particleEnabled;
+        if (emitter.active) {
+            if (cachedWeatherPresetName_ != weatherPresetName ||
+                cachedWeatherParticleTexturePath_ != currentPreset->particleTexture) {
+                cachedWeatherPresetName_ = weatherPresetName;
+                cachedWeatherParticleTexturePath_ = currentPreset->particleTexture;
+                cachedWeatherParticleTexture_ = textureManager->LoadTexture(currentPreset->particleTexture);
+                if (cachedWeatherParticleTexture_ != 0) {
+                    particleManager->SetTexture(cachedWeatherParticleTexture_);
                 }
-                emitter.emitRate = currentPreset->emitRate;
-                emitter.size = currentPreset->emitSize;
-                emitter.velocity = currentPreset->velocity;
-                emitter.velocityRandom = currentPreset->velocityRandom;
-                emitter.particleSize = currentPreset->particleSize;
-                emitter.particleLife = currentPreset->particleLife;
-                emitter.color = currentPreset->particleColor;
-
-                emitter.center = {0.0f, 15.0f, 0.0f}; 
             }
-        }
-        
-        particleManager->Update(1.0f / 60.0f, view, proj, player_ ? player_->GetPosition() : Vector3{0, 0, 0}, &stageMap_);
-        if ((currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) &&
-            particleManager->ConsumeStormLightningFlash()) {
-            effectShowcaseLightTimer_ = kEffectShowcaseLightDuration_;
+            emitter.emitRate = currentPreset->emitRate;
+            emitter.size = currentPreset->emitSize;
+            emitter.velocity = currentPreset->velocity;
+            emitter.velocityRandom = currentPreset->velocityRandom;
+            emitter.particleSize = currentPreset->particleSize;
+            emitter.particleLife = currentPreset->particleLife;
+            emitter.color = currentPreset->particleColor;
+
+            emitter.center = { 0.0f, 15.0f, 0.0f };
         }
     }
 
+    particleManager->Update(1.0f / 60.0f, view, proj, player_ ? player_->GetPosition() : Vector3{ 0, 0, 0 }, &stageMap_);
+    if ((currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) &&
+        particleManager->ConsumeStormLightningFlash()) {
+        effectShowcaseLightTimer_ = kEffectShowcaseLightDuration_;
+    }
+}
 
-    // ステージライトとエフェクト用ポイントライトを描画共通へ反映する。
+void MyGame::ApplySceneLighting(const Vector3& lightDir) {
     object3dCommon->SetLightDirection(lightDir);
     object3dCommon->SetLightColor(Vector4(
         stageMap_.GetLightColor().x,
@@ -502,7 +558,7 @@ void MyGame::Update() {
         stageMap_.GetLightColor().z, 1.0f));
     const bool isEffectPresentation = currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase;
     object3dCommon->SetLightIntensity(isEffectPresentation ? 0.18f : stageMap_.GetLightIntensity());
-    object3dCommon->SetCameraPosition(camera->GetPosition()); // スペキュラー計算用
+    object3dCommon->SetCameraPosition(camera->GetPosition());
 
     if (isEffectPresentation) {
         const bool isStorm = IsCurrentEffectStorm();
@@ -530,9 +586,9 @@ void MyGame::Update() {
     } else {
         object3dCommon->SetPointLight({ 0.0f, 0.0f, 0.0f }, 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f });
     }
+}
 
-
-    // 背景色はステージ設定を基本に、嵐演出中だけ暗い色へ寄せる。
+void MyGame::UpdateClearColorForFrame() {
     postProcess_.SetClearColor(stageMap_.GetClearColor());
     const bool stormBackdrop = IsCurrentEffectStorm();
     if (stormBackdrop) {
@@ -541,15 +597,14 @@ void MyGame::Update() {
         const Vector4& clear = stageMap_.GetClearColor();
         dxCommon->SetClearColor(clear.x, clear.y, clear.z, clear.w);
     }
+}
 
-
-    // ゲームプレイ UI とインベントリ UI を更新する。
+void MyGame::UpdateGameplayUserInterface() {
     if (gameplayUIManager_) {
         gameplayUIManager_->Update(
             currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace,
             player_.get(), camera.get(), lightCamera_.get());
     }
-
 
     if (blockInventoryUI_) {
         bool isPlayOrPlace = (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);

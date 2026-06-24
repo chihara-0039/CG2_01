@@ -135,12 +135,12 @@ public:
     // ── リスポーン ────────────────────────────────────────
 
     /// <summary>リスポーン地点をセット (スタートブロックの位置から計算して渡す)</summary>
-    void SetRespawnPosition(const Vector3& pos) { respawnPosition = pos; }
+    void SetRespawnPosition(const Vector3& pos) { respawnPosition_ = pos; }
 
-    const Vector3& GetRespawnPosition() const { return respawnPosition; }
+    const Vector3& GetRespawnPosition() const { return respawnPosition_; }
 
 
-    /// <summary>プレイヤーを respawnPosition に戻し、速度をリセットする</summary>
+    /// <summary>プレイヤーをリスポーン地点に戻し、速度をリセットする</summary>
     void Respawn();
 
     // ── ゲーム特殊ブロック処理 ────────────────────────────
@@ -197,9 +197,6 @@ public:
     SkinnedObject* GetSkinnedObject() const { return skinnedObject_.get(); }
     bool IsSkinned() const { return isSkinned_; }
 
-    // リスポーン位置 (public: StageRespawnController から直接セットされる)
-    Vector3 respawnPosition = { 0.0f, 1.5f, 0.0f };
-
 private:
     // -------------------------------------------------------
     //  CheckCollision : pos でブロックと衝突しているか判定する。
@@ -218,6 +215,7 @@ private:
     Vector3 position_ = { 0, 0, 0 }; // 足元基準のワールド座標
     Vector3 rotation_ = { 0, 0, 0 }; // 回転 (主に Y 軸: 向き)
     Vector3 velocity_ = { 0, 0, 0 }; // 速度 (重力・ジャンプ・移動の合算)
+    Vector3 respawnPosition_ = { 0.0f, 1.5f, 0.0f }; // リスポーン地点
 
     // ── コライダー ────────────────────────────────────────
     // モデルのサイズに合わせて調整すること

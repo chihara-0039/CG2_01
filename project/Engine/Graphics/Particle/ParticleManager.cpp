@@ -256,15 +256,37 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         const float cloudInterval = 1.0f / (std::max)(storm.cloudEmitRate, 0.1f);
         while (stormCloudEmitTimer_ >= cloudInterval) {
             stormCloudEmitTimer_ -= cloudInterval;
-            const float cloudScale = storm.randomizeCloudSize ? 0.75f + zeroOne(engine) * 0.8f : 1.0f;
-            const float cloudX = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaX : 0.0f;
-            const float cloudZ = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaZ : 0.0f;
-            pushStormParticle(Particle::Type::StormCloud,
-                { stormCenter_.x + cloudX, stormCenter_.y + storm.cloudHeight + zeroOne(engine) * 2.2f, stormCenter_.z + cloudZ },
-                { (2.6f + zeroOne(engine) * 2.6f) * cloudScale * storm.cloudSize, (1.1f + zeroOne(engine) * 1.2f) * cloudScale * storm.cloudSize, 1.0f },
-                { 0.004f + zeroOne(engine) * 0.006f, unit(engine) * 0.0007f, unit(engine) * 0.001f },
-                storm.cloudColor,
-                storm.cloudLife * (0.82f + zeroOne(engine) * 0.36f), unit(engine) * 0.16f);
+            constexpr int kCloudWispsPerEmission = 3;
+            const float baseCloudX = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaX : 0.0f;
+            const float baseCloudZ = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaZ : 0.0f;
+            const float baseCloudY = storm.cloudHeight + zeroOne(engine) * 1.4f;
+            for (int wisp = 0; wisp < kCloudWispsPerEmission; ++wisp) {
+                const float cloudScale = storm.randomizeCloudSize ? 0.78f + zeroOne(engine) * 0.95f : 1.0f;
+                const float localSpreadX = unit(engine) * storm.cloudSize * (0.42f + zeroOne(engine) * 0.34f);
+                const float localSpreadY = unit(engine) * storm.cloudSize * 0.18f;
+                const float localSpreadZ = unit(engine) * storm.cloudSize * (0.30f + zeroOne(engine) * 0.30f);
+                Vector4 mistColor = storm.cloudColor;
+                mistColor.w *= 0.54f + zeroOne(engine) * 0.28f;
+                pushStormParticle(Particle::Type::StormCloud,
+                    {
+                        stormCenter_.x + baseCloudX + localSpreadX,
+                        stormCenter_.y + baseCloudY + localSpreadY,
+                        stormCenter_.z + baseCloudZ + localSpreadZ
+                    },
+                    {
+                        (3.2f + zeroOne(engine) * 3.4f) * cloudScale * storm.cloudSize,
+                        (1.0f + zeroOne(engine) * 1.15f) * cloudScale * storm.cloudSize,
+                        1.0f
+                    },
+                    {
+                        0.0025f + zeroOne(engine) * 0.0065f,
+                        unit(engine) * 0.0009f,
+                        unit(engine) * 0.0022f
+                    },
+                    mistColor,
+                    storm.cloudLife * (0.85f + zeroOne(engine) * 0.55f),
+                    unit(engine) * 0.26f);
+            }
         }
 
         stormRainEmitTimer_ += deltaTime;
@@ -495,7 +517,9 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
 
         instancingData[index].WVP = wvp;
         instancingData[index].color = particle.color;
-        instancingData[index].shape = particle.type == Particle::Type::Lightning ? 1.0f : 0.0f;
+        instancingData[index].shape = particle.type == Particle::Type::StormCloud
+            ? 2.0f
+            : particle.type == Particle::Type::Lightning ? 1.0f : 0.0f;
         index++;
     }
 }

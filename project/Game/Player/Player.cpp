@@ -604,7 +604,7 @@ bool Player::CheckCollision(const Vector3& pos, StageMap& map) {
 // リスポーン処理：座標をリスポーンポイントに戻し、速度と回転をリセット
 void Player::Respawn()
 {
-	position_ = respawnPosition;
+	position_ = respawnPosition_;
 	velocity_ = { 0.0f,0.0f,0.0f };
 	rotation_ = { 0.0f,0.0f,0.0f };
 

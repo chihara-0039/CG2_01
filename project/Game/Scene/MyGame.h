@@ -291,6 +291,23 @@ private:
     void UpdateTitle();                 ///< タイトル画面の更新
     void UpdateStageSelect();           ///< ステージ選択画面の更新
     void UpdateSceneTransition();       ///< ESC によるシーン遷移処理
+    void HandleModeChange();
+    void BeginFrameImGui();
+    bool IsGuiCapturingMouse();
+    Vector3 UpdateLightCameraForFrame();
+    void UpdateHitEffectShortcut();
+    void UpdateSharedCameraControls(bool isGuiCaptured);
+    void UpdateBackgroundObjects();
+    void UpdateParticleDebugVisibility();
+    void UpdateCurrentMode(const Matrix4x4& lightVP, bool isGuiCaptured);
+    void UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
+    bool IsWindowInactive();
+    void UpdateDebugAndEffectObjects(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
+    void UpdateStagePresentation(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
+    void UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4& proj);
+    void ApplySceneLighting(const Vector3& lightDir);
+    void UpdateClearColorForFrame();
+    void UpdateGameplayUserInterface();
 
     // --- 描画サブルーチン ---
     /// <summary>オフスクリーンパスと直接パスで共通するシーン描画</summary>
