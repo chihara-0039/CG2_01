@@ -445,7 +445,7 @@ void MyGame::UpdateCurrentMode(const Matrix4x4& lightVP, bool isGuiCaptured) {
         UpdateGamePlayBlockPlace();
         break;
     case AppMode::SkinningEditor:
-        skinningEditor_.Update(dxCommon.get(), input.get(), camera.get(), lightVP, isGuiCaptured);
+        skinningEditor_.Update(dxCommon.get(), input.get(), camera.get(), lightVP, isGuiCaptured, particleManager.get());
         break;
     }
 }

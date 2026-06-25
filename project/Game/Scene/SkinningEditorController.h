@@ -14,6 +14,7 @@ class Object3dCommon;
 class DirectXCommon;
 class TextureManager;
 class Player;
+class ParticleManager;
 
 /// <summary>
 /// スキニングエディターモードの制御クラス。
@@ -62,7 +63,8 @@ public:
         Input*               input,
         Camera*              camera,
         const Matrix4x4&     lightVP,
-        bool                 isGuiCaptured);
+        bool                 isGuiCaptured,
+        ParticleManager*     particleManager = nullptr);
 
     /// <summary>グリッド線・スキニングメッシュ・スケルトンを描画する</summary>
     /// <param name="object3dCommon">スケルトン描画の PreDraw に使用</param>
@@ -125,6 +127,9 @@ private:
     /// </summary>
     void ApplyModelToPlayer(Player* player, Model* defaultObjModel);
 
+    /// <summary>手ジョイントの現在位置から評価課題用パーティクルを発生させる。</summary>
+    void UpdateHandParticleEmitter(ParticleManager* particleManager);
+
 private:
     // ========== 所有リソース ==========
 
@@ -151,6 +156,10 @@ private:
     char motionPath_[256] = "Resources/Animations/custom_motion.json";
     std::string motionStatus_;
     bool hasCustomMotionFile_ = false;
+    // 手ジョイント連動パーティクルの状態。
+    bool emitHandParticles_ = false;
+    float handParticleTimer_ = 0.0f;
+    int handParticleJointIndex_ = -1;
 
     // ========== 非所有ポインタ (依存参照) ==========
 

@@ -1,6 +1,61 @@
 ﻿#include "SkinnedObject.h"
 #include "MyMath.h"
+#include <algorithm>
 #include <cmath>
+#include <cctype>
+
+namespace {
+// ジョイント名の部分一致検索で大文字小文字を無視するための小文字化。
+std::string ToLower(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return text;
+}
+
+// このプロジェクトの行列は平行移動を 4 行目に持つため、そこから座標を抜き出す。
+Vector3 ExtractTranslation(const Matrix4x4& matrix) {
+    return { matrix.m[3][0], matrix.m[3][1], matrix.m[3][2] };
+}
+
+// 軸方向が潰れている場合でもデバッグ描画が破綻しないようにする。
+Vector3 NormalizeSafe(const Vector3& value, const Vector3& fallback) {
+    const float length = std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
+    if (length <= 0.0001f) {
+        return fallback;
+    }
+    return { value.x / length, value.y / length, value.z / length };
+}
+
+// 選択中ジョイントのローカル軸を細い棒として描画する。
+void DrawAxisRod(
+    Object3d& axisObject,
+    const Vector3& start,
+    const Vector3& direction,
+    const Vector4& color,
+    float length,
+    const Matrix4x4& view,
+    const Matrix4x4& projection)
+{
+    const Vector3 dir = NormalizeSafe(direction, { 0.0f, 1.0f, 0.0f });
+    const Vector3 center = {
+        start.x + dir.x * length * 0.5f,
+        start.y + dir.y * length * 0.5f,
+        start.z + dir.z * length * 0.5f
+    };
+    const float yaw = std::atan2(dir.x, dir.z);
+    const float pitch = std::atan2(std::sqrt(dir.x * dir.x + dir.z * dir.z), dir.y);
+
+    axisObject.SetCamera(view, projection);
+    axisObject.SetPosition(center);
+    axisObject.SetRotation({ pitch, yaw, 0.0f });
+    axisObject.SetScale({ 0.008f, length * 0.5f, 0.008f });
+    axisObject.SetColor(color);
+    axisObject.SetEnableLighting(false);
+    axisObject.Update(Math::MakeIdentity4x4());
+    axisObject.Draw();
+}
+}
 
 void SkinnedObject::Initialize(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, TextureManager* textureManager) {
     // 1. スキニングモデルの生成
@@ -35,7 +90,9 @@ void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
         animationTime_ += (1.0f / 60.0f) * animationSpeed_;
         float dur = skinnedModel_->GetMotionDuration();
         currentKeyframeTime_ = std::fmod(animationTime_, dur);
-        if (currentKeyframeTime_ < 0.0f) currentKeyframeTime_ += dur;
+        if (currentKeyframeTime_ < 0.0f) {
+            currentKeyframeTime_ += dur;
+        }
         skinnedModel_->ApplyMotion(currentKeyframeTime_);
     }
 
@@ -53,7 +110,9 @@ void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
 }
 
 void SkinnedObject::Draw() {
-    if (!skinnedModel_ || !object3d_) return;
+    if (!skinnedModel_ || !object3d_) {
+        return;
+    }
     
     auto commandList = object3d_->GetObject3dCommon()->GetDxCommon()->GetCommandList();
 
@@ -88,7 +147,10 @@ void SkinnedObject::Draw() {
     commandList->DrawInstanced(static_cast<UINT>(skinnedModel_->GetVertexCount()), 1, 0, 0);
 }
 
-void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {    if (!skinnedModel_ || !object3d_) return;
+void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {
+    if (!skinnedModel_ || !object3d_) {
+        return;
+    }
 
     auto commandList = object3d_->GetObject3dCommon()->GetDxCommon()->GetCommandList();
     
@@ -97,7 +159,9 @@ void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {    if (!s
     // object3d_->DrawShadow(lightViewProjection);
 }
 void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeModel, const Matrix4x4& view, const Matrix4x4& projection) {
-    if (!showSkeleton_ || !cubeModel) return;
+    if (!showSkeleton_ || !cubeModel) {
+        return;
+    }
 
     const auto& joints = skinnedModel_->GetJoints();
     size_t numJoints = joints.size();
@@ -140,7 +204,9 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
     size_t boneVisualCount = 0;
     for (size_t i = 0; i < numJoints; ++i) {
         int parentIdx = joints[i].parentIndex;
-        if (parentIdx == -1) continue;
+        if (parentIdx == -1) {
+            continue;
+        }
 
         if (boneVisuals_.size() <= boneVisualCount) {
             auto boneObj = std::make_unique<Object3d>();
@@ -160,7 +226,9 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
 
         Vector3 v = Math::Subtract(cPos, pPos);
         float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-        if (len < 0.001f) continue;
+        if (len < 0.001f) {
+            continue;
+        }
 
         Vector3 dir = { v.x / len, v.y / len, v.z / len };
 
@@ -185,6 +253,72 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
         boneObj->Draw();
     }
 
+    if (showJointAxes_ &&
+        selectedJointIndex_ >= 0 &&
+        selectedJointIndex_ < static_cast<int>(numJoints)) {
+        if (axisVisuals_.size() < 3) {
+            axisVisuals_.resize(3);
+            for (auto& axis : axisVisuals_) {
+                axis = std::make_unique<Object3d>();
+                axis->Initialize(object3dCommon);
+                axis->SetModel(cubeModel);
+            }
+        }
+
+        const Matrix4x4 selectedJointWorld =
+            Math::Multiply(joints[static_cast<size_t>(selectedJointIndex_)].globalMatrix, objWorld);
+        const Vector3 jointPos = ExtractTranslation(selectedJointWorld);
+        const Vector3 localX = { selectedJointWorld.m[0][0], selectedJointWorld.m[0][1], selectedJointWorld.m[0][2] };
+        const Vector3 localY = { selectedJointWorld.m[1][0], selectedJointWorld.m[1][1], selectedJointWorld.m[1][2] };
+        const Vector3 localZ = { selectedJointWorld.m[2][0], selectedJointWorld.m[2][1], selectedJointWorld.m[2][2] };
+
+        DrawAxisRod(*axisVisuals_[0], jointPos, localX, { 1.0f, 0.15f, 0.15f, 1.0f }, 0.28f, view, projection);
+        DrawAxisRod(*axisVisuals_[1], jointPos, localY, { 0.15f, 1.0f, 0.15f, 1.0f }, 0.28f, view, projection);
+        DrawAxisRod(*axisVisuals_[2], jointPos, localZ, { 0.20f, 0.35f, 1.0f, 1.0f }, 0.28f, view, projection);
+    }
+
     object3dCommon->PreDraw();
+}
+
+int SkinnedObject::FindJointIndexByNameHints(const std::vector<std::string>& nameHints) const {
+    if (!skinnedModel_) {
+        return -1;
+    }
+
+    // モデルごとに手ボーン名が異なるため、複数の名前候補を部分一致で探す。
+    const auto& joints = skinnedModel_->GetJoints();
+    for (const auto& hint : nameHints) {
+        const std::string lowerHint = ToLower(hint);
+        for (size_t i = 0; i < joints.size(); ++i) {
+            const std::string lowerName = ToLower(joints[i].name);
+            if (lowerName.find(lowerHint) != std::string::npos) {
+                return static_cast<int>(i);
+            }
+        }
+    }
+
+    return -1;
+}
+
+bool SkinnedObject::TryGetJointWorldPosition(int jointIndex, Vector3& outPosition) const {
+    if (!skinnedModel_) {
+        return false;
+    }
+
+    const auto& joints = skinnedModel_->GetJoints();
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(joints.size())) {
+        return false;
+    }
+
+    // ジョイントのグローバル行列にオブジェクトのワールド行列を掛け、シーン上の座標に変換する。
+    const Matrix4x4 objWorld = Math::MakeAffineMatrix(scale_, rotation_, position_);
+    const Matrix4x4 jointWorld = Math::Multiply(joints[static_cast<size_t>(jointIndex)].globalMatrix, objWorld);
+    outPosition = ExtractTranslation(jointWorld);
+    return true;
+}
+
+bool SkinnedObject::TryGetJointWorldPosition(const std::vector<std::string>& nameHints, Vector3& outPosition) const {
+    const int jointIndex = FindJointIndexByNameHints(nameHints);
+    return TryGetJointWorldPosition(jointIndex, outPosition);
 }
 
