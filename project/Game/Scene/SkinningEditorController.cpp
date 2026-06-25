@@ -3,6 +3,7 @@
 #include "Object3dCommon.h"
 #include "DirectXCommon.h"
 #include "TextureManager.h"
+#include "ParticleManager.h"
 #include "externals/imgui/imgui.h"
 
 #include <filesystem>
@@ -87,7 +88,8 @@ void SkinningEditorController::Update(
     Input*               input,
     Camera*              camera,
     const Matrix4x4&     lightVP,
-    bool                 isGuiCaptured)
+    bool                 isGuiCaptured,
+    ParticleManager*     particleManager)
 {
     // ----------------------------------------------------------
     // 1. レイキャストによるジョイントクリック選択
@@ -197,6 +199,8 @@ void SkinningEditorController::Update(
         skinnedObject_->Update(dxCommon, lightVP);
     }
 
+    UpdateHandParticleEmitter(particleManager);
+
     // ----------------------------------------------------------
     // 3. グリッド線の更新 (カメラ行列のセットと定数バッファ転送)
     //    SkinningEditor モード中のみ呼ばれるため、ここで安全に更新する
@@ -205,6 +209,61 @@ void SkinningEditorController::Update(
         line->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         line->Update(lightVP);
     }
+}
+
+void SkinningEditorController::UpdateHandParticleEmitter(ParticleManager* particleManager) {
+    if (!emitHandParticles_ || !particleManager || !skinnedObject_ || isObjPreviewMode_) {
+        return;
+    }
+
+    // 初回だけ手に相当するジョイントを名前候補から探してキャッシュする。
+    if (handParticleJointIndex_ < 0) {
+        handParticleJointIndex_ = skinnedObject_->FindJointIndexByNameHints({
+            "hand_r", "r_hand", "right_hand", "righthand", "hand.r",
+            "hand_l", "l_hand", "left_hand", "lefthand", "hand.l", "hand"
+        });
+    }
+
+    // アニメーション後のジョイント行列から、手の現在ワールド座標を取得する。
+    Vector3 handPosition{};
+    if (!skinnedObject_->TryGetJointWorldPosition(handParticleJointIndex_, handPosition)) {
+        return;
+    }
+
+    // 毎フレーム出すと強すぎるため、一定間隔で小さな火花として発生させる。
+    handParticleTimer_ += 1.0f / 60.0f;
+    if (handParticleTimer_ < 0.18f) {
+        return;
+    }
+    handParticleTimer_ = 0.0f;
+
+    // 既存のヒットエフェクトを手元用に小さく調整して使う。
+    ParticleManager::HitEffectSettings settings{};
+    settings.size = 0.32f;
+    settings.brightness = 0.85f;
+    settings.lifeScale = 0.55f;
+    settings.slashCount = 2;
+    settings.sparkCount = 14;
+    settings.sparkSpeed = 0.58f;
+    settings.sparkLength = 0.45f;
+    settings.scatterRadius = 0.22f;
+    settings.ringPower = 0.15f;
+    settings.corePower = 0.75f;
+    settings.crossPower = 0.0f;
+    settings.pillarPower = 0.0f;
+    settings.lightningCount = 0;
+    settings.randomizePosition = true;
+    settings.randomizeDirection = true;
+    settings.randomizeScale = true;
+    settings.randomizeLifetime = true;
+    settings.randomizeColor = true;
+    settings.coreColor = { 1.0f, 0.52f, 0.14f, 1.0f };
+    settings.slashColor = { 1.0f, 0.42f, 0.08f, 1.0f };
+    settings.sparkColor = { 1.0f, 0.72f, 0.18f, 1.0f };
+    settings.sparkSecondaryColor = { 0.34f, 0.72f, 1.0f, 1.0f };
+    settings.ringColor = { 1.0f, 0.38f, 0.08f, 1.0f };
+
+    particleManager->EmitHitEffect(handPosition, settings);
 }
 
 // ==========================================================
@@ -529,6 +588,30 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
         skinnedObject_->SetShowSkeleton(showSkeleton);
     }
 
+    bool showJointAxes = skinnedObject_->IsShowJointAxes();
+    if (ImGui::Checkbox("Show Selected Bone Axes", &showJointAxes)) {
+        skinnedObject_->SetShowJointAxes(showJointAxes);
+    }
+
+    // 手ジョイントの位置をエミッターとして使う評価課題用の確認機能。
+    if (ImGui::Checkbox("Emit Particles From Hand", &emitHandParticles_)) {
+        handParticleTimer_ = 0.0f;
+        handParticleJointIndex_ = -1;
+    }
+    if (emitHandParticles_) {
+        const int resolvedJoint = handParticleJointIndex_ >= 0
+            ? handParticleJointIndex_
+            : skinnedObject_->FindJointIndexByNameHints({
+                "hand_r", "r_hand", "right_hand", "righthand", "hand.r",
+                "hand_l", "l_hand", "left_hand", "lefthand", "hand.l", "hand"
+            });
+        if (resolvedJoint >= 0 && resolvedJoint < static_cast<int>(skinnedObject_->GetModel()->GetJoints().size())) {
+            ImGui::Text("Emitter Joint: %s", skinnedObject_->GetModel()->GetJoints()[resolvedJoint].name.c_str());
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.25f, 1.0f), "Emitter Joint: not found");
+        }
+    }
+
     if (ImGui::Button("Reset to T-Pose", ImVec2(-FLT_MIN, 24))) {
         skinnedObject_->GetModel()->ResetPose();
     }
@@ -768,8 +851,14 @@ void SkinningEditorController::ScanGltfModels() {
 //  プレビュー SkinnedObject を指定インデックスのモデルで再初期化する
 // ==========================================================
 void SkinningEditorController::ChangePreviewModel(int index) {
-    if (index < 0 || index >= static_cast<int>(modelPaths_.size())) { return; }
+    if (index < 0 || index >= static_cast<int>(modelPaths_.size())) {
+        return;
+    }
     selectedModelIndex_ = index;
+
+    // モデルごとにジョイント名が違うため、プレビュー切り替え時に検索をやり直す。
+    handParticleJointIndex_ = -1;
+    handParticleTimer_ = 0.0f;
 
     if (index == 0) {
         // ----------------------------------------------------------

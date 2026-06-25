@@ -89,3 +89,32 @@ Tempest Stormでは、雲・雨・雷の発生範囲、落雷頻度、雷の大�
 4. ソリューションをビルドして実行する
 
 シェーダー、画像、JSONは相対パスで読み込むため、実行時の作業ディレクトリはプロジェクトフォルダーにしてください。
+## 評価課題2 追加内容
+
+### SkinnedModel / Compute Shader Skinning
+
+- `SkinnedModel` は glTF の skin / joint / animation を読み込み、ジョイント行列を更新します。
+- `Resources/shaders/hlsl/Skinning.CS.hlsl` を使い、スキニング済み頂点を GPU バッファへ書き出します。
+- `SkinnedObject::Draw()` では Compute Shader のスキニング結果を描画に使用します。
+
+### Bone Debug Display
+
+- `SkinningEditor` モードでスケルトンを表示できます。
+- ジョイントは赤いキューブ、親子関係は黄色いボーンで表示します。
+- 選択中ジョイントは緑色で強調表示します。
+- `Show Selected Bone Axes` を有効にすると、選択中ジョイントのローカル X/Y/Z 軸を赤/緑/青で表示します。
+- 右パネルの `Select Bone` またはビューポート上のクリックでジョイントを選択できます。
+
+### Particle From Hand
+
+- `SkinningEditor` の `Emit Particles From Hand` を有効にすると、手のジョイント位置からパーティクルを発生させます。
+- `RightHand` / `LeftHand` / `Hand_R` / `Hand_L` などの名前を検索し、見つかったジョイントのワールド座標をエミッター位置として使用します。
+- ジョイント位置は `SkinnedObject::TryGetJointWorldPosition()` で取得し、既存の `ParticleManager::EmitHitEffect()` に渡しています。
+
+### 操作手順
+
+1. `Development|x64` で起動します。
+2. 左側の `App Mode` から `SkinningEditor` を選択します。
+3. 右側の `Skinning Editor` パネルで skinned glTF モデルを選びます。
+4. `Show Skeleton Bones` と `Show Selected Bone Axes` を有効にして骨の状態を確認します。
+5. `Emit Particles From Hand` を有効にすると、手ジョイントからパーティクルが出ます。
