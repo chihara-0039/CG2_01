@@ -24,8 +24,9 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
+    <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -37,9 +38,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
+    <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -75,22 +75,27 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>USE_IMGUI</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEVELOPMENT;USE_IMGUI</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Block;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>Disabled</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalOptions>/ignore:4049 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
-      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
       <AdditionalLibraryDirectories>$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)engine\scene;$(SolutionDir)project\externals\DirectXTex\Bin\Desktop_2022_Win10\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <LinkTimeCodeGeneration />
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -118,26 +123,22 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>DEVELOPMENT;USE_IMGUI</PreprocessorDefinitions>
+      <PreprocessorDefinitions>USE_IMGUI</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <Optimization>Disabled</Optimization>
-      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)externals\imgui;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\DirectXTex\Shaders;$(ProjectDir)externals\tinygltf;$(ProjectDir)engine;$(ProjectDir)Engine/Base;$(ProjectDir)Engine/Graphics;$(ProjectDir)Engine/Graphics/2D;$(ProjectDir)Engine/Graphics/3D;$(ProjectDir)Engine/Graphics/Particle;$(ProjectDir)Engine/Math;$(ProjectDir)Engine/Utility;$(ProjectDir)Game/Block;$(ProjectDir)Game/Camera;$(ProjectDir)Game/Entity;$(ProjectDir)Game/Player;$(ProjectDir)Game/Scene;$(ProjectDir)Game/Stage;$(ProjectDir)Game/UI;$(ProjectDir)Sound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalOptions>/ignore:4049 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
       <AdditionalLibraryDirectories>$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)engine\scene;$(SolutionDir)project\externals\DirectXTex\Bin\Desktop_2022_Win10\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <LinkTimeCodeGeneration />
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -145,7 +146,7 @@
     <ClCompile Include="Game\Block\BlockPlacementController.cpp" />
     <ClCompile Include="Game\Block\BubblePickupController.cpp" />
     <ClCompile Include="Game\Block\BlockInventory.cpp">
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Development|x64'">$(ProjectDir)Game/Block;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Game/Block;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="Engine\Utility\Camera.cpp" />
     <ClCompile Include="Engine\Utility\D3DResourceLeakChecker.cpp" />
