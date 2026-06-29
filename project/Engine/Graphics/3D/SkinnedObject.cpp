@@ -2,6 +2,60 @@
 #include "MyMath.h"
 #include <algorithm>
 #include <cmath>
+#include <cctype>
+
+namespace {
+// ジョイント名の部分一致検索で大文字小文字を無視するための小文字化。
+std::string ToLower(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return text;
+}
+
+// このプロジェクトの行列は平行移動を 4 行目に持つため、そこから座標を抜き出す。
+Vector3 ExtractTranslation(const Matrix4x4& matrix) {
+    return { matrix.m[3][0], matrix.m[3][1], matrix.m[3][2] };
+}
+
+// 軸方向が潰れている場合でもデバッグ描画が破綻しないようにする。
+Vector3 NormalizeSafe(const Vector3& value, const Vector3& fallback) {
+    const float length = std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
+    if (length <= 0.0001f) {
+        return fallback;
+    }
+    return { value.x / length, value.y / length, value.z / length };
+}
+
+// 選択中ジョイントのローカル軸を細い棒として描画する。
+void DrawAxisRod(
+    Object3d& axisObject,
+    const Vector3& start,
+    const Vector3& direction,
+    const Vector4& color,
+    float length,
+    const Matrix4x4& view,
+    const Matrix4x4& projection)
+{
+    const Vector3 dir = NormalizeSafe(direction, { 0.0f, 1.0f, 0.0f });
+    const Vector3 center = {
+        start.x + dir.x * length * 0.5f,
+        start.y + dir.y * length * 0.5f,
+        start.z + dir.z * length * 0.5f
+    };
+    const float yaw = std::atan2(dir.x, dir.z);
+    const float pitch = std::atan2(std::sqrt(dir.x * dir.x + dir.z * dir.z), dir.y);
+
+    axisObject.SetCamera(view, projection);
+    axisObject.SetPosition(center);
+    axisObject.SetRotation({ pitch, yaw, 0.0f });
+    axisObject.SetScale({ 0.008f, length * 0.5f, 0.008f });
+    axisObject.SetColor(color);
+    axisObject.SetEnableLighting(false);
+    axisObject.Update(Math::MakeIdentity4x4());
+    axisObject.Draw();
+}
+}
 
 void SkinnedObject::Initialize(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, TextureManager* textureManager) {
     // 1. スキニングモデルの生成
@@ -217,6 +271,30 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
 
         boneObj->Update(Math::MakeIdentity4x4());
         boneObj->Draw();
+    }
+
+    if (showJointAxes_ &&
+        selectedJointIndex_ >= 0 &&
+        selectedJointIndex_ < static_cast<int>(numJoints)) {
+        if (axisVisuals_.size() < 3) {
+            axisVisuals_.resize(3);
+            for (auto& axis : axisVisuals_) {
+                axis = std::make_unique<Object3d>();
+                axis->Initialize(object3dCommon);
+                axis->SetModel(cubeModel);
+            }
+        }
+
+        const Matrix4x4 selectedJointWorld =
+            Math::Multiply(joints[static_cast<size_t>(selectedJointIndex_)].globalMatrix, objWorld);
+        const Vector3 jointPos = ExtractTranslation(selectedJointWorld);
+        const Vector3 localX = { selectedJointWorld.m[0][0], selectedJointWorld.m[0][1], selectedJointWorld.m[0][2] };
+        const Vector3 localY = { selectedJointWorld.m[1][0], selectedJointWorld.m[1][1], selectedJointWorld.m[1][2] };
+        const Vector3 localZ = { selectedJointWorld.m[2][0], selectedJointWorld.m[2][1], selectedJointWorld.m[2][2] };
+
+        DrawAxisRod(*axisVisuals_[0], jointPos, localX, { 1.0f, 0.15f, 0.15f, 1.0f }, 0.28f, view, projection);
+        DrawAxisRod(*axisVisuals_[1], jointPos, localY, { 0.15f, 1.0f, 0.15f, 1.0f }, 0.28f, view, projection);
+        DrawAxisRod(*axisVisuals_[2], jointPos, localZ, { 0.20f, 0.35f, 1.0f, 1.0f }, 0.28f, view, projection);
     }
 
     object3dCommon->PreDraw();

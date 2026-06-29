@@ -16,6 +16,7 @@ class Object3dCommon;
 class DirectXCommon;
 class TextureManager;
 class Player;
+class ParticleManager;
 
 /// <summary>
 /// スキニングエディターモードの制御クラス。
@@ -64,7 +65,8 @@ public:
         Input*               input,
         Camera*              camera,
         const Matrix4x4&     lightVP,
-        bool                 isGuiCaptured);
+        bool                 isGuiCaptured,
+        ParticleManager*     particleManager = nullptr);
 
     /// <summary>グリッド線・スキニングメッシュ・スケルトンを描画する</summary>
     /// <param name="object3dCommon">スケルトン描画の PreDraw に使用</param>
@@ -133,6 +135,9 @@ private:
     /// </summary>
     void ApplyModelToPlayer(Player* player, Model* defaultObjModel);
 
+    /// <summary>手ジョイントの現在位置から評価課題用パーティクルを発生させる。</summary>
+    void UpdateHandParticleEmitter(ParticleManager* particleManager);
+
 private:
     // ========== 所有リソース ==========
 
@@ -168,6 +173,10 @@ private:
     bool assetBrowserGridView_ = true; ///< True when the asset browser uses Unity-like tiles.
     int assetTileSize_ = 82;           ///< Pixel size used by model asset tiles.
     std::string assetBrowserStatus_;   ///< Short feedback text shown after browser actions.
+    // 手ジョイント連動パーティクルの状態。
+    bool emitHandParticles_ = false;
+    float handParticleTimer_ = 0.0f;
+    int handParticleJointIndex_ = -1;
 
     // ========== 非所有ポインタ (依存参照) ==========
 

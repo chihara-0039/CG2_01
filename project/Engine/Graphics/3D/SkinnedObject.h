@@ -17,14 +17,14 @@
 //  ボーンを動かすと頂点もそれに追従して変形する技術。
 //  キャラクターの歩き・走り・攻撃アニメーションはこれで実現する。
 //
-//  ─── CPU スキニングについて ──────────────────────────────
-//  このエンジンは GPU ではなく CPU でスキニング計算を行っている。
-//  GPU スキニングより遅いが実装がシンプルで理解しやすい。
+//  ─── Compute Shader スキニングについて ───────────────────
+//  このエンジンは Compute Shader でスキニング済み頂点を生成する。
+//  変形済み頂点を GPU バッファに残すことで、描画側は通常の頂点として扱える。
 //  手順:
 //    1. ボーンの行列を階層的に計算 (親→子の順)
-//    2. 各頂点に「どのボーンにどれだけ影響を受けるか」(スキンウェイト) を掛け合わせる
-//    3. 変形後の頂点を UpdateVertexBuffer() で GPU に転送
-//    4. Draw() で描画
+//    2. WellForGPU にスケルトン空間行列を転送
+//    3. Skinning.CS.hlsl で頂点とウェイトからスキニング済み頂点を生成
+//    4. Draw() でスキニング済み頂点バッファを描画
 //
 //  ─── クラス構成 ───────────────────────────────────────────
 //  SkinnedObject : 配置情報 + アニメーション制御 (このクラス)
@@ -59,8 +59,8 @@ public:
     //  Update : 毎フレーム呼ぶ。以下の処理を順番に行う:
     //  1. アニメーション時間を進める (playAnimation_ が true の場合)
     //  2. カスタムモーション再生 (playCustomAnimation_ が true の場合)
-    //  3. SkinnedModel::UpdateSkinning() でボーン行列計算と CPU スキニング
-    //  4. 計算後の頂点を Model::UpdateVertexBuffer() で GPU に転送
+    //  3. SkinnedModel::Update() でボーン行列と GPU 用パレットを更新
+    //  4. Draw() 直前に Compute Shader で頂点をスキニング
     //  5. Object3d::Update() で WVP 行列を定数バッファに書き込む
     // -------------------------------------------------------
     void Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP);
@@ -132,12 +132,25 @@ public:
     void SetShowSkeleton(bool show) { showSkeleton_ = show; }
     bool IsShowSkeleton() const     { return showSkeleton_; }
 
+    /// <summary>選択中ジョイントのローカル軸表示 On/Off。</summary>
+    void SetShowJointAxes(bool show) { showJointAxes_ = show; }
+    bool IsShowJointAxes() const     { return showJointAxes_; }
+
     // ── ジョイント選択 (スキニングエディタで使用) ─────────
     // レイキャストで選択されたジョイントのインデックスを保持する。
     // DrawSkeleton() で選択中ジョイントの色を変えて強調表示する。
 
     void SetSelectedJointIndex(int index) { selectedJointIndex_ = index; }
     int  GetSelectedJointIndex() const    { return selectedJointIndex_; }
+
+    /// <summary>複数の名前候補から最初に一致したジョイントのインデックスを返す。</summary>
+    int FindJointIndexByNameHints(const std::vector<std::string>& nameHints) const;
+
+    /// <summary>指定ジョイントの現在のワールド座標を取得する。</summary>
+    bool TryGetJointWorldPosition(int jointIndex, Vector3& outPosition) const;
+
+    /// <summary>名前候補でジョイントを探し、そのワールド座標を取得する。</summary>
+    bool TryGetJointWorldPosition(const std::vector<std::string>& nameHints, Vector3& outPosition) const;
 
     // ── カスタムモーション操作 ────────────────────────────
     // キーフレームを手動で登録・再生するカスタムモーション機能。
@@ -218,12 +231,14 @@ private:
 
     // ── スケルトン可視化 ──────────────────────────────────
     bool showSkeleton_      = true;  // true: ボーンを描画する
+    bool showJointAxes_     = true;  // true: 選択中ジョイントのローカル軸を描画する
     int  selectedJointIndex_ = -1;   // 選択中ジョイントのインデックス (-1: 未選択)
 
     // DrawSkeleton() で使うジョイント・ボーンのビジュアル用 Object3d 群。
     // ジョイントごとに立方体 (jointVisuals_) とつなぎ棒 (boneVisuals_) を持つ。
     std::vector<std::unique_ptr<Object3d>> jointVisuals_; // 各関節の位置を示すキューブ
     std::vector<std::unique_ptr<Object3d>> boneVisuals_;  // 親子関節をつなぐ棒
+    std::vector<std::unique_ptr<Object3d>> axisVisuals_;  // 選択中関節のローカル軸
 };
 
 
