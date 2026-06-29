@@ -1,5 +1,6 @@
 ﻿#include "SkinnedObject.h"
 #include "MyMath.h"
+#include <algorithm>
 #include <cmath>
 
 void SkinnedObject::Initialize(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, TextureManager* textureManager) {
@@ -32,11 +33,33 @@ void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
         skinnedModel_->ApplyTestAnimation(animationTime_, animationSpeed_);
     } else if (playCustomAnimation_) {
         // カスタムキーフレームモーションの再生
-        animationTime_ += (1.0f / 60.0f) * animationSpeed_;
+        const float deltaTime = (1.0f / 60.0f) * animationSpeed_;
+        animationTime_ += deltaTime;
         float dur = skinnedModel_->GetMotionDuration();
         currentKeyframeTime_ = std::fmod(animationTime_, dur);
-        if (currentKeyframeTime_ < 0.0f) currentKeyframeTime_ += dur;
-        skinnedModel_->ApplyMotion(currentKeyframeTime_);
+        if (currentKeyframeTime_ < 0.0f) {
+            currentKeyframeTime_ += dur;
+        }
+
+        if (playBlendAnimation_) {
+            blendElapsed_ += deltaTime;
+            blendRate_ = blendDuration_ > 0.0f
+                ? std::clamp(blendElapsed_ / blendDuration_, 0.0f, 1.0f)
+                : 1.0f;
+            skinnedModel_->ApplyMotionBlend(
+                blendFromMotionIndex_,
+                blendTargetMotionIndex_,
+                currentKeyframeTime_,
+                blendRate_);
+
+            if (blendRate_ >= 1.0f) {
+                skinnedModel_->SetActiveMotionIndex(blendTargetMotionIndex_);
+                playBlendAnimation_ = false;
+                blendFromMotionIndex_ = blendTargetMotionIndex_;
+            }
+        } else {
+            skinnedModel_->ApplyMotion(currentKeyframeTime_);
+        }
     }
 
     // 2. スキニング計算の実行とGPUへの転送
@@ -53,7 +76,9 @@ void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
 }
 
 void SkinnedObject::Draw() {
-    if (!skinnedModel_ || !object3d_) return;
+    if (!skinnedModel_ || !object3d_) {
+        return;
+    }
     
     auto commandList = object3d_->GetObject3dCommon()->GetDxCommon()->GetCommandList();
 
@@ -88,7 +113,10 @@ void SkinnedObject::Draw() {
     commandList->DrawInstanced(static_cast<UINT>(skinnedModel_->GetVertexCount()), 1, 0, 0);
 }
 
-void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {    if (!skinnedModel_ || !object3d_) return;
+void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {
+    if (!skinnedModel_ || !object3d_) {
+        return;
+    }
 
     auto commandList = object3d_->GetObject3dCommon()->GetDxCommon()->GetCommandList();
     
@@ -97,7 +125,9 @@ void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {    if (!s
     // object3d_->DrawShadow(lightViewProjection);
 }
 void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeModel, const Matrix4x4& view, const Matrix4x4& projection) {
-    if (!showSkeleton_ || !cubeModel) return;
+    if (!showSkeleton_ || !cubeModel) {
+        return;
+    }
 
     const auto& joints = skinnedModel_->GetJoints();
     size_t numJoints = joints.size();
@@ -140,7 +170,9 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
     size_t boneVisualCount = 0;
     for (size_t i = 0; i < numJoints; ++i) {
         int parentIdx = joints[i].parentIndex;
-        if (parentIdx == -1) continue;
+        if (parentIdx == -1) {
+            continue;
+        }
 
         if (boneVisuals_.size() <= boneVisualCount) {
             auto boneObj = std::make_unique<Object3d>();
@@ -160,7 +192,9 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
 
         Vector3 v = Math::Subtract(cPos, pPos);
         float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-        if (len < 0.001f) continue;
+        if (len < 0.001f) {
+            continue;
+        }
 
         Vector3 dir = { v.x / len, v.y / len, v.z / len };
 
@@ -186,5 +220,29 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
     }
 
     object3dCommon->PreDraw();
+}
+
+void SkinnedObject::StartMotionBlend(int targetMotionIndex, float duration) {
+    if (!skinnedModel_) {
+        return;
+    }
+
+    const auto& motions = skinnedModel_->GetMotions();
+    int activeMotionIndex = skinnedModel_->GetActiveMotionIndex();
+    if (targetMotionIndex < 0 || targetMotionIndex >= static_cast<int>(motions.size()) ||
+        activeMotionIndex < 0 || activeMotionIndex >= static_cast<int>(motions.size()) ||
+        targetMotionIndex == activeMotionIndex) {
+        return;
+    }
+
+    // Blend starts from the currently active animation and gradually reaches the selected target.
+    blendFromMotionIndex_ = activeMotionIndex;
+    blendTargetMotionIndex_ = targetMotionIndex;
+    blendDuration_ = duration < 0.01f ? 0.01f : duration;
+    blendElapsed_ = 0.0f;
+    blendRate_ = 0.0f;
+    playBlendAnimation_ = true;
+    playCustomAnimation_ = true;
+    playAnimation_ = false;
 }
 

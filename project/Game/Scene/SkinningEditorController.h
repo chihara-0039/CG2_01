@@ -5,9 +5,11 @@
 #include "Camera.h"
 #include "Input.h"
 #include "MyMath.h"
+#include <d3d12.h>
 #include <vector>
 #include <string>
 #include <memory>
+#include <unordered_map>
 
 // 前方宣言 (循環インクルードを防ぐ)
 class Object3dCommon;
@@ -81,6 +83,12 @@ public:
     void DrawImGuiTimeline();
 
     /// <summary>
+    /// Draws a Unity-like model asset browser in the bottom Tools & Controls panel.
+    /// Selecting an asset updates the 3D preview, and dragging/double-clicking can apply it to the player.
+    /// </summary>
+    void DrawAssetBrowserPanel(Player* player, Model* defaultObjModel);
+
+    /// <summary>
     /// 右パネル (Skinning Editor) に描画するサイドパネル UI。
     /// モデル選択・アニメーション選択・ボーン操作・カメラプリセットを描画する。
     /// </summary>
@@ -136,12 +144,16 @@ private:
     // isObjPreviewMode_ が true のとき skinnedObject_ の代わりにこちらを使う
     std::unique_ptr<Object3d> objPreviewObject_;  ///< OBJ プレビュー用の Object3d
     std::unique_ptr<Model>    objPreviewModel_;   ///< OBJ プレビュー用の Model
+    std::unique_ptr<Model>    appliedObjModel_;   ///< Player に適用した OBJ Model の寿命を保持する
     bool                      isObjPreviewMode_ = false; ///< OBJ モード中かどうか
 
     // ========== モデルリスト ==========
 
     std::vector<std::string> modelPaths_; ///< ファイルパス (OBJ/glTF は実際のパス, Default は識別子)
     std::vector<std::string> modelNames_; ///< UI 表示用のモデル名
+    std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> assetThumbnailHandles_; ///< ImGui 用ヒープにコピー済みのサムネイルハンドル
+    std::vector<bool> assetHasThumbnail_; ///< サムネイルが実在するかどうか
+    std::unordered_map<uint32_t, D3D12_GPU_DESCRIPTOR_HANDLE> assetThumbnailCache_;
     // OBJ と glTF の境界インデックスを記録しておく (ChangePreviewModel での分岐に使用)
     int objStartIndex_  = 1;  ///< OBJ ファイルが始まるインデックス (通常 1)
     int gltfStartIndex_ = 0;  ///< glTF ファイルが始まるインデックス (スキャン後に確定)
@@ -151,6 +163,11 @@ private:
     char motionPath_[256] = "Resources/Animations/custom_motion.json";
     std::string motionStatus_;
     bool hasCustomMotionFile_ = false;
+    int blendTargetMotionIndex_ = 0;  ///< Animation blend target selected by ImGui.
+    float blendDuration_ = 0.35f;     ///< Seconds used to interpolate into the target motion.
+    bool assetBrowserGridView_ = true; ///< True when the asset browser uses Unity-like tiles.
+    int assetTileSize_ = 82;           ///< Pixel size used by model asset tiles.
+    std::string assetBrowserStatus_;   ///< Short feedback text shown after browser actions.
 
     // ========== 非所有ポインタ (依存参照) ==========
 

@@ -458,9 +458,25 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureHand
     return handle;
 }
 
+D3D12_CPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleCPU(uint32_t textureHandle) const {
+    if (textureHandle >= textures_.size()) {
+        return {};
+    }
+
+    return textures_[textureHandle].srvHandleCPU;
+}
+
 // SRVヒープのGPUハンドルを取得する関数。
 const D3D12_RESOURCE_DESC& TextureManager::GetResourceDesc(uint32_t textureHandle) {
     return textures_[textureHandle].resourceDesc;
+}
+
+ID3D12Resource* TextureManager::GetResource(uint32_t textureHandle) const {
+    if (textureHandle >= textures_.size()) {
+        return nullptr;
+    }
+
+    return textures_[textureHandle].resource.Get();
 }
 
 uint32_t TextureManager::RegisterExternalTexture(ID3D12Resource* resource) {

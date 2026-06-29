@@ -89,3 +89,10 @@ Tempest Stormでは、雲・雨・雷の発生範囲、落雷頻度、雷の大�
 4. ソリューションをビルドして実行する
 
 シェーダー、画像、JSONは相対パスで読み込むため、実行時の作業ディレクトリはプロジェクトフォルダーにしてください。
+
+## CG4 Evaluation Task 2 Additions
+
+- SkinningModel display and ComputeShader skinning are implemented in the Skinning Editor mode.
+- Bone debug display is available in the Skinning Editor viewport.
+- Hand particle emission is available from the character hand joint.
+- Animation blend preview was added. In `Skinning Editor > Animation Selection`, select a blend target and press `Blend To Target`; translation and scale are linearly interpolated, while rotation is blended with quaternion Slerp.

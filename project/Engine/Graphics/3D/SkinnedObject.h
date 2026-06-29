@@ -158,6 +158,11 @@ public:
     /// <summary>指定時刻のキーフレームを補間して各ジョイントに適用する</summary>
     void ApplyMotion(float time) { skinnedModel_->ApplyMotion(time); }
 
+    /// <summary>2つのモーションを blendRate(0..1) で補間して適用する</summary>
+    void ApplyMotionBlend(int fromMotionIndex, int toMotionIndex, float time, float blendRate) {
+        skinnedModel_->ApplyMotionBlend(fromMotionIndex, toMotionIndex, time, blendRate);
+    }
+
     /// <summary>歩行モーションのプリセットキーフレームを自動生成する</summary>
     void GenerateWalkPreset() { skinnedModel_->GenerateWalkPreset(); }
 
@@ -175,6 +180,12 @@ public:
 
     float GetCurrentKeyframeTime() const       { return currentKeyframeTime_; }
     void  SetCurrentKeyframeTime(float time)   { currentKeyframeTime_ = time; }
+
+    /// <summary>現在のモーションから targetMotionIndex へ指定秒数でブレンドする</summary>
+    void StartMotionBlend(int targetMotionIndex, float duration);
+    bool IsMotionBlending() const { return playBlendAnimation_; }
+    int GetBlendTargetMotionIndex() const { return blendTargetMotionIndex_; }
+    float GetBlendRate() const { return blendRate_; }
 
 private:
     // ── 主要コンポーネント ────────────────────────────────
@@ -198,6 +209,12 @@ private:
     // ── カスタムモーション ────────────────────────────────
     bool  playCustomAnimation_  = false; // カスタムモーション再生フラグ
     float currentKeyframeTime_  = 0.0f;  // タイムラインの現在時刻
+    bool  playBlendAnimation_   = false; // true: 2つのモーションを補間再生中
+    int   blendFromMotionIndex_ = -1;    // 補間元モーション
+    int   blendTargetMotionIndex_ = -1;  // 補間先モーション
+    float blendDuration_ = 0.35f;        // 補間にかける秒数
+    float blendElapsed_  = 0.0f;         // 補間開始からの経過秒
+    float blendRate_     = 0.0f;         // 現在の補間率 (0..1)
 
     // ── スケルトン可視化 ──────────────────────────────────
     bool showSkeleton_      = true;  // true: ボーンを描画する

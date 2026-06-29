@@ -118,6 +118,7 @@ public:
     bool SaveMotion(const std::string& filePath);
     bool LoadMotion(const std::string& filePath);
     void ApplyMotion(float time);
+    void ApplyMotionBlend(int fromMotionIndex, int toMotionIndex, float time, float blendRate);
     const std::string& GetName() const { return name_; }
     void ClearKeyframes();
     void GenerateWalkPreset();

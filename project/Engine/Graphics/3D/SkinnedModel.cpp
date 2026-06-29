@@ -70,6 +70,94 @@ namespace {
             return a.time < b.time;
         });
     }
+
+    float Clamp01(float value) {
+        return std::max(0.0f, std::min(1.0f, value));
+    }
+
+    float LerpFloat(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    Vector3 LerpVector3(const Vector3& a, const Vector3& b, float t) {
+        return {
+            LerpFloat(a.x, b.x, t),
+            LerpFloat(a.y, b.y, t),
+            LerpFloat(a.z, b.z, t)
+        };
+    }
+
+    JointKeyframe MakeRestKeyframe(const Joint& joint) {
+        JointKeyframe pose;
+        pose.translation = joint.restTranslation;
+        pose.rotation = joint.restRotation;
+        pose.scale = joint.restScale;
+        pose.rotationQuat = joint.restRotationQuat;
+        pose.isQuaternion = joint.restIsQuaternion;
+        return pose;
+    }
+
+    JointKeyframe SampleJointAnimation(const JointAnimation& animation, const JointKeyframe& restPose, float loopedTime) {
+        if (animation.keyframes.empty()) {
+            return restPose;
+        }
+        if (animation.keyframes.size() == 1) {
+            return animation.keyframes.front();
+        }
+        if (loopedTime <= animation.keyframes.front().time) {
+            return animation.keyframes.front();
+        }
+        if (loopedTime >= animation.keyframes.back().time) {
+            return animation.keyframes.back();
+        }
+
+        for (size_t keyIndex = 0; keyIndex + 1 < animation.keyframes.size(); ++keyIndex) {
+            const auto& keyA = animation.keyframes[keyIndex];
+            const auto& keyB = animation.keyframes[keyIndex + 1];
+            if (loopedTime < keyA.time || loopedTime > keyB.time) {
+                continue;
+            }
+
+            float range = keyB.time - keyA.time;
+            float rate = range > 0.0f ? Clamp01((loopedTime - keyA.time) / range) : 0.0f;
+
+            JointKeyframe pose;
+            pose.time = loopedTime;
+            pose.translation = LerpVector3(keyA.translation, keyB.translation, rate);
+            pose.scale = LerpVector3(keyA.scale, keyB.scale, rate);
+            if (keyA.isQuaternion && keyB.isQuaternion) {
+                pose.rotationQuat = Math::Slerp(keyA.rotationQuat, keyB.rotationQuat, rate);
+                pose.rotation = Math::ToEuler(pose.rotationQuat);
+                pose.isQuaternion = true;
+            } else {
+                pose.rotation = LerpVector3(keyA.rotation, keyB.rotation, rate);
+                pose.rotationQuat = Math::MakeQuaternionFromEuler(pose.rotation);
+                pose.isQuaternion = false;
+            }
+            return pose;
+        }
+
+        return animation.keyframes.back();
+    }
+
+    std::vector<JointKeyframe> SampleMotionPose(const MotionData& motion, const std::vector<Joint>& joints, float time) {
+        std::vector<JointKeyframe> pose(joints.size());
+        float duration = std::max(0.001f, motion.duration);
+        float loopedTime = std::fmod(time, duration);
+        if (loopedTime < 0.0f) {
+            loopedTime += duration;
+        }
+
+        for (size_t jointIndex = 0; jointIndex < joints.size(); ++jointIndex) {
+            JointKeyframe restPose = MakeRestKeyframe(joints[jointIndex]);
+            if (jointIndex >= motion.jointAnimations.size()) {
+                pose[jointIndex] = restPose;
+                continue;
+            }
+            pose[jointIndex] = SampleJointAnimation(motion.jointAnimations[jointIndex], restPose, loopedTime);
+        }
+        return pose;
+    }
 }
 
 void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager) {
@@ -438,7 +526,9 @@ void SkinnedModel::DispatchSkinning(DirectXCommon* dxCommon) {
 }
 
 void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
-    if (skinnedVertices_.empty()) return;
+    if (skinnedVertices_.empty()) {
+        return;
+    }
 
     if (jointBuffer_) {
         jointBuffer_->Unmap(0, nullptr);
@@ -663,7 +753,9 @@ void SkinnedModel::ApplyTestAnimation(float time, float speed) {
 }
 void SkinnedModel::ApplyMotion(float time) {
     const auto& activeMotion = GetMotionData();
-    if (activeMotion.jointAnimations.empty()) return;
+    if (activeMotion.jointAnimations.empty()) {
+        return;
+    }
 
     if (restPoseCaptured_) {
         for (auto& joint : joints_) {
@@ -680,9 +772,13 @@ void SkinnedModel::ApplyMotion(float time) {
     if (loopedTime < 0.0f) loopedTime += activeMotion.duration;
 
     for (size_t i = 0; i < joints_.size(); ++i) {
-        if (i >= activeMotion.jointAnimations.size()) continue;
+        if (i >= activeMotion.jointAnimations.size()) {
+            continue;
+        }
         const auto& jointAnim = activeMotion.jointAnimations[i];
-        if (jointAnim.keyframes.empty()) continue;
+        if (jointAnim.keyframes.empty()) {
+            continue;
+        }
 
         auto& joint = joints_[i];
 
@@ -756,6 +852,37 @@ void SkinnedModel::ApplyMotion(float time) {
                 break;
             }
         }
+    }
+}
+
+void SkinnedModel::ApplyMotionBlend(int fromMotionIndex, int toMotionIndex, float time, float blendRate) {
+    if (motions_.empty()) {
+        return;
+    }
+    if (fromMotionIndex < 0 || fromMotionIndex >= static_cast<int>(motions_.size()) ||
+        toMotionIndex < 0 || toMotionIndex >= static_cast<int>(motions_.size())) {
+        ApplyMotion(time);
+        return;
+    }
+
+    float rate = Clamp01(blendRate);
+    const auto fromPose = SampleMotionPose(motions_[static_cast<size_t>(fromMotionIndex)], joints_, time);
+    const auto toPose = SampleMotionPose(motions_[static_cast<size_t>(toMotionIndex)], joints_, time);
+
+    // Translation/Scale are linearly blended. Rotation uses Slerp after converting Euler poses to quaternions.
+    for (size_t jointIndex = 0; jointIndex < joints_.size(); ++jointIndex) {
+        const auto& poseA = fromPose[jointIndex];
+        const auto& poseB = toPose[jointIndex];
+        auto& joint = joints_[jointIndex];
+
+        joint.translation = LerpVector3(poseA.translation, poseB.translation, rate);
+        joint.scale = LerpVector3(poseA.scale, poseB.scale, rate);
+
+        Quaternion rotA = poseA.isQuaternion ? poseA.rotationQuat : Math::MakeQuaternionFromEuler(poseA.rotation);
+        Quaternion rotB = poseB.isQuaternion ? poseB.rotationQuat : Math::MakeQuaternionFromEuler(poseB.rotation);
+        joint.rotationQuat = Math::Slerp(rotA, rotB, rate);
+        joint.rotation = Math::ToEuler(joint.rotationQuat);
+        joint.isQuaternion = true;
     }
 }
 
