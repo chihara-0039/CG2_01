@@ -10,6 +10,122 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>   // sprintf_s
+#include <cstdint>
+
+namespace {
+
+const char* GetModelAssetKind(int index, int objStartIndex, int gltfStartIndex) {
+    if (index == 0) {
+        return "SKIN";
+    }
+    if (index >= objStartIndex && index < gltfStartIndex) {
+        return "OBJ";
+    }
+    return "GLTF";
+}
+
+const char* GetModelAssetDisplayKind(int index, int objStartIndex, int gltfStartIndex, bool hasThumbnail) {
+    if (index >= objStartIndex && index < gltfStartIndex && hasThumbnail) {
+        return "OBJ+IMG";
+    }
+    if (index >= gltfStartIndex && hasThumbnail) {
+        return "GLTF+IMG";
+    }
+
+    return GetModelAssetKind(index, objStartIndex, gltfStartIndex);
+}
+
+ImVec4 GetModelAssetColor(int index, int objStartIndex, int gltfStartIndex) {
+    if (index == 0) {
+        return ImVec4(0.32f, 0.50f, 0.76f, 1.0f);
+    }
+    if (index >= objStartIndex && index < gltfStartIndex) {
+        return ImVec4(0.42f, 0.63f, 0.78f, 1.0f);
+    }
+    return ImVec4(0.35f, 0.62f, 0.52f, 1.0f);
+}
+
+std::string GetDisplayFileName(const std::string& path, const std::string& fallback) {
+    if (path == "Default") {
+        return fallback;
+    }
+
+    std::filesystem::path filePath(path);
+    std::string fileName = filePath.filename().string();
+    return fileName.empty() ? fallback : fileName;
+}
+
+bool DrawTexturedModelTile(ImTextureID textureId, const ImVec2& size, bool selected, const char* kind) {
+    const ImVec2 start = ImGui::GetCursorScreenPos();
+    const bool clicked = ImGui::InvisibleButton("textured_model_tile", size);
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+    const ImU32 bgColor = selected
+        ? IM_COL32(214, 156, 58, 255)
+        : IM_COL32(58, 65, 76, 255);
+    const ImU32 sideColor = IM_COL32(44, 50, 60, 255);
+    const ImU32 lineColor = IM_COL32(218, 226, 238, 230);
+    const ImU32 labelBg = IM_COL32(21, 25, 31, 210);
+    const ImU32 labelText = IM_COL32(245, 248, 252, 255);
+
+    const ImVec2 end = ImVec2(start.x + size.x, start.y + size.y);
+    drawList->AddRectFilled(start, end, bgColor, 4.0f);
+
+    const float frontW = size.x * 0.58f;
+    const float frontH = size.y * 0.46f;
+    const float depth = size.x * 0.16f;
+    const float cx = start.x + size.x * 0.47f;
+    const float cy = start.y + size.y * 0.50f;
+
+    ImVec2 f0 = ImVec2(cx - frontW * 0.5f, cy - frontH * 0.5f);
+    ImVec2 f1 = ImVec2(cx + frontW * 0.5f, cy - frontH * 0.5f);
+    ImVec2 f2 = ImVec2(cx + frontW * 0.5f, cy + frontH * 0.5f);
+    ImVec2 f3 = ImVec2(cx - frontW * 0.5f, cy + frontH * 0.5f);
+    ImVec2 b0 = ImVec2(f0.x + depth, f0.y - depth * 0.55f);
+    ImVec2 b1 = ImVec2(f1.x + depth, f1.y - depth * 0.55f);
+    ImVec2 b2 = ImVec2(f2.x + depth, f2.y - depth * 0.55f);
+
+    drawList->AddQuadFilled(b0, b1, f1, f0, IM_COL32(75, 84, 96, 255));
+    drawList->AddQuadFilled(f1, b1, b2, f2, sideColor);
+    drawList->AddImageQuad(textureId, f0, f1, f2, f3);
+    drawList->AddQuad(f0, f1, f2, f3, lineColor, 1.5f);
+    drawList->AddLine(f0, b0, lineColor, 1.2f);
+    drawList->AddLine(f1, b1, lineColor, 1.2f);
+    drawList->AddLine(f2, b2, lineColor, 1.2f);
+    drawList->AddLine(b0, b1, lineColor, 1.2f);
+    drawList->AddLine(b1, b2, lineColor, 1.2f);
+
+    ImVec2 labelMin = ImVec2(start.x + 5.0f, start.y + 5.0f);
+    ImVec2 labelMax = ImVec2(start.x + size.x - 5.0f, labelMin.y + 18.0f);
+    drawList->AddRectFilled(labelMin, labelMax, labelBg, 3.0f);
+    drawList->AddText(ImVec2(labelMin.x + 5.0f, labelMin.y + 2.0f), labelText, kind);
+
+    return clicked;
+}
+
+std::string FindSidecarThumbnailPath(const std::string& modelPath) {
+    if (modelPath == "Default") {
+        return "";
+    }
+
+    const std::filesystem::path path(modelPath);
+    const std::filesystem::path directory = path.parent_path();
+    const std::filesystem::path stem = path.stem();
+    const char* extensions[] = { ".png", ".jpg", ".jpeg" };
+
+    for (const char* extension : extensions) {
+        std::filesystem::path thumbnailPath = directory / (stem.string() + extension);
+        if (std::filesystem::exists(thumbnailPath)) {
+            std::string result = thumbnailPath.string();
+            std::replace(result.begin(), result.end(), '\\', '/');
+            return result;
+        }
+    }
+
+    return "";
+}
+
+} // namespace
 
 // ==========================================================
 //  SkinningEditorController::Initialize
@@ -470,6 +586,133 @@ void SkinningEditorController::DrawImGuiTimeline() {
 }
 
 // ==========================================================
+//  SkinningEditorController::DrawAssetBrowserPanel
+//  Draws model assets scanned from Resources/Models in a Unity-like project panel.
+// ==========================================================
+void SkinningEditorController::DrawAssetBrowserPanel(Player* player, Model* defaultObjModel) {
+    if (modelNames_.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "No model assets found.");
+        return;
+    }
+
+    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Project Assets ]");
+    ImGui::SameLine();
+    ImGui::Checkbox("Grid", &assetBrowserGridView_);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(120.0f);
+    ImGui::SliderInt("Tile", &assetTileSize_, 64, 128, "%d px");
+    ImGui::SameLine();
+    if (ImGui::Button("Rescan Models", ImVec2(120, 22))) {
+        const int previousIndex = selectedModelIndex_;
+        ScanGltfModels();
+        const int maxIndex = static_cast<int>(modelPaths_.size()) - 1;
+        ChangePreviewModel(std::clamp(previousIndex, 0, maxIndex));
+        assetBrowserStatus_ = "Model assets rescanned.";
+    }
+
+    ImGui::Separator();
+    ImGui::BeginChild("ModelAssetBrowser", ImVec2(0, 0), false);
+
+    if (assetBrowserGridView_) {
+        const float tileSize = static_cast<float>(assetTileSize_);
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float availableWidth = ImGui::GetContentRegionAvail().x;
+        const int rawColumnCount = static_cast<int>(availableWidth / (tileSize + spacing));
+        const int columnCount = rawColumnCount > 1 ? rawColumnCount : 1;
+        ImGui::Columns(columnCount, nullptr, false);
+
+        for (int i = 0; i < static_cast<int>(modelNames_.size()); ++i) {
+            const bool selected = (i == selectedModelIndex_);
+            const ImVec4 baseColor = GetModelAssetColor(i, objStartIndex_, gltfStartIndex_);
+            const std::string fileName = GetDisplayFileName(modelPaths_[i], modelNames_[i]);
+            const bool hasThumbnail =
+                i < static_cast<int>(assetHasThumbnail_.size()) &&
+                i < static_cast<int>(assetThumbnailHandles_.size()) &&
+                assetHasThumbnail_[i] &&
+                textureManager_;
+            const char* kind = GetModelAssetDisplayKind(i, objStartIndex_, gltfStartIndex_, hasThumbnail);
+
+            ImGui::PushID(i);
+            ImGui::PushStyleColor(ImGuiCol_Button, selected ? ImVec4(0.95f, 0.72f, 0.30f, 1.0f) : baseColor);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(baseColor.x + 0.08f, baseColor.y + 0.08f, baseColor.z + 0.08f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(baseColor.x * 0.85f, baseColor.y * 0.85f, baseColor.z * 0.85f, 1.0f));
+
+            bool clicked = false;
+            if (hasThumbnail) {
+                D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = assetThumbnailHandles_[i];
+                ImTextureID textureId =
+                    reinterpret_cast<ImTextureID>(static_cast<uintptr_t>(gpuHandle.ptr));
+                clicked = DrawTexturedModelTile(
+                    textureId,
+                    ImVec2(tileSize, tileSize - 24.0f),
+                    selected,
+                    kind);
+            } else {
+                clicked = ImGui::Button(kind, ImVec2(tileSize, tileSize - 24.0f));
+            }
+
+            if (clicked) {
+                ChangePreviewModel(i);
+                assetBrowserStatus_ = "Preview: " + fileName;
+            }
+            ImGui::PopStyleColor(3);
+
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                ImGui::SetDragDropPayload("MODEL_ASSET_INDEX", &i, sizeof(int));
+                ImGui::Text("Model: %s", fileName.c_str());
+                ImGui::EndDragDropSource();
+            }
+
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                ChangePreviewModel(i);
+                ApplyModelToPlayer(player, defaultObjModel);
+                assetBrowserStatus_ = "Added to scene: " + fileName;
+            }
+
+            ImGui::TextWrapped("%s", fileName.c_str());
+            ImGui::NextColumn();
+            ImGui::PopID();
+        }
+
+        ImGui::Columns(1);
+    } else {
+        for (int i = 0; i < static_cast<int>(modelNames_.size()); ++i) {
+            const bool selected = (i == selectedModelIndex_);
+            const std::string fileName = GetDisplayFileName(modelPaths_[i], modelNames_[i]);
+            const bool hasThumbnail =
+                i < static_cast<int>(assetHasThumbnail_.size()) &&
+                assetHasThumbnail_[i];
+            const std::string rowText =
+                std::string(GetModelAssetDisplayKind(i, objStartIndex_, gltfStartIndex_, hasThumbnail)) +
+                "  " + fileName;
+
+            ImGui::PushID(i);
+            if (ImGui::Selectable(rowText.c_str(), selected)) {
+                ChangePreviewModel(i);
+                assetBrowserStatus_ = "Preview: " + fileName;
+            }
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                ImGui::SetDragDropPayload("MODEL_ASSET_INDEX", &i, sizeof(int));
+                ImGui::Text("Model: %s", fileName.c_str());
+                ImGui::EndDragDropSource();
+            }
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                ApplyModelToPlayer(player, defaultObjModel);
+                assetBrowserStatus_ = "Added to scene: " + fileName;
+            }
+            ImGui::PopID();
+        }
+    }
+
+    if (!assetBrowserStatus_.empty()) {
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.55f, 1.0f), "%s", assetBrowserStatus_.c_str());
+    }
+
+    ImGui::EndChild();
+}
+
+// ==========================================================
 //  SkinningEditorController::DrawImGuiSidePanel
 //  右パネル (Skinning Editor) の内容を描画する
 // ==========================================================
@@ -522,6 +765,44 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
                            "Active: %s", modelNames_[activeGameModelIndex_].c_str());
     }
 
+    if (selectedModelIndex_ >= 0 && selectedModelIndex_ < static_cast<int>(modelPaths_.size())) {
+        const std::string fileName = GetDisplayFileName(modelPaths_[selectedModelIndex_], modelNames_[selectedModelIndex_]);
+        const bool selectedHasThumbnail =
+            selectedModelIndex_ < static_cast<int>(assetHasThumbnail_.size()) &&
+            assetHasThumbnail_[selectedModelIndex_];
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Asset Inspector ]");
+        ImGui::Text("Name: %s", fileName.c_str());
+        ImGui::Text("Type: %s", GetModelAssetDisplayKind(
+            selectedModelIndex_,
+            objStartIndex_,
+            gltfStartIndex_,
+            selectedHasThumbnail));
+        ImGui::TextWrapped("Path: %s", modelPaths_[selectedModelIndex_].c_str());
+        if (selectedModelIndex_ < static_cast<int>(assetHasThumbnail_.size()) &&
+            assetHasThumbnail_[selectedModelIndex_] &&
+            textureManager_) {
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = assetThumbnailHandles_[selectedModelIndex_];
+            ImTextureID textureId =
+                reinterpret_cast<ImTextureID>(static_cast<uintptr_t>(gpuHandle.ptr));
+            ImGui::Image(textureId, ImVec2(140.0f, 140.0f));
+        }
+
+        ImGui::Button("Drop Model Here", ImVec2(-FLT_MIN, 34.0f));
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("MODEL_ASSET_INDEX")) {
+                const int droppedIndex = *static_cast<const int*>(payload->Data);
+                if (droppedIndex >= 0 && droppedIndex < static_cast<int>(modelPaths_.size())) {
+                    ChangePreviewModel(droppedIndex);
+                    ApplyModelToPlayer(player, defaultObjModel);
+                    assetBrowserStatus_ = "Added to scene: " + GetDisplayFileName(modelPaths_[droppedIndex], modelNames_[droppedIndex]);
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+        ImGui::TextDisabled("Click an asset to preview it. Double-click or drop here to add it.");
+    }
+
     // ----------------------------------------------------------
     // [ Animation Selection ] アニメーション (モーション) 選択
     // ----------------------------------------------------------
@@ -560,6 +841,21 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
                 ImGui::Text("Total Motions: %d", static_cast<int>(motions.size()));
                 if (currentAnimIdx >= 0 && currentAnimIdx < static_cast<int>(motions.size())) {
                     ImGui::Text("Duration: %.2f sec", motions[currentAnimIdx].duration);
+                }
+
+                // Animation blend preview. A/B poses are evaluated at the same time and blended each frame.
+                if (blendTargetMotionIndex_ < 0 || blendTargetMotionIndex_ >= static_cast<int>(motions.size())) {
+                    blendTargetMotionIndex_ = currentAnimIdx;
+                }
+                ImGui::Combo("Blend Target", &blendTargetMotionIndex_,
+                             motionNamePtrs.data(), static_cast<int>(motionNamePtrs.size()));
+                ImGui::SliderFloat("Blend Duration", &blendDuration_, 0.05f, 2.0f, "%.2f sec");
+                if (ImGui::Button("Blend To Target", ImVec2(-FLT_MIN, 24))) {
+                    skinnedObject_->StartMotionBlend(blendTargetMotionIndex_, blendDuration_);
+                    motionStatus_ = "Animation blend started";
+                }
+                if (skinnedObject_->IsMotionBlending()) {
+                    ImGui::Text("Blend Rate: %.2f", skinnedObject_->GetBlendRate());
                 }
             } else {
                 ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.0f), "No animations in this model.");
@@ -800,12 +1096,41 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 void SkinningEditorController::ScanGltfModels() {
     modelPaths_.clear();
     modelNames_.clear();
+    assetThumbnailHandles_.clear();
+    assetHasThumbnail_.clear();
+
+    auto appendModelAsset = [this](const std::string& displayName, const std::string& modelPath) {
+        modelNames_.push_back(displayName);
+        modelPaths_.push_back(modelPath);
+
+        const std::string thumbnailPath = FindSidecarThumbnailPath(modelPath);
+        if (!thumbnailPath.empty() && textureManager_ && dxCommon_) {
+            const uint32_t textureHandle = textureManager_->LoadTexture(thumbnailPath);
+            D3D12_GPU_DESCRIPTOR_HANDLE imguiHandle = {};
+            auto cached = assetThumbnailCache_.find(textureHandle);
+            if (cached != assetThumbnailCache_.end()) {
+                imguiHandle = cached->second;
+            } else {
+                imguiHandle = dxCommon_->RegisterImGuiTexture(
+                    textureManager_->GetResource(textureHandle),
+                    textureManager_->GetResourceDesc(textureHandle));
+                if (imguiHandle.ptr != 0) {
+                    assetThumbnailCache_[textureHandle] = imguiHandle;
+                }
+            }
+
+            assetThumbnailHandles_.push_back(imguiHandle);
+            assetHasThumbnail_.push_back(imguiHandle.ptr != 0);
+        } else {
+            assetThumbnailHandles_.push_back({});
+            assetHasThumbnail_.push_back(false);
+        }
+    };
 
     // ----------------------------------------------------------
     // インデックス 0 : デフォルト人型 (組み込みスキニング)
     // ----------------------------------------------------------
-    modelNames_.push_back("Default Humanoid (Skinning)");
-    modelPaths_.push_back("Default");
+    appendModelAsset("Default Humanoid (Skinning)", "Default");
 
     // ----------------------------------------------------------
     // インデックス 1以降 : Resources/Models 以下の OBJ を再帰スキャン
@@ -821,9 +1146,8 @@ void SkinningEditorController::ScanGltfModels() {
 
             std::string relPath = entry.path().string();
             std::replace(relPath.begin(), relPath.end(), '\\', '/');
-            modelPaths_.push_back(relPath);
+            appendModelAsset("[OBJ] " + entry.path().filename().string(), relPath);
             // ファイル名だけ表示 (例: player.obj)
-            modelNames_.push_back("[OBJ] " + entry.path().filename().string());
         }
     }
 
@@ -840,8 +1164,7 @@ void SkinningEditorController::ScanGltfModels() {
 
             std::string relPath = entry.path().string();
             std::replace(relPath.begin(), relPath.end(), '\\', '/');
-            modelPaths_.push_back(relPath);
-            modelNames_.push_back("[glTF] " + entry.path().filename().string());
+            appendModelAsset("[glTF] " + entry.path().filename().string(), relPath);
         }
     }
 }
@@ -913,6 +1236,7 @@ void SkinningEditorController::ApplyModelToPlayer(Player* player, Model* default
         // ----------------------------------------------------------
         // デフォルト人型スキニング
         // ----------------------------------------------------------
+        appliedObjModel_.reset();
         player->InitializeWithDefaultSkinned(object3dCommon_, dxCommon_, textureManager_);
 
     } else if (activeGameModelIndex_ >= objStartIndex_ && activeGameModelIndex_ < gltfStartIndex_) {
@@ -922,8 +1246,16 @@ void SkinningEditorController::ApplyModelToPlayer(Player* player, Model* default
         //   プレビュー用の objPreviewModel_ をそのまま渡す
         //   (Player は Model の所有権を持たないので安全)
         // ----------------------------------------------------------
-        if (objPreviewModel_) {
-            player->Initialize(object3dCommon_, objPreviewModel_.get());
+        std::string fullPath = modelPaths_[activeGameModelIndex_];
+        size_t lastSlash = fullPath.rfind('/');
+        std::string dir  = (lastSlash != std::string::npos) ? fullPath.substr(0, lastSlash) : ".";
+        std::string file = (lastSlash != std::string::npos) ? fullPath.substr(lastSlash + 1) : fullPath;
+
+        appliedObjModel_ = std::unique_ptr<Model>(
+            Model::CreateFromOBJ(dxCommon_, dir, file, textureManager_));
+
+        if (appliedObjModel_) {
+            player->Initialize(object3dCommon_, appliedObjModel_.get());
         } else {
             // フォールバック: デフォルト OBJ モデルを使用
             player->Initialize(object3dCommon_, defaultObjModel);
@@ -933,6 +1265,7 @@ void SkinningEditorController::ApplyModelToPlayer(Player* player, Model* default
         // ----------------------------------------------------------
         // glTF モデルをプレイヤーに適用
         // ----------------------------------------------------------
+        appliedObjModel_.reset();
         player->InitializeWithSkinnedGltf(
             object3dCommon_, dxCommon_, modelPaths_[activeGameModelIndex_], textureManager_);
     }

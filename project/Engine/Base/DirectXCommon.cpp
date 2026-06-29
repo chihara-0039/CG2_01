@@ -40,10 +40,12 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     // 3. DX12用SRVヒープの作成 (ImGuiのフォントテクスチャ用)
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.NumDescriptors = 1;
+    desc.NumDescriptors = kMaxImGuiSrvDescriptors;
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     HRESULT hr = device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvHeap_));
     assert(SUCCEEDED(hr));
+    imguiDescriptorSizeSRV_ =
+        device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     // 4. DX12バックエンドの初期化
     ImGui_ImplDX12_Init(
@@ -513,6 +515,48 @@ void DirectXCommon::EndImGui() {
 }
 
 // DirectXCommon.h に Finalize() を追加するか、デストラクタで実行
+D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::RegisterImGuiTexture(
+    ID3D12Resource* textureResource,
+    const D3D12_RESOURCE_DESC& resourceDesc) {
+#ifdef USE_IMGUI
+    if (!imguiSrvHeap_ || !textureResource || imguiSrvNextIndex_ >= kMaxImGuiSrvDescriptors) {
+        return {};
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE destinationCPU = imguiSrvHeap_->GetCPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE destinationGPU = imguiSrvHeap_->GetGPUDescriptorHandleForHeapStart();
+    destinationCPU.ptr += static_cast<SIZE_T>(imguiDescriptorSizeSRV_) * imguiSrvNextIndex_;
+    destinationGPU.ptr += static_cast<UINT64>(imguiDescriptorSizeSRV_) * imguiSrvNextIndex_;
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = resourceDesc.Format;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+    if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
+        resourceDesc.DepthOrArraySize == 6) {
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+        srvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
+        srvDesc.TextureCube.MostDetailedMip = 0;
+        srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+    } else {
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
+        srvDesc.Texture2D.MostDetailedMip = 0;
+        srvDesc.Texture2D.PlaneSlice = 0;
+        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+    }
+
+    device_->CreateShaderResourceView(textureResource, &srvDesc, destinationCPU);
+
+    ++imguiSrvNextIndex_;
+    return destinationGPU;
+#else
+    (void)textureResource;
+    (void)resourceDesc;
+    return {};
+#endif
+}
+
 void DirectXCommon::FinalizeImGui() {
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();

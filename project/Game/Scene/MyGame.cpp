@@ -1405,7 +1405,17 @@ void MyGame::UpdateImGui() {
 
     if (currentMode_ == AppMode::SkinningEditor && skinningEditor_.HasPreviewObject()) {
 
-        skinningEditor_.DrawImGuiTimeline();
+        if (ImGui::BeginTabBar("SkinningBottomTabs")) {
+            if (ImGui::BeginTabItem("Timeline")) {
+                skinningEditor_.DrawImGuiTimeline();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Assets")) {
+                skinningEditor_.DrawAssetBrowserPanel(player_.get(), models[2].get());
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
 
     } else if (currentMode_ == AppMode::EffectPreview) {
         // ImGui の UI 要素を表示・更新する。

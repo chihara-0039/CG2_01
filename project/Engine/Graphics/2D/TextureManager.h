@@ -25,8 +25,12 @@ public:
     // 指定ハンドルのGPUハンドルを取得（コマンドリストセット用）
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(uint32_t textureHandle);
 
+    D3D12_CPU_DESCRIPTOR_HANDLE GetSrvHandleCPU(uint32_t textureHandle) const;
+
     // テクスチャのサイズを取得（切り抜き計算用）
     const D3D12_RESOURCE_DESC& GetResourceDesc(uint32_t textureHandle);
+
+    ID3D12Resource* GetResource(uint32_t textureHandle) const;
 
 private:
     // 内部用：テクスチャデータ構造体

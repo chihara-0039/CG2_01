@@ -87,13 +87,33 @@ void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
         skinnedModel_->ApplyTestAnimation(animationTime_, animationSpeed_);
     } else if (playCustomAnimation_) {
         // カスタムキーフレームモーションの再生
-        animationTime_ += (1.0f / 60.0f) * animationSpeed_;
+        const float deltaTime = (1.0f / 60.0f) * animationSpeed_;
+        animationTime_ += deltaTime;
         float dur = skinnedModel_->GetMotionDuration();
         currentKeyframeTime_ = std::fmod(animationTime_, dur);
         if (currentKeyframeTime_ < 0.0f) {
             currentKeyframeTime_ += dur;
         }
-        skinnedModel_->ApplyMotion(currentKeyframeTime_);
+
+        if (playBlendAnimation_) {
+            blendElapsed_ += deltaTime;
+            blendRate_ = blendDuration_ > 0.0f
+                ? std::clamp(blendElapsed_ / blendDuration_, 0.0f, 1.0f)
+                : 1.0f;
+            skinnedModel_->ApplyMotionBlend(
+                blendFromMotionIndex_,
+                blendTargetMotionIndex_,
+                currentKeyframeTime_,
+                blendRate_);
+
+            if (blendRate_ >= 1.0f) {
+                skinnedModel_->SetActiveMotionIndex(blendTargetMotionIndex_);
+                playBlendAnimation_ = false;
+                blendFromMotionIndex_ = blendTargetMotionIndex_;
+            }
+        } else {
+            skinnedModel_->ApplyMotion(currentKeyframeTime_);
+        }
     }
 
     // 2. スキニング計算の実行とGPUへの転送
@@ -280,45 +300,27 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
     object3dCommon->PreDraw();
 }
 
-int SkinnedObject::FindJointIndexByNameHints(const std::vector<std::string>& nameHints) const {
+void SkinnedObject::StartMotionBlend(int targetMotionIndex, float duration) {
     if (!skinnedModel_) {
-        return -1;
+        return;
     }
 
-    // モデルごとに手ボーン名が異なるため、複数の名前候補を部分一致で探す。
-    const auto& joints = skinnedModel_->GetJoints();
-    for (const auto& hint : nameHints) {
-        const std::string lowerHint = ToLower(hint);
-        for (size_t i = 0; i < joints.size(); ++i) {
-            const std::string lowerName = ToLower(joints[i].name);
-            if (lowerName.find(lowerHint) != std::string::npos) {
-                return static_cast<int>(i);
-            }
-        }
+    const auto& motions = skinnedModel_->GetMotions();
+    int activeMotionIndex = skinnedModel_->GetActiveMotionIndex();
+    if (targetMotionIndex < 0 || targetMotionIndex >= static_cast<int>(motions.size()) ||
+        activeMotionIndex < 0 || activeMotionIndex >= static_cast<int>(motions.size()) ||
+        targetMotionIndex == activeMotionIndex) {
+        return;
     }
 
-    return -1;
-}
-
-bool SkinnedObject::TryGetJointWorldPosition(int jointIndex, Vector3& outPosition) const {
-    if (!skinnedModel_) {
-        return false;
-    }
-
-    const auto& joints = skinnedModel_->GetJoints();
-    if (jointIndex < 0 || jointIndex >= static_cast<int>(joints.size())) {
-        return false;
-    }
-
-    // ジョイントのグローバル行列にオブジェクトのワールド行列を掛け、シーン上の座標に変換する。
-    const Matrix4x4 objWorld = Math::MakeAffineMatrix(scale_, rotation_, position_);
-    const Matrix4x4 jointWorld = Math::Multiply(joints[static_cast<size_t>(jointIndex)].globalMatrix, objWorld);
-    outPosition = ExtractTranslation(jointWorld);
-    return true;
-}
-
-bool SkinnedObject::TryGetJointWorldPosition(const std::vector<std::string>& nameHints, Vector3& outPosition) const {
-    const int jointIndex = FindJointIndexByNameHints(nameHints);
-    return TryGetJointWorldPosition(jointIndex, outPosition);
+    // Blend starts from the currently active animation and gradually reaches the selected target.
+    blendFromMotionIndex_ = activeMotionIndex;
+    blendTargetMotionIndex_ = targetMotionIndex;
+    blendDuration_ = duration < 0.01f ? 0.01f : duration;
+    blendElapsed_ = 0.0f;
+    blendRate_ = 0.0f;
+    playBlendAnimation_ = true;
+    playCustomAnimation_ = true;
+    playAnimation_ = false;
 }
 

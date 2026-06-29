@@ -72,6 +72,10 @@ public:
     void BeginImGui();
     void EndImGui();
 
+    D3D12_GPU_DESCRIPTOR_HANDLE RegisterImGuiTexture(
+        ID3D12Resource* textureResource,
+        const D3D12_RESOURCE_DESC& resourceDesc);
+
     // -------------------------------------------------------
     //  描画前処理 (フレームの開始)
     //  - バックバッファのリソースバリアを Present → RenderTarget に遷移
@@ -170,6 +174,9 @@ private:
     // ── SRV (Shader Resource View) ── ImGui 専用 ─────────
     // ImGui のフォントテクスチャを GPU シェーダーから参照するためのヒープ
     ComPtr<ID3D12DescriptorHeap> imguiSrvHeap_;
+    UINT imguiDescriptorSizeSRV_ = 0;
+    uint32_t imguiSrvNextIndex_ = 1;
+    static constexpr uint32_t kMaxImGuiSrvDescriptors = 256;
 
     // ── フェンス (GPU-CPU 同期) ───────────────────────────
     // GPU がコマンドを処理し終えたことを CPU に通知するオブジェクト。
