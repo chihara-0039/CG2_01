@@ -300,6 +300,54 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
     object3dCommon->PreDraw();
 }
 
+int SkinnedObject::FindJointIndexByNameHints(const std::vector<std::string>& nameHints) const {
+    if (!skinnedModel_) {
+        return -1;
+    }
+
+    const auto& joints = skinnedModel_->GetJoints();
+    for (size_t i = 0; i < joints.size(); ++i) {
+        const std::string jointName = ToLower(joints[i].name);
+        for (const std::string& hint : nameHints) {
+            if (hint.empty()) {
+                continue;
+            }
+
+            const std::string loweredHint = ToLower(hint);
+            if (jointName.find(loweredHint) != std::string::npos) {
+                return static_cast<int>(i);
+            }
+        }
+    }
+
+    return -1;
+}
+
+bool SkinnedObject::TryGetJointWorldPosition(int jointIndex, Vector3& outPosition) const {
+    if (!skinnedModel_) {
+        return false;
+    }
+
+    const auto& joints = skinnedModel_->GetJoints();
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(joints.size())) {
+        return false;
+    }
+
+    const Matrix4x4 objWorld = Math::MakeAffineMatrix(scale_, rotation_, position_);
+    const Matrix4x4 jointWorld =
+        Math::Multiply(joints[static_cast<size_t>(jointIndex)].globalMatrix, objWorld);
+    outPosition = ExtractTranslation(jointWorld);
+    return true;
+}
+
+bool SkinnedObject::TryGetJointWorldPosition(
+    const std::vector<std::string>& nameHints,
+    Vector3& outPosition) const
+{
+    const int jointIndex = FindJointIndexByNameHints(nameHints);
+    return TryGetJointWorldPosition(jointIndex, outPosition);
+}
+
 void SkinnedObject::StartMotionBlend(int targetMotionIndex, float duration) {
     if (!skinnedModel_) {
         return;
