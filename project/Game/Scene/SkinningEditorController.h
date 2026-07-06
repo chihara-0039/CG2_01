@@ -138,7 +138,55 @@ private:
     /// <summary>手ジョイントの現在位置から評価課題用パーティクルを発生させる。</summary>
     void UpdateHandParticleEmitter(ParticleManager* particleManager);
 
+    /// <summary>
+    /// 右側 Inspector に、配置済みシーンオブジェクトの一覧・Transform編集・保存/読込UIを描画する。
+    /// Assetsブラウザで選んだモデルを「プレイヤー差し替え」ではなく「独立した配置物」として扱うためのパネル。
+    /// </summary>
+    void DrawSceneObjectPanel();
+
+    /// <summary>
+    /// 現在 Assets で選択中のモデルをシーンへ配置する。
+    /// 実処理は PlaceAssetInScene に委譲し、選択インデックスだけを渡す。
+    /// </summary>
+    bool PlaceSelectedAssetInScene();
+
+    /// <summary>
+    /// 指定した Assets インデックスの OBJ モデルを、配置済みシーンオブジェクトとして生成する。
+    /// 現段階では静的OBJのみ対応。glTF/SkinnedObject は更新・寿命管理が別系統なので次段階に分ける。
+    /// </summary>
+    bool PlaceAssetInScene(int assetIndex);
+
+    /// <summary>
+    /// 配置済みシーンオブジェクトの assetPath / position / rotation / scale を JSON に保存する。
+    /// Model や Object3d 本体は保存せず、次回 Load 時に assetPath から再生成する。
+    /// </summary>
+    bool SaveSceneObjects(const std::string& filePath);
+
+    /// <summary>
+    /// SaveSceneObjects で保存した JSON を読み込み、配置済みシーンオブジェクトを再構築する。
+    /// 読み込み時に各 assetPath から Model と Object3d を作り直す。
+    /// </summary>
+    bool LoadSceneObjects(const std::string& filePath);
+
+    /// <summary>配置済みシーンオブジェクトを全削除し、選択状態も解除する。</summary>
+    void ClearSceneObjects();
+
 private:
+    /// <summary>
+    /// SkinningEditor 内に配置された静的モデル1個分のデータ。
+    ///
+    /// name / assetPath / transform は保存対象。
+    /// model / object は実行時に描画するためのリソースで、JSON には保存しない。
+    /// Object3d は Model の所有権を持たないため、Model を同じ構造体内で保持して寿命を揃える。
+    /// </summary>
+    struct SceneObject {
+        std::string name;      ///< Inspector に表示する名前。
+        std::string assetPath; ///< 再読み込み時に Model を復元するための元アセットパス。
+        Transform transform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+        std::unique_ptr<Model> model;     ///< OBJ から生成したモデル。Object3d より長く生存させる。
+        std::unique_ptr<Object3d> object; ///< 実際に描画・Transform更新を行うインスタンス。
+    };
+
     // ========== 所有リソース ==========
 
     std::unique_ptr<SkinnedObject>           skinnedObject_;  ///< スキニングプレビュー用オブジェクト (glTF)
@@ -177,6 +225,12 @@ private:
     bool emitHandParticles_ = false;
     float handParticleTimer_ = 0.0f;
     int handParticleJointIndex_ = -1;
+
+    // Assets から配置した静的OBJの一覧。SkinningEditor中だけで編集・保存する簡易シーンデータ。
+    std::vector<SceneObject> sceneObjects_;
+    int selectedSceneObjectIndex_ = -1; ///< Scene Objects リストで選択中の配置物。-1 は未選択。
+    char sceneFilePath_[256] = "Resources/Scenes/skinning_scene.json"; ///< Save/Load 先の JSON パス。
+    std::string sceneEditorStatus_; ///< 保存/読込/配置などの結果を Inspector に表示する短いメッセージ。
 
     // ========== 非所有ポインタ (依存参照) ==========
 
