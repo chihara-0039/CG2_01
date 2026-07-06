@@ -5,14 +5,17 @@
 #include "TextureManager.h"
 #include "ParticleManager.h"
 #include "externals/imgui/imgui.h"
+#include "json.hpp"
 
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>   // sprintf_s
 #include <cstdint>
+#include <fstream>
 
 namespace {
+using json = nlohmann::json;
 
 const char* GetModelAssetKind(int index, int objStartIndex, int gltfStartIndex) {
     if (index == 0) {
@@ -53,6 +56,37 @@ std::string GetDisplayFileName(const std::string& path, const std::string& fallb
     std::filesystem::path filePath(path);
     std::string fileName = filePath.filename().string();
     return fileName.empty() ? fallback : fileName;
+}
+
+bool IsObjAssetIndex(int index, int objStartIndex, int gltfStartIndex) {
+    return index >= objStartIndex && index < gltfStartIndex;
+}
+
+bool SplitModelPath(const std::string& fullPath, std::string& directory, std::string& fileName) {
+    if (fullPath.empty() || fullPath == "Default") {
+        return false;
+    }
+
+    std::filesystem::path path(fullPath);
+    directory = path.parent_path().generic_string();
+    fileName = path.filename().generic_string();
+    return !directory.empty() && !fileName.empty();
+}
+
+json Vector3ToJson(const Vector3& value) {
+    return json::array({ value.x, value.y, value.z });
+}
+
+Vector3 JsonToVector3(const json& value, const Vector3& fallback) {
+    if (!value.is_array() || value.size() < 3) {
+        return fallback;
+    }
+
+    return {
+        value.at(0).get<float>(),
+        value.at(1).get<float>(),
+        value.at(2).get<float>()
+    };
 }
 
 bool DrawTexturedModelTile(ImTextureID textureId, const ImVec2& size, bool selected, const char* kind) {
@@ -317,6 +351,25 @@ void SkinningEditorController::Update(
 
     UpdateHandParticleEmitter(particleManager);
 
+    // Assets から配置した SceneObject は、UI で編集された Transform を毎フレーム Object3d に反映する。
+    // 保存対象は SceneObject::transform 側なので、Object3d の値を直接編集せずここで同期する。
+    // 選択中の配置物は Inspector でどれを編集しているか分かるように黄色寄りの色で強調する。
+    for (int i = 0; i < static_cast<int>(sceneObjects_.size()); ++i) {
+        SceneObject& sceneObject = sceneObjects_[i];
+        if (!sceneObject.object) {
+            continue;
+        }
+
+        sceneObject.object->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+        sceneObject.object->SetPosition(sceneObject.transform.translate);
+        sceneObject.object->SetRotation(sceneObject.transform.rotate);
+        sceneObject.object->SetScale(sceneObject.transform.scale);
+        sceneObject.object->SetColor(i == selectedSceneObjectIndex_
+            ? Vector4{ 1.0f, 0.82f, 0.28f, 1.0f }
+            : Vector4{ 1.0f, 1.0f, 1.0f, 1.0f });
+        sceneObject.object->Update(lightVP);
+    }
+
     // ----------------------------------------------------------
     // 3. グリッド線の更新 (カメラ行列のセットと定数バッファ転送)
     //    SkinningEditor モード中のみ呼ばれるため、ここで安全に更新する
@@ -382,6 +435,164 @@ void SkinningEditorController::UpdateHandParticleEmitter(ParticleManager* partic
     particleManager->EmitHitEffect(handPosition, settings);
 }
 
+bool SkinningEditorController::PlaceSelectedAssetInScene() {
+    return PlaceAssetInScene(selectedModelIndex_);
+}
+
+bool SkinningEditorController::PlaceAssetInScene(int assetIndex) {
+    // SceneObject は Model / Object3d / TextureManager を使って生成するため、
+    // 初期化前に呼ばれた場合は何も作らずステータスだけ返す。
+    if (!object3dCommon_ || !dxCommon_ || !textureManager_) {
+        sceneEditorStatus_ = "Scene placement failed: engine systems are not ready.";
+        return false;
+    }
+    // 今回の保存可能シーン配置は、まず静的OBJに限定する。
+    // glTF は SkinnedObject とアニメーション更新が絡むため、別の SceneObject 種別として拡張する想定。
+    if (!IsObjAssetIndex(assetIndex, objStartIndex_, gltfStartIndex_)) {
+        sceneEditorStatus_ = "Scene placement supports static OBJ assets first.";
+        return false;
+    }
+
+    // Model::CreateFromOBJ は directory と filename を別々に受け取るため、
+    // Assets が保持している相対パスをここで分解する。
+    std::string directory;
+    std::string fileName;
+    if (!SplitModelPath(modelPaths_[assetIndex], directory, fileName)) {
+        sceneEditorStatus_ = "Scene placement failed: invalid model path.";
+        return false;
+    }
+
+    SceneObject sceneObject;
+    sceneObject.name = GetDisplayFileName(modelPaths_[assetIndex], modelNames_[assetIndex]);
+    sceneObject.assetPath = modelPaths_[assetIndex];
+    // 連続配置したときに完全に重ならないよう、簡単なグリッド状の初期位置にずらして置く。
+    // 位置は Inspector の Transform で後から調整できる。
+    sceneObject.transform.translate = {
+        static_cast<float>(sceneObjects_.size() % 5) * 1.5f - 3.0f,
+        0.0f,
+        static_cast<float>(sceneObjects_.size() / 5) * 1.5f
+    };
+    // Object3d は Model の所有権を持たないため、SceneObject 内で Model を保持して寿命を合わせる。
+    sceneObject.model = Model::CreateFromOBJ(dxCommon_, directory, fileName, textureManager_);
+    if (!sceneObject.model) {
+        sceneEditorStatus_ = "Scene placement failed: model load failed.";
+        return false;
+    }
+
+    sceneObject.object = std::make_unique<Object3d>();
+    sceneObject.object->Initialize(object3dCommon_);
+    sceneObject.object->SetModel(sceneObject.model.get());
+    sceneObject.object->SetPosition(sceneObject.transform.translate);
+    sceneObject.object->SetRotation(sceneObject.transform.rotate);
+    sceneObject.object->SetScale(sceneObject.transform.scale);
+
+    sceneObjects_.push_back(std::move(sceneObject));
+    selectedSceneObjectIndex_ = static_cast<int>(sceneObjects_.size()) - 1;
+    sceneEditorStatus_ = "Placed scene object: " + sceneObjects_.back().name;
+    return true;
+}
+
+void SkinningEditorController::ClearSceneObjects() {
+    sceneObjects_.clear();
+    selectedSceneObjectIndex_ = -1;
+    sceneEditorStatus_ = "Scene objects cleared.";
+}
+
+bool SkinningEditorController::SaveSceneObjects(const std::string& filePath) {
+    try {
+        // 保存先フォルダがまだ無い場合でも、ボタン一発で保存できるように作成しておく。
+        std::filesystem::path path(filePath);
+        if (path.has_parent_path()) {
+            std::filesystem::create_directories(path.parent_path());
+        }
+
+        // JSON には「復元に必要な軽い情報」だけを書く。
+        // GPUリソースや Object3d は実行時リソースなので保存せず、Load 時に assetPath から再生成する。
+        json root;
+        root["version"] = 1;
+        root["objects"] = json::array();
+        for (const SceneObject& sceneObject : sceneObjects_) {
+            json item;
+            item["name"] = sceneObject.name;
+            item["assetPath"] = sceneObject.assetPath;
+            item["position"] = Vector3ToJson(sceneObject.transform.translate);
+            item["rotation"] = Vector3ToJson(sceneObject.transform.rotate);
+            item["scale"] = Vector3ToJson(sceneObject.transform.scale);
+            root["objects"].push_back(item);
+        }
+
+        std::ofstream file(filePath);
+        if (!file.is_open()) {
+            sceneEditorStatus_ = "Scene save failed: cannot open file.";
+            return false;
+        }
+        file << root.dump(4);
+        sceneEditorStatus_ = "Scene saved: " + filePath;
+        return true;
+    } catch (const std::exception& e) {
+        sceneEditorStatus_ = std::string("Scene save failed: ") + e.what();
+        return false;
+    }
+}
+
+bool SkinningEditorController::LoadSceneObjects(const std::string& filePath) {
+    try {
+        std::ifstream file(filePath);
+        if (!file.is_open()) {
+            sceneEditorStatus_ = "Scene load failed: cannot open file.";
+            return false;
+        }
+
+        json root;
+        file >> root;
+        const json& objects = root.value("objects", json::array());
+        // ロードは現在の配置を置き換える動作にする。
+        // 既存オブジェクトと混ぜると、保存内容と画面状態が一致しづらいため。
+        sceneObjects_.clear();
+        selectedSceneObjectIndex_ = -1;
+
+        for (const json& item : objects) {
+            const std::string assetPath = item.value("assetPath", "");
+            std::string directory;
+            std::string fileName;
+            if (!SplitModelPath(assetPath, directory, fileName)) {
+                continue;
+            }
+
+            // 保存済み Transform を読み戻し、assetPath から Model/Object3d を再生成する。
+            // 参照先アセットが消えていた場合は、その1件だけスキップして残りのロードを続ける。
+            SceneObject sceneObject;
+            sceneObject.name = item.value("name", GetDisplayFileName(assetPath, fileName));
+            sceneObject.assetPath = assetPath;
+            sceneObject.transform.translate =
+                JsonToVector3(item.value("position", json::array()), { 0.0f, 0.0f, 0.0f });
+            sceneObject.transform.rotate =
+                JsonToVector3(item.value("rotation", json::array()), { 0.0f, 0.0f, 0.0f });
+            sceneObject.transform.scale =
+                JsonToVector3(item.value("scale", json::array()), { 1.0f, 1.0f, 1.0f });
+
+            sceneObject.model = Model::CreateFromOBJ(dxCommon_, directory, fileName, textureManager_);
+            if (!sceneObject.model) {
+                continue;
+            }
+
+            sceneObject.object = std::make_unique<Object3d>();
+            sceneObject.object->Initialize(object3dCommon_);
+            sceneObject.object->SetModel(sceneObject.model.get());
+            sceneObjects_.push_back(std::move(sceneObject));
+        }
+
+        if (!sceneObjects_.empty()) {
+            selectedSceneObjectIndex_ = 0;
+        }
+        sceneEditorStatus_ = "Scene loaded: " + filePath;
+        return true;
+    } catch (const std::exception& e) {
+        sceneEditorStatus_ = std::string("Scene load failed: ") + e.what();
+        return false;
+    }
+}
+
 // ==========================================================
 //  SkinningEditorController::Draw
 //  グリッド線・スキニングメッシュ・スケルトンを描画する
@@ -390,6 +601,12 @@ void SkinningEditorController::Draw(Object3dCommon* object3dCommon, Camera* came
     // グリッド線の描画 (モードに関わらず常に表示)
     for (auto& line : gridLines_) {
         line->Draw();
+    }
+
+    for (auto& sceneObject : sceneObjects_) {
+        if (sceneObject.object) {
+            sceneObject.object->Draw();
+        }
     }
 
     if (isObjPreviewMode_ && objPreviewObject_) {
@@ -410,6 +627,12 @@ void SkinningEditorController::Draw(Object3dCommon* object3dCommon, Camera* came
 //  シャドウマップへの描画 (スキニングメッシュが影を落とすため)
 // ==========================================================
 void SkinningEditorController::DrawShadow(const Matrix4x4& lightVP) {
+    for (auto& sceneObject : sceneObjects_) {
+        if (sceneObject.object) {
+            sceneObject.object->DrawShadow(lightVP);
+        }
+    }
+
     if (isObjPreviewMode_ && objPreviewObject_) {
         // OBJ モード: 通常の Object3d で影描画
         objPreviewObject_->DrawShadow(lightVP);
@@ -590,6 +813,9 @@ void SkinningEditorController::DrawImGuiTimeline() {
 //  Draws model assets scanned from Resources/Models in a Unity-like project panel.
 // ==========================================================
 void SkinningEditorController::DrawAssetBrowserPanel(Player* player, Model* defaultObjModel) {
+    (void)player;
+    (void)defaultObjModel;
+
     if (modelNames_.empty()) {
         ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "No model assets found.");
         return;
@@ -665,8 +891,11 @@ void SkinningEditorController::DrawAssetBrowserPanel(Player* player, Model* defa
 
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                 ChangePreviewModel(i);
-                ApplyModelToPlayer(player, defaultObjModel);
-                assetBrowserStatus_ = "Added to scene: " + fileName;
+                if (PlaceAssetInScene(i)) {
+                    assetBrowserStatus_ = "Placed in scene: " + fileName;
+                } else {
+                    assetBrowserStatus_ = sceneEditorStatus_;
+                }
             }
 
             ImGui::TextWrapped("%s", fileName.c_str());
@@ -697,8 +926,11 @@ void SkinningEditorController::DrawAssetBrowserPanel(Player* player, Model* defa
                 ImGui::EndDragDropSource();
             }
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                ApplyModelToPlayer(player, defaultObjModel);
-                assetBrowserStatus_ = "Added to scene: " + fileName;
+                if (PlaceAssetInScene(i)) {
+                    assetBrowserStatus_ = "Placed in scene: " + fileName;
+                } else {
+                    assetBrowserStatus_ = sceneEditorStatus_;
+                }
             }
             ImGui::PopID();
         }
@@ -710,6 +942,114 @@ void SkinningEditorController::DrawAssetBrowserPanel(Player* player, Model* defa
     }
 
     ImGui::EndChild();
+}
+
+void SkinningEditorController::DrawSceneObjectPanel() {
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Scene Objects ]");
+
+    // Assets ブラウザで選択している OBJ を、そのまま独立した配置物としてシーンに追加する。
+    // プレイヤー差し替えとは別機能なので、ここでは Player には触らない。
+    if (ImGui::Button("Place Selected Asset", ImVec2(-FLT_MIN, 24.0f))) {
+        PlaceSelectedAssetInScene();
+    }
+
+    // Save/Load は固定パスにせず、授業提出用や検証用に複数ファイルを作れるよう入力欄にしている。
+    ImGui::InputText("Scene File", sceneFilePath_, IM_ARRAYSIZE(sceneFilePath_));
+    const float halfWidth = ImGui::GetContentRegionAvail().x * 0.5f;
+    if (ImGui::Button("Save Scene", ImVec2(halfWidth, 24.0f))) {
+        SaveSceneObjects(sceneFilePath_);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Load Scene", ImVec2(-FLT_MIN, 24.0f))) {
+        LoadSceneObjects(sceneFilePath_);
+    }
+    if (ImGui::Button("Clear Scene Objects", ImVec2(-FLT_MIN, 22.0f))) {
+        ClearSceneObjects();
+    }
+
+    if (!sceneEditorStatus_.empty()) {
+        ImGui::TextWrapped("%s", sceneEditorStatus_.c_str());
+    }
+
+    // 配置済みオブジェクトの一覧。選択したものだけ下の Transform 編集対象になる。
+    // ここでは名前と番号だけを表示し、細かい情報は選択後の詳細欄に出す。
+    ImGui::Text("Objects: %d", static_cast<int>(sceneObjects_.size()));
+    if (ImGui::BeginListBox("##SceneObjectList", ImVec2(-FLT_MIN, 96.0f))) {
+        for (int i = 0; i < static_cast<int>(sceneObjects_.size()); ++i) {
+            const bool selected = i == selectedSceneObjectIndex_;
+            std::string label = std::to_string(i) + ": " + sceneObjects_[i].name;
+            if (ImGui::Selectable(label.c_str(), selected)) {
+                selectedSceneObjectIndex_ = i;
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndListBox();
+    }
+
+    if (selectedSceneObjectIndex_ < 0 ||
+        selectedSceneObjectIndex_ >= static_cast<int>(sceneObjects_.size())) {
+        ImGui::TextDisabled("Select a scene object to edit its transform.");
+        return;
+    }
+
+    SceneObject& selectedObject = sceneObjects_[selectedSceneObjectIndex_];
+    ImGui::Text("Selected: %s", selectedObject.name.c_str());
+    ImGui::TextWrapped("Asset: %s", selectedObject.assetPath.c_str());
+
+    // Transform は SceneObject 側の保存用データを直接編集する。
+    // 実際の Object3d への反映は Update() 内で毎フレーム同期する。
+    Transform& transform = selectedObject.transform;
+    ImGui::DragFloat3("Position", &transform.translate.x, 0.05f, -50.0f, 50.0f, "%.2f");
+    ImGui::DragFloat3("Rotation", &transform.rotate.x, 0.02f, -6.28318f, 6.28318f, "%.2f rad");
+    ImGui::DragFloat3("Scale", &transform.scale.x, 0.02f, 0.01f, 20.0f, "%.2f");
+
+    // よく使う調整だけボタン化して、手入力の手間を減らす。
+    if (ImGui::Button("Snap To Ground", ImVec2(halfWidth, 22.0f))) {
+        transform.translate.y = 0.0f;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset Transform", ImVec2(-FLT_MIN, 22.0f))) {
+        transform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+    }
+
+    // 複製は選択中 SceneObject の assetPath と Transform を元にして新しく作る。
+    // Object3d は共有せず、Model も読み直して所有関係を単純に保つ。
+    if (ImGui::Button("Duplicate", ImVec2(halfWidth, 22.0f))) {
+        const std::string path = selectedObject.assetPath;
+        const Transform duplicateTransform = selectedObject.transform;
+        std::string directory;
+        std::string fileName;
+        if (SplitModelPath(path, directory, fileName)) {
+            SceneObject duplicate;
+            duplicate.name = selectedObject.name + " Copy";
+            duplicate.assetPath = path;
+            duplicate.transform = duplicateTransform;
+            duplicate.transform.translate.x += 1.0f;
+            duplicate.model = Model::CreateFromOBJ(dxCommon_, directory, fileName, textureManager_);
+            if (duplicate.model) {
+                duplicate.object = std::make_unique<Object3d>();
+                duplicate.object->Initialize(object3dCommon_);
+                duplicate.object->SetModel(duplicate.model.get());
+                sceneObjects_.push_back(std::move(duplicate));
+                selectedSceneObjectIndex_ = static_cast<int>(sceneObjects_.size()) - 1;
+                sceneEditorStatus_ = "Duplicated scene object.";
+            }
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Delete Selected", ImVec2(-FLT_MIN, 22.0f))) {
+        sceneObjects_.erase(sceneObjects_.begin() + selectedSceneObjectIndex_);
+        if (sceneObjects_.empty()) {
+            selectedSceneObjectIndex_ = -1;
+        } else {
+            selectedSceneObjectIndex_ =
+                std::clamp(selectedSceneObjectIndex_, 0, static_cast<int>(sceneObjects_.size()) - 1);
+        }
+        sceneEditorStatus_ = "Deleted scene object.";
+    }
 }
 
 // ==========================================================
@@ -788,20 +1128,26 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
             ImGui::Image(textureId, ImVec2(140.0f, 140.0f));
         }
 
-        ImGui::Button("Drop Model Here", ImVec2(-FLT_MIN, 34.0f));
+        if (ImGui::Button("Place In Scene", ImVec2(-FLT_MIN, 26.0f))) {
+            PlaceSelectedAssetInScene();
+        }
+
+        ImGui::Button("Drop Model To Scene", ImVec2(-FLT_MIN, 34.0f));
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("MODEL_ASSET_INDEX")) {
                 const int droppedIndex = *static_cast<const int*>(payload->Data);
                 if (droppedIndex >= 0 && droppedIndex < static_cast<int>(modelPaths_.size())) {
                     ChangePreviewModel(droppedIndex);
-                    ApplyModelToPlayer(player, defaultObjModel);
-                    assetBrowserStatus_ = "Added to scene: " + GetDisplayFileName(modelPaths_[droppedIndex], modelNames_[droppedIndex]);
+                    PlaceAssetInScene(droppedIndex);
+                    assetBrowserStatus_ = sceneEditorStatus_;
                 }
             }
             ImGui::EndDragDropTarget();
         }
-        ImGui::TextDisabled("Click an asset to preview it. Double-click or drop here to add it.");
+        ImGui::TextDisabled("Click to preview. Double-click, button, or drop to place static OBJ assets.");
     }
+
+    DrawSceneObjectPanel();
 
     // ----------------------------------------------------------
     // [ Animation Selection ] アニメーション (モーション) 選択
