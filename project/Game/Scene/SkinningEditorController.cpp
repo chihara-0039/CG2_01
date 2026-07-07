@@ -593,6 +593,74 @@ bool SkinningEditorController::LoadSceneObjects(const std::string& filePath) {
     }
 }
 
+bool SkinningEditorController::LoadLevelDataIntoScene(const std::string& filePath) {
+    if (!object3dCommon_ || !dxCommon_ || !textureManager_) {
+        sceneEditorStatus_ = "Level load failed: editor resources are not initialized.";
+        return false;
+    }
+
+    LevelData levelData;
+    std::string status;
+    if (!LevelDataLoader::Load(filePath, levelData, &status)) {
+        sceneEditorStatus_ = status;
+        return false;
+    }
+
+    // External level loading replaces the current editor placement.
+    // This keeps the viewport equal to the imported JSON instead of mixing old and new objects.
+    sceneObjects_.clear();
+    selectedSceneObjectIndex_ = -1;
+
+    int placedCount = 0;
+    for (const LevelObjectData& objectData : levelData.objects) {
+        AppendLevelObjectRecursive(objectData, placedCount);
+    }
+
+    if (!sceneObjects_.empty()) {
+        selectedSceneObjectIndex_ = 0;
+    }
+
+    sceneEditorStatus_ =
+        "Level loaded: " + levelData.name + " (" + std::to_string(placedCount) + " mesh objects)";
+    return placedCount > 0;
+}
+
+bool SkinningEditorController::AppendLevelObjectRecursive(const LevelObjectData& objectData, int& placedCount) {
+    bool placedAny = false;
+
+    if (objectData.type == "MESH") {
+        std::string directory;
+        std::string fileName;
+        if (SplitModelPath(objectData.fileName, directory, fileName)) {
+            SceneObject sceneObject;
+            sceneObject.name = objectData.name.empty()
+                ? GetDisplayFileName(objectData.fileName, fileName)
+                : objectData.name;
+            sceneObject.assetPath = objectData.fileName;
+            sceneObject.transform = objectData.transform;
+            sceneObject.model = Model::CreateFromOBJ(dxCommon_, directory, fileName, textureManager_);
+
+            if (sceneObject.model) {
+                sceneObject.object = std::make_unique<Object3d>();
+                sceneObject.object->Initialize(object3dCommon_);
+                sceneObject.object->SetModel(sceneObject.model.get());
+                sceneObjects_.push_back(std::move(sceneObject));
+                ++placedCount;
+                placedAny = true;
+            }
+        }
+    }
+
+    // The assignment asks for tree traversal. For this first pass, hierarchy is flattened into
+    // sceneObjects_ while still visiting every child recursively. Parent-child transforms can be
+    // added later if the Blender exporter starts writing local transforms.
+    for (const LevelObjectData& child : objectData.children) {
+        placedAny = AppendLevelObjectRecursive(child, placedCount) || placedAny;
+    }
+
+    return placedAny;
+}
+
 // ==========================================================
 //  SkinningEditorController::Draw
 //  グリッド線・スキニングメッシュ・スケルトンを描画する
@@ -971,6 +1039,14 @@ void SkinningEditorController::DrawSceneObjectPanel() {
     if (!sceneEditorStatus_.empty()) {
         ImGui::TextWrapped("%s", sceneEditorStatus_.c_str());
     }
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ External Level Loader ]");
+    ImGui::InputText("Level JSON", levelDataPath_, IM_ARRAYSIZE(levelDataPath_));
+    if (ImGui::Button("Load Blender Level", ImVec2(-FLT_MIN, 24.0f))) {
+        LoadLevelDataIntoScene(levelDataPath_);
+    }
+    ImGui::TextDisabled("Reads name / objects / type / file_name / transform / children.");
 
     // 配置済みオブジェクトの一覧。選択したものだけ下の Transform 編集対象になる。
     // ここでは名前と番号だけを表示し、細かい情報は選択後の詳細欄に出す。

@@ -5,6 +5,7 @@
 #include "Camera.h"
 #include "Input.h"
 #include "MyMath.h"
+#include "LevelDataLoader.h"
 #include <d3d12.h>
 #include <vector>
 #include <string>
@@ -171,6 +172,10 @@ private:
     /// <summary>配置済みシーンオブジェクトを全削除し、選択状態も解除する。</summary>
     void ClearSceneObjects();
 
+    // Loads a Blender-style level JSON and converts its MESH nodes into SceneObject entries.
+    bool LoadLevelDataIntoScene(const std::string& filePath);
+    bool AppendLevelObjectRecursive(const LevelObjectData& objectData, int& placedCount);
+
 private:
     /// <summary>
     /// SkinningEditor 内に配置された静的モデル1個分のデータ。
@@ -230,6 +235,7 @@ private:
     std::vector<SceneObject> sceneObjects_;
     int selectedSceneObjectIndex_ = -1; ///< Scene Objects リストで選択中の配置物。-1 は未選択。
     char sceneFilePath_[256] = "Resources/Scenes/skinning_scene.json"; ///< Save/Load 先の JSON パス。
+    char levelDataPath_[256] = "Resources/Levels/sample_level.json"; ///< Blender-style level JSON path.
     std::string sceneEditorStatus_; ///< 保存/読込/配置などの結果を Inspector に表示する短いメッセージ。
 
     // ========== 非所有ポインタ (依存参照) ==========

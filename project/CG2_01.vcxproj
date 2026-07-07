@@ -169,6 +169,7 @@
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
     <ClCompile Include="Game\Player\PlayerBasePosition.cpp" />
     <ClCompile Include="Game\Scene\EffectPresetStore.cpp" />
+    <ClCompile Include="Game\Scene\LevelDataLoader.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
     <ClCompile Include="Game\Scene\MyGameGameplay.cpp" />
     <ClCompile Include="Game\Scene\MyGameRenderer.cpp" />
@@ -301,6 +302,7 @@
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
     <ClInclude Include="Game\Player\PlayerBasePosition.h" />
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
+    <ClInclude Include="Game\Scene\LevelDataLoader.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
     <ClInclude Include="Game\Scene\MyGameGameplay.h" />
     <ClInclude Include="Game\Scene\MyGameRenderer.h" />
@@ -353,6 +355,7 @@
     <None Include="Resources\shaders\hlsl\Object3d.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
     </None>
+    <None Include="Resources\Levels\sample_level.json" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">
