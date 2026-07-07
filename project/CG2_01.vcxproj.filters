@@ -61,6 +61,7 @@
     <ClCompile Include="Game\Stage\StageRespawnController.cpp" />
     <ClCompile Include="Engine\Graphics\3D\GltfLoader.cpp" />
     <ClCompile Include="Game\Scene\EffectPresetStore.cpp" />
+    <ClCompile Include="Game\Scene\LevelDataLoader.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
     <ClCompile Include="Engine\Graphics\PostProcessRenderer.cpp" />
     <ClCompile Include="Game\Scene\Skybox.cpp" />
@@ -87,6 +88,7 @@
     <ClInclude Include="Engine\Graphics\3D\SkinnedObject.h" />
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
+    <ClInclude Include="Game\Scene\LevelDataLoader.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
     <ClInclude Include="Game\Scene\MyGameGameplay.h" />
     <ClInclude Include="Game\Scene\MyGameRenderer.h" />
@@ -128,5 +130,6 @@
     <None Include="Resources\shaders\hlsl\UpdateParticle.CS.hlsl" />
     <None Include="Resources\shaders\hlsl\Particle.hlsli" />
     <None Include="Resources\shaders\hlsl\Object3d.hlsli" />
+    <None Include="Resources\Levels\sample_level.json" />
   </ItemGroup>
 </Project>
