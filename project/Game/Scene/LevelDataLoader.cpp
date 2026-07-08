@@ -48,7 +48,35 @@ Transform ReadBlenderTransform(const json& object) {
     return transform;
 }
 
-LevelObjectData ReadObjectRecursive(const json& object) {
+Vector3 TransformPoint(const Vector3& point, const Transform& transform) {
+    const Matrix4x4 matrix = Math::MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+    return {
+        point.x * matrix.m[0][0] + point.y * matrix.m[1][0] + point.z * matrix.m[2][0] + matrix.m[3][0],
+        point.x * matrix.m[0][1] + point.y * matrix.m[1][1] + point.z * matrix.m[2][1] + matrix.m[3][1],
+        point.x * matrix.m[0][2] + point.y * matrix.m[1][2] + point.z * matrix.m[2][2] + matrix.m[3][2]
+    };
+}
+
+Transform ComposeTransform(const Transform& parent, const Transform& local) {
+    Transform world = {};
+
+    // This engine stores Object3d transforms as separate scale / Euler rotation / translation values.
+    // For level placement we keep that format and bake parent influence into the child at load time.
+    world.scale = {
+        parent.scale.x * local.scale.x,
+        parent.scale.y * local.scale.y,
+        parent.scale.z * local.scale.z
+    };
+    world.rotate = {
+        parent.rotate.x + local.rotate.x,
+        parent.rotate.y + local.rotate.y,
+        parent.rotate.z + local.rotate.z
+    };
+    world.translate = TransformPoint(local.translate, parent);
+    return world;
+}
+
+LevelObjectData ReadObjectRecursive(const json& object, const Transform& parentTransform) {
     assert(object.is_object());
     assert(object.contains("type"));
 
@@ -56,7 +84,7 @@ LevelObjectData ReadObjectRecursive(const json& object) {
     result.type = object.at("type").get<std::string>();
     result.name = object.value("name", result.type);
     result.fileName = object.value("file_name", "");
-    result.transform = ReadBlenderTransform(object);
+    result.transform = ComposeTransform(parentTransform, ReadBlenderTransform(object));
 
     if (object.contains("children") && object.at("children").is_array()) {
         const json& children = object.at("children");
@@ -65,7 +93,7 @@ LevelObjectData ReadObjectRecursive(const json& object) {
             if (!child.is_object() || !child.contains("type")) {
                 continue;
             }
-            result.children.push_back(ReadObjectRecursive(child));
+            result.children.push_back(ReadObjectRecursive(child, result.transform));
         }
     }
 
@@ -101,6 +129,11 @@ bool LevelDataLoader::Load(const std::string& filePath, LevelData& outLevelData,
         outLevelData.name = deserialized.at("name").get<std::string>();
         const json& objects = deserialized.at("objects");
         outLevelData.objects.reserve(objects.size());
+        const Transform rootTransform = {
+            { 1.0f, 1.0f, 1.0f },
+            { 0.0f, 0.0f, 0.0f },
+            { 0.0f, 0.0f, 0.0f }
+        };
 
         for (const json& object : objects) {
             if (!object.is_object() || !object.contains("type")) {
@@ -109,7 +142,7 @@ bool LevelDataLoader::Load(const std::string& filePath, LevelData& outLevelData,
                 }
                 return false;
             }
-            outLevelData.objects.push_back(ReadObjectRecursive(object));
+            outLevelData.objects.push_back(ReadObjectRecursive(object, rootTransform));
         }
 
         if (outStatus) {

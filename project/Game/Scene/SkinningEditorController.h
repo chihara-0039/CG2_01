@@ -174,7 +174,7 @@ private:
 
     // Loads a Blender-style level JSON and converts its MESH nodes into SceneObject entries.
     bool LoadLevelDataIntoScene(const std::string& filePath);
-    bool AppendLevelObjectRecursive(const LevelObjectData& objectData, int& placedCount);
+    bool AppendLevelObjectRecursive(const LevelObjectData& objectData);
 
 private:
     /// <summary>
@@ -236,6 +236,13 @@ private:
     int selectedSceneObjectIndex_ = -1; ///< Scene Objects リストで選択中の配置物。-1 は未選択。
     char sceneFilePath_[256] = "Resources/Scenes/skinning_scene.json"; ///< Save/Load 先の JSON パス。
     char levelDataPath_[256] = "Resources/Levels/sample_level.json"; ///< Blender-style level JSON path.
+    std::string loadedLevelName_; ///< Most recently imported Blender level name.
+    int levelLoadTotalNodes_ = 0; ///< Number of JSON nodes visited during the latest level import.
+    int levelLoadMeshNodes_ = 0; ///< Number of MESH nodes found during the latest level import.
+    int levelLoadPlacedObjects_ = 0; ///< Number of MESH nodes successfully converted into SceneObject entries.
+    int levelLoadFailedObjects_ = 0; ///< Number of MESH nodes that failed to load or had invalid paths.
+    int levelLoadSkippedObjects_ = 0; ///< Number of non-MESH nodes skipped during traversal.
+    std::vector<std::string> levelLoadMessages_; ///< Detailed import messages shown in the Inspector report.
     std::string sceneEditorStatus_; ///< 保存/読込/配置などの結果を Inspector に表示する短いメッセージ。
 
     // ========== 非所有ポインタ (依存参照) ==========
