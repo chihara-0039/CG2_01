@@ -8,6 +8,8 @@ struct LevelObjectData {
     std::string type;
     std::string name;
     std::string fileName;
+    // World-space transform after applying Blender axis conversion and parent hierarchy.
+    // Scene code can pass this directly to Object3d without needing to understand the JSON tree.
     Transform transform = {
         { 1.0f, 1.0f, 1.0f },
         { 0.0f, 0.0f, 0.0f },

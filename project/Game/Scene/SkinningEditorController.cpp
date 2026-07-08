@@ -594,8 +594,17 @@ bool SkinningEditorController::LoadSceneObjects(const std::string& filePath) {
 }
 
 bool SkinningEditorController::LoadLevelDataIntoScene(const std::string& filePath) {
+    loadedLevelName_.clear();
+    levelLoadTotalNodes_ = 0;
+    levelLoadMeshNodes_ = 0;
+    levelLoadPlacedObjects_ = 0;
+    levelLoadFailedObjects_ = 0;
+    levelLoadSkippedObjects_ = 0;
+    levelLoadMessages_.clear();
+
     if (!object3dCommon_ || !dxCommon_ || !textureManager_) {
         sceneEditorStatus_ = "Level load failed: editor resources are not initialized.";
+        levelLoadMessages_.push_back(sceneEditorStatus_);
         return false;
     }
 
@@ -603,35 +612,46 @@ bool SkinningEditorController::LoadLevelDataIntoScene(const std::string& filePat
     std::string status;
     if (!LevelDataLoader::Load(filePath, levelData, &status)) {
         sceneEditorStatus_ = status;
+        levelLoadMessages_.push_back(status);
         return false;
     }
+    loadedLevelName_ = levelData.name;
 
     // External level loading replaces the current editor placement.
     // This keeps the viewport equal to the imported JSON instead of mixing old and new objects.
     sceneObjects_.clear();
     selectedSceneObjectIndex_ = -1;
 
-    int placedCount = 0;
     for (const LevelObjectData& objectData : levelData.objects) {
-        AppendLevelObjectRecursive(objectData, placedCount);
+        AppendLevelObjectRecursive(objectData);
     }
 
     if (!sceneObjects_.empty()) {
         selectedSceneObjectIndex_ = 0;
     }
 
-    sceneEditorStatus_ =
-        "Level loaded: " + levelData.name + " (" + std::to_string(placedCount) + " mesh objects)";
-    return placedCount > 0;
+    sceneEditorStatus_ = "Level loaded: " + levelData.name +
+        " placed " + std::to_string(levelLoadPlacedObjects_) +
+        " / " + std::to_string(levelLoadMeshNodes_) + " mesh objects.";
+    levelLoadMessages_.insert(levelLoadMessages_.begin(), sceneEditorStatus_);
+    return levelLoadPlacedObjects_ > 0;
 }
 
-bool SkinningEditorController::AppendLevelObjectRecursive(const LevelObjectData& objectData, int& placedCount) {
+bool SkinningEditorController::AppendLevelObjectRecursive(const LevelObjectData& objectData) {
     bool placedAny = false;
+    ++levelLoadTotalNodes_;
 
     if (objectData.type == "MESH") {
+        ++levelLoadMeshNodes_;
         std::string directory;
         std::string fileName;
-        if (SplitModelPath(objectData.fileName, directory, fileName)) {
+        if (!SplitModelPath(objectData.fileName, directory, fileName)) {
+            ++levelLoadFailedObjects_;
+            levelLoadMessages_.push_back("Failed: invalid model path [" + objectData.name + "]");
+        } else if (!std::filesystem::exists(objectData.fileName)) {
+            ++levelLoadFailedObjects_;
+            levelLoadMessages_.push_back("Failed: missing file " + objectData.fileName);
+        } else {
             SceneObject sceneObject;
             sceneObject.name = objectData.name.empty()
                 ? GetDisplayFileName(objectData.fileName, fileName)
@@ -645,17 +665,23 @@ bool SkinningEditorController::AppendLevelObjectRecursive(const LevelObjectData&
                 sceneObject.object->Initialize(object3dCommon_);
                 sceneObject.object->SetModel(sceneObject.model.get());
                 sceneObjects_.push_back(std::move(sceneObject));
-                ++placedCount;
+                ++levelLoadPlacedObjects_;
                 placedAny = true;
+                levelLoadMessages_.push_back("Placed: " + objectData.fileName);
+            } else {
+                ++levelLoadFailedObjects_;
+                levelLoadMessages_.push_back("Failed: model load failed " + objectData.fileName);
             }
         }
+    } else {
+        ++levelLoadSkippedObjects_;
+        levelLoadMessages_.push_back("Skipped: " + objectData.type + " [" + objectData.name + "]");
     }
 
-    // The assignment asks for tree traversal. For this first pass, hierarchy is flattened into
-    // sceneObjects_ while still visiting every child recursively. Parent-child transforms can be
-    // added later if the Blender exporter starts writing local transforms.
+    // LevelDataLoader already bakes parent transforms into each child.
+    // The editor keeps a flat SceneObject list because Object3d does not own a hierarchy yet.
     for (const LevelObjectData& child : objectData.children) {
-        placedAny = AppendLevelObjectRecursive(child, placedCount) || placedAny;
+        placedAny = AppendLevelObjectRecursive(child) || placedAny;
     }
 
     return placedAny;
@@ -1047,6 +1073,68 @@ void SkinningEditorController::DrawSceneObjectPanel() {
         LoadLevelDataIntoScene(levelDataPath_);
     }
     ImGui::TextDisabled("Reads name / objects / type / file_name / transform / children.");
+
+    if (!loadedLevelName_.empty() || !levelLoadMessages_.empty()) {
+        if (ImGui::CollapsingHeader("Level Load Report", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Level: %s", loadedLevelName_.empty() ? "(none)" : loadedLevelName_.c_str());
+            if (ImGui::BeginTable("##LevelLoadStats", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted("Visited Nodes");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%d", levelLoadTotalNodes_);
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted("MESH Nodes");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%d", levelLoadMeshNodes_);
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted("Placed");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.55f, 1.0f), "%d", levelLoadPlacedObjects_);
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted("Failed");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextColored(
+                    levelLoadFailedObjects_ > 0
+                        ? ImVec4(1.0f, 0.35f, 0.35f, 1.0f)
+                        : ImVec4(0.75f, 0.75f, 0.75f, 1.0f),
+                    "%d",
+                    levelLoadFailedObjects_);
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted("Skipped");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%d", levelLoadSkippedObjects_);
+                ImGui::EndTable();
+            }
+
+            if (ImGui::Button("Clear Load Report", ImVec2(-FLT_MIN, 22.0f))) {
+                loadedLevelName_.clear();
+                levelLoadTotalNodes_ = 0;
+                levelLoadMeshNodes_ = 0;
+                levelLoadPlacedObjects_ = 0;
+                levelLoadFailedObjects_ = 0;
+                levelLoadSkippedObjects_ = 0;
+                levelLoadMessages_.clear();
+            }
+
+            if (!levelLoadMessages_.empty()) {
+                if (ImGui::BeginChild("##LevelLoadMessages", ImVec2(-FLT_MIN, 92.0f), true)) {
+                    for (const std::string& message : levelLoadMessages_) {
+                        ImGui::TextWrapped("%s", message.c_str());
+                    }
+                }
+                ImGui::EndChild();
+            }
+        }
+    }
 
     // 配置済みオブジェクトの一覧。選択したものだけ下の Transform 編集対象になる。
     // ここでは名前と番号だけを表示し、細かい情報は選択後の詳細欄に出す。
