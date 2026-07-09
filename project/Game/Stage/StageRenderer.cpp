@@ -1,5 +1,8 @@
 ﻿#include "StageRenderer.h"
 #include "StageWallTransparencyController.h"
+#include "StagePlacementPreviewBuilder.h"
+#include "StageOnOffVisualController.h"
+#include "StageCrumblingFloorEffectUpdater.h"
 #include <cassert>
 #include <random>
 
@@ -174,41 +177,8 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 }
 
 void StageRenderer::UpdateEffect(const StageMap& stageMap) {
-	size_t objIndex = 0;
-
-	for (int y = 0; y < stageMap.GetHeight(); ++y) {
-		for (int z = 0; z < stageMap.GetDepth(); ++z) {
-			for (int x = 0; x < stageMap.GetWidth(); ++x) {
-
-				const MapCell* cell = stageMap.GetCell(x, y, z);
-				if (!cell || cell->type == BlockType::None) {
-					continue;
-				}
-
-				if (cell->type == BlockType::PlayerStart && !isEditorMode_) {
-					continue;
-				}
-
-				if (objIndex >= objects_.size()) {
-					return;
-				}
-
-				Object3d* obj = objects_[objIndex].get();
-
-				if (cell->type == BlockType::CrumblingFloor) {
-					obj->SetColor({
-						1.0f,
-						cell->colorG,
-						cell->colorB,
-						cell->opacity
-					});
-					// 崩れる床の色・透明度更新によりDirty化
-					MarkDirty(obj);
-				}
-
-				objIndex++;
-			}
-		}
+	for (Object3d* obj : StageCrumblingFloorEffectUpdater::Apply(stageMap, isEditorMode_, objects_)) {
+		MarkDirty(obj);
 	}
 }
 
@@ -1153,56 +1123,8 @@ void StageRenderer::Clear() {
 }
 
 void StageRenderer::ApplyOnOffVisualState(const StageMap& stageMap) {
-	bool isOn = stageMap.IsOnState();
-	size_t objIndex = 0;
-
-	// マップの全セルを走査してオブジェクトの色と透明度（Alpha）を書き換える
-	for (int y = 0; y < stageMap.GetHeight(); ++y) {
-		for (int z = 0; z < stageMap.GetDepth(); ++z) {
-			for (int x = 0; x < stageMap.GetWidth(); ++x) {
-				const MapCell* cell = stageMap.GetCell(x, y, z);
-				if (!cell || cell->type == BlockType::None) {
-					continue;
-				}
-
-				// 配列の範囲を安全にチェック
-				if (objIndex >= objects_.size()) return;
-				Object3d* obj = objects_[objIndex].get();
-
-				// 🔴 ON/OFFスイッチの処理
-				if (cell->type == BlockType::OnOffSwitch) {
-					if (isOn) {
-						obj->SetColor({ 1.0f, 0.2f, 0.2f, 1.0f }); // スイッチON：赤色
-					}
-					else {
-						obj->SetColor({ 0.2f, 0.2f, 1.0f, 1.0f }); // スイッチOFF：青色
-					}
-					MarkDirty(obj); // 変更をGPU側に反映
-				}
-				// 🔴 ONブロック（赤ブロック）の処理
-				else if (cell->type == BlockType::OnBlock) {
-					if (isOn) {
-						obj->SetColor({ 1.0f, 0.2f, 0.2f, 1.0f }); // ON：赤色・不透明（出現）
-					}
-					else {
-						obj->SetColor({ 1.0f, 0.2f, 0.2f, 0.3f }); // OFF：赤色・透明（消滅）
-					}
-					MarkDirty(obj);
-				}
-				// 🔵 OFFブロック（青ブロック）の処理
-				else if (cell->type == BlockType::OffBlock) {
-					if (!isOn) {
-						obj->SetColor({ 0.2f, 0.2f, 1.0f, 1.0f }); // OFF：青色・不透明（出現）
-					}
-					else {
-						obj->SetColor({ 0.2f, 0.2f, 1.0f, 0.3f }); // ON：青色・透明（消滅）
-					}
-					MarkDirty(obj);
-				}
-
-				objIndex++;
-			}
-		}
+	for (Object3d* obj : StageOnOffVisualController::Apply(stageMap, objects_)) {
+		MarkDirty(obj);
 	}
 }
 
@@ -1214,120 +1136,23 @@ void StageRenderer::SetPlacementPreview(
 	int customId,
 	float rotationY
 ) {
-	previewObjects_.clear(); // 既存のプレビューをリセット
-
-	float colorR = 1.0f;
-	float colorG = 1.0f;
-	float colorB = 1.0f;
-	Model* targetModel = wallModel_.get();
-
-	if (customId >= 1 && customId <= 5) {
-		const auto* part = stageMap.GetCustomPart(customId);
-		if (part) {
-			colorR = part->colorR;
-			colorG = part->colorG;
-			colorB = part->colorB;
-			targetModel = (part->baseType == BlockType::Ladder) ? ladderModel_.get() : wallModel_.get();
-		}
-	} else {
-		// 通常ブロックのテーマカラー
-		if (type == BlockType::Wall) {
-			colorR = 1.0f; colorG = 0.4f; colorB = 0.4f;
-			targetModel = wallModel_.get();
-		} else if (type == BlockType::TransparentBlock) {
-			colorR = 1.0f; colorG = 1.0f; colorB = 1.0f;
-			targetModel = wallModel_.get();
-		}else if (type == BlockType::Ladder) {
-			colorR = 0.4f; colorG = 1.0f; colorB = 0.4f;
-			targetModel = ladderModel_.get();
-		} else if (type == BlockType::Ground) {
-			colorR = 0.7f; colorG = 0.7f; colorB = 0.7f;
-			targetModel = groundModel_.get();
-		} else if (type == BlockType::IceBlock) {
-			colorR = 0.5f; colorG = 0.85f; colorB = 1.0f; // 美しいアイスブルー
-			targetModel = iceBlockModel_.get();
-		} else if (type == BlockType::MovingFloor) {
-			colorR = 0.9f; colorG = 0.65f; colorB = 0.4f; // オレンジプレート
-			targetModel = movingFloorModel_.get();
-		} else if (type == BlockType::CrumblingFloor) {
-			colorR = 0.8f; colorG = 0.6f; colorB = 0.4f;   // ボロボロのブロック色
-			targetModel = crumbleModel_.get();
-		} else {
-			return; // プレビュー対象外
-		}
-	}
-
-	// 🌟 3x3x3 複合カスタムアセンブリプレビューの作成
-	if (customId >= 1 && customId <= 5) {
-		const auto* part = stageMap.GetCustomPart(customId);
-		if (part && !part->IsEmpty()) {
-			int rotIndex = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
-			if (rotIndex < 0) rotIndex += 4;
-
-			for (int ly = 0; ly < 3; ++ly) {
-				for (int lz = 0; lz < 3; ++lz) {
-					for (int lx = 0; lx < 3; ++lx) {
-						const auto& cell = part->cells[ly][lz][lx];
-						if (cell.type == BlockType::None) continue;
-
-						int rx = lx;
-						int rz = lz;
-						float cellRotY = 0.0f;
-						if (rotIndex == 1) {
-							rx = 2 - lz;
-							rz = lx;
-							cellRotY = 1.5707963f;
-						} else if (rotIndex == 2) {
-							rx = 2 - lx;
-							rz = 2 - lz;
-							cellRotY = 3.1415927f;
-						} else if (rotIndex == 3) {
-							rx = lz;
-							rz = 2 - lx;
-							cellRotY = 4.712389f;
-						}
-
-						Vector3 pos = {
-							static_cast<float>(cursorIndex.x + rx),
-							static_cast<float>(cursorIndex.y + ly),
-							static_cast<float>(cursorIndex.z + rz)
-						};
-						Model* cellModel = (cell.type == BlockType::Ladder) ? ladderModel_.get() : wallModel_.get();
-
-						auto obj = std::make_unique<Object3d>();
-						obj->Initialize(object3dCommon_);
-						obj->SetModel(cellModel);
-						obj->SetPosition(pos);
-						obj->SetRotation({ 1.57f, cellRotY, 0.0f });
-						obj->SetScale(blockScale_);
-						obj->SetColor({ colorR, colorG, colorB, 0.4f }); // 40%の美しい半透明
-
-						previewObjects_.push_back(std::move(obj));
-					}
-				}
-			}
-			// プレビュー表示データの再構築
-			BuildPreviewRenderGroups();
-			return;
-		}
-	}
-
-	// 🌟 通常の 1 マスプレビューの作成
-	Vector3 pos = {
-		static_cast<float>(cursorIndex.x),
-		static_cast<float>(cursorIndex.y),
-		static_cast<float>(cursorIndex.z)
-	};
-	auto obj = std::make_unique<Object3d>();
-	obj->Initialize(object3dCommon_);
-	obj->SetModel(targetModel);
-	obj->SetPosition(pos);
-	obj->SetRotation({ 1.57f, rotationY, 0.0f }); // 回転角を適用
-	obj->SetScale(blockScale_);
-	obj->SetColor({ colorR, colorG, colorB, 0.4f }); // 40%の美しい半透明
-	previewObjects_.push_back(std::move(obj));
-
-	// プレビュー表示データの再構築
+	StagePlacementPreviewBuilder::Build(
+		previewObjects_,
+		object3dCommon_,
+		{
+			groundModel_.get(),
+			wallModel_.get(),
+			ladderModel_.get(),
+			crumbleModel_.get(),
+			iceBlockModel_.get(),
+			movingFloorModel_.get()
+		},
+		blockScale_,
+		stageMap,
+		cursorIndex,
+		type,
+		customId,
+		rotationY);
 	BuildPreviewRenderGroups();
 }
 
@@ -1436,30 +1261,11 @@ Object3d* StageRenderer::CreateStageObject(
 //5/19佐倉
 void StageRenderer::ApplyPSwitchVisualState(const StageMap& stageMap)
 {
-	const bool active = stageMap.IsPSwitchActive();
-
-	for (auto& item : pSwitchObjects_) {
-		if (!item.object) continue;
-
-		if (active) {
-			item.object->SetScale({ 0.0f, 0.0f, 0.0f });
-		} else {
-			item.object->SetScale(item.normalScale);
-		}
-		// スケール変更に伴いDirty化
-		MarkDirty(item.object);
-	}
-
-	for (auto& item : pBlockObjects_) {
-		if (!item.object) continue;
-
-		if (active) {
-			item.object->SetScale({ 0.0f, 0.0f, 0.0f });
-		} else {
-			item.object->SetScale(item.normalScale);
-		}
-		// スケール変更に伴いDirty化
-		MarkDirty(item.object);
+	for (Object3d* obj : StagePSwitchVisualController::Apply(
+		stageMap.IsPSwitchActive(),
+		pSwitchObjects_,
+		pBlockObjects_)) {
+		MarkDirty(obj);
 	}
 }
 
