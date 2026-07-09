@@ -196,6 +196,10 @@
     <ClCompile Include="src\app\main.cpp" />
     <ClCompile Include="Game\Stage\StageMap.cpp" />
     <ClCompile Include="Game\Stage\StageMapGimmickSystem.cpp" />
+    <ClCompile Include="Game\Stage\StageCrumblingFloorEffectUpdater.cpp" />
+    <ClCompile Include="Game\Stage\StageOnOffVisualController.cpp" />
+    <ClCompile Include="Game\Stage\StagePlacementPreviewBuilder.cpp" />
+    <ClCompile Include="Game\Stage\StagePSwitchVisualController.cpp" />
     <ClCompile Include="Game\Stage\StageRenderer.cpp" />
     <ClCompile Include="Game\Stage\StageTransparencyPolicy.cpp" />
     <ClCompile Include="Game\Stage\StageWallTransparencyController.cpp" />
@@ -322,6 +326,10 @@
     <ClInclude Include="Game\Scene\StageSelect.h" />
     <ClInclude Include="Game\Stage\StageMap.h" />
     <ClInclude Include="Game\Stage\StageMapGimmickSystem.h" />
+    <ClInclude Include="Game\Stage\StageCrumblingFloorEffectUpdater.h" />
+    <ClInclude Include="Game\Stage\StageOnOffVisualController.h" />
+    <ClInclude Include="Game\Stage\StagePlacementPreviewBuilder.h" />
+    <ClInclude Include="Game\Stage\StagePSwitchVisualController.h" />
     <ClInclude Include="Game\Stage\StageRenderer.h" />
     <ClInclude Include="Game\Stage\StageTransparencyPolicy.h" />
     <ClInclude Include="Game\Stage\StageWallTransparencyController.h" />

@@ -6,6 +6,7 @@
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Model.h"
+#include "StagePSwitchVisualController.h"
 #include <GameplayCameraController.h>
 
 
@@ -116,13 +117,8 @@ private:
     };
     std::vector<EnemyInstance> enemyInstances_;
 
-    struct PSwitchVisualObject {
-        Object3d* object = nullptr;
-        Vector3 normalScale{ 1.0f, 1.0f, 1.0f };
-    };
-
-    std::vector<PSwitchVisualObject> pSwitchObjects_;
-    std::vector<PSwitchVisualObject> pBlockObjects_;
+    std::vector<StagePSwitchVisualObject> pSwitchObjects_;
+    std::vector<StagePSwitchVisualObject> pBlockObjects_;
 
     //5/26佐倉
     std::vector<Object3d*> wallObjects_;
