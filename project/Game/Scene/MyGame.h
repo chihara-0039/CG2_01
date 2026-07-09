@@ -69,8 +69,6 @@
 /// MyGame は「接続役 (オーケストレーター)」として機能する。
 /// </summary>
 class MyGame {
-    friend class MyGameRenderer;
-    friend class MyGameGameplay;
 public:
     void Initialize();
     void Update();
@@ -310,6 +308,9 @@ private:
     void ApplySceneLighting(const Vector3& lightDir);
     void UpdateClearColorForFrame();
     void UpdateGameplayUserInterface();
+    void RenderScene();
+    void DrawSkyboxForFrame();
+    bool IsPlayerHiddenByWall() const;
 
     // --- 描画サブルーチン ---
     /// <summary>オフスクリーンパスと直接パスで共通するシーン描画</summary>

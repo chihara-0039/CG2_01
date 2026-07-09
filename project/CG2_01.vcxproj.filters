@@ -30,8 +30,6 @@
     <ClCompile Include="Engine\Graphics\3D\SkinnedObject.cpp" />
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
-    <ClCompile Include="Game\Scene\MyGameGameplay.cpp" />
-    <ClCompile Include="Game\Scene\MyGameRenderer.cpp" />
     <ClCompile Include="Game\UI\GameplayUIManager.cpp" />
     <ClCompile Include="Game\UI\BlockInventoryUI.cpp" />
     <ClCompile Include="Game\Camera\GameplayCameraController.cpp" />
@@ -47,7 +45,10 @@
     <ClCompile Include="Engine\Utility\LightCamera.cpp" />
     <ClCompile Include="src\app\main.cpp" />
     <ClCompile Include="Game\Stage\StageMap.cpp" />
+    <ClCompile Include="Game\Stage\StageMapGimmickSystem.cpp" />
     <ClCompile Include="Game\Stage\StageRenderer.cpp" />
+    <ClCompile Include="Game\Stage\StageTransparencyPolicy.cpp" />
+    <ClCompile Include="Game\Stage\StageWallTransparencyController.cpp" />
     <ClCompile Include="Engine\Base\StringUtility.cpp" />
     <ClCompile Include="Engine\Graphics\2D\TextureManager.cpp" />
     <ClCompile Include="Engine\Base\WinApp.cpp" />
@@ -90,8 +91,6 @@
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
     <ClInclude Include="Game\Scene\LevelDataLoader.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
-    <ClInclude Include="Game\Scene\MyGameGameplay.h" />
-    <ClInclude Include="Game\Scene\MyGameRenderer.h" />
     <ClInclude Include="Game\UI\GameplayUIManager.h" />
     <ClInclude Include="Game\UI\BlockInventoryUI.h" />
     <ClInclude Include="Game\Camera\GameplayCameraController.h" />
@@ -104,7 +103,10 @@
     <ClInclude Include="Engine\Graphics\2D\Sprite.h" />
     <ClInclude Include="Engine\Graphics\2D\SpriteCommon.h" />
     <ClInclude Include="Game\Stage\StageMap.h" />
+    <ClInclude Include="Game\Stage\StageMapGimmickSystem.h" />
     <ClInclude Include="Game\Stage\StageRenderer.h" />
+    <ClInclude Include="Game\Stage\StageTransparencyPolicy.h" />
+    <ClInclude Include="Game\Stage\StageWallTransparencyController.h" />
     <ClInclude Include="Engine\Base\StringUtility.h" />
     <ClInclude Include="Engine\Graphics\2D\TextureManager.h" />
     <ClInclude Include="Engine\Base\WinApp.h" />

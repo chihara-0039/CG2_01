@@ -5,35 +5,27 @@
 #include <wrl.h>
 #include <d3d12.h>
 #include "DirectXCommon.h"
-#include "MyMath.h" // Vector2などが定義されている前提
+#include "MyMath.h"
 
 class TextureManager {
 public:
-    // シングルトンなどの管理ではなく、SpriteCommonが所有する形にします
     void Initialize(DirectXCommon* dxCommon);
 
-    // テクスチャ読み込み（読み込み済みなら既存のハンドルを返す）
-    // return: テクスチャハンドル（uint32_t）
+    // Loads a texture if needed and returns its SRV handle index.
     uint32_t LoadTexture(const std::string& filePath);
 
-    // ★追加：外部のリソースをSRVヒープに登録し、ハンドルを返す
+    // Registers a texture resource owned by another system and returns its SRV handle index.
     uint32_t RegisterExternalTexture(ID3D12Resource* resource);
 
-    // SRVヒープの取得（描画前にSetDescriptorHeapsで使う）
     ID3D12DescriptorHeap* GetSrvHeap() const { return srvHeap_.Get(); }
 
-    // 指定ハンドルのGPUハンドルを取得（コマンドリストセット用）
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(uint32_t textureHandle);
-
     D3D12_CPU_DESCRIPTOR_HANDLE GetSrvHandleCPU(uint32_t textureHandle) const;
 
-    // テクスチャのサイズを取得（切り抜き計算用）
     const D3D12_RESOURCE_DESC& GetResourceDesc(uint32_t textureHandle);
-
     ID3D12Resource* GetResource(uint32_t textureHandle) const;
 
 private:
-    // 内部用：テクスチャデータ構造体
     struct TextureData {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
         Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource;
@@ -44,16 +36,11 @@ private:
 
     DirectXCommon* dxCommon_ = nullptr;
 
-    // SRV用デスクリプタヒープ
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_;
-    // ディスクリプタのサイズ
     UINT descriptorSizeSRV_ = 0;
 
-    // テクスチャデータ一覧
     std::vector<TextureData> textures_;
-    // ファイルパスとインデックスの対応マップ
     std::unordered_map<std::string, uint32_t> fileMap_;
 
-    // 最大テクスチャ数
     static const size_t kMaxTextures = 128;
 };

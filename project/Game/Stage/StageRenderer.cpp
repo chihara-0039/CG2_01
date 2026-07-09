@@ -1,4 +1,5 @@
 ﻿#include "StageRenderer.h"
+#include "StageWallTransparencyController.h"
 #include <cassert>
 #include <random>
 
@@ -1754,63 +1755,13 @@ void StageRenderer::UpdateWallTransparency(
 	int currentStageIndex
 )
 {
-
-	if (!enableTransparency) {
-		for (auto& obj : wallObjects_) {
-			if (obj) {
-				obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-			}
-		}
-
-		RebuildTransparencyGroups();
-		return;
-	}
-	cameraPos;
-
-	int playerCellX = static_cast<int>(std::floor(playerPos.x + 0.5f));
-	int playerCellY = static_cast<int>(std::floor(playerPos.y + 0.5f));
-	int playerCellZ = static_cast<int>(std::floor(playerPos.z + 0.5f));
-
-	for (auto& obj : wallObjects_) {
-		if (!obj) {
-			continue;
-		}
-
-		Vector3 wallPos = obj->GetPosition();
-
-		int wallCellX = static_cast<int>(std::floor(wallPos.x + 0.5f));
-		int wallCellY = static_cast<int>(std::floor(wallPos.y + 0.5f));
-		int wallCellZ = static_cast<int>(std::floor(wallPos.z + 0.5f));
-
-		// まず全部不透明
-		obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-
-		// 床を絶対透明化しない
-		// 自機と同じ高さ以下は床扱い
-		if (wallCellY <= playerCellY) {
-			continue;
-		}
-
-		if (!IsTransparencyArea(
-			currentStageIndex,
-			wallCellX,
-			wallCellY,
-			wallCellZ
-		)) {
-			continue;
-		}
-
-		// 自機中心の見やすい範囲
-		bool insideTransparencyArea =
-			std::abs(wallCellX - playerCellX) <= 2 &&
-			std::abs(wallCellZ - playerCellZ) <= 1 &&
-			wallCellY <= playerCellY + 2;
-
-		if (insideTransparencyArea) {
-			obj->SetColor({ 1.0f, 1.0f, 1.0f, transparencyAlpha });
-		}
-	}
-
+	StageWallTransparencyController::Apply(
+		wallObjects_,
+		cameraPos,
+		playerPos,
+		enableTransparency,
+		transparencyAlpha,
+		currentStageIndex);
 	RebuildTransparencyGroups();
 }
 
@@ -1884,37 +1835,3 @@ void StageRenderer::UpdateCloudTransparency(
 	}
 }
 
-bool StageRenderer::IsTransparencyArea(
-	int stageIndex,
-	int x,
-	int y,
-	int z
-)
-{
-	switch (stageIndex) {
-
-		// ==========================================
-		// 操作説明
-		// ==========================================
-	case 0:
-		return false;
-
-		// ==========================================
-		// ステージ1
-		// ==========================================
-	case 1:
-
-		// 階段周辺だけ透過
-		if (
-			x >= 6 && x <= 15 &&
-			y >= 1 && y <= 3 &&
-			z ==6
-			) {
-			return true;
-		}
-
-		return false;
-	}
-
-	return false;
-}

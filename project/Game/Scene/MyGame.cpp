@@ -1,15 +1,12 @@
 ﻿//  MyGame.cpp
 //  ゲーム全体の初期化、更新、終了処理をまとめる司令塔クラスの実装。
 //  描画やゲームプレイ固有の処理は専用クラスへ委譲する。
-
-
 #include <filesystem>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <random>
 #include "MyGame.h"
-#include "MyGameGameplay.h"
-#include "MyGameRenderer.h"
 #include "EffectPresetStore.h"
 #include "../Environment/WeatherPresetManager.h"
 #include "Goal.h"
@@ -306,7 +303,7 @@ void MyGame::Update() {
     UpdateHitEffectShortcut();
 
 
-    // GamePlay 中のカメラは MyGameGameplay 側で制御する。
+    // GamePlay mode has its own camera handling in UpdateGamePlay().
     UpdateSharedCameraControls(isGuiCaptured);
 
 
@@ -1953,12 +1950,220 @@ void MyGame::UpdateImGui() {
 }
 #endif // !NDEBUG
 
-//  MyGame::Draw
-//  描画本体は MyGameRenderer に委譲する。
-
-
 void MyGame::Draw() {
-    MyGameRenderer{}.Draw(*this);
+    auto commandList = dxCommon->GetCommandList();
+
+    if (skydomeObject_) {
+        if (postProcess_.GetSkyboxLinkMode() == 1) {
+            skydomeObject_->SetColor(postProcess_.GetClearColor());
+        } else {
+            skydomeObject_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+        }
+    }
+
+    const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
+
+    shadowMap_->PreDraw(commandList);
+    commandList->SetGraphicsRootSignature(object3dCommon->GetRootSignature());
+    commandList->SetPipelineState(object3dCommon->GetShadowPipelineState());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    for (auto& obj : objectList) {
+        if (obj) { obj->DrawShadow(lightVP); }
+    }
+    if (player_) { player_->DrawShadow(lightVP); }
+    if (currentMode_ == AppMode::SkinningEditor) { skinningEditor_.DrawShadow(lightVP); }
+    if (stageRenderer_) { stageRenderer_->DrawShadow(lightVP); }
+
+    shadowMap_->PostDraw(commandList);
+
+    if (postProcess_.IsEnabled()) {
+        postProcess_.BeginRender(commandList, dxCommon.get());
+        RenderScene();
+        postProcess_.EndRender(commandList);
+        dxCommon->PreDraw(false);
+        postProcess_.DrawToBackBuffer(commandList, camera->GetProjectionMatrix());
+    } else {
+#ifdef NDEBUG
+        D3D12_VIEWPORT viewport = { 0.0f, 0.0f, (float)WinApp::kWindowWidth, (float)WinApp::kWindowHeight, 0.0f, 1.0f };
+        D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
+#else
+        D3D12_VIEWPORT viewport = { 320.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
+        D3D12_RECT scissor = { 320, 0, 1600, 720 };
+#endif
+        commandList->RSSetViewports(1, &viewport);
+        commandList->RSSetScissorRects(1, &scissor);
+        dxCommon->PreDraw();
+        RenderScene();
+    }
+
+    dxCommon->EndImGui();
+    dxCommon->PostDraw();
+}
+
+void MyGame::RenderScene() {
+    auto commandList = dxCommon->GetCommandList();
+
+    if (!debugFlags_.show3DObjects &&
+        currentMode_ != AppMode::EffectPreview &&
+        currentMode_ != AppMode::EffectShowcase &&
+        currentMode_ != AppMode::PostEffectShowcase) {
+        return;
+    }
+
+    ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
+    commandList->SetDescriptorHeaps(1, heaps);
+    object3dCommon->PreDraw();
+    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+
+    if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
+        if (terrainObject_) {
+            terrainObject_->Draw();
+        }
+        if (debugFlags_.showParticles) {
+            ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
+            commandList->SetDescriptorHeaps(1, particleHeaps);
+            particleManager->Draw();
+        }
+        return;
+    }
+
+    if (currentMode_ == AppMode::PostEffectShowcase) {
+        if (terrainObject_) {
+            terrainObject_->Draw();
+        }
+        if (player_) {
+            player_->Draw();
+        }
+        return;
+    }
+
+    DrawSkyboxForFrame();
+
+    if (currentMode_ == AppMode::StageSelect) {
+        if (stageSelect_) { stageSelect_->Draw(); }
+    } else if (currentMode_ == AppMode::SkinningEditor) {
+        skinningEditor_.Draw(object3dCommon.get(), camera.get());
+    } else {
+        const bool isGameMode =
+            currentMode_ == AppMode::StageEditor ||
+            currentMode_ == AppMode::GamePlay ||
+            currentMode_ == AppMode::GamePlay_BlockPlace ||
+            currentMode_ == AppMode::EffectPreview;
+
+        if (isGameMode && stageRenderer_) {
+            stageRenderer_->Draw();
+            stageRenderer_->DrawTransparent();
+            object3dCommon->PreDraw();
+            commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+        }
+
+        if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::EffectPreview) {
+            if (player_ && !useFirstPersonCamera_) {
+                player_->Draw();
+                if (IsPlayerHiddenByWall()) {
+                    object3dCommon->PreDrawPlayerHighlight();
+                    player_->DrawHighlight();
+                    object3dCommon->PreDraw();
+                    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                }
+            }
+
+            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_) {
+                gameplayUIManager_->Draw3DPrompts(
+                    true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
+            }
+        }
+
+        if ((currentMode_ == AppMode::StageEditor ||
+             currentMode_ == AppMode::GamePlay_BlockPlace) &&
+            mapCursor_) {
+            mapCursor_->Draw();
+        }
+
+        if (currentMode_ == AppMode::DebugView) {
+            if (terrainObject_ && debugFlags_.showTerrain) { terrainObject_->Draw(); }
+            for (auto& obj : objectList) {
+                if (obj) { obj->Draw(); }
+            }
+            if (player_) { player_->Draw(); }
+        }
+    }
+
+    if (debugFlags_.showParticles) {
+        ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
+        commandList->SetDescriptorHeaps(1, particleHeaps);
+        particleManager->Draw();
+    }
+
+    if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
+        spriteCommon->PreDraw();
+        if (sprite) { sprite->Draw(); }
+    }
+
+    if (gameplayUIManager_) {
+        gameplayUIManager_->DrawSprites(
+            currentMode_ == AppMode::GamePlay ||
+            currentMode_ == AppMode::GamePlay_BlockPlace,
+            gameplayCameraController_.IsFollowPlayerMode());
+    }
+
+    if (blockInventoryUI_ &&
+        (currentMode_ == AppMode::GamePlay ||
+         currentMode_ == AppMode::GamePlay_BlockPlace)) {
+        blockInventoryUI_->Draw();
+    }
+
+    const bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+    if (currentMode_ == AppMode::GamePlay && !invOpen && stageSelect_) {
+        if (stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_) {
+            spriteCommon->PreDraw();
+            tutorialSprite_->Draw();
+        }
+    }
+    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
+        spriteCommon->PreDraw();
+        placementTutorialSprite_->Draw();
+    }
+}
+
+void MyGame::DrawSkyboxForFrame() {
+    auto commandList = dxCommon->GetCommandList();
+    if (debugFlags_.showSkybox && showSkyboxCubemap_ && skybox_) {
+        skybox_->Draw();
+        object3dCommon->PreDraw();
+        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+    } else if (debugFlags_.showSkybox && skydomeObject_) {
+        skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+        skydomeObject_->Draw();
+    }
+}
+
+bool MyGame::IsPlayerHiddenByWall() const {
+    if (!player_ || !camera) { return false; }
+
+    Vector3 camPos = camera->GetPosition();
+    Vector3 playerPos = player_->GetPosition();
+    playerPos.y += 0.8f;
+
+    Vector3 diff = {
+        playerPos.x - camPos.x,
+        playerPos.y - camPos.y,
+        playerPos.z - camPos.z
+    };
+    const float len = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+    if (len <= 0.001f) { return false; }
+
+    Vector3 dir = { diff.x / len, diff.y / len, diff.z / len };
+    for (float t = 0.8f; t < len - 1.0f; t += 0.8f) {
+        Vector3 cp = { camPos.x + dir.x * t, camPos.y + dir.y * t, camPos.z + dir.z * t };
+        const MapCell* cell = stageMap_.GetCell(
+            static_cast<int>(std::floor(cp.x + 0.5f)),
+            static_cast<int>(std::floor(cp.y)),
+            static_cast<int>(std::floor(cp.z + 0.5f)));
+        if (cell && cell->isSolid) { return true; }
+    }
+    return false;
 }
 
 //  MyGame::Finalize
@@ -2509,15 +2714,208 @@ void MyGame::DrawPostEffectShowcaseImGui() {
 }
 
 
-// ゲームプレイ本体は MyGameGameplay に委譲する。
 void MyGame::UpdateGamePlay() {
-    MyGameGameplay{}.UpdateGamePlay(*this);
+    const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
+
+    if (input->TriggerKey(DIK_C)) {
+        useFirstPersonCamera_ = !useFirstPersonCamera_;
+        if (useFirstPersonCamera_ && player_) {
+            fpsCameraYaw_ = player_->GetRotation().y;
+            fpsCameraPitch_ = 0.0f;
+        }
+    }
+
+    if (!useFirstPersonCamera_) {
+        if (input->TriggerKey(DIK_V)) {
+            bool cur = gameplayCameraController_.IsFollowPlayerMode();
+            gameplayCameraController_.SetFollowPlayerMode(!cur);
+            if (!cur && player_) {
+                Vector3 pp = player_->GetPosition();
+                pp.y += 0.8f;
+                gameplayCameraController_.SetCameraPivot(pp);
+            } else if (cur && stageSelect_) {
+                gameplayCameraController_.ResetCamera(
+                    camera.get(),
+                    player_.get(),
+                    stageMap_,
+                    stageSelect_->GetSelectedIndex());
+            }
+        }
+        camera->SetFov(gameplayCameraController_.GetFov());
+        gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
+    } else {
+        camera->SetFov(0.9f);
+
+        bool isGuiCaptured = false;
+#ifndef NDEBUG
+        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
+#endif
+        const auto& mouse = input->GetMouseState();
+        if (mouse.buttons[0] && !isGuiCaptured) {
+            RECT rect;
+            GetClientRect(winApp->GetHwnd(), &rect);
+            float cw = static_cast<float>(rect.right - rect.left);
+            float ch = static_cast<float>(rect.bottom - rect.top);
+            if (cw > 0.0f && ch > 0.0f) {
+                float sx = static_cast<float>(WinApp::kWindowWidth) / cw;
+                float sy = static_cast<float>(WinApp::kWindowHeight) / ch;
+                float mx = static_cast<float>(mouse.posX) * sx;
+                float my = static_cast<float>(mouse.posY) * sy;
+
+                const float edgeRatio = 0.15f;
+                const float rotateSpeed = 0.03f;
+                float leftEdge = WinApp::kWindowWidth * edgeRatio;
+                float rightEdge = WinApp::kWindowWidth * (1.0f - edgeRatio);
+                float topEdge = WinApp::kWindowHeight * edgeRatio;
+                float bottomEdge = WinApp::kWindowHeight * (1.0f - edgeRatio);
+
+                if (mx < leftEdge) {
+                    fpsCameraYaw_ += rotateSpeed;
+                } else if (mx > rightEdge) {
+                    fpsCameraYaw_ -= rotateSpeed;
+                }
+                if (my < topEdge) {
+                    fpsCameraPitch_ += rotateSpeed;
+                } else if (my > bottomEdge) {
+                    fpsCameraPitch_ -= rotateSpeed;
+                }
+            }
+        }
+
+        const float keyRotateSpeed = 0.03f;
+        if (input->PushKey(DIK_LEFT)) { fpsCameraYaw_ += keyRotateSpeed; }
+        if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_ -= keyRotateSpeed; }
+        if (input->PushKey(DIK_UP)) { fpsCameraPitch_ += keyRotateSpeed; }
+        if (input->PushKey(DIK_DOWN)) { fpsCameraPitch_ -= keyRotateSpeed; }
+        fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
+
+        if (player_) {
+            Vector3 pp = player_->GetPosition();
+            camera->SetPosition({ pp.x, pp.y + 1.2f, pp.z });
+            camera->SetRotation({ fpsCameraPitch_, fpsCameraYaw_, 0.0f });
+        }
+        camera->Update();
+    }
+
+    if (gameplayUIManager_) {
+        gameplayUIManager_->UpdateCameraGuide(currentMode_ == AppMode::GamePlay, input.get(), winApp.get());
+    }
+
+    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+    if (stageSelect_ && stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_ && !invOpen) {
+        tutorialSprite_->Update();
+    }
+    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
+        placementTutorialSprite_->Update();
+    }
+
+    float dt = 1.0f / 60.0f;
+    totalTime_ += dt;
+    stageMap_.Update(dt, player_ ? player_->GetPosition() : Vector3{ 0, 0, 0 });
+    stageRenderer_->UpdateEffect(stageMap_);
+
+    if (player_) {
+        float camRot = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
+        player_->Update(input.get(), stageMap_, camRot, lightVP, dxCommon.get());
+    }
+
+    if (stageMap_.NeedsRebuild()) {
+        stageRenderer_->BuildFromStageMap(stageMap_);
+        stageMap_.ClearRebuildFlag();
+    }
+
+    stageRespawnController_.Update(
+        stageMap_,
+        backupMap_,
+        stageRenderer_.get(),
+        player_.get(),
+        &blockInventory_,
+        &bubblePickupController_,
+        &blockPlacementController_,
+        &stageEditorController_);
+
+    Vector3 pPos = player_ ? player_->GetPosition() : Vector3{};
+    if (player_) {
+        bubblePickupController_.Update(pPos);
+    }
+
+    if (Goal::Check(pPos, { 0.4f, 0.9f, 0.4f }, stageMap_)) {
+        isGoalReached_ = true;
+    }
+
+    if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
+        if (blockInventoryUI_) {
+            blockInventoryUI_->ToggleOpen();
+        }
+    }
+
+    if (isGoalReached_) {
+        // Game clear handling can be connected here when the clear scene exists.
+    }
 }
 
-// ブロック配置モードも MyGameGameplay に委譲する。
 void MyGame::UpdateGamePlayBlockPlace() {
-    MyGameGameplay{}.UpdateBlockPlace(*this);
-} 
+    const Int3& cursor = mapCursor_->GetIndex();
+
+    if (input->TriggerKey(DIK_R)) {
+        placeRotationY_ += 1.5707963f;
+        if (placeRotationY_ >= 6.0f) {
+            placeRotationY_ = 0.0f;
+        }
+    }
+
+    stageEditorController_.HandleCursorInput(
+        input.get(),
+        stageMap_,
+        mapCursor_.get(),
+        lightCamera_.get(),
+        camera.get());
+
+    BlockType selectedType = BlockType::Ground;
+    int selectedCustomId = 0;
+    if (blockInventoryUI_) {
+        selectedType = blockInventoryUI_->GetSelectedBlockType();
+        selectedCustomId = blockInventoryUI_->GetSelectedCustomId();
+        blockPlacementController_.SetPlaceBlockType(selectedType);
+        blockPlacementController_.SetPlaceCustomId(selectedCustomId);
+    }
+
+    if (stageRenderer_) {
+        stageRenderer_->SetPlacementPreview(stageMap_, cursor, selectedType, selectedCustomId, placeRotationY_);
+    }
+
+    static bool prevMouse0 = false;
+    bool mouseJustPressed = input->GetMouseState().buttons[0] && !prevMouse0;
+    prevMouse0 = input->GetMouseState().buttons[0];
+    bool mouseTrigger = false;
+    if (mouseJustPressed && (!blockInventoryUI_ || !blockInventoryUI_->IsActive())) {
+        mouseTrigger = true;
+    }
+
+    if (input->TriggerKey(DIK_RETURN) || mouseTrigger) {
+        if (blockPlacementController_.TryPlace(cursor, placeRotationY_)) {
+            bool hasRest = (selectedType == BlockType::Ground)
+                || blockInventory_.HasBlock(selectedType, selectedCustomId);
+            if (!hasRest) {
+                currentMode_ = AppMode::GamePlay;
+                placeRotationY_ = 0.0f;
+                if (stageRenderer_) {
+                    stageRenderer_->ClearPlacementPreview();
+                }
+            }
+        }
+    }
+
+    if (input->TriggerKey(DIK_ESCAPE) || input->TriggerKey(DIK_B)) {
+        currentMode_ = AppMode::GamePlay;
+        placeRotationY_ = 0.0f;
+        if (stageRenderer_) {
+            stageRenderer_->ClearPlacementPreview();
+        }
+    }
+
+    stageEditorController_.HandleCameraInput(input.get(), camera.get());
+}
 
 // ステージ選択が完了したら、選択ステージを読み込んでゲーム開始状態にする。
 void MyGame::UpdateStageSelect() {
