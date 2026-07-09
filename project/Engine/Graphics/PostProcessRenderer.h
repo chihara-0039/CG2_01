@@ -114,6 +114,45 @@ public:
     /// <summary>ポストエフェクトモードを返す (0: Normal / 1: Grayscale / 2: Sepia / 3: Vignette / 4: BoxFilter3x3 / 5: BoxFilter5x5)</summary>
     int GetPostEffectMode() const { return postEffectMode_; }
 
+    /// <summary>Sets the active post effect. Values outside the supported range fall back to Normal.</summary>
+    void SetPostEffectMode(int mode) { postEffectMode_ = (mode >= 0 && mode <= 11) ? mode : 0; }
+
+    /// <summary>Sets the dissolve cut amount used by the Release showcase and ImGui.</summary>
+    void SetDissolveThreshold(float threshold) {
+        if (!dissolveParamsData_) {
+            return;
+        }
+        if (threshold < 0.0f) {
+            threshold = 0.0f;
+        }
+        if (threshold > 1.0f) {
+            threshold = 1.0f;
+        }
+        dissolveParamsData_->threshold = threshold;
+    }
+
+    /// <summary>Sets the random effect mode. Values outside the shader's range use grayscale noise.</summary>
+    void SetRandomMode(int mode) {
+        if (!randomParamsData_) {
+            return;
+        }
+        randomParamsData_->mode = (mode >= 0 && mode <= 1) ? mode : 0;
+    }
+
+    /// <summary>Sets the random effect strength used by the Release showcase and ImGui.</summary>
+    void SetRandomStrength(float strength) {
+        if (!randomParamsData_) {
+            return;
+        }
+        if (strength < 0.0f) {
+            strength = 0.0f;
+        }
+        if (strength > 1.0f) {
+            strength = 1.0f;
+        }
+        randomParamsData_->strength = strength;
+    }
+
 private:
     // ========== 内部ヘルパー ==========
 

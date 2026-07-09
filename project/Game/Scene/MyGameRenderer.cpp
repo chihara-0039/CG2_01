@@ -61,7 +61,8 @@ void MyGameRenderer::RenderScene(MyGame& game) {
 
     if (!game.debugFlags_.show3DObjects &&
         game.currentMode_ != MyGame::AppMode::EffectPreview &&
-        game.currentMode_ != MyGame::AppMode::EffectShowcase) {
+        game.currentMode_ != MyGame::AppMode::EffectShowcase &&
+        game.currentMode_ != MyGame::AppMode::PostEffectShowcase) {
         return;
     }
 
@@ -79,6 +80,16 @@ void MyGameRenderer::RenderScene(MyGame& game) {
             ID3D12DescriptorHeap* ph[] = { game.textureManager->GetSrvHeap() };
             commandList->SetDescriptorHeaps(1, ph);
             game.particleManager->Draw();
+        }
+        return;
+    }
+
+    if (game.currentMode_ == MyGame::AppMode::PostEffectShowcase) {
+        if (game.terrainObject_) {
+            game.terrainObject_->Draw();
+        }
+        if (game.player_) {
+            game.player_->Draw();
         }
         return;
     }

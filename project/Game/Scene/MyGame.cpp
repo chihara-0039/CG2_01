@@ -25,6 +25,38 @@ const char* kEffectPresetPath = "Resources/presets/effect_presets.json";
 const char* kStormPresetPath = "Resources/presets/storm_effect_presets.json";
 const char* kStormShowcaseName = "Tempest Storm";
 
+struct PostEffectHotKey {
+    BYTE key;
+    int mode;
+    const char* keyLabel;
+    const char* effectName;
+};
+
+constexpr PostEffectHotKey kPostEffectHotKeys[] = {
+    { DIK_1, 1, "1", "Grayscale" },
+    { DIK_2, 3, "2", "Vignetting" },
+    { DIK_3, 6, "3", "GaussianFilter / Smoothing" },
+    { DIK_4, 4, "4", "BoxFilter 3x3" },
+    { DIK_5, 5, "5", "BoxFilter 5x5" },
+    { DIK_6, 7, "6", "LuminanceBasedOutline" },
+    { DIK_7, 8, "7", "DepthBasedOutline" },
+    { DIK_8, 9, "8", "RadialBlur" },
+    { DIK_9, 10, "9", "Dissolve" },
+    { DIK_0, 11, "0", "Random" },
+};
+
+const char* GetPostEffectShowcaseName(int mode) {
+    for (const PostEffectHotKey& hotKey : kPostEffectHotKeys) {
+        if (hotKey.mode == mode) {
+            return hotKey.effectName;
+        }
+    }
+    switch (mode) {
+    case 2: return "Sepia";
+    default: return "Normal";
+    }
+}
+
 void CopyPresetName(std::array<char, 64>& buffer, const std::string& name) {
     buffer.fill('\0');
     strncpy_s(buffer.data(), buffer.size(), name.c_str(), _TRUNCATE);
@@ -119,7 +151,7 @@ void MyGame::Initialize() {
         playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #elif defined(NDEBUG)
-    currentMode_           = AppMode::EffectShowcase;
+    currentMode_           = AppMode::PostEffectShowcase;
     debugFlags_.showSkybox = false;
     postProcess_.SetEnabled(false);
 #else
@@ -220,6 +252,12 @@ void MyGame::Initialize() {
 
 
     postProcess_.Initialize(dxCommon.get(), stageMap_.GetClearColor());
+#if defined(DEVELOPMENT) || defined(NDEBUG)
+    // Evaluation Task 1 requires a scene rendered through Grayscale.
+    // Enable the offscreen pass by default so the requirement is visible immediately after launch.
+    postProcess_.SetEnabled(true);
+    postProcess_.SetPostEffectMode(1);
+#endif
 }
 
 
@@ -342,6 +380,8 @@ void MyGame::HandleModeChange() {
     } else if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
         camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
         effectShowcaseFirstPlay_ = true;
+    } else if (currentMode_ == AppMode::PostEffectShowcase) {
+        camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 7.0f, { 0.35f, 0.0f, 0.0f });
     }
 
     prevMode_ = currentMode_;
@@ -372,6 +412,9 @@ Vector3 MyGame::UpdateLightCameraForFrame() {
 }
 
 void MyGame::UpdateHitEffectShortcut() {
+    if (currentMode_ == AppMode::PostEffectShowcase) {
+        return;
+    }
     if (!input->TriggerKey(DIK_H) || !particleManager) {
         return;
     }
@@ -413,7 +456,10 @@ void MyGame::UpdateBackgroundObjects() {
 }
 
 void MyGame::UpdateParticleDebugVisibility() {
-    if (particleManager && currentMode_ != AppMode::EffectPreview && currentMode_ != AppMode::EffectShowcase) {
+    if (particleManager &&
+        currentMode_ != AppMode::EffectPreview &&
+        currentMode_ != AppMode::EffectShowcase &&
+        currentMode_ != AppMode::PostEffectShowcase) {
         particleManager->SetDrawGPUParticleSphere(true);
     }
 }
@@ -432,6 +478,10 @@ void MyGame::UpdateCurrentMode(const Matrix4x4& lightVP, bool isGuiCaptured) {
     case AppMode::EffectShowcase:
         UpdateEffectShowcase();
         DrawEffectShowcaseImGui();
+        break;
+    case AppMode::PostEffectShowcase:
+        UpdatePostEffectShowcase();
+        DrawPostEffectShowcaseImGui();
         break;
     case AppMode::StageEditor:
         stageEditorController_.Update(
@@ -480,7 +530,10 @@ void MyGame::UpdateDebugAndEffectObjects(const Matrix4x4& view, const Matrix4x4&
         }
     }
 
-    if ((currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) && terrainObject_) {
+    if ((currentMode_ == AppMode::EffectPreview ||
+         currentMode_ == AppMode::EffectShowcase ||
+         currentMode_ == AppMode::PostEffectShowcase) &&
+        terrainObject_) {
         terrainObject_->SetCamera(view, proj);
         terrainObject_->Update(lightVP);
     }
@@ -1287,9 +1340,18 @@ void MyGame::UpdateImGui() {
         case AppMode::SkinningEditor: modeIndex = 3; break;
         case AppMode::EffectPreview:  modeIndex = 4; break;
         case AppMode::EffectShowcase: modeIndex = 5; break;
+        case AppMode::PostEffectShowcase: modeIndex = 6; break;
         default:                                     break;
         }
-        const char* modeNames[] = { "DebugView", "StageEditor", "GamePlay", "SkinningEditor", "EffectPreview", "EffectShowcase" };
+        const char* modeNames[] = {
+            "DebugView",
+            "StageEditor",
+            "GamePlay",
+            "SkinningEditor",
+            "EffectPreview",
+            "EffectShowcase",
+            "PostEffectShowcase"
+        };
         // ImGui コンボ「App Mode」で候補から選択する。
         if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
             switch (modeIndex) {
@@ -1307,6 +1369,10 @@ void MyGame::UpdateImGui() {
             case 5:
                 currentMode_ = AppMode::EffectShowcase;
                 camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
+                break;
+            case 6:
+                currentMode_ = AppMode::PostEffectShowcase;
+                camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 7.0f, { 0.35f, 0.0f, 0.0f });
                 break;
             }
         }
@@ -1810,6 +1876,12 @@ void MyGame::UpdateImGui() {
         // ImGui テキスト「MMB Drag : Orbit    Shift + MMB : Pan    Mouse Wheel : Zoom」を表示する。
         ImGui::Text("MMB Drag : Orbit    Shift + MMB : Pan    Mouse Wheel : Zoom");
 
+    } else if (currentMode_ == AppMode::PostEffectShowcase) {
+        ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.36f, 1.0f), "[ PostEffect Showcase ]");
+        ImGui::Text("Current: %s", GetPostEffectShowcaseName(postProcess_.GetPostEffectMode()));
+        ImGui::Text("1 Grayscale / 2 Vignetting / 3 Smoothing / 4-0 Extra PostEffects");
+        ImGui::Text("Particle showcase effects are disabled in this mode.");
+
     } else if (currentMode_ == AppMode::StageSelect) {
         // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "[ Stage Select ]");
@@ -2265,6 +2337,41 @@ void MyGame::UpdateEffectShowcase() {
     }
 }
 
+// CG5課題1専用のPostEffect確認モードを更新する。
+void MyGame::UpdatePostEffectShowcase() {
+    debugFlags_.showParticles = false;
+    debugFlags_.showSkybox = false;
+    postProcess_.SetEnabled(true);
+
+    if (particleManager) {
+        particleManager->SetStormActive(false);
+        particleManager->SetDrawGPUParticleSphere(false);
+        particleManager->ClearParticles();
+    }
+
+    // パーティクル演出とは別に、画面全体へ適用するPostEffectだけを数字キーで切り替える。
+    for (const PostEffectHotKey& hotKey : kPostEffectHotKeys) {
+        if (!input->TriggerKey(hotKey.key)) {
+            continue;
+        }
+        postProcess_.SetPostEffectMode(hotKey.mode);
+        if (hotKey.mode == 10) {
+            // 初期値0.0だとDissolveが分かりづらいため、展示時は溶け始めが見える値にする。
+            postProcess_.SetDissolveThreshold(0.35f);
+        }
+        if (hotKey.mode == 11) {
+            // ノイズ量を明確にして、Randomの効果差を単体で確認できるようにする。
+            postProcess_.SetRandomMode(0);
+            postProcess_.SetRandomStrength(0.55f);
+        }
+    }
+
+    if (input->TriggerKey(DIK_TAB)) {
+        stageSelect_->Initialize(object3dCommon.get(), input.get());
+        currentMode_ = AppMode::StageSelect;
+    }
+}
+
 // ショーケース中に表示する操作ガイドとプリセット名。
 void MyGame::DrawEffectShowcaseImGui() {
     // ImGui のフレーム情報と表示サイズを取得する。
@@ -2313,23 +2420,90 @@ void MyGame::DrawEffectShowcaseImGui() {
     ImGui::End();
 
 #ifdef NDEBUG
-    // Debug builds use the existing Tools & Controls panel for this guide.
+    // Debug builds use the existing Tools & Controls panel. Release shows a compact guide for evaluators.
+    const float panelMargin = 24.0f;
+    const float panelHeight = 96.0f;
+    const float panelY = io.DisplaySize.y - panelHeight - panelMargin;
+    const float panelWidth = io.DisplaySize.x - panelMargin * 2.0f;
+
     // 次に開く ImGui ウィンドウの表示位置を固定する。
-    ImGui::SetNextWindowPos(ImVec2(24.0f, io.DisplaySize.y - 72.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(panelMargin, panelY), ImGuiCond_Always);
     // 次に開く ImGui ウィンドウの表示サイズを固定する。
-    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x - 48.0f, 48.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(panelWidth, panelHeight), ImGuiCond_Always);
     // 次に開く ImGui ウィンドウの背景透明度を設定する。
     ImGui::SetNextWindowBgAlpha(0.72f);
     // ImGui ウィンドウ「Effect Showcase Controls」を開始する。
     ImGui::Begin("Effect Showcase Controls", nullptr, flags);
-    // ImGui テキスト「LEFT / RIGHT : Select     SPACE : Replay     A : Auto Play [%s]     TAB : Game」を表示する。
-    ImGui::Text("LEFT / RIGHT : Select     SPACE : Replay     A : Auto Play [%s]     TAB : Game",
-        effectShowcaseAutoPlay_ ? "ON" : "OFF");
-    // 次の ImGui 項目を同じ行に並べる。
+    ImGui::TextColored(ImVec4(0.42f, 0.86f, 1.0f, 1.0f), "Particle / Scene Effect");
+    ImGui::Separator();
+    ImGui::Text("LEFT / RIGHT : Select preset");
+    ImGui::Text("SPACE        : Replay current preset");
+    ImGui::Text("A            : Auto Play [%s]", effectShowcaseAutoPlay_ ? "ON" : "OFF");
+    ImGui::Text("TAB          : Back to Game");
+    ImGui::Spacing();
+    ImGui::TextUnformatted("MMB          : Orbit camera");
     ImGui::SameLine();
-    // ImGui テキスト「     MMB : Orbit     Shift+MMB : Pan     Wheel : Zoom」を装飾なしで表示する。
-    ImGui::TextUnformatted("     MMB : Orbit     Shift+MMB : Pan     Wheel : Zoom");
+    ImGui::TextUnformatted("Shift + MMB  : Pan camera");
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Wheel        : Zoom camera");
     // 現在の ImGui ウィンドウを閉じる。
+    ImGui::End();
+#endif
+}
+
+// PostEffectだけを確認するCG5課題専用UI。
+void MyGame::DrawPostEffectShowcaseImGui() {
+    const ImGuiIO& io = ImGui::GetIO();
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav;
+
+#ifdef NDEBUG
+    const float headerX = 24.0f;
+    const float headerWidth = io.DisplaySize.x - 48.0f;
+#else
+    const float headerX = 344.0f;
+    const float headerWidth = io.DisplaySize.x - headerX - 24.0f;
+#endif
+
+    ImGui::SetNextWindowPos(ImVec2(headerX, 20.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(headerWidth, 92.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.72f);
+    ImGui::Begin("PostEffect Showcase Header", nullptr, flags);
+    ImGui::SetWindowFontScale(1.45f);
+    ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.36f, 1.0f), "POST EFFECT SHOWCASE");
+    ImGui::SetWindowFontScale(1.15f);
+    ImGui::Text("Current : %s", GetPostEffectShowcaseName(postProcess_.GetPostEffectMode()));
+    ImGui::TextUnformatted("CG5 Evaluation Task 1 dedicated mode");
+    ImGui::End();
+
+#ifdef NDEBUG
+    const float panelMargin = 24.0f;
+    const float panelHeight = 214.0f;
+    const float panelY = io.DisplaySize.y - panelHeight - panelMargin;
+    const float panelWidth = io.DisplaySize.x - panelMargin * 2.0f;
+
+    ImGui::SetNextWindowPos(ImVec2(panelMargin, panelY), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(panelWidth, panelHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.72f);
+    ImGui::Begin("PostEffect Showcase Controls", nullptr, flags);
+    ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.36f, 1.0f), "PostEffect Controls");
+    ImGui::Separator();
+    ImGui::TextUnformatted("This mode disables particle showcase effects so the screen-space PostEffect is easy to inspect.");
+    ImGui::Spacing();
+    ImGui::Columns(2, "PostEffectOnlyKeyColumns", false);
+    constexpr int postEffectHotKeyCount =
+        static_cast<int>(sizeof(kPostEffectHotKeys) / sizeof(kPostEffectHotKeys[0]));
+    for (int i = 0; i < postEffectHotKeyCount; ++i) {
+        const PostEffectHotKey& hotKey = kPostEffectHotKeys[i];
+        ImGui::Text("%s : %s", hotKey.keyLabel, hotKey.effectName);
+        if (i == 4) {
+            ImGui::NextColumn();
+        }
+    }
+    ImGui::Columns(1);
+    ImGui::Spacing();
+    ImGui::TextUnformatted("TAB : Back to Stage Select     MMB : Orbit     Shift+MMB : Pan     Wheel : Zoom");
     ImGui::End();
 #endif
 }

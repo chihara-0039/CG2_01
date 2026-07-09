@@ -90,6 +90,68 @@ Tempest Stormでは、雲・雨・雷の発生範囲、落雷頻度、雷の大�
 
 シェーダー、画像、JSONは相対パスで読み込むため、実行時の作業ディレクトリはプロジェクトフォルダーにしてください。
 
+## CG5 Evaluation Task 1: PostEffect
+
+### Required Feature
+
+This project implements scene rendering through Grayscale.
+
+- `PostProcessRenderer` first renders the normal 3D scene into a RenderTexture.
+- `Resources/shaders/hlsl/Grayscale.PS.hlsl` samples that RenderTexture, converts RGB to luminance, and writes the grayscale result to the back buffer.
+- In `Development` and `Release`, offscreen rendering is enabled by default and the initial post effect is set to `Grayscale` for evaluation.
+- At runtime, the setting can be confirmed from ImGui: `Offscreen Rendering (RenderTexture)` > `Enable Offscreen Rendering` and `Post Effect: Grayscale`.
+
+### Extra PostEffects
+
+The following additional PostEffects can also be selected from the same ImGui combo:
+
+- Vignetting
+- BoxFilter 3x3 / 5x5
+- GaussianFilter
+- LuminanceBasedOutline
+- DepthBasedOutline
+- RadialBlur
+- Dissolve
+- Random
+
+Vignette / DepthBasedOutline / RadialBlur / Dissolve / Random expose adjustable parameters in ImGui.
+
+### Release PostEffect Showcase Controls
+
+The `Release` build starts in `PostEffectShowcase` mode and enables offscreen rendering automatically.
+This mode disables the particle showcase effects so the screen-space PostEffect is easy to inspect.
+Use number keys to switch the visible PostEffect:
+
+| Key | PostEffect |
+| --- | --- |
+| `1` | Grayscale |
+| `2` | Vignetting |
+| `3` | GaussianFilter / Smoothing |
+| `4` | BoxFilter 3x3 |
+| `5` | BoxFilter 5x5 |
+| `6` | LuminanceBasedOutline |
+| `7` | DepthBasedOutline |
+| `8` | RadialBlur |
+| `9` | Dissolve |
+| `0` | Random |
+
+`TAB` returns to Stage Select. Mouse middle-drag orbits the camera, `Shift + middle-drag` pans, and the mouse wheel zooms.
+
+### Main Files
+
+- `Engine/Graphics/PostProcessRenderer.h`
+- `Engine/Graphics/PostProcessRenderer.cpp`
+- `Resources/shaders/hlsl/Fullscreen.VS.hlsl`
+- `Resources/shaders/hlsl/Grayscale.PS.hlsl`
+- `Resources/shaders/hlsl/BoxFilter3x3.PS.hlsl`
+- `Resources/shaders/hlsl/BoxFilter5x5.PS.hlsl`
+- `Resources/shaders/hlsl/GaussianFilter.PS.hlsl`
+- `Resources/shaders/hlsl/LuminanceBasedOutline.PS.hlsl`
+- `Resources/shaders/hlsl/DepthBasedOutline.PS.hlsl`
+- `Resources/shaders/hlsl/RadialBlur.PS.hlsl`
+- `Resources/shaders/hlsl/Dissolve.PS.hlsl`
+- `Resources/shaders/hlsl/Random.PS.hlsl`
+
 ## CG4 Evaluation Task 2 Additions
 
 - SkinningModel display and ComputeShader skinning are implemented in the Skinning Editor mode.
