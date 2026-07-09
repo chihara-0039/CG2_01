@@ -209,11 +209,4 @@ public:
     //雲の透過
     void UpdateCloudTransparency(const Vector3& cameraPos, const Vector3& playerPos);
 
-    //ステージの部分透過エリアのための関数
-    bool IsTransparencyArea(
-        int stageIndex,
-        int x,
-        int y,
-        int z
-    );
 };

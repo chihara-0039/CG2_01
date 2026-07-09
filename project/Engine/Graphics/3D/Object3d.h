@@ -3,14 +3,14 @@
 #include "Model.h"
 #include "MyMath.h"
 
-// Object3d.VS.hlsl の b0 に渡す行列セット。
+// Constant buffer data bound to Object3d.VS.hlsl b0.
 struct TransformationMatrix {
     Matrix4x4 WVP;
     Matrix4x4 World;
     Matrix4x4 lightViewProjection;
 };
 
-// Object3d.PS.hlsl のマテリアル定数。
+// Material constants bound to Object3d.PS.hlsl.
 struct Material {
     Vector4   color;
     int32_t   enableLighting;
@@ -21,30 +21,31 @@ struct Material {
     float     environmentCoefficient;
 };
 
-// 1つの3Dモデルのワールド変換・マテリアル・描画を担当するクラス。
-// RootSignature や PSO は Object3dCommon が共有管理する。
+// Renderable 3D object instance.
+// Object3d owns per-object transform/material buffers. Shared PSO and root
+// signature state are owned by Object3dCommon.
 class Object3d {
 public:
-    // 定数バッファを作成し、初期マテリアル値を書き込む。
+    // Creates constant buffers and writes default material values.
     void Initialize(Object3dCommon* object3dCommon);
 
-    // World / WVP / lightVP を更新して GPU 定数バッファへ書き込む。
+    // Updates world, WVP, and light-view-projection matrices.
     void Update(const Matrix4x4& lightVP);
 
-    // 登録済み Model を通常描画する。
+    // Draws the assigned model with the current transform and material.
     void Draw();
 
-    // 描画に使うモデルを設定する。所有権は持たない。
+    // Sets a non-owning model pointer. The caller must keep the model alive.
     void SetModel(Model* model) { model_ = model; }
 
     void SetPosition(const Vector3& position) { transform_.translate = position; }
     void SetRotation(const Vector3& rotation) { transform_.rotate = rotation; }
     void SetScale(const Vector3& scale) { transform_.scale = scale; }
 
-    // シャドウマップ用の深度描画を行う。
+    // Draws depth for the shadow-map pass.
     void DrawShadow(const Matrix4x4& lightViewProjection);
 
-    // Update() 前に現在のカメラ行列を渡す。
+    // Sets the camera matrices used by the next Update().
     void SetCamera(const Matrix4x4& view, const Matrix4x4& projection) {
         viewMatrix_       = view;
         projectionMatrix_ = projection;

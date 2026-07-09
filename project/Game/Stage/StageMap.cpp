@@ -1,4 +1,5 @@
 ﻿#include "StageMap.h"
+#include "StageMapGimmickSystem.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -570,6 +571,18 @@ bool StageMap::RemoveBlock(const Int3& index) {
     return RemoveBlock(index.x, index.y, index.z);
 }
 
+void StageMap::SetPSwitchActive(int switchId) {
+    StageMapGimmickSystem::SetPSwitchActive(*this, switchId);
+}
+
+void StageMap::ResetPSwitchStateNoRebuild() {
+    StageMapGimmickSystem::ResetPSwitchStateNoRebuild(*this);
+}
+
+void StageMap::ToggleOnState() {
+    StageMapGimmickSystem::ToggleOnState(*this);
+}
+
 void StageMap::DrawImGui() {
 #ifdef USE_IMGUI
     ImGui::Text("Size: %d x %d x %d", width_, height_, depth_);
@@ -747,7 +760,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
 
 void StageMap::ResetPSwitchState()
 {
-    isPSwitchActive_ = false;
+    StageMapGimmickSystem::ResetPSwitchState(*this);
 }
 
 void StageMap::RebuildMovingFloorList() {

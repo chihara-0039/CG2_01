@@ -4,6 +4,8 @@
 #include <string>
 #include "MyMath.h"
 
+class StageMapGimmickSystem;
+
 // ブロック種類
 enum class BlockType : uint32_t {
     None = 0,
@@ -164,6 +166,7 @@ struct CustomBlockPart {
 };
 
 class StageMap {
+    friend class StageMapGimmickSystem;
 public:
     StageMap() = default;
     ~StageMap() = default;
@@ -210,59 +213,8 @@ public:
     int GetHeight() const { return height_; }
     int GetDepth() const { return depth_; }
 
-    //5/21佐倉変更
-
-    void SetPSwitchActive(int switchId) {
-        isPSwitchActive_ = true;
-        needsRebuild_ = true;
-
-        for (auto& cell : cells_) {
-
-            // 同じIDのPスイッチも消す
-            if (cell.type == BlockType::PSwitch && cell.variant == switchId) {
-                cell.isSolid = false;
-                cell.isHidden = true;
-            }
-
-
-            if (cell.type == BlockType::PBlock && cell.variant == switchId) {
-                cell.isSolid = false;
-                cell.isHidden = true;
-            }
-
-            // ▼ 🌟 追加：出現するPブロック：押すと出てくる（実体化する）
-            if (cell.type == BlockType::PBlockAppears && cell.variant == switchId) {
-                cell.isSolid = true;
-            }
-        }
-    }
-
-	// ★ Pスイッチを元に戻す関数（再構築はしない）
-    void ResetPSwitchStateNoRebuild() {
-        isPSwitchActive_ = false;
-
-		// PスイッチとPブロックの状態を元に戻す（すり抜けるようにする）
-        for (auto& cell : cells_) {
-
-			// 同じIDのPスイッチを元に戻す
-            if (cell.type == BlockType::PSwitch) {
-                cell.isSolid = false;
-                cell.isHidden = false;
-            }
-
-			// 同じIDのPブロックを元に戻す
-            if (cell.type == BlockType::PBlock) {
-                cell.isSolid = true;
-                cell.isHidden = false;
-            }
-            // ▼ 出現するPブロック：元に戻る（すり抜けるようになる）
-            if (cell.type == BlockType::PBlockAppears) {
-                cell.isSolid = false;
-            }
-        }
-        // ここでは true にしない
-        needsRebuild_ = false;
-    }
+    void SetPSwitchActive(int switchId);
+    void ResetPSwitchStateNoRebuild();
 
 
 	// 再構築が必要かどうかのフラグを返す関数
@@ -273,7 +225,7 @@ public:
         needsRebuild_ = false;
     }
 
-	// フラグを「再構築の必要あり（true）」にセットする関数
+	// フラグを「再構築の必要なし（false）」に戻す
     void ClearRebuildFlag() { needsRebuild_ = false; }
 
 	// フラグを「再構築の必要あり（true）」にセットする関数
@@ -344,18 +296,7 @@ public:
     // 🌟 状態取得・変更関数を追加
     bool IsOnState() const { return isOnState_; }
 
-    // スイッチを押した時の処理
-    void ToggleOnState() {
-        isOnState_ = !isOnState_;
-
-        // マップ上の全ON/OFFブロックの当たり判定を更新する
-        for (auto& cell : cells_) {
-            if (cell.type == BlockType::OnBlock) cell.isSolid = isOnState_;
-            if (cell.type == BlockType::OffBlock) cell.isSolid = !isOnState_;
-        }
-        // 見た目の再構築を要求する（すでに実装されている機能を利用）
-        needsRebuild_ = true;
-    }
+    void ToggleOnState();
 
 private:
 
