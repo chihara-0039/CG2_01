@@ -93,6 +93,7 @@ private:
         SkinningEditor,    ///< スキニングエディタ
         EffectPreview,     ///< エフェクト編集・確認モード
         EffectShowcase,    ///< Release対応のエフェクト鑑賞モード
+        PostEffectShowcase,///< CG5課題専用のPostEffect鑑賞モード
     };
 
     /// <summary>DebugView モードで表示するオブジェクトのフラグ群</summary>
@@ -285,6 +286,7 @@ private:
     void UpdateDebugView();             ///< DebugView モードの更新
     void UpdateEffectPreview();         ///< EffectPreview モードの更新
     void UpdateEffectShowcase();        ///< EffectShowcase モードの更新
+    void UpdatePostEffectShowcase();    ///< PostEffectShowcase モードの更新
     void EmitEffectPreviewBurst();       ///< EffectPreview のバースト発生
     void UpdateGamePlay();              ///< GamePlay モードの更新
     void UpdateGamePlayBlockPlace();    ///< GamePlay_BlockPlace モードの更新
@@ -317,6 +319,7 @@ private:
     void DrawEffectPreviewEditorImGui();
     void DrawStormEffectEditorImGui();
     void DrawEffectShowcaseImGui();
+    void DrawPostEffectShowcaseImGui();
     void LoadStormPresetNames();
     bool SaveStormPreset(const std::string& name);
     bool LoadStormPreset(const std::string& name);
