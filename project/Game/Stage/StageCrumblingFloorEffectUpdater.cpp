@@ -11,6 +11,7 @@ std::vector<Object3d*> StageCrumblingFloorEffectUpdater::Apply(
     std::vector<Object3d*> dirtyObjects;
     size_t objIndex = 0;
 
+    // objectsはStageRenderer::BuildFromStageMapと同じセル走査順で作られている前提。
     for (int y = 0; y < stageMap.GetHeight(); ++y) {
         for (int z = 0; z < stageMap.GetDepth(); ++z) {
             for (int x = 0; x < stageMap.GetWidth(); ++x) {
@@ -19,16 +20,19 @@ std::vector<Object3d*> StageCrumblingFloorEffectUpdater::Apply(
                     continue;
                 }
 
+                // プレイ中はPlayerStartの描画オブジェクトが作られないため、インデックスも進めない。
                 if (cell->type == BlockType::PlayerStart && !isEditorMode) {
                     continue;
                 }
 
+                // マップと描画オブジェクト数がずれても範囲外アクセスしない。
                 if (objIndex >= objects.size()) {
                     return dirtyObjects;
                 }
 
                 Object3d* obj = objects[objIndex].get();
                 if (cell->type == BlockType::CrumblingFloor) {
+                    // 崩れる床の進行状態はMapCell側の色成分と透明度で表現する。
                     obj->SetColor({
                         1.0f,
                         cell->colorG,

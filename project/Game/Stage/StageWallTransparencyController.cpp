@@ -12,9 +12,11 @@ void StageWallTransparencyController::Apply(
     float transparencyAlpha,
     int currentStageIndex) {
 
+    // 現状はセル範囲ベースの透過判定のみ使う。引数は将来の視線判定拡張用に残している。
     cameraPos;
 
     if (!enableTransparency) {
+        // 透過無効時は、前フレームで半透明にした壁を必ず不透明へ戻す。
         for (auto& obj : wallObjects) {
             if (obj) {
                 obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
@@ -27,6 +29,7 @@ void StageWallTransparencyController::Apply(
     int playerCellY = static_cast<int>(std::floor(playerPos.y + 0.5f));
     int playerCellZ = static_cast<int>(std::floor(playerPos.z + 0.5f));
 
+    // 各壁を一度不透明に戻してから、そのフレームで必要な壁だけ半透明にする。
     for (auto& obj : wallObjects) {
         if (!obj) {
             continue;
@@ -40,10 +43,12 @@ void StageWallTransparencyController::Apply(
 
         obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 
+        // プレイヤーより下の壁は視界を遮らないので対象外。
         if (wallCellY <= playerCellY) {
             continue;
         }
 
+        // ステージごとの設計範囲外では、意図しない壁透過を起こさない。
         if (!StageTransparencyPolicy::IsTransparencyArea(
                 currentStageIndex,
                 wallCellX,
@@ -52,6 +57,7 @@ void StageWallTransparencyController::Apply(
             continue;
         }
 
+        // プレイヤー近傍かつ上方向の壁だけを薄くして、奥行き感を残す。
         bool insideTransparencyArea =
             std::abs(wallCellX - playerCellX) <= 2 &&
             std::abs(wallCellZ - playerCellZ) <= 1 &&

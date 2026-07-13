@@ -4,82 +4,84 @@
 #include "MyMath.h"
 #include "SpriteCommon.h"
 
+// 2D UIやHUD表示に使う矩形スプライト。
 class Sprite {
 public:
-    // 頂点データ構造体
+    // 1頂点分の位置とUV。
     struct VertexData {
         Vector4 position;
         Vector2 texcoord;
     };
 
-    // マテリアルデータ（色）
+    // スプライト全体に乗算する色。
     struct Material {
         Vector4 color;
     };
 
-    // 座標変換データ
+    // 2D描画用のワールド・ビュー・プロジェクション合成行列。
     struct TransformationMatrix {
         Matrix4x4 WVP;
     };
 
 public:
-    // 初期化（テクスチャインデックス指定）
+    // 使用する共通描画設定とテクスチャを指定して初期化する。
     void Initialize(SpriteCommon* spriteCommon, uint32_t textureHandle);
 
-    // 更新処理
+    // 位置・サイズ・回転などの変更をGPUバッファへ反映する。
     void Update();
 
-    // 描画
+    // SpriteCommon::PreDraw後に呼び、現在のテクスチャで描画する。
     void Draw();
 
-    // --- セッター群 ---
+    // 画面上の表示位置を設定する。
     void SetPosition(const Vector2& position) { position_ = position; transferNeeded_ = true; }
+    // Z軸回転角をラジアンで設定する。
     void SetRotation(float rotation) { rotation_ = rotation; transferNeeded_ = true; }
+    // 表示サイズをピクセル基準で設定する。
     void SetSize(const Vector2& size) { size_ = size; transferNeeded_ = true; }
     void SetColor(const Vector4& color) { materialData_->color = color; }
 
-    // アンカーポイント (0.0~1.0) 例: 中心なら{0.5, 0.5}
+    // アンカーポイント。0.0～1.0で指定し、中心なら{0.5f, 0.5f}。
     void SetAnchorPoint(const Vector2& anchor) { anchorPoint_ = anchor; transferNeeded_ = true; }
 
-    // テクスチャ切り抜き (画像上のピクセル座標とサイズ)
+    // テクスチャの一部だけを表示するための切り抜き矩形をピクセル座標で指定する。
     void SetTextureRect(const Vector2& position, const Vector2& size);
-    // テクスチャ変更
+    // 描画に使うテクスチャを差し替える。
     void SetTexture(uint32_t textureHandle);
 
-    // 既に Initialize 等があると思いますが、その下に以下を追加
     const Vector2& GetPosition() const { return position_; }
     float GetRotation() const { return rotation_; }
     const Vector2& GetSize() const { return size_; }
 
 private:
-    // 頂点バッファの作成
+    // 矩形描画用の頂点バッファを作成する。
     void CreateVertexBuffer();
-    // マテリアルバッファの作成
+    // 色情報を渡す定数バッファを作成する。
     void CreateMaterialBuffer();
-    // トランスフォームバッファの作成
+    // WVP行列を渡す定数バッファを作成する。
     void CreateTransformationMatrixBuffer();
 
-    // 頂点データの更新（サイズや切り抜き変更時）
+    // サイズ、アンカー、切り抜き範囲をもとに頂点データを再計算する。
     void UpdateVertexData();
 
 private:
     SpriteCommon* spriteCommon_ = nullptr;
     uint32_t textureHandle_ = 0;
 
-    // トランスフォーム情報
+    // 2Dトランスフォーム情報。
     Vector2 position_ = { 0.0f, 0.0f };
     float rotation_ = 0.0f;
     Vector2 size_ = { 100.0f, 100.0f };
     Vector2 anchorPoint_ = { 0.0f, 0.0f };
 
-    // テクスチャ切り抜き情報
+    // テクスチャ切り抜き情報。
     Vector2 textureLeftTop_ = { 0.0f, 0.0f };
     Vector2 textureSize_ = { 100.0f, 100.0f };
 
-    // フラグ
+    // CPU側の変更をGPUへ再転送する必要があるか。
     bool transferNeeded_ = true; // 頂点データの再転送が必要か
 
-    // DirectXリソース
+    // DirectXリソース。
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
 

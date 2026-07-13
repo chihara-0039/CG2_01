@@ -3,8 +3,10 @@
 
 class Player;
 
+// StageMapからプレイヤー開始位置を解決し、Playerへ反映する。
 class PlayerBasePosition {
 public:
+    // PlayerStartセルを探して位置とインデックスを更新する。見つからない場合はfalseを返す。
     bool ApplyFromStageMap(const StageMap& stageMap, Player* player);
 
     const Vector3& GetPosition() const { return position_; }

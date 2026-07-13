@@ -7,25 +7,27 @@
 
 #include <functional>
 
-// シャボン玉取得処理専用クラス
+// プレイヤー位置をもとに、近くのシャボン玉ブロックを回収して所持数へ反映する。
 class BubblePickupController {
 public:
+    // 回収対象のマップ、描画、所持数管理を外部から注入する。
     void Initialize(
         StageMap* stageMap,
         StageRenderer* stageRenderer,
         BlockInventory* inventory
     );
 
-    // プレイヤー位置を渡して、近くのシャボン玉を取得する
+    // プレイヤー周辺セルを確認し、回収可能なシャボン玉があれば取得する。
     void Update(const Vector3& playerPosition);
 
+    // 回収演出やSEを呼び出すための通知先を登録する。
     void SetCollectCallback(std::function<void(const Vector3&)> callback);
 
 private:
-    // ワールド座標から近いマス座標を作る
+    // ワールド座標を最寄りのステージセル座標へ変換する。
     Int3 ToGridIndex(const Vector3& position) const;
 
-    // 指定マスにシャボン玉があれば取得する
+    // 指定セルにシャボン玉があれば回収し、マップと描画を更新する。
     bool TryCollectAt(const Int3& index);
 
 private:

@@ -3,9 +3,10 @@
 #include <wrl.h>
 #include <cstdint>
 
+// Win32ウィンドウの生成、メッセージ処理、破棄を担当するアプリ基盤クラス。
 class WinApp {
 public:
-    // 静的メンバ関数
+    // Win32から呼び出されるウィンドウプロシージャ。
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 public:
@@ -17,24 +18,23 @@ public:
     static constexpr int32_t kWindowWidth = 1920;
     static constexpr int32_t kWindowHeight = 1080;
 
-    // 初期化
+    // ウィンドウクラス登録とゲーム用ウィンドウ生成を行う。
     void Initialize();
-    // メッセージ処理
+    // Windowsメッセージを処理する。終了要求を受けた場合はfalseを返す。
     bool ProcessMessage();
-    // 終了
+    // ウィンドウ破棄とクラス登録解除を行う。
     void Finalize();
 
-    // Getter
     HWND GetHwnd() const { return hwnd_; }
     HINSTANCE GetHInstance() const { return wc_.hInstance; }
 
-    // ★ここを追加（DirectXCommonやInputクラスから呼ばれるため必須）
+    // DirectXCommonやInputが参照するクライアント領域サイズ。
     int32_t GetWidth() const { return kClientWidth; }
     int32_t GetHeight() const { return kClientHeight; }
 
 private:
-    // ウィンドウハンドル
+    // 生成済みウィンドウのハンドル。
     HWND hwnd_ = nullptr;
-    // ウィンドウクラス
+    // 登録したウィンドウクラス情報。
     WNDCLASSW wc_{};
 };

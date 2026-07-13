@@ -6,6 +6,7 @@ void StageMapGimmickSystem::SetPSwitchActive(StageMap& stageMap, int switchId) {
     stageMap.isPSwitchActive_ = true;
     stageMap.needsRebuild_ = true;
 
+    // 同じvariantを持つPスイッチ/Pブロックだけを対象にして、別IDのギミックに影響させない。
     for (auto& cell : stageMap.cells_) {
         if (cell.type == BlockType::PSwitch && cell.variant == switchId) {
             cell.isSolid = false;
@@ -26,6 +27,7 @@ void StageMapGimmickSystem::SetPSwitchActive(StageMap& stageMap, int switchId) {
 void StageMapGimmickSystem::ResetPSwitchStateNoRebuild(StageMap& stageMap) {
     stageMap.isPSwitchActive_ = false;
 
+    // リトライやステージ遷移時に、Pスイッチ系セルを初期状態へ戻す。
     for (auto& cell : stageMap.cells_) {
         if (cell.type == BlockType::PSwitch) {
             cell.isSolid = false;
@@ -46,12 +48,14 @@ void StageMapGimmickSystem::ResetPSwitchStateNoRebuild(StageMap& stageMap) {
 }
 
 void StageMapGimmickSystem::ResetPSwitchState(StageMap& stageMap) {
+    // 見た目側の再構築を伴わない、フラグだけの軽量リセット。
     stageMap.isPSwitchActive_ = false;
 }
 
 void StageMapGimmickSystem::ToggleOnState(StageMap& stageMap) {
     stageMap.isOnState_ = !stageMap.isOnState_;
 
+    // ON/OFFブロックは片方だけが当たり判定を持つよう、状態を対で切り替える。
     for (auto& cell : stageMap.cells_) {
         if (cell.type == BlockType::OnBlock) {
             cell.isSolid = stageMap.isOnState_;
@@ -61,5 +65,6 @@ void StageMapGimmickSystem::ToggleOnState(StageMap& stageMap) {
         }
     }
 
+    // 当たり判定と見た目の反映が必要なので、StageRenderer側の再構築対象にする。
     stageMap.needsRebuild_ = true;
 }

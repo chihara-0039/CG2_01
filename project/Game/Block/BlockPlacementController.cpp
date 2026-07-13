@@ -18,6 +18,7 @@ void BlockPlacementController::Initialize(
     placeCustomId_ = 0;
 }
 
+// 配置可能かどうかを判定する
 bool BlockPlacementController::TryPlace(const Int3& index, float rotationY) {
     if (!stageMap_ || !stageRenderer_ || !inventory_) {
         return false;
@@ -33,7 +34,9 @@ bool BlockPlacementController::TryPlace(const Int3& index, float rotationY) {
             }
 
             int rotIndex = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
-            if (rotIndex < 0) rotIndex += 4;
+            if (rotIndex < 0) { 
+                rotIndex += 4;
+            }
 
             // 1. 配置処理（既存ブロックがあるマスは自動スキップし、空いているマスにのみ一括配置）
             bool placedAny = false;
@@ -60,6 +63,7 @@ bool BlockPlacementController::TryPlace(const Int3& index, float rotationY) {
                             cellRotY = 4.712389f;
                         }
 
+						// 2. 空いているマスにのみ配置
                         Int3 targetPos = { index.x + rx, index.y + ly, index.z + rz };
                         if (stageMap_->IsInside(targetPos)) {
                             const MapCell* targetCell = stageMap_->GetCell(targetPos);
@@ -113,10 +117,12 @@ bool BlockPlacementController::TryPlace(const Int3& index, float rotationY) {
         else if (placeBlockType_ == BlockType::Ladder) finalVariant = 7;
     }
 
+	// 配置処理
     if (!stageMap_->SetBlock(index, placeBlockType_, finalVariant)) {
         return false;
     }
 
+	// 回転値を設定
     MapCell* cell = stageMap_->GetCell(index);
     if (cell) {
         cell->rotationY = rotationY;
@@ -133,6 +139,7 @@ bool BlockPlacementController::TryPlace(const Int3& index, float rotationY) {
     return true;
 }
 
+// 配置可能かを判定する。空マスでステージ範囲内ならOK。
 bool BlockPlacementController::CanPlaceAt(const Int3& index) const {
     const MapCell* cell = stageMap_->GetCell(index);
     if (!cell) {
