@@ -188,6 +188,9 @@ private:
         std::string name;      ///< Inspector に表示する名前。
         std::string assetPath; ///< 再読み込み時に Model を復元するための元アセットパス。
         Transform transform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+        bool disabled = false; ///< trueの場合、ゲーム側へ出さない配置物として扱う。
+        LevelColliderData collider; ///< Blenderレベルエディタから読み込んだ当たり判定情報。
+        LevelSpawnPointData spawnPoint; ///< Blender側で指定された出現地点情報。
         std::unique_ptr<Model> model;     ///< OBJ から生成したモデル。Object3d より長く生存させる。
         std::unique_ptr<Object3d> object; ///< 実際に描画・Transform更新を行うインスタンス。
     };
