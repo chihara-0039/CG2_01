@@ -4,11 +4,28 @@
 #include <string>
 #include <vector>
 
+// Blenderアドオンから出力されたBoxコライダー情報。
+struct LevelColliderData {
+    bool enabled = false;
+    std::string type;
+    Vector3 center{ 0.0f, 0.0f, 0.0f };
+    Vector3 size{ 2.0f, 2.0f, 2.0f };
+};
+
+// Blender上で配置したプレイヤー/敵などの出現地点情報。
+struct LevelSpawnPointData {
+    bool enabled = false;
+    std::string type;
+};
+
 // レベルJSON内の1オブジェクト分のデータ。
 struct LevelObjectData {
     std::string type;
     std::string name;
     std::string fileName;
+    bool disabled = false;
+    LevelColliderData collider;
+    LevelSpawnPointData spawnPoint;
     // Blender軸変換と親子階層を適用済みのワールド変換。
     // 利用側はJSON階層を意識せずObject3dへそのまま渡せる。
     Transform transform = {

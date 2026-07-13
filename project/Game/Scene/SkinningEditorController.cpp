@@ -73,6 +73,34 @@ namespace {
 		return !directory.empty() && !fileName.empty();
 	}
 
+	std::string ResolveLevelModelPath(const std::string& fileName) {
+		if (fileName.empty()) {
+			return "";
+		}
+
+		std::filesystem::path path(fileName);
+		if (path.has_parent_path() && std::filesystem::exists(path)) {
+			return path.generic_string();
+		}
+		if (path.has_parent_path()) {
+			return path.generic_string();
+		}
+
+		const std::string stem = path.stem().string();
+		std::vector<std::filesystem::path> candidates;
+		candidates.push_back(std::filesystem::path("Resources/Models") / stem / (stem + ".obj"));
+		candidates.push_back(std::filesystem::path("Resources/Models") / (stem + ".obj"));
+		candidates.push_back(std::filesystem::path("Resources/Models") / stem / fileName);
+
+		for (const auto& candidate : candidates) {
+			if (std::filesystem::exists(candidate)) {
+				return candidate.generic_string();
+			}
+		}
+
+		return fileName;
+	}
+
 	json Vector3ToJson(const Vector3& value) {
 		return json::array({ value.x, value.y, value.z });
 	}
@@ -354,7 +382,7 @@ void SkinningEditorController::Update(
 	// 選択中の配置物は Inspector でどれを編集しているか分かるように黄色寄りの色で強調する。
 	for (int i = 0; i < static_cast<int>(sceneObjects_.size()); ++i) {
 		SceneObject& sceneObject = sceneObjects_[i];
-		if (!sceneObject.object) {
+		if (sceneObject.disabled || !sceneObject.object) {
 			continue;
 		}
 
@@ -513,9 +541,21 @@ bool SkinningEditorController::SaveSceneObjects(const std::string& filePath) {
 			json item;
 			item["name"] = sceneObject.name;
 			item["assetPath"] = sceneObject.assetPath;
+			if (sceneObject.disabled) {
+				item["disabled"] = true;
+			}
 			item["position"] = Vector3ToJson(sceneObject.transform.translate);
 			item["rotation"] = Vector3ToJson(sceneObject.transform.rotate);
 			item["scale"] = Vector3ToJson(sceneObject.transform.scale);
+			if (sceneObject.collider.enabled) {
+				item["collider"]["type"] = sceneObject.collider.type;
+				item["collider"]["center"] = Vector3ToJson(sceneObject.collider.center);
+				item["collider"]["size"] = Vector3ToJson(sceneObject.collider.size);
+			}
+			if (sceneObject.spawnPoint.enabled) {
+				item["spawn_point"]["enabled"] = true;
+				item["spawn_point"]["type"] = sceneObject.spawnPoint.type;
+			}
 			root["objects"].push_back(item);
 		}
 
@@ -554,30 +594,48 @@ bool SkinningEditorController::LoadSceneObjects(const std::string& filePath) {
 			const std::string assetPath = item.value("assetPath", "");
 			std::string directory;
 			std::string fileName;
-			if (!SplitModelPath(assetPath, directory, fileName)) {
-				continue;
-			}
 
 			// 保存済み Transform を読み戻し、assetPath から Model/Object3d を再生成する。
 			// 参照先アセットが消えていた場合は、その1件だけスキップして残りのロードを続ける。
 			SceneObject sceneObject;
-			sceneObject.name = item.value("name", GetDisplayFileName(assetPath, fileName));
+			sceneObject.name = item.value("name", assetPath.empty() ? std::string("Scene Object") : GetDisplayFileName(assetPath, assetPath));
 			sceneObject.assetPath = assetPath;
+			sceneObject.disabled = item.value("disabled", false);
 			sceneObject.transform.translate =
 				JsonToVector3(item.value("position", json::array()), { 0.0f, 0.0f, 0.0f });
 			sceneObject.transform.rotate =
 				JsonToVector3(item.value("rotation", json::array()), { 0.0f, 0.0f, 0.0f });
 			sceneObject.transform.scale =
 				JsonToVector3(item.value("scale", json::array()), { 1.0f, 1.0f, 1.0f });
-
-			sceneObject.model = Model::CreateFromOBJ(dxCommon_, directory, fileName, textureManager_);
-			if (!sceneObject.model) {
-				continue;
+			if (item.contains("collider") && item.at("collider").is_object()) {
+				const json& collider = item.at("collider");
+				sceneObject.collider.enabled = true;
+				sceneObject.collider.type = collider.value("type", "BOX");
+				sceneObject.collider.center =
+					JsonToVector3(collider.value("center", json::array()), { 0.0f, 0.0f, 0.0f });
+				sceneObject.collider.size =
+					JsonToVector3(collider.value("size", json::array()), { 2.0f, 2.0f, 2.0f });
+			}
+			if (item.contains("spawn_point") && item.at("spawn_point").is_object()) {
+				const json& spawnPoint = item.at("spawn_point");
+				sceneObject.spawnPoint.enabled = spawnPoint.value("enabled", true);
+				sceneObject.spawnPoint.type = spawnPoint.value("type", "Player");
 			}
 
-			sceneObject.object = std::make_unique<Object3d>();
-			sceneObject.object->Initialize(object3dCommon_);
-			sceneObject.object->SetModel(sceneObject.model.get());
+			if (!assetPath.empty()) {
+				if (!SplitModelPath(assetPath, directory, fileName)) {
+					continue;
+				}
+				sceneObject.model = Model::CreateFromOBJ(dxCommon_, directory, fileName, textureManager_);
+				if (!sceneObject.model) {
+					continue;
+				}
+
+				sceneObject.object = std::make_unique<Object3d>();
+				sceneObject.object->Initialize(object3dCommon_);
+				sceneObject.object->SetModel(sceneObject.model.get());
+			}
+
 			sceneObjects_.push_back(std::move(sceneObject));
 		}
 
@@ -643,36 +701,56 @@ bool SkinningEditorController::AppendLevelObjectRecursive(const LevelObjectData&
 
 	if (objectData.type == "MESH") {
 		++levelLoadMeshNodes_;
-		std::string directory;
-		std::string fileName;
-		if (!SplitModelPath(objectData.fileName, directory, fileName)) {
-			++levelLoadFailedObjects_;
-			levelLoadMessages_.push_back("Failed: invalid model path [" + objectData.name + "]");
-		} else if (!std::filesystem::exists(objectData.fileName)) {
-			++levelLoadFailedObjects_;
-			levelLoadMessages_.push_back("Failed: missing file " + objectData.fileName);
+		if (objectData.disabled) {
+			++levelLoadSkippedObjects_;
+			levelLoadMessages_.push_back("Skipped disabled: " + objectData.name);
 		} else {
-			SceneObject sceneObject;
-			sceneObject.name = objectData.name.empty()
-				? GetDisplayFileName(objectData.fileName, fileName)
-				: objectData.name;
-			sceneObject.assetPath = objectData.fileName;
-			sceneObject.transform = objectData.transform;
-			sceneObject.model = Model::CreateFromOBJ(dxCommon_, directory, fileName, textureManager_);
-
-			if (sceneObject.model) {
-				sceneObject.object = std::make_unique<Object3d>();
-				sceneObject.object->Initialize(object3dCommon_);
-				sceneObject.object->SetModel(sceneObject.model.get());
-				sceneObjects_.push_back(std::move(sceneObject));
-				++levelLoadPlacedObjects_;
-				placedAny = true;
-				levelLoadMessages_.push_back("Placed: " + objectData.fileName);
-			} else {
+			const std::string resolvedModelPath = ResolveLevelModelPath(objectData.fileName);
+			std::string directory;
+			std::string fileName;
+			if (!SplitModelPath(resolvedModelPath, directory, fileName)) {
 				++levelLoadFailedObjects_;
-				levelLoadMessages_.push_back("Failed: model load failed " + objectData.fileName);
+				levelLoadMessages_.push_back("Failed: invalid model path [" + objectData.name + "]");
+			} else if (!std::filesystem::exists(resolvedModelPath)) {
+				++levelLoadFailedObjects_;
+				levelLoadMessages_.push_back("Failed: missing file " + resolvedModelPath);
+			} else {
+				SceneObject sceneObject;
+				sceneObject.name = objectData.name.empty()
+					? GetDisplayFileName(resolvedModelPath, fileName)
+					: objectData.name;
+				sceneObject.assetPath = resolvedModelPath;
+				sceneObject.transform = objectData.transform;
+				sceneObject.disabled = objectData.disabled;
+				sceneObject.collider = objectData.collider;
+				sceneObject.spawnPoint = objectData.spawnPoint;
+				sceneObject.model = Model::CreateFromOBJ(dxCommon_, directory, fileName, textureManager_);
+
+				if (sceneObject.model) {
+					sceneObject.object = std::make_unique<Object3d>();
+					sceneObject.object->Initialize(object3dCommon_);
+					sceneObject.object->SetModel(sceneObject.model.get());
+					sceneObjects_.push_back(std::move(sceneObject));
+					++levelLoadPlacedObjects_;
+					placedAny = true;
+					levelLoadMessages_.push_back("Placed: " + resolvedModelPath);
+				} else {
+					++levelLoadFailedObjects_;
+					levelLoadMessages_.push_back("Failed: model load failed " + resolvedModelPath);
+				}
 			}
 		}
+	} else if (objectData.spawnPoint.enabled) {
+		SceneObject sceneObject;
+		sceneObject.name = objectData.name.empty() ? objectData.spawnPoint.type + " SpawnPoint" : objectData.name;
+		sceneObject.assetPath = "";
+		sceneObject.transform = objectData.transform;
+		sceneObject.disabled = objectData.disabled;
+		sceneObject.spawnPoint = objectData.spawnPoint;
+		sceneObjects_.push_back(std::move(sceneObject));
+		++levelLoadPlacedObjects_;
+		placedAny = true;
+		levelLoadMessages_.push_back("Placed spawn point: " + sceneObject.name);
 	} else {
 		++levelLoadSkippedObjects_;
 		levelLoadMessages_.push_back("Skipped: " + objectData.type + " [" + objectData.name + "]");
@@ -698,7 +776,7 @@ void SkinningEditorController::Draw(Object3dCommon* object3dCommon, Camera* came
 	}
 
 	for (auto& sceneObject : sceneObjects_) {
-		if (sceneObject.object) {
+		if (!sceneObject.disabled && sceneObject.object) {
 			sceneObject.object->Draw();
 		}
 	}
@@ -722,7 +800,7 @@ void SkinningEditorController::Draw(Object3dCommon* object3dCommon, Camera* came
 // ==========================================================
 void SkinningEditorController::DrawShadow(const Matrix4x4& lightVP) {
 	for (auto& sceneObject : sceneObjects_) {
-		if (sceneObject.object) {
+		if (!sceneObject.disabled && sceneObject.object) {
 			sceneObject.object->DrawShadow(lightVP);
 		}
 	}
@@ -1068,11 +1146,11 @@ void SkinningEditorController::DrawSceneObjectPanel() {
 
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ External Level Loader ]");
-	ImGui::InputText("Level JSON", levelDataPath_, IM_ARRAYSIZE(levelDataPath_));
+	ImGui::InputText("Level File", levelDataPath_, IM_ARRAYSIZE(levelDataPath_));
 	if (ImGui::Button("Load Blender Level", ImVec2(-FLT_MIN, 24.0f))) {
 		LoadLevelDataIntoScene(levelDataPath_);
 	}
-	ImGui::TextDisabled("Reads name / objects / type / file_name / transform / children.");
+	ImGui::TextDisabled("Reads .json or level_editor.py .scene files with file_name / transform / collider.");
 
 	if (!loadedLevelName_.empty() || !levelLoadMessages_.empty()) {
 		if (ImGui::CollapsingHeader("Level Load Report", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1161,7 +1239,8 @@ void SkinningEditorController::DrawSceneObjectPanel() {
 
 	SceneObject& selectedObject = sceneObjects_[selectedSceneObjectIndex_];
 	ImGui::Text("Selected: %s", selectedObject.name.c_str());
-	ImGui::TextWrapped("Asset: %s", selectedObject.assetPath.c_str());
+	ImGui::TextWrapped("Asset: %s", selectedObject.assetPath.empty() ? "(none)" : selectedObject.assetPath.c_str());
+	ImGui::Checkbox("Disabled", &selectedObject.disabled);
 
 	// Transform は SceneObject 側の保存用データを直接編集する。
 	// 実際の Object3d への反映は Update() 内で毎フレーム同期する。
@@ -1169,6 +1248,37 @@ void SkinningEditorController::DrawSceneObjectPanel() {
 	ImGui::DragFloat3("Position", &transform.translate.x, 0.05f, -50.0f, 50.0f, "%.2f");
 	ImGui::DragFloat3("Rotation", &transform.rotate.x, 0.02f, -6.28318f, 6.28318f, "%.2f rad");
 	ImGui::DragFloat3("Scale", &transform.scale.x, 0.02f, 0.01f, 20.0f, "%.2f");
+
+	if (ImGui::CollapsingHeader("Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Checkbox("Enabled", &selectedObject.collider.enabled);
+		if (selectedObject.collider.enabled) {
+			if (selectedObject.collider.type.empty()) {
+				selectedObject.collider.type = "BOX";
+			}
+			char colliderType[32] = {};
+			strncpy_s(colliderType, selectedObject.collider.type.c_str(), _TRUNCATE);
+			if (ImGui::InputText("Type", colliderType, IM_ARRAYSIZE(colliderType))) {
+				selectedObject.collider.type = colliderType;
+			}
+			ImGui::DragFloat3("Center", &selectedObject.collider.center.x, 0.05f, -50.0f, 50.0f, "%.2f");
+			ImGui::DragFloat3("Size", &selectedObject.collider.size.x, 0.05f, 0.01f, 50.0f, "%.2f");
+		}
+	}
+
+	if (ImGui::CollapsingHeader("SpawnPoint")) {
+		ImGui::Checkbox("Spawn Enabled", &selectedObject.spawnPoint.enabled);
+		if (selectedObject.spawnPoint.enabled) {
+			if (selectedObject.spawnPoint.type.empty()) {
+				selectedObject.spawnPoint.type = "Player";
+			}
+			char spawnType[64] = {};
+			strncpy_s(spawnType, selectedObject.spawnPoint.type.c_str(), _TRUNCATE);
+			if (ImGui::InputText("Spawn Type", spawnType, IM_ARRAYSIZE(spawnType))) {
+				selectedObject.spawnPoint.type = spawnType;
+			}
+			ImGui::TextDisabled("Position uses this object's Transform.");
+		}
+	}
 
 	// よく使う調整だけボタン化して、手入力の手間を減らす。
 	if (ImGui::Button("Snap To Ground", ImVec2(halfWidth, 22.0f))) {
@@ -1191,6 +1301,7 @@ void SkinningEditorController::DrawSceneObjectPanel() {
 			duplicate.name = selectedObject.name + " Copy";
 			duplicate.assetPath = path;
 			duplicate.transform = duplicateTransform;
+			duplicate.collider = selectedObject.collider;
 			duplicate.transform.translate.x += 1.0f;
 			duplicate.model = Model::CreateFromOBJ(dxCommon_, directory, fileName, textureManager_);
 			if (duplicate.model) {
