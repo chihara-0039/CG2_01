@@ -4,7 +4,7 @@
 class Goal
 {
 public:
-	// プレイヤーとゴールの当たり判定
+	// プレイヤー位置と半径をもとに、StageMap内のゴールセルとの接触を判定する。
 	static bool Check(const Vector3& pos, const Vector3& radius, const StageMap& map);
 };
 

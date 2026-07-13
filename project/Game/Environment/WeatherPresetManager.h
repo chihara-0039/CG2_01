@@ -4,16 +4,17 @@
 #include <string>
 #include <vector>
 
+// 背景色、ライト、天候パーティクルをまとめた環境プリセット。
 struct WeatherPreset {
     std::string name;
 
-    // Environment/Lighting
+    // 環境色とライト設定。
     Vector4 clearColor = {0.1f, 0.25f, 0.5f, 1.0f};
     float lightIntensity = 1.0f;
     Vector3 lightColor = {1.0f, 1.0f, 1.0f};
     Vector3 lightDirection = {0.5f, -1.0f, 0.5f};
 
-    // Particle
+    // 雨や雪などの天候パーティクル設定。
     bool particleEnabled = false;
     std::string particleTexture = "Resources/UI/inventory/white.png";
     float emitRate = 100.0f;
@@ -25,6 +26,7 @@ struct WeatherPreset {
     Vector4 particleColor = {1.0f, 1.0f, 1.0f, 1.0f};
 };
 
+// 天候プリセットの読み込み、保存、検索を担当するシングルトン。
 class WeatherPresetManager {
 public:
     static WeatherPresetManager& GetInstance() {
@@ -32,7 +34,9 @@ public:
         return instance;
     }
 
+    // JSONファイルからプリセット一覧を読み込む。
     void LoadPresets();
+    // 現在のプリセット一覧をJSONファイルへ保存する。
     void SavePresets();
 
     const std::vector<WeatherPreset>& GetPresets() const { return presets_; }

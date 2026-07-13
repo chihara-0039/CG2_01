@@ -24,11 +24,13 @@ void BlockInventory::Initialize(int initialCount) {
     }
 }
 
+// 追加するブロックの種類と個数を指定して所持数を増やす。customIdが1～5の場合はカスタムパーツ枠を使用する。
 void BlockInventory::AddBlock(BlockType type, int count, int customId) {
     if (count <= 0) {
         return;
     }
 
+	// カスタムパーツ枠のIDが1～5の場合は、customCounts_配列に追加する
     if (customId >= 1 && customId <= 5) {
         customCounts_[customId - 1] += count;
     } else {
@@ -46,15 +48,18 @@ void BlockInventory::AddBlock(BlockType type, int count, int customId) {
     }
 }
 
+// 後方互換用。通常Wallを追加する。
 void BlockInventory::AddBlock(int count) {
     AddBlock(BlockType::Wall, count, 0);
 }
 
+// 指定ブロックの種類と個数を指定して所持数を消費する。足りない場合は状態を変えずfalseを返す。
 bool BlockInventory::ConsumeBlock(BlockType type, int count, int customId) {
     if (count <= 0) {
         return false;
     }
 
+	// カスタムパーツ枠のIDが1～5の場合は、customCounts_配列から消費する
     if (customId >= 1 && customId <= 5) {
         if (customCounts_[customId - 1] >= count) {
             customCounts_[customId - 1] -= count;
@@ -92,15 +97,18 @@ bool BlockInventory::ConsumeBlock(BlockType type, int count, int customId) {
     return false;
 }
 
+// 後方互換用。通常Wallを消費する。
 bool BlockInventory::ConsumeBlock(int count) {
     return ConsumeBlock(BlockType::Wall, count, 0);
 }
 
+// 指定ブロックの現在所持数を返す。customIdが1～5の場合はカスタムパーツ枠の所持数を返す。
 int BlockInventory::GetBlockCount(BlockType type, int customId) const {
     if (customId >= 1 && customId <= 5) {
         return customCounts_[customId - 1];
     }
 
+	// 通常ブロックの所持数を返す
     if (type == BlockType::Wall) {
         return wallCount_;
     } else if (type == BlockType::Ladder) {

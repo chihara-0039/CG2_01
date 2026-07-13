@@ -21,6 +21,7 @@ PreviewStyle ResolvePreviewStyle(
     PreviewStyle style;
     style.model = models.wall;
 
+    // カスタムパーツは個別セルの種類より、登録されたパーツ定義を優先して見た目を決める。
     if (customId >= 1 && customId <= 5) {
         const auto* part = stageMap.GetCustomPart(customId);
         if (part) {
@@ -30,6 +31,7 @@ PreviewStyle ResolvePreviewStyle(
         return style;
     }
 
+    // 通常ブロックは配置予定の種類ごとに、実体と同じモデル・識別しやすい半透明色を使う。
     switch (type) {
     case BlockType::Wall:
         style.color = { 1.0f, 0.4f, 0.4f, 0.4f };
@@ -76,6 +78,7 @@ std::unique_ptr<Object3d> CreatePreviewObject(
     const Vector4& color) {
 
     auto obj = std::make_unique<Object3d>();
+    // プレビュー専用の一時オブジェクトなので、生成後はpreviewObjects側に所有権を渡す。
     obj->Initialize(object3dCommon);
     obj->SetModel(model);
     obj->SetPosition(position);
@@ -101,12 +104,14 @@ void StagePlacementPreviewBuilder::Build(
 
     PreviewStyle style = ResolvePreviewStyle(stageMap, models, type, customId);
     if (!style.canPreview || !style.model) {
+        // 未対応ブロックやモデル未設定の場合は、古いプレビューを消した状態で終了する。
         return;
     }
 
     if (customId >= 1 && customId <= 5) {
         const auto* part = stageMap.GetCustomPart(customId);
         if (part && !part->IsEmpty()) {
+            // 90度単位の回転に丸め、3x3パーツ内のローカル座標を回転後の座標へ変換する。
             int rotIndex = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
             if (rotIndex < 0) {
                 rotIndex += 4;
@@ -120,6 +125,7 @@ void StagePlacementPreviewBuilder::Build(
                             continue;
                         }
 
+                        // パーツ内セルごとに回転後の表示位置と向きを決定する。
                         int rx = lx;
                         int rz = lz;
                         float cellRotY = 0.0f;
