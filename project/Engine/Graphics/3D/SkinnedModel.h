@@ -78,7 +78,7 @@ struct SkinningInformationForGPU {
 class SkinnedModel {
 public:
     SkinnedModel() = default;
-    ~SkinnedModel() = default;
+    ~SkinnedModel();
 
     // 初期化 (人型モデルの生成とバッファ構築)
     void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager);

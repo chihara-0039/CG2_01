@@ -12,6 +12,7 @@ struct TransformationMatrix
     float4x4 WVP;
     float4x4 World;
     float4x4 lightViewProjection;
+    float4x4 WorldInverseTranspose;
 };
 
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
@@ -28,7 +29,7 @@ VertexShaderOutput main(VertexSgaderInput input)
     VertexShaderOutput output;
     output.position = mul(input.position, gTransformationMatrix.WVP);
     output.texcoord = input.texcoord;
-    output.normal = normalize(mul((float3x3) gTransformationMatrix.World, input.normal));
+    output.normal = normalize(mul(input.normal, (float3x3) gTransformationMatrix.WorldInverseTranspose));
     
     // その世界座標を「ライト視点の行列」で変換してピクセルシェーダーに送る
     float4 worldPos = mul(input.position, gTransformationMatrix.World);

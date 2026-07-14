@@ -20,6 +20,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon) {
     transformationResource_->Map(0, nullptr, (void**)&transformationData_);
     transformationData_->WVP = Math::MakeIdentity4x4();
     transformationData_->World = Math::MakeIdentity4x4();
+    transformationData_->WorldInverseTranspose = Math::MakeIdentity4x4();
 
     // Material Buffer
     resDesc.Width = (sizeof(Material) + 0xff) & ~0xff;
@@ -42,10 +43,12 @@ void Object3d::Update(const Matrix4x4& lightVP) {
 
     // 2. カメラ視点の WVP 行列の計算
     Matrix4x4 wvpMatrix = Math::Multiply(worldMatrix, Math::Multiply(viewMatrix_, projectionMatrix_));
+    Matrix4x4 worldInverseTransposeMatrix = Math::Inverse(Math::Transpose(worldMatrix));
 
     // 3. 定数バッファ(GPUに送るデータ)への書き込み
     transformationData_->WVP = wvpMatrix;
     transformationData_->World = worldMatrix;
+    transformationData_->WorldInverseTranspose = worldInverseTransposeMatrix;
 
     // ★ ここが重要：ピクセルシェーダーでの影判定に使うため、ライト行列を転送します
     transformationData_->lightViewProjection = lightVP;

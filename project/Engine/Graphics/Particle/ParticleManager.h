@@ -96,6 +96,14 @@ public: // サブクラスなど
     struct ParticleGroup {
         uint32_t textureHandle = 0;
         std::list<Particle> particles;
+        uint32_t planeInstanceStart = 0;
+        uint32_t planeInstanceCount = 0;
+        uint32_t cloudInstanceStart = 0;
+        uint32_t cloudInstanceCount = 0;
+        uint32_t ringInstanceStart = 0;
+        uint32_t ringInstanceCount = 0;
+        uint32_t cylinderInstanceStart = 0;
+        uint32_t cylinderInstanceCount = 0;
     };
 
     struct HitEffectSettings {
@@ -221,6 +229,7 @@ public: // メンバ関数
     // パーティクル発生（エミッター）
     // pos: 発生位置, count: 発生数
     void Emit(const Vector3& pos, uint32_t count);
+    void Emit(const std::string& groupName, const Vector3& pos, uint32_t count);
 
     // 飛沫を生成する（ブロック衝突時など）
     void EmitSplash(const Vector3& pos, const Vector4& color);
@@ -241,6 +250,10 @@ public: // メンバ関数
         textureHandle_ = textureHandle;
         GetDefaultParticleGroup().textureHandle = textureHandle;
     }
+    void SetTexture(const std::string& groupName, uint32_t textureHandle);
+    void CreateParticleGroup(const std::string& groupName, uint32_t textureHandle);
+    ParticleGroup* FindParticleGroup(const std::string& groupName);
+    const ParticleGroup* FindParticleGroup(const std::string& groupName) const;
 
     void SetDrawGPUParticleSphere(bool draw) { drawGPUParticleSphere_ = draw; }
     bool GetDrawGPUParticleSphere() const { return drawGPUParticleSphere_; }
