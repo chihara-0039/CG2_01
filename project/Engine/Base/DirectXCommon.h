@@ -7,6 +7,7 @@
 #include <string>
 #include <chrono>
 #include <unordered_map>
+#include "SrvManager.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -174,9 +175,7 @@ private:
 
     // ── SRV (Shader Resource View) ── ImGui 専用 ─────────
     // ImGui のフォントテクスチャを GPU シェーダーから参照するためのヒープ
-    ComPtr<ID3D12DescriptorHeap> imguiSrvHeap_;
-    UINT imguiDescriptorSizeSRV_ = 0;
-    uint32_t imguiSrvNextIndex_ = 1;
+    SrvManager imguiSrvManager_;
     static constexpr uint32_t kMaxImGuiSrvDescriptors = 256;
 
     // ── フェンス (GPU-CPU 同期) ───────────────────────────
