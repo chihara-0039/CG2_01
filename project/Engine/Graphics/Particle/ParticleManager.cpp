@@ -85,6 +85,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
 
     // 1. テクスチャ読み込み (デフォルト)
     textureHandle_ = textureManager_->LoadTexture("Resources/UI/inventory/white.png");
+    GetDefaultParticleGroup().textureHandle = textureHandle_;
 
     // 2. パイプライン生成
     CreateRootSignature();
@@ -162,7 +163,7 @@ void ParticleManager::SetStormActive(bool active, const Vector3& center) {
     stormLightningFlash_ = false;
 
     if (!active) {
-        particles_.remove_if([](const Particle& particle) {
+        Particles().remove_if([](const Particle& particle) {
             return particle.type == Particle::Type::StormCloud ||
                    particle.type == Particle::Type::StormRain ||
                    particle.type == Particle::Type::StormWind;
@@ -196,7 +197,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         while (weatherEmitter_.emitTimer >= emitInterval) {
             weatherEmitter_.emitTimer -= emitInterval;
             
-            if (particles_.size() < kMaxParticles) {
+            if (Particles().size() < kMaxParticles) {
                 std::uniform_real_distribution<float> distX(-weatherEmitter_.size.x / 2.0f, weatherEmitter_.size.x / 2.0f);
                 std::uniform_real_distribution<float> distY(-weatherEmitter_.size.y / 2.0f, weatherEmitter_.size.y / 2.0f);
                 std::uniform_real_distribution<float> distZ(-weatherEmitter_.size.z / 2.0f, weatherEmitter_.size.z / 2.0f);
@@ -225,7 +226,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 p.initialAlpha = p.color.w;
                 p.lifeTime = 0.0f;
                 p.maxTime = weatherEmitter_.particleLife;
-                particles_.push_back(p);
+                Particles().push_back(p);
             }
         }
     }
@@ -234,7 +235,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
     if (stormActive_) {
         auto pushStormParticle = [&](Particle::Type type, const Vector3& position, const Vector3& scale,
                                      const Vector3& velocity, const Vector4& color, float life, float rotateZ = 0.0f) {
-            if (particles_.size() >= kMaxParticles) return;
+            if (Particles().size() >= kMaxParticles) return;
             Particle particle;
             particle.type = type;
             particle.transform.translate = position;
@@ -245,7 +246,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             particle.initialAlpha = color.w;
             particle.lifeTime = 0.0f;
             particle.maxTime = life;
-            particles_.push_back(particle);
+            Particles().push_back(particle);
         };
 
         std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
@@ -399,10 +400,10 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
     }
 
     // 1. パーティクル更新
-    for (auto it = particles_.begin(); it != particles_.end();) {
+    for (auto it = Particles().begin(); it != Particles().end();) {
         it->lifeTime += deltaTime;
         if (it->lifeTime >= it->maxTime) {
-            it = particles_.erase(it);
+            it = Particles().erase(it);
             continue;
         }
         
@@ -416,7 +417,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             Vector3 splashPosition = it->transform.translate;
             splashPosition.y = stormCenter_.y + 0.14f;
             EmitStormRainSplash(splashPosition, it->color);
-            it = particles_.erase(it);
+            it = Particles().erase(it);
             continue;
         }
 
@@ -455,7 +456,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 Vector3 splashPos = it->transform.translate;
                 splashPos.y = (float)hitY + 0.6f;
                 EmitSplash(splashPos, it->color);
-                it = particles_.erase(it);
+                it = Particles().erase(it);
                 continue;
             }
         }
@@ -486,7 +487,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         perViewData_->billboardMatrix = billboardMat;
     }
 
-    for (const auto& particle : particles_) {
+    for (const auto& particle : Particles()) {
         uint32_t* indexPtr = &planeInstanceCount_;
         InstanceData* instancingData = instancingDataMapped_;
         bool useBillboard = true;
@@ -1095,7 +1096,7 @@ void ParticleManager::EmitStormRainSplash(const Vector3& pos, const Vector4& col
     std::uniform_real_distribution<float> speedDistribution(0.010f, 0.024f);
     std::uniform_real_distribution<float> lifeDistribution(0.10f, 0.20f);
 
-    for (int i = 0; i < kDropCount && particles_.size() < kMaxParticles; ++i) {
+    for (int i = 0; i < kDropCount && Particles().size() < kMaxParticles; ++i) {
         const float angle = angleDistribution(engine);
         const float speed = speedDistribution(engine);
         Particle splash;
@@ -1112,7 +1113,7 @@ void ParticleManager::EmitStormRainSplash(const Vector3& pos, const Vector4& col
         splash.initialAlpha = splash.color.w;
         splash.lifeTime = 0.0f;
         splash.maxTime = lifeDistribution(engine);
-        particles_.push_back(splash);
+        Particles().push_back(splash);
     }
 }
 
@@ -1127,7 +1128,7 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     std::uniform_real_distribution<float> distSplashSpeed(0.018f, 0.060f);
     std::uniform_real_distribution<float> distUnit(-1.0f, 1.0f);
 
-    if (particles_.size() < kMaxParticles) {
+    if (Particles().size() < kMaxParticles) {
         Particle cylinder;
         cylinder.type = Particle::Type::Cylinder;
         cylinder.transform.translate = { pos.x, pos.y - 0.05f, pos.z };
@@ -1138,10 +1139,10 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
         cylinder.initialAlpha = cylinder.color.w;
         cylinder.lifeTime = 0.0f;
         cylinder.maxTime = 0.45f;
-        particles_.push_back(cylinder);
+        Particles().push_back(cylinder);
     }
 
-    if (particles_.size() < kMaxParticles) {
+    if (Particles().size() < kMaxParticles) {
         Particle ring;
         ring.type = Particle::Type::Ring;
         ring.transform.translate = { pos.x, pos.y + 0.22f, pos.z };
@@ -1152,11 +1153,11 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
         ring.initialAlpha = ring.color.w;
         ring.lifeTime = 0.0f;
         ring.maxTime = 0.35f;
-        particles_.push_back(ring);
+        Particles().push_back(ring);
     }
 
     for (int i = 0; i < kSplashCount; ++i) {
-        if (particles_.size() >= kMaxParticles) break;
+        if (Particles().size() >= kMaxParticles) break;
 
         const float speed = distSplashSpeed(engine);
         Vector3 direction = {};
@@ -1189,7 +1190,7 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
         p.lifeTime = 0.0f;
         p.maxTime = distLife(engine);
 
-        particles_.push_back(p);
+        Particles().push_back(p);
     }
 }
 
@@ -1228,8 +1229,8 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
     };
 
     auto pushParticle = [&](const Particle& particle) {
-        if (particles_.size() < kMaxParticles) {
-            particles_.push_back(particle);
+        if (Particles().size() < kMaxParticles) {
+            Particles().push_back(particle);
         }
     };
 
@@ -1460,7 +1461,7 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
     std::uniform_real_distribution<float> distTime(0.18f, 0.35f);
     std::uniform_real_distribution<float> distOffset(-0.2f, 0.2f);
 
-    if (particles_.size() < kMaxParticles) {
+    if (Particles().size() < kMaxParticles) {
         Particle cylinder;
         cylinder.type = Particle::Type::Cylinder;
         cylinder.transform.scale = { 0.7f, 0.8f, 0.7f };
@@ -1471,10 +1472,10 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
         cylinder.initialAlpha = cylinder.color.w;
         cylinder.lifeTime = 0.0f;
         cylinder.maxTime = 0.45f;
-        particles_.push_back(cylinder);
+        Particles().push_back(cylinder);
     }
 
-    if (particles_.size() < kMaxParticles) {
+    if (Particles().size() < kMaxParticles) {
         Particle ring;
         ring.type = Particle::Type::Ring;
         ring.transform.scale = { 0.25f, 0.25f, 1.0f };
@@ -1485,11 +1486,11 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
         ring.initialAlpha = ring.color.w;
         ring.lifeTime = 0.0f;
         ring.maxTime = 0.35f;
-        particles_.push_back(ring);
+        Particles().push_back(ring);
     }
 
     for (uint32_t i = 0; i < count; ++i) {
-        if (particles_.size() >= kMaxParticles) return;
+        if (Particles().size() >= kMaxParticles) return;
 
         Particle p;
         p.type = Particle::Type::Splash;
@@ -1505,6 +1506,28 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
         p.initialAlpha = p.color.w;
         p.lifeTime = 0.0f;
         p.maxTime = distTime(engine);
-        particles_.push_back(p);
+        Particles().push_back(p);
     }
+}
+
+ParticleManager::ParticleGroup& ParticleManager::GetDefaultParticleGroup() {
+    ParticleGroup& group = particleGroups_[kDefaultParticleGroupName];
+    if (group.textureHandle == 0) {
+        group.textureHandle = textureHandle_;
+    }
+    return group;
+}
+
+const ParticleManager::ParticleGroup& ParticleManager::GetDefaultParticleGroup() const {
+    auto it = particleGroups_.find(kDefaultParticleGroupName);
+    assert(it != particleGroups_.end());
+    return it->second;
+}
+
+std::list<Particle>& ParticleManager::Particles() {
+    return GetDefaultParticleGroup().particles;
+}
+
+const std::list<Particle>& ParticleManager::Particles() const {
+    return GetDefaultParticleGroup().particles;
 }

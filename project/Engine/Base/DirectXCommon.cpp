@@ -101,23 +101,18 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     ImGui_ImplWin32_Init(winApp_->GetHwnd());
 
     // 3. DX12用SRVヒープの作成 (ImGuiのフォントテクスチャ用)
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.NumDescriptors = kMaxImGuiSrvDescriptors;
-    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    HRESULT hr = device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvHeap_));
-    assert(SUCCEEDED(hr));
-    imguiDescriptorSizeSRV_ =
-        device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    imguiSrvManager_.Initialize(this, kMaxImGuiSrvDescriptors);
+    const uint32_t fontSrvIndex = imguiSrvManager_.Allocate();
+    assert(fontSrvIndex == 0);
 
     // 4. DX12バックエンドの初期化
     ImGui_ImplDX12_Init(
         device_.Get(),
         2, // バックバッファ数
         DXGI_FORMAT_R8G8B8A8_UNORM, // swapChainDesc.Formatと合わせる
-        imguiSrvHeap_.Get(),
-        imguiSrvHeap_->GetCPUDescriptorHandleForHeapStart(),
-        imguiSrvHeap_->GetGPUDescriptorHandleForHeapStart()
+        imguiSrvManager_.GetDescriptorHeap(),
+        imguiSrvManager_.GetCPUDescriptorHandle(fontSrvIndex),
+        imguiSrvManager_.GetGPUDescriptorHandle(fontSrvIndex)
     );
 
 #endif
@@ -586,7 +581,7 @@ void DirectXCommon::EndImGui() {
     scissorRect.bottom = WinApp::kWindowHeight;
     commandList_->RSSetScissorRects(1, &scissorRect);
 
-    ID3D12DescriptorHeap* heaps[] = { imguiSrvHeap_.Get() };
+    ID3D12DescriptorHeap* heaps[] = { imguiSrvManager_.GetDescriptorHeap() };
     commandList_->SetDescriptorHeaps(1, heaps);
 
     ImGui_ImplDX12_RenderDrawData(draw_data, commandList_.Get());
@@ -598,14 +593,13 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::RegisterImGuiTexture(
     ID3D12Resource* textureResource,
     const D3D12_RESOURCE_DESC& resourceDesc) {
 #ifdef USE_IMGUI
-    if (!imguiSrvHeap_ || !textureResource || imguiSrvNextIndex_ >= kMaxImGuiSrvDescriptors) {
+    if (!textureResource || imguiSrvManager_.GetUseCount() >= imguiSrvManager_.GetMaxCount()) {
         return {};
     }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE destinationCPU = imguiSrvHeap_->GetCPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE destinationGPU = imguiSrvHeap_->GetGPUDescriptorHandleForHeapStart();
-    destinationCPU.ptr += static_cast<SIZE_T>(imguiDescriptorSizeSRV_) * imguiSrvNextIndex_;
-    destinationGPU.ptr += static_cast<UINT64>(imguiDescriptorSizeSRV_) * imguiSrvNextIndex_;
+    const uint32_t srvIndex = imguiSrvManager_.Allocate();
+    D3D12_CPU_DESCRIPTOR_HANDLE destinationCPU = imguiSrvManager_.GetCPUDescriptorHandle(srvIndex);
+    D3D12_GPU_DESCRIPTOR_HANDLE destinationGPU = imguiSrvManager_.GetGPUDescriptorHandle(srvIndex);
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = resourceDesc.Format;
@@ -627,7 +621,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::RegisterImGuiTexture(
 
     device_->CreateShaderResourceView(textureResource, &srvDesc, destinationCPU);
 
-    ++imguiSrvNextIndex_;
     return destinationGPU;
 #else
     (void)textureResource;

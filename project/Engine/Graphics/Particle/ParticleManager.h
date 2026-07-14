@@ -4,6 +4,7 @@
 #include <vector>
 #include <list>
 #include <string>
+#include <unordered_map>
 #include "MyMath.h"
 #include "DirectXCommon.h"
 #include "TextureManager.h"
@@ -90,6 +91,11 @@ public: // サブクラスなど
         Vector3 particleSize = {0.2f, 0.2f, 0.2f};
         float particleLife = 4.0f;
         Vector4 color = {1,1,1,1};
+    };
+
+    struct ParticleGroup {
+        uint32_t textureHandle = 0;
+        std::list<Particle> particles;
     };
 
     struct HitEffectSettings {
@@ -231,7 +237,10 @@ public: // メンバ関数
     const StormEffectSettings& GetStormSettings() const { return stormSettings_; }
 
     // テクスチャ設定
-    void SetTexture(uint32_t textureHandle) { textureHandle_ = textureHandle; }
+    void SetTexture(uint32_t textureHandle) {
+        textureHandle_ = textureHandle;
+        GetDefaultParticleGroup().textureHandle = textureHandle;
+    }
 
     void SetDrawGPUParticleSphere(bool draw) { drawGPUParticleSphere_ = draw; }
     bool GetDrawGPUParticleSphere() const { return drawGPUParticleSphere_; }
@@ -240,7 +249,9 @@ public: // メンバ関数
     WeatherEmitter& GetWeatherEmitter() { return weatherEmitter_; }
 
     void ClearParticles() {
-        particles_.clear();
+        for (auto& [name, group] : particleGroups_) {
+            group.particles.clear();
+        }
         planeInstanceCount_ = 0;
         cloudInstanceCount_ = 0;
         ringInstanceCount_ = 0;
@@ -261,6 +272,10 @@ private: // 内部処理
     void UpdateGPUParticles();
     void DrawGPUParticles();
     void TransitionGPUParticleResource(D3D12_RESOURCE_STATES stateAfter);
+    ParticleGroup& GetDefaultParticleGroup();
+    const ParticleGroup& GetDefaultParticleGroup() const;
+    std::list<Particle>& Particles();
+    const std::list<Particle>& Particles() const;
 
 private: // メンバ変数
     DirectXCommon* dxCommon_ = nullptr;
@@ -332,11 +347,13 @@ private: // メンバ変数
     InstanceData* cylinderInstancingDataMapped_ = nullptr;
     uint32_t cylinderInstanceCount_ = 0;
 
+    static constexpr const char* kDefaultParticleGroupName = "default";
+
     // テクスチャハンドル
     uint32_t textureHandle_ = 0;
 
-    // パーティクルリスト
-    std::list<Particle> particles_;
+    // パーティクルグループ。課題要件に合わせ、名前ごとにテクスチャとパーティクル列を管理する。
+    std::unordered_map<std::string, ParticleGroup> particleGroups_;
 
     // 天候用エミッター
     WeatherEmitter weatherEmitter_;

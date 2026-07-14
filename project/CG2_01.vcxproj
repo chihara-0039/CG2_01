@@ -167,6 +167,7 @@
     <ClCompile Include="Engine\Graphics\3D\SkinnedModel.cpp" />
     <ClCompile Include="Engine\Graphics\3D\SkinnedObject.cpp" />
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\SrvManager.cpp" />
     <ClCompile Include="Game\Player\PlayerBasePosition.cpp" />
     <ClCompile Include="Game\Scene\EffectPresetStore.cpp" />
     <ClCompile Include="Game\Scene\LevelDataLoader.cpp" />
@@ -305,6 +306,7 @@
     <ClInclude Include="Engine\Graphics\3D\SkinnedModel.h" />
     <ClInclude Include="Engine\Graphics\3D\SkinnedObject.h" />
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
+    <ClInclude Include="Engine\Graphics\3D\SrvManager.h" />
     <ClInclude Include="Game\Player\PlayerBasePosition.h" />
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
     <ClInclude Include="Game\Scene\LevelDataLoader.h" />
