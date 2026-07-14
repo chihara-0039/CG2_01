@@ -68,6 +68,8 @@
     <ClCompile Include="Engine\Graphics\3D\GltfLoader.cpp" />
     <ClCompile Include="Game\Scene\EffectPresetStore.cpp" />
     <ClCompile Include="Game\Scene\LevelDataLoader.cpp" />
+    <ClCompile Include="Game\Scene\SceneFactory.cpp" />
+    <ClCompile Include="Game\Scene\SceneManager.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
     <ClCompile Include="Engine\Graphics\PostProcessRenderer.cpp" />
     <ClCompile Include="Game\Scene\Skybox.cpp" />
@@ -95,8 +97,13 @@
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
     <ClInclude Include="Engine\Graphics\3D\SrvManager.h" />
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
+    <ClInclude Include="Game\Scene\BaseScene.h" />
     <ClInclude Include="Game\Scene\LevelDataLoader.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
+    <ClInclude Include="Game\Scene\SceneFactory.h" />
+    <ClInclude Include="Game\Scene\SceneManager.h" />
+    <ClInclude Include="Game\Scene\SceneType.h" />
+    <ClInclude Include="Game\Scene\SceneUpdateContext.h" />
     <ClInclude Include="Game\UI\GameplayUIManager.h" />
     <ClInclude Include="Game\UI\BlockInventoryUI.h" />
     <ClInclude Include="Game\Camera\GameplayCameraController.h" />
