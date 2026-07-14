@@ -3108,7 +3108,6 @@ void MyGame::UpdateStageSelect() {
     }
 }
 
-
 //  GamePlay 中に ESC が押されたらステージ選択へ戻す。
 
 void MyGame::UpdateSceneTransition() {
