@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <random>
+#include <iterator>
 #include "MyGame.h"
 #include "EffectPresetStore.h"
 #include "../Environment/WeatherPresetManager.h"
@@ -266,6 +267,8 @@ void MyGame::Initialize() {
     stageEditorController_.Initialize();
 
     // SkinningEditor / Terrain / PostProcess は重いので、必要なモードへ入った時に初期化する。
+    sceneManager_ = std::make_unique<SceneManager>();
+    sceneManager_->Initialize(&sceneFactory_, GetCurrentSceneType(), *this);
 }
 
 
@@ -314,6 +317,143 @@ void MyGame::EnsurePostProcessInitialized() {
     }
     postProcess_.Initialize(dxCommon.get(), stageMap_.GetClearColor());
     postProcessInitialized_ = true;
+}
+
+void MyGame::OnSceneEntered(SceneType sceneType) {
+    switch (sceneType) {
+    case SceneType::StageSelect:
+        currentMode_ = AppMode::StageSelect;
+        break;
+    case SceneType::DebugView:
+        currentMode_ = AppMode::DebugView;
+        break;
+    case SceneType::StageEditor:
+        currentMode_ = AppMode::StageEditor;
+        break;
+    case SceneType::GamePlay:
+        currentMode_ = AppMode::GamePlay;
+        break;
+    case SceneType::GamePlayBlockPlace:
+        currentMode_ = AppMode::GamePlay_BlockPlace;
+        break;
+    case SceneType::SkinningEditor:
+        currentMode_ = AppMode::SkinningEditor;
+        break;
+    case SceneType::EffectPreview:
+        currentMode_ = AppMode::EffectPreview;
+        break;
+    case SceneType::EffectShowcase:
+        currentMode_ = AppMode::EffectShowcase;
+        break;
+    case SceneType::PostEffectShowcase:
+        currentMode_ = AppMode::PostEffectShowcase;
+        break;
+    }
+
+    HandleModeChange();
+}
+
+void MyGame::OnSceneExited(SceneType sceneType) {
+    if ((sceneType == SceneType::EffectPreview || sceneType == SceneType::EffectShowcase) && particleManager) {
+        particleManager->SetStormActive(false);
+    }
+}
+
+void MyGame::RequestSceneChange(SceneType sceneType) {
+    if (sceneType == SceneType::StageSelect) {
+        currentMode_ = AppMode::StageSelect;
+    } else if (sceneType == SceneType::DebugView) {
+        currentMode_ = AppMode::DebugView;
+    } else if (sceneType == SceneType::StageEditor) {
+        currentMode_ = AppMode::StageEditor;
+    } else if (sceneType == SceneType::GamePlay) {
+        currentMode_ = AppMode::GamePlay;
+    } else if (sceneType == SceneType::GamePlayBlockPlace) {
+        currentMode_ = AppMode::GamePlay_BlockPlace;
+    } else if (sceneType == SceneType::SkinningEditor) {
+        currentMode_ = AppMode::SkinningEditor;
+    } else if (sceneType == SceneType::EffectPreview) {
+        currentMode_ = AppMode::EffectPreview;
+    } else if (sceneType == SceneType::EffectShowcase) {
+        currentMode_ = AppMode::EffectShowcase;
+    } else if (sceneType == SceneType::PostEffectShowcase) {
+        currentMode_ = AppMode::PostEffectShowcase;
+    }
+}
+
+SceneType MyGame::GetCurrentSceneType() const {
+    if (currentMode_ == AppMode::StageSelect) {
+        return SceneType::StageSelect;
+    }
+    if (currentMode_ == AppMode::DebugView) {
+        return SceneType::DebugView;
+    }
+    if (currentMode_ == AppMode::StageEditor) {
+        return SceneType::StageEditor;
+    }
+    if (currentMode_ == AppMode::GamePlay) {
+        return SceneType::GamePlay;
+    }
+    if (currentMode_ == AppMode::GamePlay_BlockPlace) {
+        return SceneType::GamePlayBlockPlace;
+    }
+    if (currentMode_ == AppMode::SkinningEditor) {
+        return SceneType::SkinningEditor;
+    }
+    if (currentMode_ == AppMode::EffectPreview) {
+        return SceneType::EffectPreview;
+    }
+    if (currentMode_ == AppMode::EffectShowcase) {
+        return SceneType::EffectShowcase;
+    }
+    if (currentMode_ == AppMode::PostEffectShowcase) {
+        return SceneType::PostEffectShowcase;
+    }
+
+    return SceneType::DebugView;
+}
+
+void MyGame::RunStageSelectScene() {
+    UpdateStageSelect();
+}
+
+void MyGame::RunDebugViewScene() {
+    UpdateDebugView();
+}
+
+void MyGame::RunStageEditorScene() {
+    stageEditorController_.Update(
+        input.get(), stageMap_, stageRenderer_.get(),
+        mapCursor_.get(), lightCamera_.get(), player_.get(), camera.get());
+}
+
+void MyGame::RunGamePlayScene() {
+    UpdateGamePlay();
+}
+
+void MyGame::RunGamePlayBlockPlaceScene() {
+    UpdateGamePlayBlockPlace();
+}
+
+void MyGame::RunSkinningEditorScene(const SceneUpdateContext& context) {
+    EnsureSkinningEditorInitialized();
+    skinningEditor_.Update(
+        dxCommon.get(), input.get(), camera.get(),
+        context.lightViewProjection, context.isGuiCaptured, particleManager.get());
+}
+
+void MyGame::RunEffectPreviewScene() {
+    UpdateEffectPreview();
+}
+
+void MyGame::RunEffectShowcaseScene() {
+    UpdateEffectShowcase();
+    DrawEffectShowcaseImGui();
+}
+
+void MyGame::RunPostEffectShowcaseScene() {
+    UpdatePostEffectShowcase();
+    DrawPostEffectShowcaseImGui();
 }
 
 //  MyGame::Update
@@ -511,39 +651,20 @@ void MyGame::UpdateParticleDebugVisibility() {
 }
 
 void MyGame::UpdateCurrentMode(const Matrix4x4& lightVP, bool isGuiCaptured) {
-    switch (currentMode_) {
-    case AppMode::StageSelect:
-        UpdateStageSelect();
-        break;
-    case AppMode::DebugView:
-        UpdateDebugView();
-        break;
-    case AppMode::EffectPreview:
-        UpdateEffectPreview();
-        break;
-    case AppMode::EffectShowcase:
-        UpdateEffectShowcase();
-        DrawEffectShowcaseImGui();
-        break;
-    case AppMode::PostEffectShowcase:
-        UpdatePostEffectShowcase();
-        DrawPostEffectShowcaseImGui();
-        break;
-    case AppMode::StageEditor:
-        stageEditorController_.Update(
-            input.get(), stageMap_, stageRenderer_.get(),
-            mapCursor_.get(), lightCamera_.get(), player_.get(), camera.get());
-        break;
-    case AppMode::GamePlay:
-        UpdateGamePlay();
-        break;
-    case AppMode::GamePlay_BlockPlace:
-        UpdateGamePlayBlockPlace();
-        break;
-    case AppMode::SkinningEditor:
-        EnsureSkinningEditorInitialized();
-        skinningEditor_.Update(dxCommon.get(), input.get(), camera.get(), lightVP, isGuiCaptured, particleManager.get());
-        break;
+    if (!sceneManager_) {
+        return;
+    }
+
+    const SceneType requestedScene = GetCurrentSceneType();
+    if (sceneManager_->GetCurrentSceneType() != requestedScene) {
+        sceneManager_->ChangeScene(requestedScene, *this);
+    }
+
+    sceneManager_->Update(*this, SceneUpdateContext{ lightVP, isGuiCaptured });
+
+    const SceneType sceneAfterUpdate = GetCurrentSceneType();
+    if (sceneManager_->GetCurrentSceneType() != sceneAfterUpdate) {
+        sceneManager_->ChangeScene(sceneAfterUpdate, *this);
     }
 }
 
@@ -714,7 +835,7 @@ void MyGame::UpdateGameplayUserInterface() {
         blockInventoryUI_->Update(input.get(), winApp.get(), isPlayOrPlace, &stageMap_);
 
         if (blockInventoryUI_->ConsumeUseRequest()) {
-            currentMode_ = AppMode::GamePlay_BlockPlace;
+            RequestSceneChange(SceneType::GamePlayBlockPlace);
             Vector3 pPos = player_ ? player_->GetPosition() : Vector3{ 0,0,0 };
             mapCursor_->SetIndex({
                 static_cast<int>(std::floor(pPos.x + 0.5f)),
@@ -1381,17 +1502,15 @@ void MyGame::UpdateImGui() {
 
     // ImGui セクション「Hierarchy / Mode」を開閉できる見出しとして表示する。
     if (ImGui::CollapsingHeader("Hierarchy / Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
-        int modeIndex = 0;
-        switch (currentMode_) {
-        case AppMode::DebugView:      modeIndex = 0; break;
-        case AppMode::StageEditor:    modeIndex = 1; break;
-        case AppMode::GamePlay:       modeIndex = 2; break;
-        case AppMode::SkinningEditor: modeIndex = 3; break;
-        case AppMode::EffectPreview:  modeIndex = 4; break;
-        case AppMode::EffectShowcase: modeIndex = 5; break;
-        case AppMode::PostEffectShowcase: modeIndex = 6; break;
-        default:                                     break;
-        }
+        const SceneType selectableScenes[] = {
+            SceneType::DebugView,
+            SceneType::StageEditor,
+            SceneType::GamePlay,
+            SceneType::SkinningEditor,
+            SceneType::EffectPreview,
+            SceneType::EffectShowcase,
+            SceneType::PostEffectShowcase,
+        };
         const char* modeNames[] = {
             "DebugView",
             "StageEditor",
@@ -1401,28 +1520,18 @@ void MyGame::UpdateImGui() {
             "EffectShowcase",
             "PostEffectShowcase"
         };
+        int modeIndex = 0;
+        const SceneType currentSceneType = GetCurrentSceneType();
+        for (int i = 0; i < static_cast<int>(std::size(selectableScenes)); ++i) {
+            if (selectableScenes[i] == currentSceneType) {
+                modeIndex = i;
+                break;
+            }
+        }
         // ImGui コンボ「App Mode」で候補から選択する。
         if (ImGui::Combo("App Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
-            switch (modeIndex) {
-            case 0: currentMode_ = AppMode::DebugView;      break;
-            case 1: currentMode_ = AppMode::StageEditor;    break;
-            case 2: currentMode_ = AppMode::GamePlay;       break;
-            case 3:
-                currentMode_ = AppMode::SkinningEditor;
-                camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
-                break;
-            case 4:
-                currentMode_ = AppMode::EffectPreview;
-                camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
-                break;
-            case 5:
-                currentMode_ = AppMode::EffectShowcase;
-                camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
-                break;
-            case 6:
-                currentMode_ = AppMode::PostEffectShowcase;
-                camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 7.0f, { 0.35f, 0.0f, 0.0f });
-                break;
+            if (modeIndex >= 0 && modeIndex < static_cast<int>(std::size(selectableScenes))) {
+                RequestSceneChange(selectableScenes[modeIndex]);
             }
         }
         if (currentMode_ == AppMode::EffectPreview) {
@@ -2228,6 +2337,11 @@ void MyGame::Finalize() {
 
     if (dxCommon) { dxCommon->WaitForGpu(); }
 
+    if (sceneManager_) {
+        sceneManager_->Finalize(*this);
+        sceneManager_.reset();
+    }
+
     sound.Finalize();
 
     dxCommon->FinalizeImGui();
@@ -2581,7 +2695,7 @@ void MyGame::UpdateEffectShowcase() {
             particleManager->ClearParticles();
         }
         stageSelect_->Initialize(object3dCommon.get(), input.get());
-        currentMode_ = AppMode::StageSelect;
+        RequestSceneChange(SceneType::StageSelect);
         return;
     }
 
@@ -2629,7 +2743,7 @@ void MyGame::UpdatePostEffectShowcase() {
 
     if (input->TriggerKey(DIK_TAB)) {
         stageSelect_->Initialize(object3dCommon.get(), input.get());
-        currentMode_ = AppMode::StageSelect;
+        RequestSceneChange(SceneType::StageSelect);
     }
 }
 
@@ -2953,7 +3067,7 @@ void MyGame::UpdateGamePlayBlockPlace() {
             bool hasRest = (selectedType == BlockType::Ground)
                 || blockInventory_.HasBlock(selectedType, selectedCustomId);
             if (!hasRest) {
-                currentMode_ = AppMode::GamePlay;
+                RequestSceneChange(SceneType::GamePlay);
                 placeRotationY_ = 0.0f;
                 if (stageRenderer_) {
                     stageRenderer_->ClearPlacementPreview();
@@ -2963,7 +3077,7 @@ void MyGame::UpdateGamePlayBlockPlace() {
     }
 
     if (input->TriggerKey(DIK_ESCAPE) || input->TriggerKey(DIK_B)) {
-        currentMode_ = AppMode::GamePlay;
+        RequestSceneChange(SceneType::GamePlay);
         placeRotationY_ = 0.0f;
         if (stageRenderer_) {
             stageRenderer_->ClearPlacementPreview();
@@ -2990,7 +3104,7 @@ void MyGame::UpdateStageSelect() {
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
             blockInventory_.Initialize(0);
         }
-        currentMode_ = AppMode::GamePlay;
+        RequestSceneChange(SceneType::GamePlay);
     }
 }
 
@@ -3007,24 +3121,15 @@ void MyGame::UpdateSceneTransition() {
         stageSelect_->Initialize(object3dCommon.get(), input.get());
         isGoalReached_ = false;
         if (player_) { player_->Respawn(); }
-        currentMode_ = AppMode::StageSelect;
+        RequestSceneChange(SceneType::StageSelect);
     }
 }
 
 void MyGame::UpdateBGM() {
     BgmType nextBgmType = BgmType::None;
 
-    // AppMode ごとの本体処理はサブルーチンや専用クラスへ委譲する。
-    switch (currentMode_) {
-
-    case AppMode::GamePlay:
-    case AppMode::GamePlay_BlockPlace:
+    if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
         nextBgmType = BgmType::Game;
-        break;
-
-    default:
-        nextBgmType = BgmType::None;
-        break;
     }
 
     if (currentBgmType_ == nextBgmType) {

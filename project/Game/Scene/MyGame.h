@@ -4,6 +4,9 @@
 #include <filesystem>
 #include <array>
 #include <string>
+#include "SceneType.h"
+#include "SceneFactory.h"
+#include "SceneManager.h"
 
 // ===== エンジン基盤 =====
 #include "WinApp.h"
@@ -78,6 +81,21 @@ public:
     /// <summary>ウィンドウが閉じられていなければ true を返す</summary>
     bool IsRunning() { return !winApp->ProcessMessage(); }
 
+    void OnSceneEntered(SceneType sceneType);
+    void OnSceneExited(SceneType sceneType);
+    void RequestSceneChange(SceneType sceneType);
+    SceneType GetCurrentSceneType() const;
+
+    void RunStageSelectScene();
+    void RunDebugViewScene();
+    void RunStageEditorScene();
+    void RunGamePlayScene();
+    void RunGamePlayBlockPlaceScene();
+    void RunSkinningEditorScene(const SceneUpdateContext& context);
+    void RunEffectPreviewScene();
+    void RunEffectShowcaseScene();
+    void RunPostEffectShowcaseScene();
+
 private:
     // ==========================================================
     //  AppMode : アプリケーションのモード定義
@@ -147,6 +165,8 @@ private:
     // ==========================================================
     //  シーン管理
     // ==========================================================
+    SceneFactory sceneFactory_;
+    std::unique_ptr<SceneManager> sceneManager_;
     std::unique_ptr<StageSelect>    stageSelect_;    ///< ステージ選択画面
 
     // ==========================================================

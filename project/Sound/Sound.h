@@ -30,6 +30,8 @@ public:
         WAVEFORMATEX wfex;
         // バッファ
         std::vector<BYTE> buffer;
+
+        bool IsValid() const { return !buffer.empty() && wfex.nChannels != 0; }
     };
 
 
@@ -48,6 +50,21 @@ public:
 
     //音源停止
     void BGMStop();
+
+    // BGM一時停止
+    void BGMPause();
+
+    // BGM再開
+    void BGMResume();
+
+    // BGM音量変更
+    void SetBGMVolume(float volume);
+
+    // 再生中の効果音を全て停止
+    void StopAllSoundEffects();
+
+    // 効果音の再生済みSourceVoiceを整理
+    void CleanupFinishedSoundEffects();
 
 private:
     // チャンクヘッダ
@@ -84,6 +101,7 @@ private:
 
     //現在再生中のBGM
     IXAudio2SourceVoice* bgmSourceVoice = nullptr;
+    float bgmVolume_ = 0.5f;
 
 };
 
