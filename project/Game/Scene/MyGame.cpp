@@ -22,6 +22,13 @@ const char* kEffectPresetPath = "Resources/presets/effect_presets.json";
 const char* kStormPresetPath = "Resources/presets/storm_effect_presets.json";
 const char* kStormShowcaseName = "Tempest Storm";
 
+struct EditorLayout {
+    float leftPanelWidth = 320.0f;
+    float rightPanelWidth = 320.0f;
+    float bottomPanelHeight = 360.0f;
+    float mainPanelHeight = 720.0f;
+};
+
 struct PostEffectHotKey {
     BYTE key;
     int mode;
@@ -57,6 +64,33 @@ const char* GetPostEffectShowcaseName(int mode) {
 void CopyPresetName(std::array<char, 64>& buffer, const std::string& name) {
     buffer.fill('\0');
     strncpy_s(buffer.data(), buffer.size(), name.c_str(), _TRUNCATE);
+}
+
+EditorLayout MakeEditorLayout(const ImVec2& displaySize) {
+    EditorLayout layout;
+    const float width = (std::max)(displaySize.x, 1.0f);
+    const float height = (std::max)(displaySize.y, 1.0f);
+
+    float sidePanel = std::clamp(width * 0.18f, 300.0f, 380.0f);
+    if (width < 1360.0f) {
+        sidePanel = std::clamp(width * 0.22f, 260.0f, 320.0f);
+    }
+
+    const float minimumViewportWidth = 560.0f;
+    if (width - sidePanel * 2.0f < minimumViewportWidth) {
+        sidePanel = (std::max)(220.0f, (width - minimumViewportWidth) * 0.5f);
+    }
+
+    float bottomPanel = std::clamp(height * 0.32f, 280.0f, 420.0f);
+    if (height < 820.0f) {
+        bottomPanel = std::clamp(height * 0.28f, 220.0f, 320.0f);
+    }
+
+    layout.leftPanelWidth = sidePanel;
+    layout.rightPanelWidth = sidePanel;
+    layout.bottomPanelHeight = bottomPanel;
+    layout.mainPanelHeight = (std::max)(220.0f, height - bottomPanel);
+    return layout;
 }
 }
 
@@ -231,30 +265,7 @@ void MyGame::Initialize() {
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
 
-    // SkinningEditor と DebugView 用の地形モデル。
-    skinningEditor_.Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
-
-
-    terrainModel_ = std::unique_ptr<Model>(
-        Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/terrain", "terrain.obj", textureManager.get()));
-    terrainObject_ = std::make_unique<Object3d>();
-    terrainObject_->Initialize(object3dCommon.get());
-    terrainObject_->SetModel(terrainModel_.get());
-    terrainObject_->SetPosition({ 0.0f, 0.0f, 0.0f });
-    terrainObject_->SetScale({ 1.0f, 1.0f, 1.0f });
-    terrainObject_->SetRotation({ 0.0f, 0.0f, 0.0f });
-    terrainObject_->SetEnvironmentCoefficient(terrainEnvironmentCoefficient_);
-    terrainObject_->SetShininess(0.38f);
-    terrainObject_->SetMetallic(0.08f);
-
-
-    postProcess_.Initialize(dxCommon.get(), stageMap_.GetClearColor());
-#if defined(DEVELOPMENT) || defined(NDEBUG)
-    // Evaluation Task 1 requires a scene rendered through Grayscale.
-    // Enable the offscreen pass by default so the requirement is visible immediately after launch.
-    postProcess_.SetEnabled(true);
-    postProcess_.SetPostEffectMode(1);
-#endif
+    // SkinningEditor / Terrain / PostProcess は重いので、必要なモードへ入った時に初期化する。
 }
 
 
@@ -269,6 +280,40 @@ Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
     Object3d* ptr = obj.get();
     objectList.push_back(std::move(obj));
     return ptr;
+}
+
+void MyGame::EnsureSkinningEditorInitialized() {
+    if (skinningEditorInitialized_) {
+        return;
+    }
+    skinningEditor_.Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
+    skinningEditorInitialized_ = true;
+}
+
+void MyGame::EnsureTerrainInitialized() {
+    if (terrainObject_) {
+        return;
+    }
+
+    terrainModel_ = std::unique_ptr<Model>(
+        Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/terrain", "terrain.obj", textureManager.get()));
+    terrainObject_ = std::make_unique<Object3d>();
+    terrainObject_->Initialize(object3dCommon.get());
+    terrainObject_->SetModel(terrainModel_.get());
+    terrainObject_->SetPosition({ 0.0f, 0.0f, 0.0f });
+    terrainObject_->SetScale({ 1.0f, 1.0f, 1.0f });
+    terrainObject_->SetRotation({ 0.0f, 0.0f, 0.0f });
+    terrainObject_->SetEnvironmentCoefficient(terrainEnvironmentCoefficient_);
+    terrainObject_->SetShininess(0.38f);
+    terrainObject_->SetMetallic(0.08f);
+}
+
+void MyGame::EnsurePostProcessInitialized() {
+    if (postProcessInitialized_) {
+        return;
+    }
+    postProcess_.Initialize(dxCommon.get(), stageMap_.GetClearColor());
+    postProcessInitialized_ = true;
 }
 
 //  MyGame::Update
@@ -373,11 +418,15 @@ void MyGame::HandleModeChange() {
     }
 
     if (currentMode_ == AppMode::SkinningEditor) {
+        EnsureSkinningEditorInitialized();
         camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
     } else if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
+        EnsureTerrainInitialized();
         camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
         effectShowcaseFirstPlay_ = true;
     } else if (currentMode_ == AppMode::PostEffectShowcase) {
+        EnsurePostProcessInitialized();
+        EnsureTerrainInitialized();
         camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 7.0f, { 0.35f, 0.0f, 0.0f });
     }
 
@@ -492,6 +541,7 @@ void MyGame::UpdateCurrentMode(const Matrix4x4& lightVP, bool isGuiCaptured) {
         UpdateGamePlayBlockPlace();
         break;
     case AppMode::SkinningEditor:
+        EnsureSkinningEditorInitialized();
         skinningEditor_.Update(dxCommon.get(), input.get(), camera.get(), lightVP, isGuiCaptured, particleManager.get());
         break;
     }
@@ -521,7 +571,8 @@ void MyGame::UpdateDebugAndEffectObjects(const Matrix4x4& view, const Matrix4x4&
             }
         }
 
-        if (terrainObject_ && debugFlags_.showTerrain) {
+        if (debugFlags_.showTerrain) {
+            EnsureTerrainInitialized();
             terrainObject_->SetCamera(view, proj);
             terrainObject_->Update(lightVP);
         }
@@ -529,8 +580,8 @@ void MyGame::UpdateDebugAndEffectObjects(const Matrix4x4& view, const Matrix4x4&
 
     if ((currentMode_ == AppMode::EffectPreview ||
          currentMode_ == AppMode::EffectShowcase ||
-         currentMode_ == AppMode::PostEffectShowcase) &&
-        terrainObject_) {
+         currentMode_ == AppMode::PostEffectShowcase)) {
+        EnsureTerrainInitialized();
         terrainObject_->SetCamera(view, proj);
         terrainObject_->Update(lightVP);
     }
@@ -639,7 +690,9 @@ void MyGame::ApplySceneLighting(const Vector3& lightDir) {
 }
 
 void MyGame::UpdateClearColorForFrame() {
-    postProcess_.SetClearColor(stageMap_.GetClearColor());
+    if (postProcessInitialized_) {
+        postProcess_.SetClearColor(stageMap_.GetClearColor());
+    }
     const bool stormBackdrop = IsCurrentEffectStorm();
     if (stormBackdrop) {
         dxCommon->SetClearColor(0.012f, 0.018f, 0.045f, 1.0f);
@@ -1299,14 +1352,13 @@ void MyGame::DrawEffectPreviewEditorImGui() {
 void MyGame::UpdateImGui() {
     // ImGui のフレーム情報と表示サイズを取得する。
     ImGuiIO& io        = ImGui::GetIO();
-    const float panelW = 320.0f;
-    const float botH   = 360.0f;
+    const EditorLayout layout = MakeEditorLayout(io.DisplaySize);
 
     // 左パネル: Information
     // 次に開く ImGui ウィンドウの表示位置を固定する。
     ImGui::SetNextWindowPos( ImVec2(0, 0), ImGuiCond_Always);
     // 次に開く ImGui ウィンドウの表示サイズを固定する。
-    ImGui::SetNextWindowSize(ImVec2(panelW, io.DisplaySize.y - botH), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(layout.leftPanelWidth, layout.mainPanelHeight), ImGuiCond_Always);
     // 次に開く ImGui ウィンドウの背景透明度を設定する。
     ImGui::SetNextWindowBgAlpha(1.0f);
     // ImGui ウィンドウ「Information」を開始する。
@@ -1315,7 +1367,7 @@ void MyGame::UpdateImGui() {
     // ImGui テキスト「FPS: %.1f (%.3f ms/f)」を表示する。
     ImGui::Text("FPS: %.1f (%.3f ms/f)", io.Framerate, 1000.0f / io.Framerate);
     // 次の ImGui 項目を同じ行に並べる。
-    ImGui::SameLine(panelW - 60.0f);
+    ImGui::SameLine(layout.leftPanelWidth - 60.0f);
     // ImGui ボタン「Exit」を表示し、押されたら処理する。
     if (ImGui::Button("Exit", ImVec2(50, 20))) {
         PostQuitMessage(0);
@@ -1399,7 +1451,9 @@ void MyGame::UpdateImGui() {
 
 
     // PostProcessRenderer 側の ImGui 設定パネルを描画する。
-    postProcess_.DrawImGui();
+    if (postProcessInitialized_) {
+        postProcess_.DrawImGui();
+    }
 
 
     // ImGui セクション「Camera Settings」を開閉できる見出しとして表示する。
@@ -1444,9 +1498,9 @@ void MyGame::UpdateImGui() {
 
     if (currentMode_ == AppMode::EffectPreview) {
         // 次に開く ImGui ウィンドウの表示位置を固定する。
-        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panelW, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - layout.rightPanelWidth, 0), ImGuiCond_Always);
         // 次に開く ImGui ウィンドウの表示サイズを固定する。
-        ImGui::SetNextWindowSize(ImVec2(panelW, io.DisplaySize.y - botH), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(layout.rightPanelWidth, layout.mainPanelHeight), ImGuiCond_Always);
         // 次に開く ImGui ウィンドウの背景透明度を設定する。
         ImGui::SetNextWindowBgAlpha(1.0f);
         // ImGui ウィンドウ「Effect Editor」を開始する。
@@ -1458,15 +1512,15 @@ void MyGame::UpdateImGui() {
 
     // 下パネル: Tools & Controls
     // 次に開く ImGui ウィンドウの表示位置を固定する。
-    ImGui::SetNextWindowPos( ImVec2(0, io.DisplaySize.y - botH), ImGuiCond_Always);
+    ImGui::SetNextWindowPos( ImVec2(0, io.DisplaySize.y - layout.bottomPanelHeight), ImGuiCond_Always);
     // 次に開く ImGui ウィンドウの表示サイズを固定する。
-    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, botH),     ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, layout.bottomPanelHeight),     ImGuiCond_Always);
     // 次に開く ImGui ウィンドウの背景透明度を設定する。
     ImGui::SetNextWindowBgAlpha(1.0f);
     // ImGui ウィンドウ「Tools & Controls」を開始する。
     ImGui::Begin("Tools & Controls", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-    if (currentMode_ == AppMode::SkinningEditor && skinningEditor_.HasPreviewObject()) {
+    if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_ && skinningEditor_.HasPreviewObject()) {
 
         if (ImGui::BeginTabBar("SkinningBottomTabs")) {
             if (ImGui::BeginTabItem("Timeline")) {
@@ -1934,11 +1988,11 @@ void MyGame::UpdateImGui() {
     ImGui::End(); // 下パネルここまで
 
     // 右パネル (Skinning Editor) - SkinningEditor モード時のみ
-    if (currentMode_ == AppMode::SkinningEditor && skinningEditor_.HasPreviewObject()) {
+    if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_ && skinningEditor_.HasPreviewObject()) {
         // 次に開く ImGui ウィンドウの表示位置を固定する。
-        ImGui::SetNextWindowPos( ImVec2(io.DisplaySize.x - panelW, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowPos( ImVec2(io.DisplaySize.x - layout.rightPanelWidth, 0), ImGuiCond_Always);
         // 次に開く ImGui ウィンドウの表示サイズを固定する。
-        ImGui::SetNextWindowSize(ImVec2(panelW, io.DisplaySize.y - botH), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(layout.rightPanelWidth, layout.mainPanelHeight), ImGuiCond_Always);
         // 次に開く ImGui ウィンドウの背景透明度を設定する。
         ImGui::SetNextWindowBgAlpha(1.0f);
         // ImGui ウィンドウ「Skinning Editor」を開始する。
@@ -1954,7 +2008,7 @@ void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
 
     if (skydomeObject_) {
-        if (postProcess_.GetSkyboxLinkMode() == 1) {
+        if (postProcessInitialized_ && postProcess_.GetSkyboxLinkMode() == 1) {
             skydomeObject_->SetColor(postProcess_.GetClearColor());
         } else {
             skydomeObject_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
@@ -1972,12 +2026,12 @@ void MyGame::Draw() {
         if (obj) { obj->DrawShadow(lightVP); }
     }
     if (player_) { player_->DrawShadow(lightVP); }
-    if (currentMode_ == AppMode::SkinningEditor) { skinningEditor_.DrawShadow(lightVP); }
+    if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) { skinningEditor_.DrawShadow(lightVP); }
     if (stageRenderer_) { stageRenderer_->DrawShadow(lightVP); }
 
     shadowMap_->PostDraw(commandList);
 
-    if (postProcess_.IsEnabled()) {
+    if (postProcessInitialized_ && postProcess_.IsEnabled()) {
         postProcess_.BeginRender(commandList, dxCommon.get());
         RenderScene();
         postProcess_.EndRender(commandList);
@@ -2042,7 +2096,7 @@ void MyGame::RenderScene() {
 
     if (currentMode_ == AppMode::StageSelect) {
         if (stageSelect_) { stageSelect_->Draw(); }
-    } else if (currentMode_ == AppMode::SkinningEditor) {
+    } else if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
         skinningEditor_.Draw(object3dCommon.get(), camera.get());
     } else {
         const bool isGameMode =
@@ -2544,6 +2598,8 @@ void MyGame::UpdateEffectShowcase() {
 
 // CG5課題1専用のPostEffect確認モードを更新する。
 void MyGame::UpdatePostEffectShowcase() {
+    EnsurePostProcessInitialized();
+    EnsureTerrainInitialized();
     debugFlags_.showParticles = false;
     debugFlags_.showSkybox = false;
     postProcess_.SetEnabled(true);

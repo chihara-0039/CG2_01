@@ -1,5 +1,6 @@
 #include "Sprite.h"
 #include "MyMath.h" // 必ずインクルード
+#include "WinApp.h"
 #include <cassert>
 
 void Sprite::Initialize(SpriteCommon* spriteCommon, uint32_t textureHandle) {
@@ -38,9 +39,15 @@ void Sprite::Update() {
     Matrix4x4 worldMatrix = Math::Multiply(scaleMat, Math::Multiply(rotateMat, translateMat));
 
     // ビュープロジェクション行列（正射影）
-    // 画面サイズ 1280x720 を想定
+    // 画面サイズはWinAppのクライアント領域定数を参照する。
     Matrix4x4 viewMatrix = Math::MakeIdentity4x4();
-    Matrix4x4 projectionMatrix = Math::MakeOrthographicMatrix(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 100.0f);
+    Matrix4x4 projectionMatrix = Math::MakeOrthographicMatrix(
+        0.0f,
+        0.0f,
+        static_cast<float>(WinApp::kClientWidth),
+        static_cast<float>(WinApp::kClientHeight),
+        0.0f,
+        100.0f);
 
 	// ワールド・ビュー・プロジェクション行列の計算
     Matrix4x4 wvpMatrix = Math::Multiply(worldMatrix, Math::Multiply(viewMatrix, projectionMatrix));

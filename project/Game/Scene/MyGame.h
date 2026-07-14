@@ -100,7 +100,7 @@ private:
         bool showSkybox = true;  ///< スカイドーム / スカイボックスを表示するか
         bool showSprite = true;  ///< スプライトを表示するか
         bool showParticles = true;  ///< パーティクルを表示するか
-        bool showTerrain = true;  ///< 地形を表示するか
+        bool showTerrain = false;  ///< 地形を表示するか
     };
 
     // ==========================================================
@@ -172,6 +172,8 @@ private:
     StageEditorController     stageEditorController_;    ///< ステージエディタ操作
     SkinningEditorController  skinningEditor_;           ///< スキニングエディタ全般
     PostProcessRenderer       postProcess_;              ///< オフスクリーン/ポストエフェクト
+    bool                      skinningEditorInitialized_ = false;
+    bool                      postProcessInitialized_ = false;
 
     // ==========================================================
     //  ブロック関連
@@ -292,6 +294,9 @@ private:
     void UpdateStageSelect();           ///< ステージ選択画面の更新
     void UpdateSceneTransition();       ///< ESC によるシーン遷移処理
     void HandleModeChange();
+    void EnsureSkinningEditorInitialized();
+    void EnsureTerrainInitialized();
+    void EnsurePostProcessInitialized();
     void BeginFrameImGui();
     bool IsGuiCapturingMouse();
     Vector3 UpdateLightCameraForFrame();
