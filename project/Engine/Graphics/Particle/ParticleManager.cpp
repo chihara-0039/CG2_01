@@ -85,7 +85,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
 
     // 1. テクスチャ読み込み (デフォルト)
     textureHandle_ = textureManager_->LoadTexture("Resources/UI/inventory/white.png");
-    GetDefaultParticleGroup().textureHandle = textureHandle_;
+    CreateParticleGroup(kDefaultParticleGroupName, textureHandle_);
 
     // 2. パイプライン生成
     CreateRootSignature();
@@ -399,76 +399,79 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         }
     }
 
-    // 1. パーティクル更新
-    for (auto it = Particles().begin(); it != Particles().end();) {
-        it->lifeTime += deltaTime;
-        if (it->lifeTime >= it->maxTime) {
-            it = Particles().erase(it);
-            continue;
-        }
-        
-        float oldY = it->transform.translate.y;
-        
-        it->transform.translate.x += it->velocity.x * deltaTime * 60.0f;
-        it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
-        it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
-
-        if (it->type == Particle::Type::StormRain && it->transform.translate.y <= stormCenter_.y + 0.12f) {
-            Vector3 splashPosition = it->transform.translate;
-            splashPosition.y = stormCenter_.y + 0.14f;
-            EmitStormRainSplash(splashPosition, it->color);
-            it = Particles().erase(it);
-            continue;
-        }
-
-        if (it->type == Particle::Type::Ring) {
-            float t = it->lifeTime / it->maxTime;
-            float ringScale = 0.25f + 1.8f * t;
-            it->transform.scale = { ringScale, ringScale, 1.0f };
-        } else if (it->type == Particle::Type::Cylinder) {
-            float t = it->lifeTime / it->maxTime;
-            float radiusScale = 0.7f + 0.6f * t;
-            float heightScale = 0.8f + 0.4f * t;
-            it->transform.scale = { radiusScale, heightScale, radiusScale };
-        }
-        
-        // 当たり判定 (StageMapとの衝突判定)
-        if (it->type == Particle::Type::Fall && stageMap) {
-            int bx = (int)std::floor(it->transform.translate.x + 0.5f);
-            int bz = (int)std::floor(it->transform.translate.z + 0.5f);
-            int oldBy = (int)std::floor(oldY + 0.5f);
-            int newBy = (int)std::floor(it->transform.translate.y + 0.5f);
-            
-            bool hit = false;
-            int hitY = newBy;
-            // 落下前の位置から落下後の位置までの間のセルを確認（すり抜け防止）
-            for (int y = oldBy; y >= newBy; --y) {
-                const MapCell* cell = stageMap->GetCell(bx, y, bz);
-                if (cell != nullptr && cell->type != BlockType::None) {
-                    hit = true;
-                    hitY = y;
-                    break;
-                }
-            }
-            
-            if (hit) {
-                // ブロック上面(hitY + 0.5f)の少し上で飛沫を生成して元のパーティクルを消滅させる
-                Vector3 splashPos = it->transform.translate;
-                splashPos.y = (float)hitY + 0.6f;
-                EmitSplash(splashPos, it->color);
-                it = Particles().erase(it);
+    // 1. パーティクル更新。グループごとに寿命・座標・衝突を処理する。
+    for (auto& [groupName, group] : particleGroups_) {
+        (void)groupName;
+        for (auto it = group.particles.begin(); it != group.particles.end();) {
+            it->lifeTime += deltaTime;
+            if (it->lifeTime >= it->maxTime) {
+                it = group.particles.erase(it);
                 continue;
             }
+
+            float oldY = it->transform.translate.y;
+
+            it->transform.translate.x += it->velocity.x * deltaTime * 60.0f;
+            it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
+            it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
+
+            if (it->type == Particle::Type::StormRain && it->transform.translate.y <= stormCenter_.y + 0.12f) {
+                Vector3 splashPosition = it->transform.translate;
+                splashPosition.y = stormCenter_.y + 0.14f;
+                EmitStormRainSplash(splashPosition, it->color);
+                it = group.particles.erase(it);
+                continue;
+            }
+
+            if (it->type == Particle::Type::Ring) {
+                float t = it->lifeTime / it->maxTime;
+                float ringScale = 0.25f + 1.8f * t;
+                it->transform.scale = { ringScale, ringScale, 1.0f };
+            } else if (it->type == Particle::Type::Cylinder) {
+                float t = it->lifeTime / it->maxTime;
+                float radiusScale = 0.7f + 0.6f * t;
+                float heightScale = 0.8f + 0.4f * t;
+                it->transform.scale = { radiusScale, heightScale, radiusScale };
+            }
+
+            // 当たり判定 (StageMapとの衝突判定)
+            if (it->type == Particle::Type::Fall && stageMap) {
+                int bx = (int)std::floor(it->transform.translate.x + 0.5f);
+                int bz = (int)std::floor(it->transform.translate.z + 0.5f);
+                int oldBy = (int)std::floor(oldY + 0.5f);
+                int newBy = (int)std::floor(it->transform.translate.y + 0.5f);
+
+                bool hit = false;
+                int hitY = newBy;
+                // 落下前の位置から落下後の位置までの間のセルを確認（すり抜け防止）
+                for (int y = oldBy; y >= newBy; --y) {
+                    const MapCell* cell = stageMap->GetCell(bx, y, bz);
+                    if (cell != nullptr && cell->type != BlockType::None) {
+                        hit = true;
+                        hitY = y;
+                        break;
+                    }
+                }
+
+                if (hit) {
+                    // ブロック上面(hitY + 0.5f)の少し上で飛沫を生成して元のパーティクルを消滅させる
+                    Vector3 splashPos = it->transform.translate;
+                    splashPos.y = (float)hitY + 0.6f;
+                    EmitSplash(splashPos, it->color);
+                    it = group.particles.erase(it);
+                    continue;
+                }
+            }
+
+            // フェードアウト
+            float normalizedLife = it->lifeTime / it->maxTime;
+            float alpha = it->type == Particle::Type::StormCloud
+                ? std::sin(normalizedLife * 3.14159265f)
+                : 1.0f - normalizedLife;
+            it->color.w = it->initialAlpha * alpha;
+
+            ++it;
         }
-        
-        // フェードアウト
-        float normalizedLife = it->lifeTime / it->maxTime;
-        float alpha = it->type == Particle::Type::StormCloud
-            ? std::sin(normalizedLife * 3.14159265f)
-            : 1.0f - normalizedLife;
-        it->color.w = it->initialAlpha * alpha;
-        
-        ++it;
     }
 
     // 2. データ書き込み
@@ -487,41 +490,58 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         perViewData_->billboardMatrix = billboardMat;
     }
 
-    for (const auto& particle : Particles()) {
-        uint32_t* indexPtr = &planeInstanceCount_;
-        InstanceData* instancingData = instancingDataMapped_;
-        bool useBillboard = true;
+    for (auto& [groupName, group] : particleGroups_) {
+        (void)groupName;
+        group.planeInstanceStart = planeInstanceCount_;
+        group.cloudInstanceStart = cloudInstanceCount_;
+        group.ringInstanceStart = ringInstanceCount_;
+        group.cylinderInstanceStart = cylinderInstanceCount_;
+        group.planeInstanceCount = 0;
+        group.cloudInstanceCount = 0;
+        group.ringInstanceCount = 0;
+        group.cylinderInstanceCount = 0;
 
-        if (particle.type == Particle::Type::StormCloud) {
-            indexPtr = &cloudInstanceCount_;
-            instancingData = cloudInstancingDataMapped_;
-        } else if (particle.type == Particle::Type::Ring) {
-            indexPtr = &ringInstanceCount_;
-            instancingData = ringInstancingDataMapped_;
-        } else if (particle.type == Particle::Type::Cylinder) {
-            indexPtr = &cylinderInstanceCount_;
-            instancingData = cylinderInstancingDataMapped_;
-            useBillboard = false;
+        for (const auto& particle : group.particles) {
+            uint32_t* indexPtr = &planeInstanceCount_;
+            uint32_t* groupCountPtr = &group.planeInstanceCount;
+            InstanceData* instancingData = instancingDataMapped_;
+            bool useBillboard = true;
+
+            if (particle.type == Particle::Type::StormCloud) {
+                indexPtr = &cloudInstanceCount_;
+                groupCountPtr = &group.cloudInstanceCount;
+                instancingData = cloudInstancingDataMapped_;
+            } else if (particle.type == Particle::Type::Ring) {
+                indexPtr = &ringInstanceCount_;
+                groupCountPtr = &group.ringInstanceCount;
+                instancingData = ringInstancingDataMapped_;
+            } else if (particle.type == Particle::Type::Cylinder) {
+                indexPtr = &cylinderInstanceCount_;
+                groupCountPtr = &group.cylinderInstanceCount;
+                instancingData = cylinderInstancingDataMapped_;
+                useBillboard = false;
+            }
+
+            uint32_t& index = *indexPtr;
+
+            if (index >= kMaxParticles) continue;
+
+            Matrix4x4 scaleMat = Math::Matrix4x4MakeScaleMatrix(particle.transform.scale);
+            Matrix4x4 rotateMat = Math::MakeRotateZMatrix(particle.transform.rotate.z);
+            Matrix4x4 transMat = Math::MakeTranslateMatrix(particle.transform.translate);
+            Matrix4x4 worldMat = useBillboard
+                ? Math::Multiply(scaleMat, Math::Multiply(rotateMat, Math::Multiply(billboardMat, transMat)))
+                : Math::MakeAffineMatrix(particle.transform.scale, particle.transform.rotate, particle.transform.translate);
+            Matrix4x4 wvp = Math::Multiply(worldMat, Math::Multiply(viewMatrix, projectionMatrix));
+
+            instancingData[index].WVP = wvp;
+            instancingData[index].color = particle.color;
+            instancingData[index].shape = particle.type == Particle::Type::StormCloud
+                ? 2.0f
+                : particle.type == Particle::Type::Lightning ? 1.0f : 0.0f;
+            index++;
+            (*groupCountPtr)++;
         }
-
-        uint32_t& index = *indexPtr;
-
-        if (index >= kMaxParticles) continue;
-
-        Matrix4x4 scaleMat = Math::Matrix4x4MakeScaleMatrix(particle.transform.scale);
-        Matrix4x4 rotateMat = Math::MakeRotateZMatrix(particle.transform.rotate.z);
-        Matrix4x4 transMat = Math::MakeTranslateMatrix(particle.transform.translate);
-        Matrix4x4 worldMat = useBillboard
-            ? Math::Multiply(scaleMat, Math::Multiply(rotateMat, Math::Multiply(billboardMat, transMat)))
-            : Math::MakeAffineMatrix(particle.transform.scale, particle.transform.rotate, particle.transform.translate);
-        Matrix4x4 wvp = Math::Multiply(worldMat, Math::Multiply(viewMatrix, projectionMatrix));
-
-        instancingData[index].WVP = wvp;
-        instancingData[index].color = particle.color;
-        instancingData[index].shape = particle.type == Particle::Type::StormCloud
-            ? 2.0f
-            : particle.type == Particle::Type::Lightning ? 1.0f : 0.0f;
-        index++;
     }
 }
 
@@ -543,35 +563,48 @@ void ParticleManager::Draw() {
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    auto srvHandle = textureManager_->GetSrvHandleGPU(textureHandle_);
-    commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
+    for (const auto& [groupName, group] : particleGroups_) {
+        (void)groupName;
+        const uint32_t groupInstanceCount =
+            group.planeInstanceCount +
+            group.cloudInstanceCount +
+            group.ringInstanceCount +
+            group.cylinderInstanceCount;
+        if (groupInstanceCount == 0) {
+            continue;
+        }
 
-    if (cloudInstanceCount_ > 0) {
-        commandList->SetPipelineState(cloudPipelineState_.Get());
-        commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
-        commandList->IASetVertexBuffers(1, 1, &cloudInstancingBufferView_);
-        commandList->DrawInstanced(planeVertexCount_, cloudInstanceCount_, 0, 0);
-    }
+        const uint32_t textureHandle = group.textureHandle != 0 ? group.textureHandle : textureHandle_;
+        auto srvHandle = textureManager_->GetSrvHandleGPU(textureHandle);
+        commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
 
-    if (planeInstanceCount_ > 0) {
-        commandList->SetPipelineState(pipelineState_.Get());
-        commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
-        commandList->IASetVertexBuffers(1, 1, &instancingBufferView_);
-        commandList->DrawInstanced(planeVertexCount_, planeInstanceCount_, 0, 0);
-    }
+        if (group.cloudInstanceCount > 0) {
+            commandList->SetPipelineState(cloudPipelineState_.Get());
+            commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+            commandList->IASetVertexBuffers(1, 1, &cloudInstancingBufferView_);
+            commandList->DrawInstanced(planeVertexCount_, group.cloudInstanceCount, 0, group.cloudInstanceStart);
+        }
 
-    if (ringInstanceCount_ > 0) {
-        commandList->SetPipelineState(primitivePipelineState_.Get());
-        commandList->IASetVertexBuffers(0, 1, &ringVertexBufferView_);
-        commandList->IASetVertexBuffers(1, 1, &ringInstancingBufferView_);
-        commandList->DrawInstanced(ringVertexCount_, ringInstanceCount_, 0, 0);
-    }
+        if (group.planeInstanceCount > 0) {
+            commandList->SetPipelineState(pipelineState_.Get());
+            commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+            commandList->IASetVertexBuffers(1, 1, &instancingBufferView_);
+            commandList->DrawInstanced(planeVertexCount_, group.planeInstanceCount, 0, group.planeInstanceStart);
+        }
 
-    if (cylinderInstanceCount_ > 0) {
-        commandList->SetPipelineState(primitivePipelineState_.Get());
-        commandList->IASetVertexBuffers(0, 1, &cylinderVertexBufferView_);
-        commandList->IASetVertexBuffers(1, 1, &cylinderInstancingBufferView_);
-        commandList->DrawInstanced(cylinderVertexCount_, cylinderInstanceCount_, 0, 0);
+        if (group.ringInstanceCount > 0) {
+            commandList->SetPipelineState(primitivePipelineState_.Get());
+            commandList->IASetVertexBuffers(0, 1, &ringVertexBufferView_);
+            commandList->IASetVertexBuffers(1, 1, &ringInstancingBufferView_);
+            commandList->DrawInstanced(ringVertexCount_, group.ringInstanceCount, 0, group.ringInstanceStart);
+        }
+
+        if (group.cylinderInstanceCount > 0) {
+            commandList->SetPipelineState(primitivePipelineState_.Get());
+            commandList->IASetVertexBuffers(0, 1, &cylinderVertexBufferView_);
+            commandList->IASetVertexBuffers(1, 1, &cylinderInstancingBufferView_);
+            commandList->DrawInstanced(cylinderVertexCount_, group.cylinderInstanceCount, 0, group.cylinderInstanceStart);
+        }
     }
 
     if (drawGPUParticleSphere_) {
@@ -1455,13 +1488,21 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
 }
 
 void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
+    Emit(kDefaultParticleGroupName, pos, count);
+}
+
+void ParticleManager::Emit(const std::string& groupName, const Vector3& pos, uint32_t count) {
+    ParticleGroup& group = particleGroups_.contains(groupName)
+        ? particleGroups_.at(groupName)
+        : GetDefaultParticleGroup();
+
     std::uniform_real_distribution<float> distRotate(-3.14159265f, 3.14159265f);
     std::uniform_real_distribution<float> distScale(0.4f, 1.5f);
     std::uniform_real_distribution<float> distColor(0.7f, 1.0f);
     std::uniform_real_distribution<float> distTime(0.18f, 0.35f);
     std::uniform_real_distribution<float> distOffset(-0.2f, 0.2f);
 
-    if (Particles().size() < kMaxParticles) {
+    if (group.particles.size() < kMaxParticles) {
         Particle cylinder;
         cylinder.type = Particle::Type::Cylinder;
         cylinder.transform.scale = { 0.7f, 0.8f, 0.7f };
@@ -1472,10 +1513,10 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
         cylinder.initialAlpha = cylinder.color.w;
         cylinder.lifeTime = 0.0f;
         cylinder.maxTime = 0.45f;
-        Particles().push_back(cylinder);
+        group.particles.push_back(cylinder);
     }
 
-    if (Particles().size() < kMaxParticles) {
+    if (group.particles.size() < kMaxParticles) {
         Particle ring;
         ring.type = Particle::Type::Ring;
         ring.transform.scale = { 0.25f, 0.25f, 1.0f };
@@ -1486,11 +1527,11 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
         ring.initialAlpha = ring.color.w;
         ring.lifeTime = 0.0f;
         ring.maxTime = 0.35f;
-        Particles().push_back(ring);
+        group.particles.push_back(ring);
     }
 
     for (uint32_t i = 0; i < count; ++i) {
-        if (Particles().size() >= kMaxParticles) return;
+        if (group.particles.size() >= kMaxParticles) return;
 
         Particle p;
         p.type = Particle::Type::Splash;
@@ -1506,8 +1547,36 @@ void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
         p.initialAlpha = p.color.w;
         p.lifeTime = 0.0f;
         p.maxTime = distTime(engine);
-        Particles().push_back(p);
+        group.particles.push_back(p);
     }
+}
+
+void ParticleManager::CreateParticleGroup(const std::string& groupName, uint32_t textureHandle) {
+    if (groupName.empty()) {
+        return;
+    }
+
+    ParticleGroup& group = particleGroups_[groupName];
+    group.textureHandle = textureHandle != 0 ? textureHandle : textureHandle_;
+}
+
+void ParticleManager::SetTexture(const std::string& groupName, uint32_t textureHandle) {
+    if (groupName.empty()) {
+        return;
+    }
+
+    ParticleGroup& group = particleGroups_[groupName];
+    group.textureHandle = textureHandle;
+}
+
+ParticleManager::ParticleGroup* ParticleManager::FindParticleGroup(const std::string& groupName) {
+    auto it = particleGroups_.find(groupName);
+    return it == particleGroups_.end() ? nullptr : &it->second;
+}
+
+const ParticleManager::ParticleGroup* ParticleManager::FindParticleGroup(const std::string& groupName) const {
+    auto it = particleGroups_.find(groupName);
+    return it == particleGroups_.end() ? nullptr : &it->second;
 }
 
 ParticleManager::ParticleGroup& ParticleManager::GetDefaultParticleGroup() {

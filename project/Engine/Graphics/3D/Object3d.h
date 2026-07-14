@@ -8,6 +8,7 @@ struct TransformationMatrix {
     Matrix4x4 WVP;
     Matrix4x4 World;
     Matrix4x4 lightViewProjection;
+    Matrix4x4 WorldInverseTranspose;
 };
 
 // Material constants bound to Object3d.PS.hlsl.

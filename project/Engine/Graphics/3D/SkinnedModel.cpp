@@ -160,6 +160,18 @@ namespace {
     }
 }
 
+SkinnedModel::~SkinnedModel() {
+    if (jointBuffer_ && mappedPalette_) {
+        jointBuffer_->Unmap(0, nullptr);
+        mappedPalette_ = nullptr;
+    }
+
+    if (skinningInformationBuffer_ && mappedSkinningInformation_) {
+        skinningInformationBuffer_->Unmap(0, nullptr);
+        mappedSkinningInformation_ = nullptr;
+    }
+}
+
 void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager) {
     restPoseCaptured_ = false;
     // 1. 
