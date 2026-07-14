@@ -6,12 +6,75 @@
 #include <thread>
 #include <stdexcept>
 #include <filesystem>
+#include <fstream>
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 
 using namespace Microsoft::WRL;
+
+namespace {
+std::filesystem::path MakeShaderCachePath(const std::filesystem::path& absolutePath, const wchar_t* profile) {
+    const std::wstring profileName = profile ? profile : L"unknown";
+    const size_t hash = std::hash<std::wstring>{}(absolutePath.wstring() + L"|" + profileName);
+    const std::wstring cacheName =
+        absolutePath.stem().wstring() + L"_" + profileName + L"_" + std::format(L"{:016x}", hash) + L".cso";
+    return absolutePath.parent_path() / L"Compiled" / cacheName;
+}
+
+bool IsShaderCacheFresh(const std::filesystem::path& sourcePath, const std::filesystem::path& cachePath) {
+    std::error_code ec;
+    if (!std::filesystem::exists(cachePath, ec)) {
+        return false;
+    }
+
+    const auto sourceTime = std::filesystem::last_write_time(sourcePath, ec);
+    if (ec) {
+        return false;
+    }
+
+    const auto cacheTime = std::filesystem::last_write_time(cachePath, ec);
+    if (ec) {
+        return false;
+    }
+
+    return cacheTime >= sourceTime;
+}
+
+ComPtr<IDxcBlob> LoadCachedShaderBlob(IDxcUtils* dxcUtils, const std::filesystem::path& cachePath) {
+    ComPtr<IDxcBlobEncoding> cachedEncoding;
+    HRESULT hr = dxcUtils->LoadFile(cachePath.wstring().c_str(), nullptr, &cachedEncoding);
+    if (FAILED(hr)) {
+        return nullptr;
+    }
+
+    ComPtr<IDxcBlob> cachedBlob;
+    cachedEncoding.As(&cachedBlob);
+    return cachedBlob;
+}
+
+void SaveCachedShaderBlob(const std::filesystem::path& cachePath, IDxcBlob* shaderBlob) {
+    if (!shaderBlob) {
+        return;
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(cachePath.parent_path(), ec);
+    if (ec) {
+        return;
+    }
+
+    std::ofstream file(cachePath, std::ios::binary);
+    if (!file) {
+        return;
+    }
+
+    file.write(
+        static_cast<const char*>(shaderBlob->GetBufferPointer()),
+        static_cast<std::streamsize>(shaderBlob->GetBufferSize()));
+}
+}
 
 void DirectXCommon::Initialize(WinApp* winApp) {
     assert(winApp);
@@ -62,11 +125,13 @@ void DirectXCommon::Initialize(WinApp* winApp) {
 
 void DirectXCommon::InitializeDevice() {
     // DXGIファクトリーの生成
-#ifdef USE_IMGUI
+#ifdef ENABLE_D3D12_DEBUG_LAYER
     ComPtr<ID3D12Debug1> debugController = nullptr;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
         debugController->EnableDebugLayer();
-        debugController->SetEnableGPUBasedValidation(TRUE);
+        // GPU Based Validationは起動時のPSO作成や実行時検証がかなり重い。
+        // 必要な調査時だけTRUEに戻す。
+        debugController->SetEnableGPUBasedValidation(FALSE);
     }
 #endif
 
@@ -224,6 +289,18 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     std::filesystem::path absolutePath = std::filesystem::absolute(filePath);
     std::wstring absFilePath = absolutePath.wstring();
     std::wstring absDirectoryPath = absolutePath.parent_path().wstring();
+    const std::wstring cacheKey = absFilePath + L"|" + (profile ? profile : L"");
+    if (auto it = shaderBlobCache_.find(cacheKey); it != shaderBlobCache_.end()) {
+        return it->second;
+    }
+
+    const std::filesystem::path cachePath = MakeShaderCachePath(absolutePath, profile);
+    if (IsShaderCacheFresh(absolutePath, cachePath)) {
+        if (ComPtr<IDxcBlob> cachedBlob = LoadCachedShaderBlob(dxcUtils_.Get(), cachePath)) {
+            shaderBlobCache_[cacheKey] = cachedBlob;
+            return cachedBlob;
+        }
+    }
 
     // --- デバッグログ：何を読み込もうとしているか出力 ---
     OutputDebugStringW(L"----------------------------------------\n");
@@ -308,6 +385,8 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     OutputDebugStringA("CompileShader Success!\n");
     OutputDebugStringA("----------------------------------------\n");
 
+    SaveCachedShaderBlob(cachePath, shaderBlob.Get());
+    shaderBlobCache_[cacheKey] = shaderBlob;
     return shaderBlob;
 }
 

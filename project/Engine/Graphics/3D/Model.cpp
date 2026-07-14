@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cassert>
 #include <unordered_map>
+#include <stdexcept>
 
 using namespace Microsoft::WRL;
 
@@ -35,7 +36,11 @@ void Model::Initialize(DirectXCommon* dxCommon, const std::string& directoryPath
 void Model::LoadObjFile(const std::string& directoryPath, const std::string& filename) {
     std::string fullPath = directoryPath + "/" + filename;
     std::ifstream file(fullPath);
-    assert(file.is_open());
+    if (!file.is_open()) {
+        const std::string message = "Failed to open OBJ file: " + fullPath;
+        OutputDebugStringA((message + "\n").c_str());
+        throw std::runtime_error(message);
+    }
 
     // ★追加：どのパスのファイルを読んでいるか出力
     OutputDebugStringA(("---- Loading: " + fullPath + " ----\n").c_str());

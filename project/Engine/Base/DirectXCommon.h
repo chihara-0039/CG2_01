@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <chrono>
+#include <unordered_map>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -190,6 +191,7 @@ private:
     // VS2022 付属のコンパイラより新しい機能 (SM 6.x) に対応している。
     ComPtr<IDxcUtils>          dxcUtils_;
     ComPtr<IDxcCompiler3>      dxcCompiler_;
+    std::unordered_map<std::wstring, ComPtr<IDxcBlob>> shaderBlobCache_;
     ComPtr<IDxcIncludeHandler> includeHandler_; // #include 解決に使う
 
     // ── FPS 固定 ─────────────────────────────────────────

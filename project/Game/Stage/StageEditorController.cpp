@@ -7,6 +7,40 @@
 #include "externals/imgui/imgui.h"
 #endif
 
+#ifdef USE_IMGUI
+namespace {
+struct StageEditorLayout {
+    float rightPanelWidth = 320.0f;
+    float bottomPanelHeight = 360.0f;
+    float mainPanelHeight = 720.0f;
+};
+
+StageEditorLayout MakeStageEditorLayout(const ImVec2& displaySize) {
+    StageEditorLayout layout;
+    const float width = (std::max)(displaySize.x, 1.0f);
+    const float height = (std::max)(displaySize.y, 1.0f);
+
+    float sidePanel = std::clamp(width * 0.18f, 300.0f, 380.0f);
+    if (width < 1360.0f) {
+        sidePanel = std::clamp(width * 0.22f, 260.0f, 320.0f);
+    }
+    if (width - sidePanel * 2.0f < 560.0f) {
+        sidePanel = (std::max)(220.0f, (width - 560.0f) * 0.5f);
+    }
+
+    float bottomPanel = std::clamp(height * 0.32f, 280.0f, 420.0f);
+    if (height < 820.0f) {
+        bottomPanel = std::clamp(height * 0.28f, 220.0f, 320.0f);
+    }
+
+    layout.rightPanelWidth = sidePanel;
+    layout.bottomPanelHeight = bottomPanel;
+    layout.mainPanelHeight = (std::max)(220.0f, height - bottomPanel);
+    return layout;
+}
+}
+#endif
+
 void StageEditorController::Initialize() {
     LoadCampaignSequence();
     // ブロック表示スケールの初期化
@@ -210,12 +244,11 @@ void StageEditorController::Update(Input* input, StageMap& stageMap, StageRender
 void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRenderer, MapCursor* mapCursor, Player* player) {
 #ifdef USE_IMGUI
     ImGuiIO& io = ImGui::GetIO();
-    float panelWidth = 320.0f;
-    float bottomHeight = 360.0f;
+    const StageEditorLayout layout = MakeStageEditorLayout(io.DisplaySize);
 
     // 右側パネルに配置：ステージの保存・読み込み管理
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panelWidth, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(panelWidth, io.DisplaySize.y - bottomHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - layout.rightPanelWidth, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(layout.rightPanelWidth, layout.mainPanelHeight), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(1.0f); // 透過なし
     ImGui::Begin("Stage Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
