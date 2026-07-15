@@ -4,6 +4,7 @@
 #include "StageMap.h"
 #include "SkinnedObject.h"
 #include <memory>
+#include <string>
 
 class DirectXCommon;
 
@@ -198,18 +199,32 @@ public:
     bool IsSkinned() const { return isSkinned_; }
 
 private:
+    enum class AnimationState {
+        Idle,
+        Walk,
+        Run,
+        Jump,
+        Ladder,
+    };
+
     // -------------------------------------------------------
     //  CheckCollision : pos でブロックと衝突しているか判定する。
     //  radius_ の AABB と StageMap の各ブロックを比較する。
     //  isSolid フラグが true のブロックと衝突とみなす。
     // -------------------------------------------------------
     bool CheckCollision(const Vector3& pos, StageMap& map);
+    bool IsJumpTriggered() const;
+    bool IsInteractTriggered() const;
+    bool IsRunInputActive(const Vector3& inputDir) const;
+    AnimationState ResolveAnimationState(bool hasMoveInput, bool isRunInput) const;
+    void ApplySkinnedAnimation(AnimationState state, bool isMoving);
 
 private:
     // ── 描画コンポーネント ────────────────────────────────
     std::unique_ptr<Object3d>      object_;        // OBJ モデル用 (通常)
     std::unique_ptr<SkinnedObject> skinnedObject_; // glTF スキニング用
     bool isSkinned_ = false;                       // スキニングモードかどうか
+    AnimationState animationState_ = AnimationState::Idle; // 現在のプレイヤーアニメーション状態
 
     // ── トランスフォーム ──────────────────────────────────
     Vector3 position_ = { 0, 0, 0 }; // 足元基準のワールド座標
