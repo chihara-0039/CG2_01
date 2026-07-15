@@ -127,6 +127,7 @@ private:
     std::unique_ptr<WinApp>         winApp;
     std::unique_ptr<DirectXCommon>  dxCommon;
     std::unique_ptr<Input>          input;
+    std::unique_ptr<SrvManager>     srvManager;
     std::unique_ptr<TextureManager> textureManager;
     std::unique_ptr<SpriteCommon>   spriteCommon;
     std::unique_ptr<Object3dCommon> object3dCommon;

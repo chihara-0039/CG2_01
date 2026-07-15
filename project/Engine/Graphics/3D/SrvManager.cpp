@@ -78,3 +78,13 @@ void SrvManager::CreateSRVforStructuredBuffer(uint32_t index, ID3D12Resource* re
         &srvDesc,
         GetCPUDescriptorHandle(index));
 }
+
+void SrvManager::CreateSRV(uint32_t index, ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc) {
+    assert(dxCommon_);
+    assert(resource);
+
+    dxCommon_->GetDevice()->CreateShaderResourceView(
+        resource,
+        &srvDesc,
+        GetCPUDescriptorHandle(index));
+}
