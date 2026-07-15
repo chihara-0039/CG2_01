@@ -14,25 +14,31 @@
 using json = nlohmann::json;
 
 namespace {
-    // 
-    Vector3 TransformCoord(const Vector3& v, const Matrix4x4& m) {
-        float w = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
-        if (std::abs(w) < 1e-5f) w = 1.0f;
+    // 座標を行列で変換し、w 成分で透視除算する。
+    Vector3 TransformCoord(const Vector3& position, const Matrix4x4& matrix) {
+        float homogeneousW =
+            position.x * matrix.m[0][3] +
+            position.y * matrix.m[1][3] +
+            position.z * matrix.m[2][3] +
+            matrix.m[3][3];
+        if (std::abs(homogeneousW) < 1e-5f) {
+            homogeneousW = 1.0f;
+        }
         return {
-            (v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0]) / w,
-            (v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1]) / w,
-            (v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2]) / w
+            (position.x * matrix.m[0][0] + position.y * matrix.m[1][0] + position.z * matrix.m[2][0] + matrix.m[3][0]) / homogeneousW,
+            (position.x * matrix.m[0][1] + position.y * matrix.m[1][1] + position.z * matrix.m[2][1] + matrix.m[3][1]) / homogeneousW,
+            (position.x * matrix.m[0][2] + position.y * matrix.m[1][2] + position.z * matrix.m[2][2] + matrix.m[3][2]) / homogeneousW
         };
     }
 
-    // ()
-    Vector3 TransformNormal(const Vector3& n, const Matrix4x4& m) {
-        Vector3 res = {
-            n.x * m.m[0][0] + n.y * m.m[1][0] + n.z * m.m[2][0],
-            n.x * m.m[0][1] + n.y * m.m[1][1] + n.z * m.m[2][1],
-            n.x * m.m[0][2] + n.y * m.m[1][2] + n.z * m.m[2][2]
+    // 法線を行列の回転・スケール成分で変換し、単位ベクトルに戻す。
+    Vector3 TransformNormal(const Vector3& normal, const Matrix4x4& matrix) {
+        Vector3 transformedNormal = {
+            normal.x * matrix.m[0][0] + normal.y * matrix.m[1][0] + normal.z * matrix.m[2][0],
+            normal.x * matrix.m[0][1] + normal.y * matrix.m[1][1] + normal.z * matrix.m[2][1],
+            normal.x * matrix.m[0][2] + normal.y * matrix.m[1][2] + normal.z * matrix.m[2][2]
         };
-        return Math::Normalize(res);
+        return Math::Normalize(transformedNormal);
     }
 
     json ToJson(const Vector3& value) {
@@ -76,15 +82,15 @@ namespace {
         return std::max(0.0f, std::min(1.0f, value));
     }
 
-    float LerpFloat(float a, float b, float t) {
-        return a + (b - a) * t;
+    float LerpFloat(float start, float end, float rate) {
+        return start + (end - start) * rate;
     }
 
-    Vector3 LerpVector3(const Vector3& a, const Vector3& b, float t) {
+    Vector3 LerpVector3(const Vector3& start, const Vector3& end, float rate) {
         return {
-            LerpFloat(a.x, b.x, t),
-            LerpFloat(a.y, b.y, t),
-            LerpFloat(a.z, b.z, t)
+            LerpFloat(start.x, end.x, rate),
+            LerpFloat(start.y, end.y, rate),
+            LerpFloat(start.z, end.z, rate)
         };
     }
 

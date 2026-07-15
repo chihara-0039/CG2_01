@@ -1,21 +1,21 @@
 #pragma once
 #include <Windows.h>
 #include <wrl.h>
-#include <dinput.h> // DirectInputのヘッダー
+#include <dinput.h> // DirectInput のヘッダー
 #include <Xinput.h>
 #include "WinApp.h"
 
-// ライブラリのリンク指示
+// 入力ライブラリをリンクする。
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "xinput.lib")
 
 struct MouseState {
-    LONG x, y;       // 前フレームからの移動量
+    LONG x, y;       // 前フレームからのマウス移動量
     int wheel;       // ホイール回転量
-    bool buttons[3]; // 0:左, 1:右, 2:中
+    bool buttons[3]; // 0:左, 1:右, 2:中央
 
-    //4/20佐倉追加
+    // ウィンドウクライアント座標上の現在位置。
     LONG posX, posY;
 };
 
@@ -33,45 +33,52 @@ struct GamePadState {
 
 class Input {
 public:
-    // 名前空間省略
+    // COM オブジェクトを安全に扱うための別名。
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 public:
-    // 初期化
+    // DirectInput と XInput の入力デバイスを初期化する。
     void Initialize(WinApp* winApp);
-    // 更新
+
+    // キーボード、マウス、ゲームパッドの状態を1フレーム分更新する。
     void Update();
 
-    // キーが押されているか判定
-    // keyNumber: DIK_SPACE などのキーコード
+    // 指定キーが現在押されているかを返す。
+    // keyNumber: DIK_SPACE などの DirectInput キーコード。
     bool PushKey(BYTE keyNumber) const;
 
-    // キーがトリガーされたか（押した瞬間）判定
+    // 指定キーがこのフレームで押された瞬間かを返す。
     bool TriggerKey(BYTE keyNumber) const;
 
-	// マウスの状態を取得する関数
+    // 直近のマウス状態を取得する。
     const MouseState& GetMouseState() const { return mouseState_; }
+
+    // 直近のゲームパッド状態を取得する。
     const GamePadState& GetGamePadState() const { return gamePadState_; }
+
+    // Xbox コントローラーが接続されているかを返す。
     bool IsGamePadConnected() const { return gamePadState_.connected; }
+
+    // 指定コントローラーボタンが現在押されているかを返す。
     bool PushControllerButton(WORD button) const;
+
+    // 指定コントローラーボタンがこのフレームで押された瞬間かを返す。
     bool TriggerControllerButton(WORD button) const;
 
 private:
     float NormalizeStickAxis(SHORT value, SHORT deadZone) const;
     float NormalizeTrigger(BYTE value) const;
 
-
     WinApp* winApp_ = nullptr;
 
     ComPtr<IDirectInput8> directInput_;
     ComPtr<IDirectInputDevice8> keyboard_;
 
-    ComPtr<IDirectInputDevice8> mouse_; // マウス用デバイスを追加
-	MouseState mouseState_ = {};        // マウスの状態を保持する構造体
-    GamePadState gamePadState_ = {};
+    ComPtr<IDirectInputDevice8> mouse_; // マウス用 DirectInput デバイス
+    MouseState mouseState_ = {};        // 毎フレーム更新されるマウス入力状態
+    GamePadState gamePadState_ = {};    // 毎フレーム更新されるゲームパッド入力状態
 
-    // キーボードの入力状態（全キー256個）
+    // キーボード入力状態。DirectInput の全キー 256 個を保持する。
     BYTE key_[256] = {};
-    BYTE keyPre_[256] = {}; // 1フレーム前の状態（トリガー判定用）
-
+    BYTE keyPre_[256] = {}; // 1フレーム前のキー状態。トリガー判定に使う。
 };

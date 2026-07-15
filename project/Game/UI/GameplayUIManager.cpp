@@ -2,10 +2,36 @@
 #include "WinApp.h"
 #include <cmath>
 
+namespace {
+// 3Dプロンプトはワールド上に置くが、常にカメラ方向へ向けることでUIとして読みやすくする。
+void UpdatePromptObject3D(
+    Object3d* object,
+    const Vector3& promptPosition,
+    Camera* camera,
+    LightCamera* lightCamera)
+{
+    if (!object || !camera || !lightCamera) {
+        return;
+    }
+
+    object->SetPosition(promptPosition);
+    object->SetScale({ 0.6f, 0.6f, 0.6f });
+
+    const Vector3 cameraPosition = camera->GetPosition();
+    const float faceCameraYaw = std::atan2f(
+        cameraPosition.x - promptPosition.x,
+        cameraPosition.z - promptPosition.z);
+
+    object->SetRotation({ 0.0f, faceCameraYaw, 0.0f });
+    object->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+    object->Update(lightCamera->GetViewProjectionMatrix());
+}
+}
+
 void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager, SpriteCommon* spriteCommon, Object3dCommon* object3dCommon) {
     spriteCommon_ = spriteCommon;
 
-    // カメラ回転用UIスプライト（4方向ごとの個別テクスチャ）
+    // カメラ回転ガイド用の2D矢印スプライトを方向ごとに用意する。
     cameraGuideLeftTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_left.png");
     cameraGuideRightTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_right.png");
     cameraGuideUpTextureHandle_ = textureManager->LoadTexture("Resources/UI/arrow/arrow_up.png");
@@ -23,15 +49,14 @@ void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* text
     cameraGuideDownSprite_ = std::make_unique<Sprite>();
     cameraGuideDownSprite_->Initialize(spriteCommon, cameraGuideDownTextureHandle_);
 
-    // ドア用3D F UI
+    // ドア、スイッチ、鍵など、プレイヤーが操作できる対象に出す「F」プロンプト。
+    // 同じモデルを複数の Object3d に割り当て、表示位置だけ個別に更新する。
     doorPromptModel_ = std::unique_ptr<Model>(
         Model::CreateFromOBJ(
             dxCommon,
             "Resources/UI/F",
             "F.obj",
-            textureManager
-        )
-    );
+            textureManager));
 
     doorPromptObject_ = std::make_unique<Object3d>();
     doorPromptObject_->Initialize(object3dCommon);
@@ -57,15 +82,13 @@ void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* text
     keyBlockPromptObject_->SetEnableLighting(false);
     keyBlockPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
 
-    // はしご用3D UI
+    // はしご専用の3Dプロンプト。Fプロンプトとは別モデルを使う。
     ladderPromptModel_ = std::unique_ptr<Model>(
         Model::CreateFromOBJ(
             dxCommon,
             "Resources/UI/radderUI",
             "radderUI.obj",
-            textureManager
-        )
-    );
+            textureManager));
 
     ladderPromptObject_ = std::make_unique<Object3d>();
     ladderPromptObject_->Initialize(object3dCommon);
@@ -73,7 +96,7 @@ void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* text
     ladderPromptObject_->SetEnableLighting(false);
     ladderPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
 
-    // カメラモード表示用UIスプライトの初期化
+    // カメラモード表示用アイコン。俯瞰モードとプレイヤー追従モードを切り替えて描画する。
     cameraModeStageTextureHandle_ = textureManager->LoadTexture("Resources/UI/stage_overview_icon.png");
     cameraModePlayerTextureHandle_ = textureManager->LoadTexture("Resources/UI/follow_player_icon.png");
 
@@ -89,7 +112,7 @@ void GameplayUIManager::Initialize(DirectXCommon* dxCommon, TextureManager* text
 }
 
 void GameplayUIManager::Update(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera) {
-    /*UpdateCameraGuideSprites(isGamePlayMode);*/
+    // 3Dプロンプトはプレイヤーの近接状態に依存するため、毎フレームプレイヤー情報から位置を更新する。
     UpdateDoorPrompt3D(isGamePlayMode, player, camera, lightCamera);
     UpdateLadderPrompt3D(isGamePlayMode, player, camera, lightCamera);
     UpdatePSwitchPrompt3D(isGamePlayMode, player, camera, lightCamera);
@@ -104,64 +127,19 @@ void GameplayUIManager::Update(bool isGamePlayMode, Player* player, Camera* came
     }
 }
 
-
 void GameplayUIManager::UpdateDoorPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera) {
     if (!doorPromptObject_ || !player) {
         return;
     }
-
     if (!isGamePlayMode || !player->IsNearDoor()) {
         return;
     }
 
-    Vector3 pos = player->GetNearDoorWorldPos();
-
-    doorPromptObject_->SetPosition(pos);
-    doorPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
-
-    Vector3 camPos = camera->GetPosition();
-
-    float angleY = std::atan2f(
-        camPos.x - pos.x,
-        camPos.z - pos.z
-    );
-
-    doorPromptObject_->SetRotation({ 0.0f, angleY, 0.0f });
-    doorPromptObject_->SetCamera(
-        camera->GetViewMatrix(),
-        camera->GetProjectionMatrix()
-    );
-    doorPromptObject_->Update(
-        lightCamera->GetViewProjectionMatrix()
-    );
-}
-
-static void UpdatePromptObject3D(
-    Object3d* object,
-    const Vector3& pos,
-    Camera* camera,
-    LightCamera* lightCamera)
-{
-    if (!object || !camera || !lightCamera) {
-        return;
-    }
-
-    object->SetPosition(pos);
-    object->SetScale({ 0.6f, 0.6f, 0.6f });
-
-    Vector3 camPos = camera->GetPosition();
-
-    float angleY = std::atan2f(
-        camPos.x - pos.x,
-        camPos.z - pos.z
-    );
-
-    object->SetRotation({ 0.0f, angleY, 0.0f });
-    object->SetCamera(
-        camera->GetViewMatrix(),
-        camera->GetProjectionMatrix()
-    );
-    object->Update(lightCamera->GetViewProjectionMatrix());
+    UpdatePromptObject3D(
+        doorPromptObject_.get(),
+        player->GetNearDoorWorldPos(),
+        camera,
+        lightCamera);
 }
 
 void GameplayUIManager::UpdatePSwitchPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera)
@@ -174,8 +152,7 @@ void GameplayUIManager::UpdatePSwitchPrompt3D(bool isGamePlayMode, Player* playe
         pSwitchPromptObject_.get(),
         player->GetNearPSwitchWorldPos(),
         camera,
-        lightCamera
-    );
+        lightCamera);
 }
 
 void GameplayUIManager::UpdateKeyPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera)
@@ -188,8 +165,7 @@ void GameplayUIManager::UpdateKeyPrompt3D(bool isGamePlayMode, Player* player, C
         keyPromptObject_.get(),
         player->GetNearKeyWorldPos(),
         camera,
-        lightCamera
-    );
+        lightCamera);
 }
 
 void GameplayUIManager::UpdateKeyBlockPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera)
@@ -202,39 +178,22 @@ void GameplayUIManager::UpdateKeyBlockPrompt3D(bool isGamePlayMode, Player* play
         keyBlockPromptObject_.get(),
         player->GetNearKeyBlockWorldPos(),
         camera,
-        lightCamera
-    );
+        lightCamera);
 }
 
 void GameplayUIManager::UpdateLadderPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera) {
     if (!ladderPromptObject_ || !player) {
         return;
     }
-
     if (!isGamePlayMode || !player->IsOnLadder()) {
         return;
     }
 
-    Vector3 pos = player->GetLadderWorldPos();
-
-    ladderPromptObject_->SetPosition(pos);
-    ladderPromptObject_->SetScale({ 0.6f, 0.6f, 0.6f });
-
-    Vector3 camPos = camera->GetPosition();
-
-    float angleY = std::atan2f(
-        camPos.x - pos.x,
-        camPos.z - pos.z
-    );
-
-    ladderPromptObject_->SetRotation({ 0.0f, angleY, 0.0f });
-    ladderPromptObject_->SetCamera(
-        camera->GetViewMatrix(),
-        camera->GetProjectionMatrix()
-    );
-    ladderPromptObject_->Update(
-        lightCamera->GetViewProjectionMatrix()
-    );
+    UpdatePromptObject3D(
+        ladderPromptObject_.get(),
+        player->GetLadderWorldPos(),
+        camera,
+        lightCamera);
 }
 
 void GameplayUIManager::UpdateCameraGuide(bool isGamePlay, Input* input, WinApp* winApp)
@@ -242,11 +201,9 @@ void GameplayUIManager::UpdateCameraGuide(bool isGamePlay, Input* input, WinApp*
     if (!isGamePlay) {
         return;
     }
-
     if (!input || !winApp) {
         return;
     }
-
     if (!cameraGuideLeftSprite_ ||
         !cameraGuideRightSprite_ ||
         !cameraGuideUpSprite_ ||
@@ -256,139 +213,111 @@ void GameplayUIManager::UpdateCameraGuide(bool isGamePlay, Input* input, WinApp*
 
     const auto& mouse = input->GetMouseState();
 
-    float screenWidth = static_cast<float>(WinApp::kClientWidth);
-    float screenHeight = static_cast<float>(WinApp::kClientHeight);
+    // 矢印ガイドはゲーム画面の端に配置する。デバッグ時はImGui領域を考慮して座標補正する。
+    const float screenWidth = static_cast<float>(WinApp::kClientWidth);
+    const float screenHeight = static_cast<float>(WinApp::kClientHeight);
+    const float edgeRatio = 0.1f;
 
-    float edgeRatio = 0.1f;
+    const float leftGuideX = screenWidth * edgeRatio * 0.5f;
+    const float rightGuideX = screenWidth * (1.0f - edgeRatio * 0.5f);
+    const float topGuideY = screenHeight * edgeRatio * 0.5f;
+    const float bottomGuideY = screenHeight * (1.0f - edgeRatio * 0.5f);
 
-    float leftEdge = screenWidth * edgeRatio;
-    float rightEdge = screenWidth * (1.0f - edgeRatio);
-    float topEdge = screenHeight * edgeRatio;
-    float bottomEdge = screenHeight * (1.0f - edgeRatio);
-
-    float leftX = screenWidth * edgeRatio * 0.5f;
-    float rightX = screenWidth * (1.0f - edgeRatio * 0.5f);
-    float topY = screenHeight * edgeRatio * 0.5f;
-    float bottomY = screenHeight * (1.0f - edgeRatio * 0.5f);
-
-    float centerX = screenWidth * 0.5f;
-    float centerY = screenHeight * 0.5f;
+    const float centerX = screenWidth * 0.5f;
+    const float centerY = screenHeight * 0.5f;
 
 #ifdef NDEBUG
-    Vector2 leftOffset = { 0.0f, 0.0f };
-    Vector2 rightOffset = { -40.0f, 0.0f };
-    Vector2 upOffset = { 0.0f, 0.0f };
-    Vector2 downOffset = { 0.0f, -60.0f };
+    Vector2 leftGuideOffset = { 0.0f, 0.0f };
+    Vector2 rightGuideOffset = { -40.0f, 0.0f };
+    Vector2 upGuideOffset = { 0.0f, 0.0f };
+    Vector2 downGuideOffset = { 0.0f, -60.0f };
 #else
-    Vector2 leftOffset = { 0.0f, 0.0f };
-    Vector2 rightOffset = { -20.0f, 0.0f };
-    Vector2 upOffset = { 0.0f, 0.0f };
-    Vector2 downOffset = { 0.0f, -20.0f };
-#endif    
+    Vector2 leftGuideOffset = { 0.0f, 0.0f };
+    Vector2 rightGuideOffset = { -20.0f, 0.0f };
+    Vector2 upGuideOffset = { 0.0f, 0.0f };
+    Vector2 downGuideOffset = { 0.0f, -20.0f };
+#endif
 
-    // ふわふわ用時間
+    // 矢印を少し上下に揺らして、クリック可能なガイドだと分かりやすくする。
     cameraGuideTime_ += 1.0f / 60.0f;
+    const float floatPower = 6.0f;
+    const float floatSpeed = 3.0f;
+    const float floatingOffsetY = std::sin(cameraGuideTime_ * floatSpeed) * floatPower;
 
-    float floatPower = 6.0f;
-    float floatSpeed = 3.0f;
-    float floating = std::sin(cameraGuideTime_ * floatSpeed) * floatPower;
+    RECT clientRect;
+    GetClientRect(winApp->GetHwnd(), &clientRect);
 
-    RECT rect;
-    GetClientRect(winApp->GetHwnd(), &rect);
-
-    float currentClientW = static_cast<float>(rect.right - rect.left);
-    float currentClientH = static_cast<float>(rect.bottom - rect.top);
-
-    if (currentClientW <= 0.0f || currentClientH <= 0.0f) {
+    const float currentClientWidth = static_cast<float>(clientRect.right - clientRect.left);
+    const float currentClientHeight = static_cast<float>(clientRect.bottom - clientRect.top);
+    if (currentClientWidth <= 0.0f || currentClientHeight <= 0.0f) {
         return;
     }
 
-    float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
-    float scaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientH;
-
-    float swapMouseX = static_cast<float>(mouse.posX) * scaleX;
-    float swapMouseY = static_cast<float>(mouse.posY) * scaleY;
+    const float screenScaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientWidth;
+    const float screenScaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientHeight;
+    const float scaledMouseX = static_cast<float>(mouse.posX) * screenScaleX;
+    const float scaledMouseY = static_cast<float>(mouse.posY) * screenScaleY;
 
     float offsetX = 0.0f;
     float offsetY = 0.0f;
 
 #if defined(USE_IMGUI) && !defined(NDEBUG)
     offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
-#endif;
-
-#ifdef NDEBUG
-    // Release：UIは kClientWidth / kClientHeight 基準なので、
-    // マウスも同じ座標系に合わせる
-    float mouseX = static_cast<float>(mouse.posX) *
-        (static_cast<float>(WinApp::kClientWidth) / currentClientW);
-
-    float mouseY = static_cast<float>(mouse.posY) *
-        (static_cast<float>(WinApp::kClientHeight) / currentClientH);
-#else
-    // develop：ImGuiぶんを引く
-    float mouseX = swapMouseX - offsetX;
-    float mouseY = swapMouseY - offsetY;
 #endif
 
-    float normalSize = 64.0f;
-    float glowSize = 78.0f;
+#ifdef NDEBUG
+    // Releaseではクライアント領域を基準にマウス座標を合わせる。
+    const float mouseX = static_cast<float>(mouse.posX) *
+        (static_cast<float>(WinApp::kClientWidth) / currentClientWidth);
+    const float mouseY = static_cast<float>(mouse.posY) *
+        (static_cast<float>(WinApp::kClientHeight) / currentClientHeight);
+#else
+    // DebugではImGui表示分の横オフセットを差し引き、ゲーム画面内座標へ変換する。
+    const float mouseX = scaledMouseX - offsetX;
+    const float mouseY = scaledMouseY - offsetY;
+#endif
 
-    Vector2 leftPos = {
-        leftX + leftOffset.x,
-        centerY + leftOffset.y + floating
+    const float normalSize = 64.0f;
+    const float glowSize = 78.0f;
+
+    Vector2 leftGuidePosition = {
+        leftGuideX + leftGuideOffset.x,
+        centerY + leftGuideOffset.y + floatingOffsetY
+    };
+    Vector2 rightGuidePosition = {
+        rightGuideX + rightGuideOffset.x,
+        centerY + rightGuideOffset.y + floatingOffsetY
+    };
+    Vector2 upGuidePosition = {
+        centerX + upGuideOffset.x,
+        topGuideY + upGuideOffset.y + floatingOffsetY
+    };
+    Vector2 downGuidePosition = {
+        centerX + downGuideOffset.x,
+        bottomGuideY + downGuideOffset.y + floatingOffsetY
     };
 
-    Vector2 rightPos = {
-        rightX + rightOffset.x,
-        centerY + rightOffset.y + floating
+    auto isMouseOverGuide = [&](Vector2 guidePosition) {
+        return mouseX >= guidePosition.x &&
+            mouseX <= guidePosition.x + normalSize &&
+            mouseY >= guidePosition.y &&
+            mouseY <= guidePosition.y + normalSize;
     };
 
-    Vector2 upPos = {
-        centerX + upOffset.x,
-        topY + upOffset.y + floating
-    };
+    const bool hoverLeft = isMouseOverGuide(leftGuidePosition);
+    const bool hoverRight = isMouseOverGuide(rightGuidePosition);
+    const bool hoverUp = isMouseOverGuide(upGuidePosition);
+    const bool hoverDown = isMouseOverGuide(downGuidePosition);
 
-    Vector2 downPos = {
-        centerX + downOffset.x,
-        bottomY + downOffset.y + floating
-    };
+    cameraGuideLeftSprite_->SetPosition(leftGuidePosition);
+    cameraGuideRightSprite_->SetPosition(rightGuidePosition);
+    cameraGuideUpSprite_->SetPosition(upGuidePosition);
+    cameraGuideDownSprite_->SetPosition(downGuidePosition);
 
-    auto CheckHitBox = [&](Vector2 pos) {
-        return mouseX >= pos.x &&
-            mouseX <= pos.x + normalSize &&
-            mouseY >= pos.y &&
-            mouseY <= pos.y + normalSize;
-        };
-
-    bool hoverLeft = CheckHitBox(leftPos);
-    bool hoverRight = CheckHitBox(rightPos);
-    bool hoverUp = CheckHitBox(upPos);
-    bool hoverDown = CheckHitBox(downPos);
-
-    cameraGuideLeftSprite_->SetPosition(leftPos);
-    cameraGuideRightSprite_->SetPosition(rightPos);
-    cameraGuideUpSprite_->SetPosition(upPos);
-    cameraGuideDownSprite_->SetPosition(downPos);
-
-    cameraGuideLeftSprite_->SetSize({
-        hoverLeft ? glowSize : normalSize,
-        hoverLeft ? glowSize : normalSize
-        });
-
-    cameraGuideRightSprite_->SetSize({
-        hoverRight ? glowSize : normalSize,
-        hoverRight ? glowSize : normalSize
-        });
-
-    cameraGuideUpSprite_->SetSize({
-        hoverUp ? glowSize : normalSize,
-        hoverUp ? glowSize : normalSize
-        });
-
-    cameraGuideDownSprite_->SetSize({
-        hoverDown ? glowSize : normalSize,
-        hoverDown ? glowSize : normalSize
-        });
+    cameraGuideLeftSprite_->SetSize({ hoverLeft ? glowSize : normalSize, hoverLeft ? glowSize : normalSize });
+    cameraGuideRightSprite_->SetSize({ hoverRight ? glowSize : normalSize, hoverRight ? glowSize : normalSize });
+    cameraGuideUpSprite_->SetSize({ hoverUp ? glowSize : normalSize, hoverUp ? glowSize : normalSize });
+    cameraGuideDownSprite_->SetSize({ hoverDown ? glowSize : normalSize, hoverDown ? glowSize : normalSize });
 
     cameraGuideLeftSprite_->SetRotation(0.0f);
     cameraGuideRightSprite_->SetRotation(0.0f);
@@ -401,12 +330,10 @@ void GameplayUIManager::UpdateCameraGuide(bool isGamePlay, Input* input, WinApp*
     cameraGuideDownSprite_->Update();
 }
 
-
 void GameplayUIManager::DrawSprites(bool isGamePlayMode, bool isFollowPlayerMode) {
     if (!isGamePlayMode) {
         return;
     }
-
     if (!cameraGuideLeftSprite_ ||
         !cameraGuideRightSprite_ ||
         !cameraGuideUpSprite_ ||
@@ -414,6 +341,7 @@ void GameplayUIManager::DrawSprites(bool isGamePlayMode, bool isFollowPlayerMode
         return;
     }
 
+    // 2D UIはSprite用パイプラインに切り替えてまとめて描画する。
     spriteCommon_->PreDraw();
 
     cameraGuideLeftSprite_->Draw();
@@ -437,11 +365,11 @@ void GameplayUIManager::Draw3DPrompts(bool isGamePlayMode, Player* player, Objec
         return;
     }
 
-    bool drawDoorPrompt = doorPromptObject_ && player->IsNearDoor();
-    bool drawLadderPrompt = ladderPromptObject_ && player->IsOnLadder();
-    bool drawPSwitchPrompt = pSwitchPromptObject_ && player->IsNearPSwitch();
-    bool drawKeyPrompt = keyPromptObject_ && player->IsNearKey();
-    bool drawKeyBlockPrompt = keyBlockPromptObject_ && player->IsNearKeyBlock();
+    const bool drawDoorPrompt = doorPromptObject_ && player->IsNearDoor();
+    const bool drawLadderPrompt = ladderPromptObject_ && player->IsOnLadder();
+    const bool drawPSwitchPrompt = pSwitchPromptObject_ && player->IsNearPSwitch();
+    const bool drawKeyPrompt = keyPromptObject_ && player->IsNearKey();
+    const bool drawKeyBlockPrompt = keyBlockPromptObject_ && player->IsNearKeyBlock();
 
     if (drawDoorPrompt ||
         drawLadderPrompt ||
@@ -449,6 +377,7 @@ void GameplayUIManager::Draw3DPrompts(bool isGamePlayMode, Player* player, Objec
         drawKeyPrompt ||
         drawKeyBlockPrompt) {
 
+        // 3D UIはプレイヤー強調表示用のライティングなしパスで描画し、見やすさを優先する。
         object3dCommon->PreDrawPlayerHighlight();
 
         if (drawDoorPrompt) {
@@ -467,13 +396,14 @@ void GameplayUIManager::Draw3DPrompts(bool isGamePlayMode, Player* player, Objec
             keyBlockPromptObject_->Draw();
         }
 
+        // 後続の通常3D描画に戻すため、パイプラインとシャドウSRVを復元する。
         object3dCommon->PreDraw();
         commandList->SetGraphicsRootDescriptorTable(4, shadowSrvHandle);
     }
-    
 }
 
 void GameplayUIManager::Finalize() {
+    // 所有しているUIリソースを明示的に破棄する。unique_ptrなので順序以外は自動解放される。
     doorPromptObject_.reset();
     doorPromptModel_.reset();
     pSwitchPromptObject_.reset();

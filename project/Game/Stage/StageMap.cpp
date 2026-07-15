@@ -13,6 +13,7 @@
 #endif
 
 void StageMap::Initialize(int width, int height, int depth) {
+    // ステージの3次元グリッドサイズを決め、全セルを確保する。
     assert(width > 0);
     assert(height > 0);
     assert(depth > 0);
@@ -23,9 +24,7 @@ void StageMap::Initialize(int width, int height, int depth) {
 
     cells_.resize(width_ * height_ * depth_);
 
-    // ==================================================
-  // ▼ ステージ読み込み時にギミック状態を完全リセット
-  // ==================================================
+    // ステージ読み込み時に、前ステージのギミック状態が残らないようにリセットする。
     isPSwitchActive_ = false;
     isOnState_ = true;
     needsRebuild_ = false;
@@ -53,7 +52,7 @@ void StageMap::Initialize(int width, int height, int depth) {
         }
     }
 
-    // 楽しい複合プリセット形状の設定！
+    // エディタで最初から使えるカスタムブロックのプリセット形状を用意する。
     // Slot 1: L-SHIELD (L字の壁足場パーツ)
     customParts_[0].name = "L-SHIELD";
     customParts_[0].colorR = 0.9f; customParts_[0].colorG = 0.3f; customParts_[0].colorB = 0.3f; // スタイリッシュ赤
@@ -94,9 +93,11 @@ void StageMap::Initialize(int width, int height, int depth) {
 
 void StageMap::Update(float deltaTime, const Vector3& playerPos)
 {
+    // ステージ全体で共有する経過時間。時間制ブロックなどの周期演出に使う。
     accumulatedTime_ += deltaTime;
 
-    // 1. 各グループの全Order IDを収集する
+    // 時間制ブロックは variant の十の位をグループ、 一の位を出現順として扱う。
+    // まず各グループに存在する出現順を集め、ステージごとに必要な周期を求められるようにする。
     std::vector<int> groupOrders[10];
     for (const auto& cell : cells_) {
         if (cell.type == BlockType::TimedBlock) {
@@ -110,7 +111,7 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
         }
     }
 
-    // 2. 各グループのOrder IDをソートする
+    // 出現順に並べることで、同じグループ内のブロックを順番に表示/非表示できる。
     for (int g = 1; g < 10; ++g) {
         if (!groupOrders[g].empty()) {
             std::sort(groupOrders[g].begin(), groupOrders[g].end());
@@ -123,27 +124,28 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                 MapCell& cell = cells_[ToIndex(x, y, z)];
 
                 if (cell.type == BlockType::TimedBlock) {
+                    // 同じグループ内で、order の小さいブロックから順に出現させる。
                     int group = cell.variant / 10;
                     int order = cell.variant % 10;
                     if (group >= 1 && group < 10 && !groupOrders[group].empty()) {
                         const auto& orders = groupOrders[group];
 
                         float kAppearDelay = 1.2f;       // 1.2秒間隔で次のブロックが出現
-                        float kActiveDuration = 3.0f;    // 3.0秒間表示（2個出現中に3個目が出た後、0.6秒後に消える）
+                        float kActiveDuration = 3.0f;    // 3.0秒間表示する
                         float kRestDuration = 1.5f;      // 全て消えた後のインターバル
 
-                        // サイクル全体の長さを計算
-                        float T_cycle = static_cast<float>(orders.size() - 1) * kAppearDelay + kActiveDuration + kRestDuration;
+                        // グループ内の最後のブロックが消えた後、少し待ってから最初に戻る。
+                        float cycleDuration = static_cast<float>(orders.size() - 1) * kAppearDelay + kActiveDuration + kRestDuration;
 
                         // このブロックの出現順インデックスを取得
                         auto it = std::find(orders.begin(), orders.end(), order);
                         size_t idx = std::distance(orders.begin(), it);
 
-                        float t_appear = static_cast<float>(idx) * kAppearDelay;
-                        float t_disappear = t_appear + kActiveDuration;
+                        float appearTime = static_cast<float>(idx) * kAppearDelay;
+                        float disappearTime = appearTime + kActiveDuration;
 
-                        float t_local = std::fmod(accumulatedTime_, T_cycle);
-                        if (t_local >= t_appear && t_local < t_disappear) {
+                        float localCycleTime = std::fmod(accumulatedTime_, cycleDuration);
+                        if (localCycleTime >= appearTime && localCycleTime < disappearTime) {
                             cell.isSolid = true;
                         } else {
                             cell.isSolid = false;
@@ -193,10 +195,12 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
 #pragma endregion
 
                 if (cell.type == BlockType::MovingFloor) {
+                    // MovingFloor は moveOffset で指定された目的地まで往復する。
+                    // currentOffset は描画位置、deltaOffset は乗っているプレイヤーを一緒に動かすために使う。
                     float moveSpeed = 1.0f;
                     cell.moveTimer += deltaTime * moveSpeed;
 
-                    float t = (std::sin(cell.moveTimer) + 1.0f) / 2.0f;
+                    float moveRate = (std::sin(cell.moveTimer) + 1.0f) / 2.0f;
 
                     // 前フレームのオフセットを記憶
                     float oldX = cell.currentOffsetX;
@@ -204,9 +208,9 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                     float oldZ = cell.currentOffsetZ;
 
                     // 新しいオフセットを計算
-                    cell.currentOffsetX = static_cast<float>(cell.moveOffset.x) * t;
-                    cell.currentOffsetY = static_cast<float>(cell.moveOffset.y) * t;
-                    cell.currentOffsetZ = static_cast<float>(cell.moveOffset.z) * t;
+                    cell.currentOffsetX = static_cast<float>(cell.moveOffset.x) * moveRate;
+                    cell.currentOffsetY = static_cast<float>(cell.moveOffset.y) * moveRate;
+                    cell.currentOffsetZ = static_cast<float>(cell.moveOffset.z) * moveRate;
 
                     // 1フレーム分の移動量を記録
                     cell.deltaOffsetX = cell.currentOffsetX - oldX;
@@ -232,6 +236,7 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
 
                 // --- 敵3 (EnemyChaser): プレイヤー追尾 (一定範囲内のみ) ---
                 if (cell.type == BlockType::EnemyChaser) {
+                    // スポーン地点から一定範囲内にプレイヤーが入ると追尾し、遠ざかると初期位置へ戻る。
                     Vector3 spawnPos = { static_cast<float>(x), static_cast<float>(y), static_cast<float>(z) };
                     Vector3 currentPos = {
                         spawnPos.x + cell.currentOffsetX,
@@ -243,21 +248,28 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                         playerPos.y - currentPos.y,
                         playerPos.z - currentPos.z
                     };
-                    float dist = std::sqrt(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y + toPlayer.z * toPlayer.z);
+                    float distanceToPlayer = std::sqrt(
+                        toPlayer.x * toPlayer.x +
+                        toPlayer.y * toPlayer.y +
+                        toPlayer.z * toPlayer.z);
 
-                    float spawnDist = std::sqrt(
+                    float playerDistanceFromSpawn = std::sqrt(
                         (playerPos.x - spawnPos.x) * (playerPos.x - spawnPos.x) +
                         (playerPos.y - spawnPos.y) * (playerPos.y - spawnPos.y) +
                         (playerPos.z - spawnPos.z) * (playerPos.z - spawnPos.z)
                     );
 
-                    if (spawnDist < 8.0f && dist > 0.05f) {
+                    if (playerDistanceFromSpawn < 8.0f && distanceToPlayer > 0.05f) {
                         float speed = 1.2f; // 秒速 1.2 マス
-                        Vector3 dir = { toPlayer.x / dist, toPlayer.y / dist, toPlayer.z / dist };
+                        Vector3 directionToPlayer = {
+                            toPlayer.x / distanceToPlayer,
+                            toPlayer.y / distanceToPlayer,
+                            toPlayer.z / distanceToPlayer
+                        };
                         Vector3 nextPos = {
-                            currentPos.x + dir.x * (speed * deltaTime),
-                            currentPos.y + dir.y * (speed * deltaTime),
-                            currentPos.z + dir.z * (speed * deltaTime)
+                            currentPos.x + directionToPlayer.x * (speed * deltaTime),
+                            currentPos.y + directionToPlayer.y * (speed * deltaTime),
+                            currentPos.z + directionToPlayer.z * (speed * deltaTime)
                         };
 
                         // スポーン位置からの最大追尾距離を 8 マスに制限
@@ -266,9 +278,16 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                             nextPos.y - spawnPos.y,
                             nextPos.z - spawnPos.z
                         };
-                        float offsetDist = std::sqrt(nextOffset.x * nextOffset.x + nextOffset.y * nextOffset.y + nextOffset.z * nextOffset.z);
-                        if (offsetDist > 8.0f) {
-                            nextOffset = { nextOffset.x / offsetDist * 8.0f, nextOffset.y / offsetDist * 8.0f, nextOffset.z / offsetDist * 8.0f };
+                        float offsetDistanceFromSpawn = std::sqrt(
+                            nextOffset.x * nextOffset.x +
+                            nextOffset.y * nextOffset.y +
+                            nextOffset.z * nextOffset.z);
+                        if (offsetDistanceFromSpawn > 8.0f) {
+                            nextOffset = {
+                                nextOffset.x / offsetDistanceFromSpawn * 8.0f,
+                                nextOffset.y / offsetDistanceFromSpawn * 8.0f,
+                                nextOffset.z / offsetDistanceFromSpawn * 8.0f
+                            };
                         }
                         cell.currentOffsetX = nextOffset.x;
                         cell.currentOffsetY = nextOffset.y;
@@ -277,11 +296,14 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                     else {
                         // プレイヤーが遠い場合は、ゆっくり初期位置に戻る
                         float returnSpeed = 1.0f;
-                        float curDist = std::sqrt(cell.currentOffsetX * cell.currentOffsetX + cell.currentOffsetY * cell.currentOffsetY + cell.currentOffsetZ * cell.currentOffsetZ);
-                        if (curDist > 0.05f) {
-                            cell.currentOffsetX -= (cell.currentOffsetX / curDist) * returnSpeed * deltaTime;
-                            cell.currentOffsetY -= (cell.currentOffsetY / curDist) * returnSpeed * deltaTime;
-                            cell.currentOffsetZ -= (cell.currentOffsetZ / curDist) * returnSpeed * deltaTime;
+                        float currentOffsetDistance = std::sqrt(
+                            cell.currentOffsetX * cell.currentOffsetX +
+                            cell.currentOffsetY * cell.currentOffsetY +
+                            cell.currentOffsetZ * cell.currentOffsetZ);
+                        if (currentOffsetDistance > 0.05f) {
+                            cell.currentOffsetX -= (cell.currentOffsetX / currentOffsetDistance) * returnSpeed * deltaTime;
+                            cell.currentOffsetY -= (cell.currentOffsetY / currentOffsetDistance) * returnSpeed * deltaTime;
+                            cell.currentOffsetZ -= (cell.currentOffsetZ / currentOffsetDistance) * returnSpeed * deltaTime;
                         }
                         else {
                             cell.currentOffsetX = 0.0f;
@@ -299,10 +321,10 @@ void StageMap::SaveToFile(const std::string& filename) {
     std::ofstream ofs(filename);
     if (!ofs.is_open()) return;
 
-    // ヘッダー: サイズ
+    // 1行目は必ずステージサイズにする。LoadFromFile が最初にこの3値を読んでグリッドを確保する。
     ofs << width_ << " " << height_ << " " << depth_ << "\n";
 
-    // 環境・ライティング設定を書き出す
+    // ステージごとの見た目を再現するため、天候プリセットとライト設定も保存する。
     ofs << "PRESET \"" << weatherPresetName_ << "\"\n";
     ofs << "ENVIRONMENT "
         << clearColor_.x << " " << clearColor_.y << " " << clearColor_.z << " " << clearColor_.w << " "
@@ -312,7 +334,8 @@ void StageMap::SaveToFile(const std::string& filename) {
 
 
 
-    // カスタムブロック定義を書き出す
+    // カスタムブロック定義を書き出す。
+    // PART はスロット全体の見た目、PARTCELL は 3x3x3 内の実セル構成を表す。
     for (const auto& part : customParts_) {
         ofs << "PART " << part.id << " "
             << static_cast<int>(part.baseType) << " "
@@ -335,7 +358,7 @@ void StageMap::SaveToFile(const std::string& filename) {
         }
     }
 
-    // ブロックデータ
+    // 通常ブロックの配置情報を書き出す。空セルは保存せず、ファイルサイズを小さく保つ。
     for (int y = 0; y < height_; ++y) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
@@ -344,6 +367,8 @@ void StageMap::SaveToFile(const std::string& filename) {
 
                 int saveVariant = cell->variant;
                 if (cell->type == BlockType::MovingFloor) {
+                    // MovingFloor は移動先オフセットを variant にパックして保存する。
+                    // +10 しているのは負のオフセットも 0 以上の値として扱うため。
                     saveVariant = (cell->moveOffset.x + 10) | ((cell->moveOffset.y + 10) << 8) | ((cell->moveOffset.z + 10) << 16);
                 }
 
@@ -367,6 +392,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
     std::ifstream ifs(filename);
     if (!ifs.is_open()) return;
 
+    // 最初の行からステージサイズを復元し、そのサイズでセル配列を作り直す。
     std::string firstLine;
     if (!std::getline(ifs, firstLine)) return;
 
@@ -381,7 +407,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
     lightColor_ = { 0.9f, 0.9f, 0.9f };
     lightDirection_ = { 0.5f, -1.0f, 0.5f };
 
-    // 各スロットがファイルロードによってクリアされたかを追跡するフラグ
+    // PARTCELL があるスロットだけプリセット形状を消して、ファイル側の定義で上書きする。
     bool partCleared[5] = { false, false, false, false, false };
 
     std::string line;
@@ -393,6 +419,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
         lineSS >> token;
 
         if (token == "PART") {
+            // カスタムブロックのスロット情報。色や名前など、UI と描画に使う設定を復元する。
             int id, baseTypeVal;
             float r, g, b;
             lineSS >> id >> baseTypeVal >> r >> g >> b;
@@ -413,6 +440,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
                 part.name = name;
             }
         } else if (token == "PARTCELL") {
+            // カスタムブロックの内部セル情報。3x3x3 のどこに何のブロックがあるかを復元する。
             int id, lx, ly, lz, typeVal;
             if (lineSS >> id >> lx >> ly >> lz >> typeVal) {
                 if (id >= 1 && id <= (int)customParts_.size()) {
@@ -436,6 +464,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
                 }
             }
         } else if (token == "PRESET") {
+            // 天候プリセット名は空白を含められるようにダブルクォート付きで保存している。
             std::string presetName;
             std::getline(lineSS, presetName);
             // " " を取り除く
@@ -445,7 +474,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
                 weatherPresetName_ = presetName.substr(start + 1, end - start - 1);
             }
         } else if (token == "ENVIRONMENT") {
-
+            // 背景色、ライト強度、ライト色、ライト方向を復元する。
             lineSS >> clearColor_.x >> clearColor_.y >> clearColor_.z >> clearColor_.w
                    >> lightIntensity_
                    >> lightColor_.x >> lightColor_.y >> lightColor_.z
