@@ -271,7 +271,7 @@ void MyGame::Initialize() {
     stageEditorController_.Initialize();
 
     // SkinningEditor / Terrain / PostProcess は重いので、必要なモードへ入った時に初期化する。
-    sceneManager_ = std::make_unique<SceneManager>();
+    sceneManager_ = SceneManager::GetInstance();
     sceneManager_->Initialize(&sceneFactory_, GetCurrentSceneType(), *this);
 }
 
@@ -2341,7 +2341,7 @@ void MyGame::Finalize() {
 
     if (sceneManager_) {
         sceneManager_->Finalize(*this);
-        sceneManager_.reset();
+        sceneManager_ = nullptr;
     }
 
     sound.Finalize();

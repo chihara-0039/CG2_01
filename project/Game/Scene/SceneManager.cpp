@@ -4,6 +4,11 @@
 
 #include <cassert>
 
+SceneManager* SceneManager::GetInstance() {
+    static SceneManager instance;
+    return &instance;
+}
+
 void SceneManager::Initialize(const SceneFactory* sceneFactory, SceneType initialScene, MyGame& game) {
     assert(sceneFactory);
     sceneFactory_ = sceneFactory;
@@ -44,5 +49,6 @@ void SceneManager::ChangeScene(SceneType nextScene, MyGame& game) {
     currentSceneType_ = nextScene;
     currentScene_ = sceneFactory_->CreateScene(nextScene);
     assert(currentScene_);
+    currentScene_->SetSceneManager(this);
     currentScene_->Initialize(game);
 }

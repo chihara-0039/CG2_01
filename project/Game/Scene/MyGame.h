@@ -167,7 +167,7 @@ private:
     //  シーン管理
     // ==========================================================
     SceneFactory sceneFactory_;
-    std::unique_ptr<SceneManager> sceneManager_;
+    SceneManager* sceneManager_ = nullptr;
     std::unique_ptr<StageSelect>    stageSelect_;    ///< ステージ選択画面
 
     // ==========================================================
