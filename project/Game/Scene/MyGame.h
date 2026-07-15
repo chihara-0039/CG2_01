@@ -354,7 +354,7 @@ private:
 
     // --- ヘルパー ---
     /// <summary>モデルと位置を指定して Object3d を生成し objectList に追加する (非所有ポインタを返す)</summary>
-    Object3d* CreateObject(Model* model, Vector3 pos);
+    Object3d* CreateObject(Model* model, Vector3 initialPosition);
 
     /// <summary>スカイドーム / スカイボックスを描画する内部ヘルパー</summary>
 

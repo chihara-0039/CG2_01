@@ -80,7 +80,8 @@ void SkinnedObject::InitializeFromGltf(Object3dCommon* object3dCommon, DirectXCo
 }
 
 void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
-    // 1. アニメーションの再生
+    // 1. CPU側で現在フレームのボーン姿勢を決める。
+    // playAnimation_ は組み込みテスト用、playCustomAnimation_ は glTF/自作モーション用。
     if (playAnimation_) {
         // 60FPS想定で時間を進める
         animationTime_ += (1.0f / 60.0f);
@@ -89,13 +90,14 @@ void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
         // カスタムキーフレームモーションの再生
         const float deltaTime = (1.0f / 60.0f) * animationSpeed_;
         animationTime_ += deltaTime;
-        float dur = skinnedModel_->GetMotionDuration();
-        currentKeyframeTime_ = std::fmod(animationTime_, dur);
+        float motionDuration = skinnedModel_->GetMotionDuration();
+        currentKeyframeTime_ = std::fmod(animationTime_, motionDuration);
         if (currentKeyframeTime_ < 0.0f) {
-            currentKeyframeTime_ += dur;
+            currentKeyframeTime_ += motionDuration;
         }
 
         if (playBlendAnimation_) {
+            // モーション切り替え時は、現在のモーションからターゲットへ一定時間で補間する。
             blendElapsed_ += deltaTime;
             blendRate_ = blendDuration_ > 0.0f
                 ? std::clamp(blendElapsed_ / blendDuration_, 0.0f, 1.0f)
@@ -116,10 +118,10 @@ void SkinnedObject::Update(DirectXCommon* dxCommon, const Matrix4x4& lightVP) {
         }
     }
 
-    // 2. スキニング計算の実行とGPUへの転送
+    // 2. SkinnedModel 側でボーン行列を更新し、GPU用パレットへ転送する。
     skinnedModel_->Update(dxCommon);
 
-    // 3. Object3d のトランスフォーム設定と行列更新
+    // 3. 通常の Object3d と同じワールド行列を更新し、描画時の WVP に反映する。
     if (object3d_) {
         object3d_->SetPosition(position_);
         object3d_->SetRotation(rotation_);
@@ -136,6 +138,8 @@ void SkinnedObject::Draw() {
     
     auto commandList = object3d_->GetObject3dCommon()->GetDxCommon()->GetCommandList();
 
+    // 描画直前に Compute Shader でスキニング済み頂点バッファを更新する。
+    // 以降の描画パイプラインは通常の Object3d と同じ頂点形式として扱う。
     skinnedModel_->DispatchSkinning(object3d_->GetObject3dCommon()->GetDxCommon());
     
     auto* object3dCommon = object3d_->GetObject3dCommon();
@@ -162,8 +166,8 @@ void SkinnedObject::Draw() {
         commandList->SetGraphicsRootDescriptorTable(6, environmentHandle);
     }
 
-    const D3D12_VERTEX_BUFFER_VIEW& vbView = skinnedModel_->GetSkinnedVertexBufferView();
-    commandList->IASetVertexBuffers(0, 1, &vbView);
+    const D3D12_VERTEX_BUFFER_VIEW& skinnedVertexBufferView = skinnedModel_->GetSkinnedVertexBufferView();
+    commandList->IASetVertexBuffers(0, 1, &skinnedVertexBufferView);
     commandList->DrawInstanced(static_cast<UINT>(skinnedModel_->GetVertexCount()), 1, 0, 0);
 }
 
@@ -172,11 +176,10 @@ void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {
         return;
     }
 
-    auto commandList = object3d_->GetObject3dCommon()->GetDxCommon()->GetCommandList();
-    
-    // Set Skinned Shadow Pipeline (We don't have one right now, we can use a custom one later, but for now we won't draw shadows for skinned objects if it's too complex, or we can just fall back to normal DrawShadow if we had a SkinnedShadow_VS.hlsl).
-    // For now, skip shadow drawing or it will crash.
-    // object3d_->DrawShadow(lightViewProjection);
+    // TODO: スキニング済み頂点バッファをシャドウ用パイプラインへ渡す実装が必要。
+    // 現状で通常 Object3d の DrawShadow を呼ぶと頂点形式が合わず破綻する可能性があるため、
+    // スキンメッシュの影描画は明示的にスキップしている。
+    (void)lightViewProjection;
 }
 void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeModel, const Matrix4x4& view, const Matrix4x4& projection) {
     if (!showSkeleton_ || !cubeModel) {
@@ -184,15 +187,16 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
     }
 
     const auto& joints = skinnedModel_->GetJoints();
-    size_t numJoints = joints.size();
+    size_t jointCount = joints.size();
 
-    if (jointVisuals_.size() < numJoints) {
-        jointVisuals_.resize(numJoints);
-        for (size_t i = 0; i < numJoints; ++i) {
-            jointVisuals_[i] = std::make_unique<Object3d>();
-            jointVisuals_[i]->Initialize(object3dCommon);
-            jointVisuals_[i]->SetModel(cubeModel);
-            jointVisuals_[i]->SetScale({ 0.04f, 0.04f, 0.04f });
+    // ジョイントごとの小さなキューブを必要数だけ作成し、以後は使い回す。
+    if (jointVisuals_.size() < jointCount) {
+        jointVisuals_.resize(jointCount);
+        for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex) {
+            jointVisuals_[jointIndex] = std::make_unique<Object3d>();
+            jointVisuals_[jointIndex]->Initialize(object3dCommon);
+            jointVisuals_[jointIndex]->SetModel(cubeModel);
+            jointVisuals_[jointIndex]->SetScale({ 0.04f, 0.04f, 0.04f });
         }
     }
 
@@ -200,31 +204,33 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
 
     object3dCommon->PreDrawPlayerHighlight();
 
-    for (size_t i = 0; i < numJoints; ++i) {
-        Matrix4x4 jointWorld = Math::Multiply(joints[i].globalMatrix, objWorld);
+    // まず各ジョイント位置を点として描画する。選択中ジョイントは緑、それ以外は赤。
+    for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex) {
+        Matrix4x4 jointWorld = Math::Multiply(joints[jointIndex].globalMatrix, objWorld);
 
-        jointVisuals_[i]->SetCamera(view, projection);
+        jointVisuals_[jointIndex]->SetCamera(view, projection);
         
         Vector3 globalPos = { jointWorld.m[3][0], jointWorld.m[3][1], jointWorld.m[3][2] };
-        jointVisuals_[i]->SetPosition(globalPos);
-        jointVisuals_[i]->SetRotation({ 0, 0, 0 });
-        jointVisuals_[i]->SetScale({ 0.04f, 0.04f, 0.04f });
+        jointVisuals_[jointIndex]->SetPosition(globalPos);
+        jointVisuals_[jointIndex]->SetRotation({ 0, 0, 0 });
+        jointVisuals_[jointIndex]->SetScale({ 0.04f, 0.04f, 0.04f });
 
-        if (static_cast<int>(i) == selectedJointIndex_) {
-            jointVisuals_[i]->SetColor({ 0.0f, 1.0f, 0.0f, 1.0f });
+        if (static_cast<int>(jointIndex) == selectedJointIndex_) {
+            jointVisuals_[jointIndex]->SetColor({ 0.0f, 1.0f, 0.0f, 1.0f });
         } else {
-            jointVisuals_[i]->SetColor({ 1.0f, 0.0f, 0.0f, 1.0f });
+            jointVisuals_[jointIndex]->SetColor({ 1.0f, 0.0f, 0.0f, 1.0f });
         }
 
-        jointVisuals_[i]->SetEnableLighting(false);
-        jointVisuals_[i]->Update(Math::MakeIdentity4x4());
-        jointVisuals_[i]->Draw();
+        jointVisuals_[jointIndex]->SetEnableLighting(false);
+        jointVisuals_[jointIndex]->Update(Math::MakeIdentity4x4());
+        jointVisuals_[jointIndex]->Draw();
     }
 
+    // 親子ジョイントの間を細い棒で結び、ボーン階層を線のように見せる。
     size_t boneVisualCount = 0;
-    for (size_t i = 0; i < numJoints; ++i) {
-        int parentIdx = joints[i].parentIndex;
-        if (parentIdx == -1) {
+    for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex) {
+        int parentJointIndex = joints[jointIndex].parentIndex;
+        if (parentJointIndex == -1) {
             continue;
         }
 
@@ -238,33 +244,42 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
         auto& boneObj = boneVisuals_[boneVisualCount];
         boneVisualCount++;
 
-        Matrix4x4 pJointWorld = Math::Multiply(joints[parentIdx].globalMatrix, objWorld);
-        Matrix4x4 cJointWorld = Math::Multiply(joints[i].globalMatrix, objWorld);
+        Matrix4x4 parentJointWorld = Math::Multiply(joints[parentJointIndex].globalMatrix, objWorld);
+        Matrix4x4 childJointWorld = Math::Multiply(joints[jointIndex].globalMatrix, objWorld);
 
-        Vector3 pPos = { pJointWorld.m[3][0], pJointWorld.m[3][1], pJointWorld.m[3][2] };
-        Vector3 cPos = { cJointWorld.m[3][0], cJointWorld.m[3][1], cJointWorld.m[3][2] };
+        Vector3 parentPosition = { parentJointWorld.m[3][0], parentJointWorld.m[3][1], parentJointWorld.m[3][2] };
+        Vector3 childPosition = { childJointWorld.m[3][0], childJointWorld.m[3][1], childJointWorld.m[3][2] };
 
-        Vector3 v = Math::Subtract(cPos, pPos);
-        float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-        if (len < 0.001f) {
+        Vector3 parentToChild = Math::Subtract(childPosition, parentPosition);
+        float boneLength = std::sqrt(
+            parentToChild.x * parentToChild.x +
+            parentToChild.y * parentToChild.y +
+            parentToChild.z * parentToChild.z);
+        if (boneLength < 0.001f) {
             continue;
         }
 
-        Vector3 dir = { v.x / len, v.y / len, v.z / len };
-
-        Vector3 centerPos = {
-            (pPos.x + cPos.x) * 0.5f,
-            (pPos.y + cPos.y) * 0.5f,
-            (pPos.z + cPos.z) * 0.5f
+        Vector3 boneDirection = {
+            parentToChild.x / boneLength,
+            parentToChild.y / boneLength,
+            parentToChild.z / boneLength
         };
 
-        float phi_y = std::atan2(dir.x, dir.z);
-        float phi_x = std::atan2(std::sqrt(dir.x * dir.x + dir.z * dir.z), dir.y);
+        Vector3 centerPos = {
+            (parentPosition.x + childPosition.x) * 0.5f,
+            (parentPosition.y + childPosition.y) * 0.5f,
+            (parentPosition.z + childPosition.z) * 0.5f
+        };
+
+        float boneYaw = std::atan2(boneDirection.x, boneDirection.z);
+        float bonePitch = std::atan2(
+            std::sqrt(boneDirection.x * boneDirection.x + boneDirection.z * boneDirection.z),
+            boneDirection.y);
 
         boneObj->SetCamera(view, projection);
         boneObj->SetPosition(centerPos);
-        boneObj->SetRotation({ phi_x, phi_y, 0.0f });
-        boneObj->SetScale({ 0.015f, len * 0.5f, 0.015f });
+        boneObj->SetRotation({ bonePitch, boneYaw, 0.0f });
+        boneObj->SetScale({ 0.015f, boneLength * 0.5f, 0.015f });
 
         boneObj->SetColor({ 0.9f, 0.9f, 0.5f, 1.0f });
         boneObj->SetEnableLighting(false);
@@ -275,7 +290,7 @@ void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeMode
 
     if (showJointAxes_ &&
         selectedJointIndex_ >= 0 &&
-        selectedJointIndex_ < static_cast<int>(numJoints)) {
+        selectedJointIndex_ < static_cast<int>(jointCount)) {
         if (axisVisuals_.size() < 3) {
             axisVisuals_.resize(3);
             for (auto& axis : axisVisuals_) {

@@ -7,17 +7,17 @@
 #include <random>
 
 
-// 解放
+// StageRenderer が所有している描画オブジェクトをまとめて解放する。
 StageRenderer::~StageRenderer() {
 	Clear();
 }
 
-// ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス
+// ステージ描画で使うモデルと、インスタンシング用の共通バッファを初期化する。
 void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 	assert(object3dCommon);
 	object3dCommon_ = object3dCommon;
 
-	// 地面モデル1設定
+	// ブロック種別ごとに表示モデルを読み込む。StageMap のセル種別とここでのモデルが対応する。
 	groundModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
 		"Resources/Models/block",
@@ -25,7 +25,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetTextureManager()
 	);
 
-	// 壁モデル1設定
+	// 壁モデル。通常壁、Pブロック、ON/OFFブロックなど複数用途で使い回す。
 	wallModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
 		"Resources/Models/wall",
@@ -159,7 +159,7 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetTextureManager()
 	);
 
-	// インスタンシング用の ViewProjection 定数バッファを作成
+	// インスタンシング描画時に全インスタンスで共有する ViewProjection 定数バッファを作成する。
 	D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
 	D3D12_RESOURCE_DESC resDesc = {};
 	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -177,17 +177,19 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 }
 
 void StageRenderer::UpdateEffect(const StageMap& stageMap) {
+	// 崩れる床など、セル状態に応じて見た目だけが変わるオブジェクトを更新する。
 	for (Object3d* obj : StageCrumblingFloorEffectUpdater::Apply(stageMap, isEditorMode_, objects_)) {
 		MarkDirty(obj);
 	}
 }
 
-// ステージマップの内容に応じて、描画用オブジェクトを生成していくクラス
+// StageMap の全セルを読み取り、描画用 Object3d を再構築する。
+// ステージ編集やロード後など、ブロック構成が大きく変わった時に呼ぶ。
 void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 	// 既存のオブジェクトがあれば全て削除してから新しいオブジェクトを生成する
 	Clear();
 
-	// 雲の生成
+	// ステージ寸法を元に、背景装飾の雲をステージ周辺へ配置する。
 	int mapWidth = stageMap.GetWidth();
 	int mapHeight = stageMap.GetHeight();
 	int mapDepth = stageMap.GetDepth();
@@ -203,13 +205,13 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 	};
 
 	int cloudCount = 12; // 12個浮かべる
-	for (int i = 0; i < cloudCount; ++i) {
+	for (int cloudIndex = 0; cloudIndex < cloudCount; ++cloudIndex) {
 		CloudInstance cloud;
 		// ランダムな位置 (ステージの少し上空、周囲)
-		float rx = randomFloat() * (mapWidth * scaleX + 80.0f) - 40.0f;
-		float ry = randomFloat() * 6.0f + 3.0f; // 3.0f 〜 9.0f の高さ
-		float rz = randomFloat() * (mapDepth * scaleZ + 80.0f) - 40.0f;
-		cloud.basePosition = { rx, ry, rz };
+		float randomCloudX = randomFloat() * (mapWidth * scaleX + 80.0f) - 40.0f;
+		float randomCloudY = randomFloat() * 6.0f + 3.0f; // 3.0f 〜 9.0f の高さ
+		float randomCloudZ = randomFloat() * (mapDepth * scaleZ + 80.0f) - 40.0f;
+		cloud.basePosition = { randomCloudX, randomCloudY, randomCloudZ };
 
 		// 流れる速度 (X軸方向へゆっくり流れる)
 		float speedX = randomFloat() * 0.4f + 0.1f;
@@ -221,12 +223,12 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
 		// 1つの雲を構成する球体数 (3〜5個)
 		int partCount = static_cast<int>(randomEngine() % 3) + 3;
-		for (int j = 0; j < partCount; ++j) {
+		for (int partIndex = 0; partIndex < partCount; ++partIndex) {
 			// 中心からのオフセット
-			float ox = randomFloat() * 4.0f - 2.0f;
-			float oy = randomFloat() * 1.5f - 0.75f;
-			float oz = randomFloat() * 4.0f - 2.0f;
-			cloud.localOffsets.push_back({ ox, oy, oz });
+			float localOffsetX = randomFloat() * 4.0f - 2.0f;
+			float localOffsetY = randomFloat() * 1.5f - 0.75f;
+			float localOffsetZ = randomFloat() * 4.0f - 2.0f;
+			cloud.localOffsets.push_back({ localOffsetX, localOffsetY, localOffsetZ });
 
 			// ランダムスケール
 			float s = randomFloat() * 2.0f + 1.5f;
@@ -234,27 +236,27 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 		}
 
 		// 3Dオブジェクトの作成
-		for (int j = 0; j < partCount; ++j) {
-			std::unique_ptr<Object3d> obj = std::make_unique<Object3d>();
-			obj->Initialize(object3dCommon_);
-			obj->SetModel(bubbleModel_.get()); // 球体モデルを雲のパーツとして使用
-			obj->SetEnableLighting(true);       // ライティングで立体感（ローポリ雲の綺麗な陰影）を出す
-			obj->SetShininess(0.0f);            // テカらせない
-			obj->SetMetallic(0.0f);             // テカらせない
+		for (int partIndex = 0; partIndex < partCount; ++partIndex) {
+			std::unique_ptr<Object3d> cloudPartObject = std::make_unique<Object3d>();
+			cloudPartObject->Initialize(object3dCommon_);
+			cloudPartObject->SetModel(bubbleModel_.get()); // 球体モデルを雲のパーツとして使用
+			cloudPartObject->SetEnableLighting(true);       // ライティングで立体感（ローポリ雲の綺麗な陰影）を出す
+			cloudPartObject->SetShininess(0.0f);            // テカらせない
+			cloudPartObject->SetMetallic(0.0f);             // テカらせない
 			
 			// 初期位置とスケール
-			Vector3 pos = {
-				cloud.basePosition.x + cloud.localOffsets[j].x,
-				cloud.basePosition.y + cloud.localOffsets[j].y,
-				cloud.basePosition.z + cloud.localOffsets[j].z
+			Vector3 cloudPartPosition = {
+				cloud.basePosition.x + cloud.localOffsets[partIndex].x,
+				cloud.basePosition.y + cloud.localOffsets[partIndex].y,
+				cloud.basePosition.z + cloud.localOffsets[partIndex].z
 			};
-			obj->SetPosition(pos);
-			obj->SetScale(cloud.localScales[j]);
+			cloudPartObject->SetPosition(cloudPartPosition);
+			cloudPartObject->SetScale(cloud.localScales[partIndex]);
 			
 			// 色を完全な白に設定
-			obj->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+			cloudPartObject->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 
-			cloud.objects.push_back(std::move(obj));
+			cloud.objects.push_back(std::move(cloudPartObject));
 		}
 
 		clouds_.push_back(std::move(cloud));

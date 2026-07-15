@@ -287,15 +287,15 @@ void MyGame::Initialize() {
 
 //  生成した Object3d は objectList が所有する。
 
-Object3d* MyGame::CreateObject(Model* model, Vector3 pos) {
-    auto obj = std::make_unique<Object3d>();
-    obj->Initialize(object3dCommon.get());
-    obj->SetModel(model);
-    obj->SetPosition(pos);
-    obj->SetRotation({ 1.57f, 0.0f, 0.0f });
-    Object3d* ptr = obj.get();
-    objectList.push_back(std::move(obj));
-    return ptr;
+Object3d* MyGame::CreateObject(Model* model, Vector3 initialPosition) {
+    auto createdObject = std::make_unique<Object3d>();
+    createdObject->Initialize(object3dCommon.get());
+    createdObject->SetModel(model);
+    createdObject->SetPosition(initialPosition);
+    createdObject->SetRotation({ 1.57f, 0.0f, 0.0f });
+    Object3d* createdObjectRawPtr = createdObject.get();
+    objectList.push_back(std::move(createdObject));
+    return createdObjectRawPtr;
 }
 
 void MyGame::EnsureSkinningEditorInitialized() {
@@ -1951,9 +1951,9 @@ void MyGame::UpdateImGui() {
         ImGui::NextColumn();
         // ImGui の UI 要素を表示・更新する。
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Player Debug ]");
-        Vector3 pos = player_->GetPosition();
+        Vector3 playerPosition = player_->GetPosition();
         // ImGui テキスト「Pos: X:%.2f Y:%.2f Z:%.2f」を表示する。
-        ImGui::Text("Pos: X:%.2f Y:%.2f Z:%.2f", pos.x, pos.y, pos.z);
+        ImGui::Text("Pos: X:%.2f Y:%.2f Z:%.2f", playerPosition.x, playerPosition.y, playerPosition.z);
         if (isGoalReached_) {
             // ImGui の UI 要素を表示・更新する。
             ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "GOAL REACHED!");
@@ -2351,15 +2351,15 @@ void MyGame::RenderScene() {
     }
 
 	// チュートリアルスプライトの描画条件をチェックし、描画する。
-    const bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-    if (currentMode_ == AppMode::GamePlay && !invOpen && stageSelect_) {
+    const bool isInventoryOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+    if (currentMode_ == AppMode::GamePlay && !isInventoryOpen && stageSelect_) {
 		// 選択されたステージファイル名が "tutorial.txt" であり、チュートリアルスプライトが存在する場合に描画する。
         if (stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_) {
             spriteCommon->PreDraw();
             tutorialSprite_->Draw();
         }
     }
-    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
+    if ((currentMode_ == AppMode::GamePlay_BlockPlace || isInventoryOpen) && placementTutorialSprite_) {
         spriteCommon->PreDraw();
         placementTutorialSprite_->Draw();
     }
@@ -2387,34 +2387,45 @@ bool MyGame::IsPlayerHiddenByWall() const {
     }
 
 	// プレイヤーの位置を取得し、y座標を少し上げて判定する。
-    Vector3 camPos = camera->GetPosition();
+    Vector3 cameraPosition = camera->GetPosition();
     Vector3 playerPos = player_->GetPosition();
     playerPos.y += 0.8f;
 
 	// プレイヤーとカメラの位置の差を計算する。
-    Vector3 diff = {
-        playerPos.x - camPos.x,
-        playerPos.y - camPos.y,
-        playerPos.z - camPos.z
+    Vector3 cameraToPlayer = {
+        playerPos.x - cameraPosition.x,
+        playerPos.y - cameraPosition.y,
+        playerPos.z - cameraPosition.z
     };
 	// プレイヤーとカメラの距離を計算する。
-    const float len = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+    const float cameraToPlayerLength = std::sqrt(
+        cameraToPlayer.x * cameraToPlayer.x +
+        cameraToPlayer.y * cameraToPlayer.y +
+        cameraToPlayer.z * cameraToPlayer.z);
 	// プレイヤーとカメラの距離が非常に近い場合、壁に隠れているとは見なさない。
-    if (len <= 0.001f) {
+    if (cameraToPlayerLength <= 0.001f) {
         return false;
     }
 
 	// カメラからプレイヤーまでの方向ベクトルを正規化する。
-    Vector3 dir = { diff.x / len, diff.y / len, diff.z / len };
+    Vector3 cameraToPlayerDirection = {
+        cameraToPlayer.x / cameraToPlayerLength,
+        cameraToPlayer.y / cameraToPlayerLength,
+        cameraToPlayer.z / cameraToPlayerLength
+    };
 	// カメラからプレイヤーまでの距離に沿って、0.8単位ごとにマップセルをチェックする。
-    for (float t = 0.8f; t < len - 1.0f; t += 0.8f) {
-		// カメラ位置からプレイヤー方向に沿って、t単位進んだ位置を計算する。
-        Vector3 cp = { camPos.x + dir.x * t, camPos.y + dir.y * t, camPos.z + dir.z * t };
+    for (float rayDistance = 0.8f; rayDistance < cameraToPlayerLength - 1.0f; rayDistance += 0.8f) {
+		// カメラ位置からプレイヤー方向に沿って rayDistance だけ進んだサンプル位置を計算する。
+        Vector3 samplePosition = {
+            cameraPosition.x + cameraToPlayerDirection.x * rayDistance,
+            cameraPosition.y + cameraToPlayerDirection.y * rayDistance,
+            cameraPosition.z + cameraToPlayerDirection.z * rayDistance
+        };
 		// 計算した位置に対応するマップセルを取得する。
         const MapCell* cell = stageMap_.GetCell(
-            static_cast<int>(std::floor(cp.x + 0.5f)),
-            static_cast<int>(std::floor(cp.y)),
-            static_cast<int>(std::floor(cp.z + 0.5f)));
+            static_cast<int>(std::floor(samplePosition.x + 0.5f)),
+            static_cast<int>(std::floor(samplePosition.y)),
+            static_cast<int>(std::floor(samplePosition.z + 0.5f)));
 		// 取得したマップセルが存在し、かつそのセルが固体（壁）である場合、プレイヤーは壁に隠れていると判定する。
         if (cell && cell->isSolid) { 
             return true;
@@ -2680,13 +2691,13 @@ void MyGame::EmitEffectPreviewBurst() {
     static std::mt19937 randomEngine(std::random_device{}());
 	// バーストの数だけループして、ヒットエフェクトを発生させる。
     for (int i = 0; i < burstCount; ++i) {
-        Vector3 pos = effectPreviewPosition_;
+        Vector3 burstPosition = effectPreviewPosition_;
 		// バーストの数が 1 より大きく、かつバースト半径が正の値の場合、バーストごとに位置を扇状にずらす。
         if (burstCount > 1 && effectPreviewBurstRadius_ > 0.0f) {
             const float angle = (static_cast<float>(i) / static_cast<float>(burstCount)) * kPi * 2.0f;
-            pos.x += std::cos(angle) * effectPreviewBurstRadius_;
-            pos.y += std::sin(angle * 1.7f) * effectPreviewBurstRadius_ * 0.35f;
-            pos.z += std::sin(angle) * effectPreviewBurstRadius_;
+            burstPosition.x += std::cos(angle) * effectPreviewBurstRadius_;
+            burstPosition.y += std::sin(angle * 1.7f) * effectPreviewBurstRadius_ * 0.35f;
+            burstPosition.z += std::sin(angle) * effectPreviewBurstRadius_;
         }
 
 		// バーストごとにランダムな角度を加える。
@@ -2705,7 +2716,7 @@ void MyGame::EmitEffectPreviewBurst() {
         burstSettings.slashSpread += 0.18f * burstT;
         burstSettings.sparkSpeed *= 1.0f + 0.20f * burstT;
         burstSettings.ringPower *= 1.0f + 0.18f * burstT;
-        particleManager->EmitHitEffect(pos, burstSettings);
+        particleManager->EmitHitEffect(burstPosition, burstSettings);
     }
 }
 
@@ -3058,15 +3069,15 @@ void MyGame::UpdateGamePlay() {
 	// ゲームプレイ中のカメラ操作を更新する。
     if (!useFirstPersonCamera_) {
         if (input->TriggerKey(DIK_V)) {
-            bool cur = gameplayCameraController_.IsFollowPlayerMode();
-            gameplayCameraController_.SetFollowPlayerMode(!cur);
+            bool wasFollowingPlayer = gameplayCameraController_.IsFollowPlayerMode();
+            gameplayCameraController_.SetFollowPlayerMode(!wasFollowingPlayer);
 			// プレイヤー追従モードの切り替え時に、カメラのピボット位置を更新する。
-            if (!cur && player_) {
-                Vector3 pp = player_->GetPosition();
-                pp.y += 0.8f;
-                gameplayCameraController_.SetCameraPivot(pp);
+            if (!wasFollowingPlayer && player_) {
+                Vector3 playerPivotPosition = player_->GetPosition();
+                playerPivotPosition.y += 0.8f;
+                gameplayCameraController_.SetCameraPivot(playerPivotPosition);
 				// プレイヤー追従モードに切り替えた場合、カメラの位置をリセットする。
-            } else if (cur && stageSelect_) {
+            } else if (wasFollowingPlayer && stageSelect_) {
                 gameplayCameraController_.ResetCamera(
                     camera.get(),
                     player_.get(),
@@ -3095,14 +3106,14 @@ void MyGame::UpdateGamePlay() {
             RECT rect;
 			// ウィンドウのクライアント領域のサイズを取得する。
             GetClientRect(winApp->GetHwnd(), &rect);
-            float cw = static_cast<float>(rect.right - rect.left);
-            float ch = static_cast<float>(rect.bottom - rect.top);
+            float clientWidth = static_cast<float>(rect.right - rect.left);
+            float clientHeight = static_cast<float>(rect.bottom - rect.top);
 			// クライアント領域の幅と高さが正の値である場合、マウスの位置に基づいてカメラの回転を更新する。
-            if (cw > 0.0f && ch > 0.0f) {
-                float sx = static_cast<float>(WinApp::kWindowWidth) / cw;
-                float sy = static_cast<float>(WinApp::kWindowHeight) / ch;
-                float mx = static_cast<float>(mouse.posX) * sx;
-                float my = static_cast<float>(mouse.posY) * sy;
+            if (clientWidth > 0.0f && clientHeight > 0.0f) {
+                float screenScaleX = static_cast<float>(WinApp::kWindowWidth) / clientWidth;
+                float screenScaleY = static_cast<float>(WinApp::kWindowHeight) / clientHeight;
+                float scaledMouseX = static_cast<float>(mouse.posX) * screenScaleX;
+                float scaledMouseY = static_cast<float>(mouse.posY) * screenScaleY;
 
 				// マウスカーソルが画面端に近い場合、カメラを回転させるための閾値と回転速度を設定する。
                 const float edgeRatio = 0.15f;
@@ -3113,16 +3124,16 @@ void MyGame::UpdateGamePlay() {
                 float bottomEdge = WinApp::kWindowHeight * (1.0f - edgeRatio);
 
 				// マウスカーソルが画面端に近い場合、カメラを回転させる。
-                if (mx < leftEdge) {
+                if (scaledMouseX < leftEdge) {
                     fpsCameraYaw_ += rotateSpeed;
-                } else if (mx > rightEdge) {
+                } else if (scaledMouseX > rightEdge) {
                     fpsCameraYaw_ -= rotateSpeed;
                 }
 
 				// マウスカーソルが画面端に近い場合、カメラを回転させる。
-                if (my < topEdge) {
+                if (scaledMouseY < topEdge) {
                     fpsCameraPitch_ += rotateSpeed;
-                } else if (my > bottomEdge) {
+                } else if (scaledMouseY > bottomEdge) {
                     fpsCameraPitch_ -= rotateSpeed;
                 }
             }
@@ -3138,8 +3149,8 @@ void MyGame::UpdateGamePlay() {
 
 		// プレイヤーが存在する場合、カメラの位置と回転をプレイヤーの位置に合わせて更新する。
         if (player_) {
-            Vector3 pp = player_->GetPosition();
-            camera->SetPosition({ pp.x, pp.y + 1.2f, pp.z });
+            Vector3 playerPosition = player_->GetPosition();
+            camera->SetPosition({ playerPosition.x, playerPosition.y + 1.2f, playerPosition.z });
             camera->SetRotation({ fpsCameraPitch_, fpsCameraYaw_, 0.0f });
         }
         camera->Update();
@@ -3151,28 +3162,28 @@ void MyGame::UpdateGamePlay() {
     }
 
 	// ブロック配置モード中またはインベントリが開いているかを判定する。
-    bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+    bool isInventoryOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
 
 	// チュートリアルステージが選択されており、チュートリアルスプライトが存在し、インベントリが開いていない場合、チュートリアルスプライトを更新する。
-    if (stageSelect_ && stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_ && !invOpen) {
+    if (stageSelect_ && stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_ && !isInventoryOpen) {
         tutorialSprite_->Update();
     }
 
 	// ブロック配置モード中またはインベントリが開いている場合、配置チュートリアルスプライトを更新する。
-    if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
+    if ((currentMode_ == AppMode::GamePlay_BlockPlace || isInventoryOpen) && placementTutorialSprite_) {
         placementTutorialSprite_->Update();
     }
 
 	// ゲームプレイ中の更新処理を行う。
-    float dt = 1.0f / 60.0f;
-    totalTime_ += dt;
-    stageMap_.Update(dt, player_ ? player_->GetPosition() : Vector3{ 0, 0, 0 });
+    float fixedDeltaTime = 1.0f / 60.0f;
+    totalTime_ += fixedDeltaTime;
+    stageMap_.Update(fixedDeltaTime, player_ ? player_->GetPosition() : Vector3{ 0, 0, 0 });
     stageRenderer_->UpdateEffect(stageMap_);
 
 	// プレイヤーが存在する場合、プレイヤーの状態を更新する。
     if (player_) {
-        float camRot = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
-        player_->Update(input.get(), stageMap_, camRot, lightVP, dxCommon.get());
+        float cameraYawForMovement = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
+        player_->Update(input.get(), stageMap_, cameraYawForMovement, lightVP, dxCommon.get());
     }
 
 	// ステージマップの再構築が必要な場合、ステージレンダラーを更新する。

@@ -1,6 +1,6 @@
 #include "GameplayCameraController.h"
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
@@ -20,7 +20,9 @@ void GameplayCameraController::Initialize() {
 }
 
 void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winApp, Player* player) {
-    if (!input || !camera || !winApp || !player) return;
+    if (!input || !camera || !winApp || !player) {
+        return;
+    }
 
     const auto& mouse = input->GetMouseState();
 
@@ -31,10 +33,10 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     }
 #endif
 
-    bool changed = false;
+    bool hasCameraParameterChanged = false;
 
     if (followPlayerMode_) {
-        // プレイヤーに追従 (Yオフセットを加えて見やすく調整)
+        // プレイヤー追従時は、上半身付近をカメラの注視点にする。
         Vector3 targetPivot = player->GetPosition();
         targetPivot.y += 0.8f;
 
@@ -42,13 +44,11 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
             std::abs(cameraPivot_.y - targetPivot.y) > 0.001f ||
             std::abs(cameraPivot_.z - targetPivot.z) > 0.001f) {
             cameraPivot_ = targetPivot;
-            changed = true;
+            hasCameraParameterChanged = true;
         }
     }
 
-    
     if (!isGuiCaptured && mouse.wheel != 0) {
-
         float minFov = minFov_;
         float maxFov = maxFov_;
 
@@ -58,7 +58,6 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
         }
 
         const float zoomStep = (maxFov - minFov) / 5.0f;
-
         if (mouse.wheel > 0) {
             cameraFov_ -= zoomStep;
         } else if (mouse.wheel < 0) {
@@ -67,114 +66,103 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 
         cameraFov_ = std::clamp(cameraFov_, minFov, maxFov);
         camera->SetFov(cameraFov_);
-        changed = true;
+        hasCameraParameterChanged = true;
     }
 
-    // ==========================================================
-    // 回転：左クリックしている時だけ画面端判定
-    // ==========================================================
+    // 画面端のガイド領域を左クリックした時だけ、カメラを段階的に回転させる。
     if (mouse.buttons[0] && !isGuiCaptured) {
-        RECT rect;
-        GetClientRect(winApp->GetHwnd(), &rect);
+        RECT clientRect;
+        GetClientRect(winApp->GetHwnd(), &clientRect);
 
-        float currentClientW = static_cast<float>(rect.right - rect.left);
-        float currentClientH = static_cast<float>(rect.bottom - rect.top);
+        float currentClientWidth = static_cast<float>(clientRect.right - clientRect.left);
+        float currentClientHeight = static_cast<float>(clientRect.bottom - clientRect.top);
 
-        if (currentClientW > 0.0f && currentClientH > 0.0f) {
-            float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
-            float scaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientH;
-            float swapMouseX = static_cast<float>(mouse.posX) * scaleX;
-            float swapMouseY = static_cast<float>(mouse.posY) * scaleY;
+        if (currentClientWidth > 0.0f && currentClientHeight > 0.0f) {
+            float windowScaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientWidth;
+            float windowScaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientHeight;
+            float scaledMouseX = static_cast<float>(mouse.posX) * windowScaleX;
+            float scaledMouseY = static_cast<float>(mouse.posY) * windowScaleY;
 
 #ifdef NDEBUG
             float mouseX = static_cast<float>(mouse.posX) *
-                (static_cast<float>(WinApp::kClientWidth) / currentClientW);
+                (static_cast<float>(WinApp::kClientWidth) / currentClientWidth);
 
             float mouseY = static_cast<float>(mouse.posY) *
-                (static_cast<float>(WinApp::kClientHeight) / currentClientH);
-
-            float screenWidth = static_cast<float>(WinApp::kClientWidth);
-            float screenHeight = static_cast<float>(WinApp::kClientHeight);
+                (static_cast<float>(WinApp::kClientHeight) / currentClientHeight);
 #else
-
-            float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
-            float mouseX = swapMouseX - offsetX;
-            float mouseY = swapMouseY;
-
-            float screenWidth = static_cast<float>(WinApp::kClientWidth);
-            float screenHeight = static_cast<float>(WinApp::kClientHeight);
+            float debugViewportOffsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
+            float mouseX = scaledMouseX - debugViewportOffsetX;
+            float mouseY = scaledMouseY;
 #endif
 
+            float screenWidth = static_cast<float>(WinApp::kClientWidth);
+            float screenHeight = static_cast<float>(WinApp::kClientHeight);
+
             float edgeRatio = 0.1f;
-            float leftEdge = screenWidth * edgeRatio;
-            float rightEdge = screenWidth * (1.0f - edgeRatio);
-            float topEdge = screenHeight * edgeRatio;
-            float bottomEdge = screenHeight * (1.0f - edgeRatio);
-
-            const float rotateSpeed = 0.025f;
-             float minPitch = 0.3f;
-             float maxPitch = 1.5f;
-
-            if (currentStageIndex_ == 3) {
-                minPitch = 0.2f;  // 下方向にもっと回せる
-                maxPitch = 1.5f;
-            }
-
-            const float hitSize = 90.0f;
-            const float half = hitSize * 0.5f;
-
-            float leftX = screenWidth * edgeRatio * 0.5f;
-            float rightX = screenWidth * (1.0f - edgeRatio * 0.5f);
-            float topY = screenHeight * edgeRatio * 0.5f;
-            float bottomY = screenHeight * (1.0f - edgeRatio * 0.5f);
+            float leftGuideX = screenWidth * edgeRatio * 0.5f;
+            float rightGuideX = screenWidth * (1.0f - edgeRatio * 0.5f);
+            float topGuideY = screenHeight * edgeRatio * 0.5f;
+            float bottomGuideY = screenHeight * (1.0f - edgeRatio * 0.5f);
 
             float centerX = screenWidth * 0.5f;
             float centerY = screenHeight * 0.5f;
 
+            const float rotateSpeed = 0.025f;
+            float minPitch = 0.3f;
+            float maxPitch = 1.5f;
+
+            if (currentStageIndex_ == 3) {
+                minPitch = 0.2f; // 高低差の大きいステージでは少し下まで見られるようにする。
+                maxPitch = 1.5f;
+            }
+
+            const float hitSize = 90.0f;
+            const float halfHitSize = hitSize * 0.5f;
+
 #ifdef NDEBUG
-            Vector2 leftOffset = { 0.0f, 0.0f };
-            Vector2 rightOffset = { -40.0f, 0.0f };
-            Vector2 upOffset = { 0.0f, 0.0f };
-            Vector2 downOffset = { 0.0f, -60.0f };
+            Vector2 leftGuideOffset = { 0.0f, 0.0f };
+            Vector2 rightGuideOffset = { -40.0f, 0.0f };
+            Vector2 upGuideOffset = { 0.0f, 0.0f };
+            Vector2 downGuideOffset = { 0.0f, -60.0f };
 #else
-            Vector2 leftOffset = { 0.0f, 0.0f };
-            Vector2 rightOffset = { -20.0f, 0.0f };
-            Vector2 upOffset = { 0.0f, 0.0f };
-            Vector2 downOffset = { 0.0f, -20.0f };
+            Vector2 leftGuideOffset = { 0.0f, 0.0f };
+            Vector2 rightGuideOffset = { -20.0f, 0.0f };
+            Vector2 upGuideOffset = { 0.0f, 0.0f };
+            Vector2 downGuideOffset = { 0.0f, -20.0f };
 #endif
 
-            auto CheckHitBox = [&](float x, float y) {
-                return mouseX >= x - half &&
-                    mouseX <= x + half &&
-                    mouseY >= y - half &&
-                    mouseY <= y + half;
-                };
+            auto isMouseInsideGuide = [&](float guideCenterX, float guideCenterY) {
+                return mouseX >= guideCenterX - halfHitSize &&
+                    mouseX <= guideCenterX + halfHitSize &&
+                    mouseY >= guideCenterY - halfHitSize &&
+                    mouseY <= guideCenterY + halfHitSize;
+            };
 
-            bool hitLeft = CheckHitBox(leftX + leftOffset.x, centerY + leftOffset.y);
-            bool hitRight = CheckHitBox(rightX + rightOffset.x, centerY + rightOffset.y);
-            bool hitUp = CheckHitBox(centerX + upOffset.x, topY + upOffset.y);
-            bool hitDown = CheckHitBox(centerX + downOffset.x, bottomY + downOffset.y);
+            bool hitLeftGuide = isMouseInsideGuide(leftGuideX + leftGuideOffset.x, centerY + leftGuideOffset.y);
+            bool hitRightGuide = isMouseInsideGuide(rightGuideX + rightGuideOffset.x, centerY + rightGuideOffset.y);
+            bool hitUpGuide = isMouseInsideGuide(centerX + upGuideOffset.x, topGuideY + upGuideOffset.y);
+            bool hitDownGuide = isMouseInsideGuide(centerX + downGuideOffset.x, bottomGuideY + downGuideOffset.y);
 
-            if (hitLeft) {
+            if (hitLeftGuide) {
                 cameraAngle_ += rotateSpeed;
-                changed = true;
-            } else if (hitRight) {
+                hasCameraParameterChanged = true;
+            } else if (hitRightGuide) {
                 cameraAngle_ -= rotateSpeed;
-                changed = true;
-            } else if (hitUp) {
+                hasCameraParameterChanged = true;
+            } else if (hitUpGuide) {
                 cameraPitch_ += rotateSpeed;
-                changed = true;
-            } else if (hitDown) {
+                hasCameraParameterChanged = true;
+            } else if (hitDownGuide) {
                 cameraPitch_ -= rotateSpeed;
-                changed = true;
+                hasCameraParameterChanged = true;
             }
 
             cameraPitch_ = std::clamp(cameraPitch_, minPitch, maxPitch);
         }
     }
 
-    // 何も操作していないなら、sin/cos計算もSetPositionも行わない
-    if (!changed && !cameraDirty_) {
+    // 変化がないフレームでは三角関数計算と Camera への反映を省く。
+    if (!hasCameraParameterChanged && !cameraDirty_) {
         return;
     }
 
@@ -183,28 +171,30 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 }
 
 void GameplayCameraController::ApplyCamera(Camera* camera) {
-    if (!camera) return;
+    if (!camera) {
+        return;
+    }
 
-    Vector3 target = cameraPivot_;
+    Vector3 targetPosition = cameraPivot_;
 
-    Vector3 pos;
-    pos.x = target.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * cameraDistance_;
-    pos.y = target.y + std::sin(cameraPitch_) * cameraHeight_;
-    pos.z = target.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * cameraDistance_;
+    Vector3 cameraPosition;
+    cameraPosition.x = targetPosition.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * cameraDistance_;
+    cameraPosition.y = targetPosition.y + std::sin(cameraPitch_) * cameraHeight_;
+    cameraPosition.z = targetPosition.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * cameraDistance_;
 
-    camera->SetPosition(pos);
+    camera->SetPosition(cameraPosition);
 
-    Vector3 diff = {
-        target.x - pos.x,
-        target.y - pos.y,
-        target.z - pos.z
+    Vector3 cameraToTarget = {
+        targetPosition.x - cameraPosition.x,
+        targetPosition.y - cameraPosition.y,
+        targetPosition.z - cameraPosition.z
     };
 
-    float yaw = std::atan2(diff.x, diff.z);
-    float horizontal = std::sqrt(diff.x * diff.x + diff.z * diff.z);
-    float pitch = -std::atan2(diff.y, horizontal);
+    float cameraYaw = std::atan2(cameraToTarget.x, cameraToTarget.z);
+    float horizontalDistance = std::sqrt(cameraToTarget.x * cameraToTarget.x + cameraToTarget.z * cameraToTarget.z);
+    float cameraPitch = -std::atan2(cameraToTarget.y, horizontalDistance);
 
-    camera->SetRotation({ pitch, yaw, 0.0f });
+    camera->SetRotation({ cameraPitch, cameraYaw, 0.0f });
 }
 
 void GameplayCameraController::ResetCamera(
@@ -213,81 +203,32 @@ void GameplayCameraController::ResetCamera(
     const StageMap& stageMap,
     int stageIndex
 ) {
-    if (!camera || !player) return;
+    if (!camera || !player) {
+        return;
+    }
 
     followPlayerMode_ = true;
-
     currentStageIndex_ = stageIndex;
 
-    float width = static_cast<float>(stageMap.GetWidth());
-    float height = static_cast<float>(stageMap.GetHeight());
-    float depth = static_cast<float>(stageMap.GetDepth());
+    float stageWidth = static_cast<float>(stageMap.GetWidth());
+    float stageHeight = static_cast<float>(stageMap.GetHeight());
+    float stageDepth = static_cast<float>(stageMap.GetDepth());
+    float maxStageSize = (std::max)(stageWidth, stageDepth);
 
-    float maxSize = (std::max)(width, depth);
-
-    // ==============================
-    // ステージごとのカメラ設定
-    // ==============================
+    // ステージごとの見やすさに合わせた初期カメラ設定。
     CameraPreset preset{};
 
     switch (stageIndex) {
     case 0:
-
         preset.enableWallTransparency = false;
         preset.wallTransparencyAlpha = 1.0f;
 
-        // 操作説明ステージ
-        // ==========================================
-// カメラの左右回転角度
-// 0     = 正面
-// 1.57f = 90度回転
-// 3.14f = 背面
-// 5.55f = 今の斜め俯瞰向き
-// ==========================================
+        // 操作説明ステージ。斜め俯瞰で全体とプレイヤーを見せる。
         preset.angle = 5.55f;
-
-        // ==========================================
-        // カメラの上下角度（見下ろし具合）
-        // 小さい = 横視点寄り
-        // 大きい = 真上寄り
-        //
-        // 0.4f くらい → 横から見る
-        // 0.7f くらい → 箱庭向き
-        // 1.2f くらい → かなり上空
-        // ==========================================
         preset.pitch = 0.78f;
-
-        // ==========================================
-        // カメラとステージ中心の距離倍率
-        // 小さいほど近い
-        // 大きいほど遠い
-        // ==========================================
         preset.distanceRate = 1.55f;
-
-        // ==========================================
-        // カメラの高さ倍率
-        // 高いほど上から見下ろす
-        // ==========================================
         preset.heightRate = 0.90f;
-
-        // ==========================================
-        // 視野角(FOV)
-        //
-        // 小さい = ズーム
-        // 大きい = 広角
-        //
-        // 0.35f → かなりズーム
-        // 0.55f → 標準
-        // 0.80f → 広角
-        // ==========================================
         preset.fov = 0.55f;
-
-        // ==========================================
-        // カメラが見る中心位置のY倍率
-        //
-        // 小さい → 足元を見る
-        // 大きい → 上側を見る
-        // ==========================================
         preset.pivotYRate = 0.45f;
         break;
 
@@ -295,19 +236,17 @@ void GameplayCameraController::ResetCamera(
         preset.enableWallTransparency = true;
         preset.wallTransparencyAlpha = 0.50f;
 
-        // 通常ステージ
+        // 通常ステージ。壁越し表示を有効にしてプレイヤーを見失いにくくする。
         preset.angle = 0.78f;
         preset.pitch = 0.72f;
         preset.distanceRate = 1.85f;
         preset.heightRate = 1.10f;
-
         preset.fov = 1.0f;
-
         preset.pivotYRate = 0.38f;
         break;
 
     case 2:
-        // 少し広めに見たいステージ
+        // 少し広めに見たいステージ。距離と高さを増やして全体を把握しやすくする。
         preset.angle = 0.785f;
         preset.pitch = 0.68f;
         preset.distanceRate = 2.25f;
@@ -317,7 +256,7 @@ void GameplayCameraController::ResetCamera(
         break;
 
     case 3:
-        // 高低差・複雑なステージ
+        // 高低差や複雑な構造があるステージ。より高い位置から見下ろす。
         preset.angle = 0.785f;
         preset.pitch = 0.75f;
         preset.distanceRate = 2.40f;
@@ -327,7 +266,7 @@ void GameplayCameraController::ResetCamera(
         break;
 
     default:
-        // 予備
+        // 通常ステージ向けの標準カメラ設定。
         preset.angle = 0.785f;
         preset.pitch = 0.60f;
         preset.distanceRate = 2.00f;
@@ -337,15 +276,15 @@ void GameplayCameraController::ResetCamera(
         break;
     }
 
-    // ステージ開始時は自機追従カメラから始める
-    Vector3 pp = player->GetPosition();
-    pp.y += 0.8f;
-    cameraPivot_ = pp;
+    // ステージ開始時はプレイヤーの上半身付近を注視点にする。
+    Vector3 playerPivotPosition = player->GetPosition();
+    playerPivotPosition.y += 0.8f;
+    cameraPivot_ = playerPivotPosition;
 
     cameraAngle_ = preset.angle;
     cameraPitch_ = preset.pitch;
-    cameraDistance_ = maxSize * preset.distanceRate;
-    cameraHeight_ = maxSize * preset.heightRate;
+    cameraDistance_ = maxStageSize * preset.distanceRate;
+    cameraHeight_ = maxStageSize * preset.heightRate;
     cameraFov_ = preset.fov;
 
     enableWallTransparency_ = preset.enableWallTransparency;

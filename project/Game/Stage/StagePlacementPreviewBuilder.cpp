@@ -21,7 +21,7 @@ PreviewStyle ResolvePreviewStyle(
     PreviewStyle style;
     style.model = models.wall;
 
-    // カスタムパーツは個別セルの種類より、登録されたパーツ定義を優先して見た目を決める。
+    // カスタムパーツは登録済みスロットの色とベースモデルを優先して使う。
     if (customId >= 1 && customId <= 5) {
         const auto* part = stageMap.GetCustomPart(customId);
         if (part) {
@@ -31,7 +31,7 @@ PreviewStyle ResolvePreviewStyle(
         return style;
     }
 
-    // 通常ブロックは配置予定の種類ごとに、実体と同じモデル・識別しやすい半透明色を使う。
+    // 通常ブロックは配置予定の種類ごとに、実体と同じモデルか識別しやすい半透明色を選ぶ。
     switch (type) {
     case BlockType::Wall:
         style.color = { 1.0f, 0.4f, 0.4f, 0.4f };
@@ -77,15 +77,15 @@ std::unique_ptr<Object3d> CreatePreviewObject(
     const Vector3& scale,
     const Vector4& color) {
 
-    auto obj = std::make_unique<Object3d>();
-    // プレビュー専用の一時オブジェクトなので、生成後はpreviewObjects側に所有権を渡す。
-    obj->Initialize(object3dCommon);
-    obj->SetModel(model);
-    obj->SetPosition(position);
-    obj->SetRotation(rotation);
-    obj->SetScale(scale);
-    obj->SetColor(color);
-    return obj;
+    // プレビュー専用の一時オブジェクトを作成し、呼び出し側の previewObjects に所有権を渡す。
+    auto previewObject = std::make_unique<Object3d>();
+    previewObject->Initialize(object3dCommon);
+    previewObject->SetModel(model);
+    previewObject->SetPosition(position);
+    previewObject->SetRotation(rotation);
+    previewObject->SetScale(scale);
+    previewObject->SetColor(color);
+    return previewObject;
 }
 }
 
@@ -100,6 +100,7 @@ void StagePlacementPreviewBuilder::Build(
     int customId,
     float rotationY) {
 
+    // プレビューはカーソル移動や選択変更のたびに作り直すため、前回分を先に消す。
     previewObjects.clear();
 
     PreviewStyle style = ResolvePreviewStyle(stageMap, models, type, customId);
@@ -111,42 +112,42 @@ void StagePlacementPreviewBuilder::Build(
     if (customId >= 1 && customId <= 5) {
         const auto* part = stageMap.GetCustomPart(customId);
         if (part && !part->IsEmpty()) {
-            // 90度単位の回転に丸め、3x3パーツ内のローカル座標を回転後の座標へ変換する。
-            int rotIndex = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
-            if (rotIndex < 0) {
-                rotIndex += 4;
+            // カスタムパーツは3x3x3のローカルセルを、90度単位の回転後座標へ変換して表示する。
+            int rotationQuarterTurns = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
+            if (rotationQuarterTurns < 0) {
+                rotationQuarterTurns += 4;
             }
 
-            for (int ly = 0; ly < 3; ++ly) {
-                for (int lz = 0; lz < 3; ++lz) {
-                    for (int lx = 0; lx < 3; ++lx) {
-                        const auto& cell = part->cells[ly][lz][lx];
+            for (int localY = 0; localY < 3; ++localY) {
+                for (int localZ = 0; localZ < 3; ++localZ) {
+                    for (int localX = 0; localX < 3; ++localX) {
+                        const auto& cell = part->cells[localY][localZ][localX];
                         if (cell.type == BlockType::None) {
                             continue;
                         }
 
-                        // パーツ内セルごとに回転後の表示位置と向きを決定する。
-                        int rx = lx;
-                        int rz = lz;
-                        float cellRotY = 0.0f;
-                        if (rotIndex == 1) {
-                            rx = 2 - lz;
-                            rz = lx;
-                            cellRotY = 1.5707963f;
-                        } else if (rotIndex == 2) {
-                            rx = 2 - lx;
-                            rz = 2 - lz;
-                            cellRotY = 3.1415927f;
-                        } else if (rotIndex == 3) {
-                            rx = lz;
-                            rz = 2 - lx;
-                            cellRotY = 4.712389f;
+                        // パーツセルごとに回転後の表示位置と向きを決定する。
+                        int rotatedX = localX;
+                        int rotatedZ = localZ;
+                        float cellRotationY = 0.0f;
+                        if (rotationQuarterTurns == 1) {
+                            rotatedX = 2 - localZ;
+                            rotatedZ = localX;
+                            cellRotationY = 1.5707963f;
+                        } else if (rotationQuarterTurns == 2) {
+                            rotatedX = 2 - localX;
+                            rotatedZ = 2 - localZ;
+                            cellRotationY = 3.1415927f;
+                        } else if (rotationQuarterTurns == 3) {
+                            rotatedX = localZ;
+                            rotatedZ = 2 - localX;
+                            cellRotationY = 4.712389f;
                         }
 
-                        Vector3 pos = {
-                            static_cast<float>(cursorIndex.x + rx),
-                            static_cast<float>(cursorIndex.y + ly),
-                            static_cast<float>(cursorIndex.z + rz)
+                        Vector3 previewPosition = {
+                            static_cast<float>(cursorIndex.x + rotatedX),
+                            static_cast<float>(cursorIndex.y + localY),
+                            static_cast<float>(cursorIndex.z + rotatedZ)
                         };
                         Model* cellModel = (cell.type == BlockType::Ladder) ? models.ladder : models.wall;
                         if (!cellModel) {
@@ -156,8 +157,8 @@ void StagePlacementPreviewBuilder::Build(
                         previewObjects.push_back(CreatePreviewObject(
                             object3dCommon,
                             cellModel,
-                            pos,
-                            { 1.57f, cellRotY, 0.0f },
+                            previewPosition,
+                            { 1.57f, cellRotationY, 0.0f },
                             blockScale,
                             style.color));
                     }
@@ -167,7 +168,8 @@ void StagePlacementPreviewBuilder::Build(
         }
     }
 
-    Vector3 pos = {
+    // 通常ブロックはカーソル位置に1つだけ半透明プレビューを出す。
+    Vector3 previewPosition = {
         static_cast<float>(cursorIndex.x),
         static_cast<float>(cursorIndex.y),
         static_cast<float>(cursorIndex.z)
@@ -176,7 +178,7 @@ void StagePlacementPreviewBuilder::Build(
     previewObjects.push_back(CreatePreviewObject(
         object3dCommon,
         style.model,
-        pos,
+        previewPosition,
         { 1.57f, rotationY, 0.0f },
         blockScale,
         style.color));
