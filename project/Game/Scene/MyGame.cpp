@@ -165,7 +165,16 @@ void MyGame::Initialize() {
     
     // プレイヤー本体とメインカメラを生成する。
     player_ = std::make_unique<Player>();
-    player_->Initialize(object3dCommon.get(), models[2].get());
+    const std::string playerWalkGltfPath = "Resources/Models/Work/human/walk.gltf";
+    if (std::filesystem::exists(playerWalkGltfPath)) {
+        player_->InitializeWithSkinnedGltf(
+            object3dCommon.get(),
+            dxCommon.get(),
+            playerWalkGltfPath,
+            textureManager.get());
+    } else {
+        player_->Initialize(object3dCommon.get(), models[2].get());
+    }
     player_->SetPosition({ 0.0f, 1.5f, 0.0f });
 
     
@@ -676,7 +685,9 @@ void MyGame::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Matrix4
     }
 
     player_->SetCamera(view, proj);
-    if (currentMode_ != AppMode::GamePlay) {
+    if (currentMode_ == AppMode::DebugView) {
+        player_->Update(input.get(), stageMap_, camera->GetRotation().y, lightVP, dxCommon.get());
+    } else if (currentMode_ != AppMode::GamePlay) {
         player_->UpdateTransform(lightVP);
     }
 }
@@ -2115,33 +2126,53 @@ void MyGame::UpdateImGui() {
 }
 #endif // !NDEBUG
 
+// 描画処理を行う関数 Draw() の定義
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
 
+	// 描画前の準備処理を行う。
     if (skydomeObject_) {
+		// skydomeオブジェクトの色を設定する。ポストプロセスが初期化されており、スカイボックスリンクモードが1の場合は、ポストプロセスのクリアカラーを使用する。それ以外の場合は、白色に設定する。
         if (postProcessInitialized_ && postProcess_.GetSkyboxLinkMode() == 1) {
             skydomeObject_->SetColor(postProcess_.GetClearColor());
+			// skydomeオブジェクトの色を設定する。ポストプロセスが初期化されており、スカイボックスリンクモードが1の場合は、ポストプロセスのクリアカラーを使用する。それ以外の場合は、白色に設定する。
         } else {
             skydomeObject_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
         }
     }
 
+	// ライトカメラのビュー射影行列を取得する。
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
+	// シャドウマップの描画処理を行う。
     shadowMap_->PreDraw(commandList);
     commandList->SetGraphicsRootSignature(object3dCommon->GetRootSignature());
     commandList->SetPipelineState(object3dCommon->GetShadowPipelineState());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+	// シャドウマップ描画用のルートパラメータを設定する。
     for (auto& obj : objectList) {
-        if (obj) { obj->DrawShadow(lightVP); }
+        if (obj) {
+            obj->DrawShadow(lightVP);
+        }
     }
-    if (player_) { player_->DrawShadow(lightVP); }
-    if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) { skinningEditor_.DrawShadow(lightVP); }
-    if (stageRenderer_) { stageRenderer_->DrawShadow(lightVP); }
+	// 地形オブジェクトが存在する場合は、地形オブジェクトのシャドウ描画を行う。
+    if (player_) {
+        player_->DrawShadow(lightVP); 
+    }
+	// スキニングエディタモードで、スキニングエディタが初期化されている場合は、スキニングエディタのシャドウ描画を行う。
+    if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
+        skinningEditor_.DrawShadow(lightVP); 
+    }
+	// ステージレンダラーが存在する場合は、ステージレンダラーのシャドウ描画を行う。
+    if (stageRenderer_) { 
+        stageRenderer_->DrawShadow(lightVP);
+    }
 
+	// シャドウマップの描画処理を終了する。
     shadowMap_->PostDraw(commandList);
 
+	// ImGui の描画処理を開始する。
     if (postProcessInitialized_ && postProcess_.IsEnabled()) {
         postProcess_.BeginRender(commandList, dxCommon.get());
         RenderScene();
@@ -2150,25 +2181,31 @@ void MyGame::Draw() {
         postProcess_.DrawToBackBuffer(commandList, camera->GetProjectionMatrix());
     } else {
 #ifdef NDEBUG
+		// リリースビルド時は、ウィンドウ全体を描画領域として使用する。
         D3D12_VIEWPORT viewport = { 0.0f, 0.0f, (float)WinApp::kWindowWidth, (float)WinApp::kWindowHeight, 0.0f, 1.0f };
         D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
 #else
+		// デバッグビルド時は、ウィンドウの左側に ImGui のサイドパネルが表示されるため、描画領域を右側にオフセットする。
         D3D12_VIEWPORT viewport = { 320.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
         D3D12_RECT scissor = { 320, 0, 1600, 720 };
 #endif
+		// ビューポートとシザー矩形を設定する。
         commandList->RSSetViewports(1, &viewport);
         commandList->RSSetScissorRects(1, &scissor);
         dxCommon->PreDraw();
         RenderScene();
     }
 
+	// ImGui の描画処理を終了する。
     dxCommon->EndImGui();
     dxCommon->PostDraw();
 }
 
+// 描画処理を行う関数 RenderScene() の定義
 void MyGame::RenderScene() {
     auto commandList = dxCommon->GetCommandList();
 
+	// デバッグフラグが無効で、かつ現在のモードが EffectPreview、EffectShowcase、PostEffectShowcase でない場合は描画をスキップする。
     if (!debugFlags_.show3DObjects &&
         currentMode_ != AppMode::EffectPreview &&
         currentMode_ != AppMode::EffectShowcase &&
@@ -2176,15 +2213,21 @@ void MyGame::RenderScene() {
         return;
     }
 
-    ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
+	// 描画に必要なデスクリプタヒープを設定する。
+    ID3D12DescriptorHeap* heaps[] = {
+        textureManager->GetSrvHeap()
+    };
     commandList->SetDescriptorHeaps(1, heaps);
     object3dCommon->PreDraw();
     commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
 
+	// EffectPreview または EffectShowcase モードでは、地形オブジェクトを描画する。
     if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
+		// EffectPreview または EffectShowcase モードでは、地形オブジェクトを描画する。
         if (terrainObject_) {
             terrainObject_->Draw();
         }
+		// EffectPreview または EffectShowcase モードでは、プレイヤーの描画を行わない。
         if (debugFlags_.showParticles) {
             ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
             commandList->SetDescriptorHeaps(1, particleHeaps);
@@ -2193,10 +2236,13 @@ void MyGame::RenderScene() {
         return;
     }
 
+	// PostEffectShowcase モードでは、地形オブジェクトとプレイヤーを描画する。
     if (currentMode_ == AppMode::PostEffectShowcase) {
+		// PostEffectShowcase モードでは、地形オブジェクトとプレイヤーを描画する。
         if (terrainObject_) {
             terrainObject_->Draw();
         }
+		// PostEffectShowcase モードでは、地形オブジェクトとプレイヤーを描画する。
         if (player_) {
             player_->Draw();
         }
@@ -2205,10 +2251,15 @@ void MyGame::RenderScene() {
 
     DrawSkyboxForFrame();
 
+	// 現在のモードに応じて描画処理を分岐する。
     if (currentMode_ == AppMode::StageSelect) {
-        if (stageSelect_) { stageSelect_->Draw(); }
+        if (stageSelect_) {
+            stageSelect_->Draw();
+        }
+		// ステージセレクトモードでは、プレイヤーの描画を行わない。
     } else if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
         skinningEditor_.Draw(object3dCommon.get(), camera.get());
+	// スキニングエディタモードでは、プレイヤーの描画を行わない。
     } else {
         const bool isGameMode =
             currentMode_ == AppMode::StageEditor ||
@@ -2216,6 +2267,7 @@ void MyGame::RenderScene() {
             currentMode_ == AppMode::GamePlay_BlockPlace ||
             currentMode_ == AppMode::EffectPreview;
 
+		// ゲームプレイモードまたはエフェクトプレビューモードで、stageRenderer_ が存在する場合に描画する。
         if (isGameMode && stageRenderer_) {
             stageRenderer_->Draw();
             stageRenderer_->DrawTransparent();
@@ -2223,9 +2275,12 @@ void MyGame::RenderScene() {
             commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
         }
 
+		// ゲームプレイモードまたはエフェクトプレビューモードで、プレイヤーが存在し、かつ一人称カメラモードでない場合に描画する。
         if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::EffectPreview) {
+			// プレイヤーが存在し、かつ一人称カメラモードでない場合に描画する。
             if (player_ && !useFirstPersonCamera_) {
                 player_->Draw();
+				// プレイヤーが壁に隠れている場合、プレイヤーのハイライトを描画する。
                 if (IsPlayerHiddenByWall()) {
                     object3dCommon->PreDrawPlayerHighlight();
                     player_->DrawHighlight();
@@ -2234,38 +2289,53 @@ void MyGame::RenderScene() {
                 }
             }
 
+			// プレイヤーが存在し、ゲームプレイモードであり、gameplayUIManager_ が有効な場合に 3D プロンプトを描画する。
             if (currentMode_ == AppMode::GamePlay && gameplayUIManager_) {
                 gameplayUIManager_->Draw3DPrompts(
                     true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
             }
         }
 
+		// ステージエディタモードまたはブロック配置モードで、マップカーソルが存在する場合に描画する。
         if ((currentMode_ == AppMode::StageEditor ||
              currentMode_ == AppMode::GamePlay_BlockPlace) &&
             mapCursor_) {
             mapCursor_->Draw();
         }
 
+		// デバッグモードでの描画条件をチェックし、描画する。
         if (currentMode_ == AppMode::DebugView) {
-            if (terrainObject_ && debugFlags_.showTerrain) { terrainObject_->Draw(); }
-            for (auto& obj : objectList) {
-                if (obj) { obj->Draw(); }
+			// デバッグモードでの描画条件をチェックし、描画する。
+            if (terrainObject_ && debugFlags_.showTerrain) {
+                terrainObject_->Draw();
             }
-            if (player_) { player_->Draw(); }
+			// デバッグモードでの描画条件をチェックし、描画する。
+            for (auto& obj : objectList) {
+                if (obj) {
+                    obj->Draw();
+                }
+            }
+			// デバッグモードでの描画条件をチェックし、描画する。
+            if (player_) { 
+                player_->Draw();
+            }
         }
     }
 
+	// パーティクル描画の条件をチェックし、描画する。
     if (debugFlags_.showParticles) {
         ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
         commandList->SetDescriptorHeaps(1, particleHeaps);
         particleManager->Draw();
     }
 
+	// デバッグモードでスプライトの描画条件をチェックし、描画する。
     if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
         spriteCommon->PreDraw();
         if (sprite) { sprite->Draw(); }
     }
 
+	// UI の描画条件をチェックし、描画する。
     if (gameplayUIManager_) {
         gameplayUIManager_->DrawSprites(
             currentMode_ == AppMode::GamePlay ||
@@ -2273,14 +2343,17 @@ void MyGame::RenderScene() {
             gameplayCameraController_.IsFollowPlayerMode());
     }
 
+	// ブロックインベントリ UI の描画条件をチェックし、描画する。
     if (blockInventoryUI_ &&
         (currentMode_ == AppMode::GamePlay ||
          currentMode_ == AppMode::GamePlay_BlockPlace)) {
         blockInventoryUI_->Draw();
     }
 
+	// チュートリアルスプライトの描画条件をチェックし、描画する。
     const bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
     if (currentMode_ == AppMode::GamePlay && !invOpen && stageSelect_) {
+		// 選択されたステージファイル名が "tutorial.txt" であり、チュートリアルスプライトが存在する場合に描画する。
         if (stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_) {
             spriteCommon->PreDraw();
             tutorialSprite_->Draw();
@@ -2292,53 +2365,74 @@ void MyGame::RenderScene() {
     }
 }
 
+// DrawSkyboxForFrame : フレームごとのスカイボックス描画処理
 void MyGame::DrawSkyboxForFrame() {
     auto commandList = dxCommon->GetCommandList();
+	// スカイボックス描画の条件をチェックし、描画する。
     if (debugFlags_.showSkybox && showSkyboxCubemap_ && skybox_) {
         skybox_->Draw();
         object3dCommon->PreDraw();
         commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+	// スカイボックス描画後、オブジェクト描画のための設定を再度行う。
     } else if (debugFlags_.showSkybox && skydomeObject_) {
         skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         skydomeObject_->Draw();
     }
 }
 
+// IsPlayerHiddenByWall : プレイヤーが壁に隠れているかどうかを判定する。
 bool MyGame::IsPlayerHiddenByWall() const {
-    if (!player_ || !camera) { return false; }
+    if (!player_ || !camera) { 
+        return false;
+    }
 
+	// プレイヤーの位置を取得し、y座標を少し上げて判定する。
     Vector3 camPos = camera->GetPosition();
     Vector3 playerPos = player_->GetPosition();
     playerPos.y += 0.8f;
 
+	// プレイヤーとカメラの位置の差を計算する。
     Vector3 diff = {
         playerPos.x - camPos.x,
         playerPos.y - camPos.y,
         playerPos.z - camPos.z
     };
+	// プレイヤーとカメラの距離を計算する。
     const float len = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
-    if (len <= 0.001f) { return false; }
+	// プレイヤーとカメラの距離が非常に近い場合、壁に隠れているとは見なさない。
+    if (len <= 0.001f) {
+        return false;
+    }
 
+	// カメラからプレイヤーまでの方向ベクトルを正規化する。
     Vector3 dir = { diff.x / len, diff.y / len, diff.z / len };
+	// カメラからプレイヤーまでの距離に沿って、0.8単位ごとにマップセルをチェックする。
     for (float t = 0.8f; t < len - 1.0f; t += 0.8f) {
+		// カメラ位置からプレイヤー方向に沿って、t単位進んだ位置を計算する。
         Vector3 cp = { camPos.x + dir.x * t, camPos.y + dir.y * t, camPos.z + dir.z * t };
+		// 計算した位置に対応するマップセルを取得する。
         const MapCell* cell = stageMap_.GetCell(
             static_cast<int>(std::floor(cp.x + 0.5f)),
             static_cast<int>(std::floor(cp.y)),
             static_cast<int>(std::floor(cp.z + 0.5f)));
-        if (cell && cell->isSolid) { return true; }
+		// 取得したマップセルが存在し、かつそのセルが固体（壁）である場合、プレイヤーは壁に隠れていると判定する。
+        if (cell && cell->isSolid) { 
+            return true;
+        }
     }
     return false;
 }
 
 //  MyGame::Finalize
 //  GPU 完了を待ってから、UI、ゲームオブジェクト、エンジン基盤の順に解放する。
-
-
 void MyGame::Finalize() {
 
-    if (dxCommon) { dxCommon->WaitForGpu(); }
+	// GPU 完了を待つ。
+    if (dxCommon) {
+        dxCommon->WaitForGpu();
+    }
 
+	// シーンマネージャが存在する場合、Finalize() を呼び出してシーンを終了し、シーンマネージャを解放する。
     if (sceneManager_) {
         sceneManager_->Finalize(*this);
         sceneManager_ = nullptr;
@@ -2354,9 +2448,14 @@ void MyGame::Finalize() {
     models.clear();
 
     // Finalize() を持つ UI は reset 前に明示的に終了させる。
-    if (gameplayUIManager_) { gameplayUIManager_->Finalize(); }
+    if (gameplayUIManager_) {
+        gameplayUIManager_->Finalize();
+    }
     gameplayUIManager_.reset();
-    if (blockInventoryUI_) { blockInventoryUI_->Finalize(); }
+	// Finalize() を持つ UI は reset 前に明示的に終了させる。
+    if (blockInventoryUI_) {
+        blockInventoryUI_->Finalize();
+    }
     blockInventoryUI_.reset();
 
     // ゲームオブジェクトを解放する。
@@ -2387,21 +2486,25 @@ void MyGame::Finalize() {
 
 //  UpdateDebugView : DebugView モードの更新
 
+// DebugView モードでは、スペースキーでパーティクルを発生させる。
 void MyGame::UpdateDebugView() {
     if (input->TriggerKey(DIK_SPACE)) {
         particleManager->Emit({ 0, 0, 0 }, 10);
     }
 
+	// StageEditor モードでは、ステージエディタコントローラにカーソル入力を渡す。
     stageEditorController_.HandleCursorInput(
         input.get(), stageMap_, mapCursor_.get(), lightCamera_.get(), camera.get());
 }
 
+// LoadStormPresetNames : 保存済みの嵐プリセット名を読み込む
 void MyGame::LoadStormPresetNames() {
     const EffectPresetStore store;
     const auto result = store.LoadStormPresetNames(kStormPresetPath, kStormShowcaseName);
     stormPresetNames_ = result.all;
     stormShowcasePresetNames_ = result.showcase;
     stormPresetSelectedIndex_ = -1;
+	// 読み込み結果のステータスが空でない場合、stormPresetStatus_ に設定する。
     if (!result.status.empty()) {
         stormPresetStatus_ = result.status;
     }
@@ -2419,34 +2522,42 @@ bool MyGame::SaveStormPreset(const std::string& name) {
     preset.includeInShowcase = stormPresetIncludeInShowcase_;
 
     const EffectPresetStore store;
+	// EffectPresetStore クラスのインスタンスを作成し、指定されたプリセット名で嵐エフェクトプリセットを保存する。
     if (!store.SaveStormPreset(kStormPresetPath, name, preset, stormPresetStatus_)) {
         return false;
     }
 
     LoadEffectPresetNames();
+	// 保存後にプリセット一覧を更新し、保存したプリセットのインデックスを選択状態にする。
     for (int i = 0; i < static_cast<int>(stormPresetNames_.size()); ++i) {
         if (stormPresetNames_[i] == name) {
             stormPresetSelectedIndex_ = i;
             break;
         }
     }
+	// 保存後にプリセット名をバッファにコピーする。
     CopyPresetName(stormPresetNameBuffer_, name);
     return true;
 }
 
 // 保存済みの嵐プリセットを読み込み、エディタ用の状態へ反映する。
 bool MyGame::LoadStormPreset(const std::string& name) {
-    if (!particleManager) return false;
+    if (!particleManager) { 
+        return false;
+    }
 
+	// EffectPresetStore::StormPreset 構造体を作成し、現在の嵐エフェクト設定とショーケースへの含有フラグを格納する。
     EffectPresetStore::StormPreset preset;
     preset.settings = particleManager->GetStormSettings();
     preset.includeInShowcase = stormPresetIncludeInShowcase_;
 
     const EffectPresetStore store;
+	// EffectPresetStore クラスのインスタンスを作成し、指定されたプリセット名で嵐エフェクトプリセットを読み込む。
     if (!store.LoadStormPreset(kStormPresetPath, kStormShowcaseName, name, preset, stormPresetStatus_)) {
         return false;
     }
 
+	// 読み込んだプリセットの値を、嵐エフェクトの現在値に反映する。
     particleManager->GetStormSettings() = preset.settings;
     stormPresetIncludeInShowcase_ = preset.includeInShowcase;
     CopyPresetName(stormPresetNameBuffer_, name);
@@ -2457,6 +2568,7 @@ bool MyGame::LoadStormPreset(const std::string& name) {
 void MyGame::LoadEffectPresetNames() {
     LoadStormPresetNames();
 
+	// ヒットエフェクトのプリセット一覧を更新する。
     const EffectPresetStore store;
     const auto result = store.LoadHitPresetNames(kEffectPresetPath);
     effectPresetNames_ = result.all;
@@ -2477,10 +2589,12 @@ bool MyGame::SaveEffectPreset(const std::string& name) {
     preset.includeInShowcase = effectPresetIncludeInShowcase_;
 
     const EffectPresetStore store;
+	// EffectPresetStore クラスのインスタンスを作成し、指定されたプリセット名でヒットエフェクトプリセットを保存する。
     if (!store.SaveHitPreset(kEffectPresetPath, name, preset, effectPresetStatus_)) {
         return false;
     }
 
+	// 保存後にプリセット一覧を更新し、保存したプリセットのインデックスを選択状態にする。
     LoadEffectPresetNames();
     for (int i = 0; i < static_cast<int>(effectPresetNames_.size()); ++i) {
         if (effectPresetNames_[i] == name) {
@@ -2501,11 +2615,13 @@ bool MyGame::LoadEffectPreset(const std::string& name) {
     preset.burstRadius = effectPreviewBurstRadius_;
     preset.includeInShowcase = effectPresetIncludeInShowcase_;
 
+	// EffectPresetStore クラスのインスタンスを作成し、指定されたプリセット名でヒットエフェクトプリセットを読み込む。
     const EffectPresetStore store;
     if (!store.LoadHitPreset(kEffectPresetPath, name, preset, effectPresetStatus_)) {
         return false;
     }
 
+	// 読み込んだプリセットの値を、エフェクト調整画面の現在値に反映する。
     effectPreviewHitSettings_ = preset.settings;
     effectPreviewShowGPUParticleSphere_ = preset.showGpuSphere;
     effectPreviewMirrorSlash_ = preset.mirrorSlash;
@@ -2513,6 +2629,7 @@ bool MyGame::LoadEffectPreset(const std::string& name) {
     effectPreviewBurstRadius_ = preset.burstRadius;
     effectPresetIncludeInShowcase_ = preset.includeInShowcase;
 
+	// 現在のモードがエフェクト調整画面の場合、嵐エフェクトを無効化する。
     if (currentMode_ == AppMode::EffectPreview) {
         effectPreviewStormMode_ = false;
         if (particleManager) {
@@ -2520,6 +2637,7 @@ bool MyGame::LoadEffectPreset(const std::string& name) {
         }
     }
 
+	// プリセット名をバッファにコピーする。
     CopyPresetName(effectPresetNameBuffer_, name);
     return true;
 }
@@ -2529,12 +2647,13 @@ bool MyGame::IsCurrentEffectStorm() const {
     if (currentMode_ == AppMode::EffectPreview) {
         return effectPreviewStormMode_;
     }
+	// エフェクトショーケース画面で選択されているプリセットが嵐プリセットかを判定する。
     if (currentMode_ != AppMode::EffectShowcase ||
         effectShowcaseSelectedIndex_ < 0 ||
         effectShowcaseSelectedIndex_ >= static_cast<int>(effectShowcasePresetNames_.size())) {
         return false;
     }
-
+	// エフェクトショーケース画面で選択されているプリセット名が、嵐プリセットの一覧に含まれているかを判定する。
     const std::string& presetName = effectShowcasePresetNames_[effectShowcaseSelectedIndex_];
     return std::find(stormPresetNames_.begin(), stormPresetNames_.end(), presetName) != stormPresetNames_.end();
 }
@@ -2545,11 +2664,13 @@ void MyGame::EmitEffectPreviewBurst() {
         return;
     }
 
+	// エフェクト調整画面またはエフェクトショーケース画面でヒットエフェクトを発生させると、一定時間ライトが点灯する。
     if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
         effectShowcaseLightTimer_ = kEffectShowcaseLightDuration_;
     }
 
     ParticleManager::HitEffectSettings settings = effectPreviewHitSettings_;
+	// ミラー表示が有効な場合、スラッシュ角度を反転させる。
     if (effectPreviewMirrorSlash_) {
         settings.slashAngle = -settings.slashAngle;
     }
@@ -2557,8 +2678,10 @@ void MyGame::EmitEffectPreviewBurst() {
     const int burstCount = effectPreviewBurstCount_ < 1 ? 1 : effectPreviewBurstCount_;
     constexpr float kPi = 3.14159265f;
     static std::mt19937 randomEngine(std::random_device{}());
+	// バーストの数だけループして、ヒットエフェクトを発生させる。
     for (int i = 0; i < burstCount; ++i) {
         Vector3 pos = effectPreviewPosition_;
+		// バーストの数が 1 より大きく、かつバースト半径が正の値の場合、バーストごとに位置を扇状にずらす。
         if (burstCount > 1 && effectPreviewBurstRadius_ > 0.0f) {
             const float angle = (static_cast<float>(i) / static_cast<float>(burstCount)) * kPi * 2.0f;
             pos.x += std::cos(angle) * effectPreviewBurstRadius_;
@@ -2566,6 +2689,7 @@ void MyGame::EmitEffectPreviewBurst() {
             pos.z += std::sin(angle) * effectPreviewBurstRadius_;
         }
 
+		// バーストごとにランダムな角度を加える。
         ParticleManager::HitEffectSettings burstSettings = settings;
         if (burstSettings.randomizeAngle && burstSettings.angleRandomRange > 0.0f) {
             std::uniform_real_distribution<float> angleOffset(-burstSettings.angleRandomRange, burstSettings.angleRandomRange);
@@ -2573,6 +2697,7 @@ void MyGame::EmitEffectPreviewBurst() {
             burstSettings.slashAngle += randomAngle;
             burstSettings.lightningDirection += randomAngle;
         }
+		// バーストのインデックスに応じて、サイズ、明るさ、角度、広がり、速度などを調整する。
         const float burstT = burstCount <= 1 ? 0.0f : static_cast<float>(i) / static_cast<float>(burstCount - 1);
         burstSettings.size *= 1.0f - 0.12f * burstT;
         burstSettings.brightness *= 1.0f - 0.10f * burstT;
@@ -2588,25 +2713,31 @@ void MyGame::EmitEffectPreviewBurst() {
 void MyGame::UpdateEffectPreview() {
     debugFlags_.showParticles = true;
     effectShowcaseLightTimer_ = (std::max)(0.0f, effectShowcaseLightTimer_ - 1.0f / 60.0f);
+	// GPU パーティクルの球体描画はエフェクト調整画面では、嵐モードのときは無効化し、それ以外のときは設定に従って有効化する。
     if (particleManager) {
         particleManager->SetDrawGPUParticleSphere(effectPreviewStormMode_ ? false : effectPreviewShowGPUParticleSphere_);
+		// 嵐モードのときは、嵐の演出を開始する。
         if (effectPreviewStormMode_ && !particleManager->IsStormActive()) {
             particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+		// 嵐モード以外のときは、嵐の演出を終了する。
         } else if (!effectPreviewStormMode_ && particleManager->IsStormActive()) {
             particleManager->SetStormActive(false);
         }
     }
 
+	// SPACEキーでヒットエフェクトを発生させる。
     if (input->TriggerKey(DIK_SPACE) && particleManager) {
         if (effectPreviewStormMode_) {
             particleManager->SetStormActive(false);
             particleManager->ClearParticles();
             particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+		// それ以外の場合は、ヒットエフェクトを単発または扇状に複数発生させる。
         } else {
             EmitEffectPreviewBurst();
         }
     }
 
+	// 自動再生モードが有効な場合、一定間隔でヒットエフェクトを発生させる。
     if (!effectPreviewStormMode_ && effectPreviewAutoPlay_ && particleManager) {
         constexpr float kDeltaTime = 1.0f / 60.0f;
         effectPreviewTimer_ += kDeltaTime;
@@ -2623,16 +2754,21 @@ void MyGame::UpdateEffectPreview() {
 void MyGame::UpdateEffectShowcase() {
     debugFlags_.showParticles = true;
     debugFlags_.showSkybox = false;
+	// GPU パーティクルの球体描画はショーケース画面では無効化する。
     if (particleManager) {
         particleManager->SetDrawGPUParticleSphere(false);
     }
+	// ショーケース画面のライト点滅タイマーを更新する。
     effectShowcaseLightTimer_ = (std::max)(0.0f, effectShowcaseLightTimer_ - 1.0f / 60.0f);
 
+	// 登録済みのプリセット数を取得する。
     const int presetCount = static_cast<int>(effectShowcasePresetNames_.size());
+	// 現在のプリセットが嵐プリセットかどうかを判定するラムダ関数を定義する。
     auto isStormIndex = [&](int index) {
         if (index < 0 || index >= presetCount) return false;
         return std::find(stormPresetNames_.begin(), stormPresetNames_.end(), effectShowcasePresetNames_[index]) != stormPresetNames_.end();
     };
+	// プリセットを切り替える処理をラムダ関数として定義する。
     auto selectPreset = [&](int index, bool play) {
         if (presetCount <= 0) {
             return;
@@ -2640,37 +2776,46 @@ void MyGame::UpdateEffectShowcase() {
         effectShowcaseSelectedIndex_ = (index % presetCount + presetCount) % presetCount;
         effectPreviewShowGPUParticleSphere_ = false;
         effectShowcaseTimer_ = 0.0f;
+		// プリセットを切り替えた直後に再生する場合は、嵐プリセット以外のときにヒットエフェクトを発生させる。
         if (particleManager) {
             particleManager->SetStormActive(false);
             particleManager->ClearParticles();
         }
+		// 現在のプリセットが嵐プリセットかどうかを判定し、嵐プリセットの場合は嵐の演出を開始する。
         if (isStormIndex(effectShowcaseSelectedIndex_)) {
             LoadStormPreset(effectShowcasePresetNames_[effectShowcaseSelectedIndex_]);
             if (particleManager) {
                 particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
             }
+		// 嵐プリセットを選択した直後に再生する場合は、嵐の演出をリセットする。
         } else {
             LoadEffectPreset(effectShowcasePresetNames_[effectShowcaseSelectedIndex_]);
         }
+		// プリセットを切り替えた直後に再生する場合は、嵐プリセット以外のときにヒットエフェクトを発生させる。
         if (play && !isStormIndex(effectShowcaseSelectedIndex_)) {
             EmitEffectPreviewBurst();
         }
     };
 
+	// ショーケース画面に入った直後は、最初のプリセットを自動的に選択して再生する。
     if (effectShowcaseFirstPlay_) {
         effectShowcaseFirstPlay_ = false;
         selectPreset(effectShowcaseSelectedIndex_, true);
     }
+	// 左キーで前のプリセットを選択する。
     if (input->TriggerKey(DIK_LEFT)) {
         selectPreset(effectShowcaseSelectedIndex_ - 1, true);
     }
+	// 右キーで次のプリセットを選択する。
     if (input->TriggerKey(DIK_RIGHT)) {
         selectPreset(effectShowcaseSelectedIndex_ + 1, true);
     }
+	// SPACEキーで現在のプリセットを再生する。
     if (input->TriggerKey(DIK_SPACE)) {
         if (particleManager) {
             particleManager->ClearParticles();
         }
+		// 現在のプリセットが嵐プリセットの場合は、嵐を一度停止してから再度開始することで、嵐の演出をリセットする。
         if (isStormIndex(effectShowcaseSelectedIndex_)) {
             if (particleManager) {
                 particleManager->SetStormActive(false);
@@ -2681,31 +2826,37 @@ void MyGame::UpdateEffectShowcase() {
         }
         effectShowcaseTimer_ = 0.0f;
     }
+	// Aキーで自動再生モードの ON/OFF を切り替える。
     if (input->TriggerKey(DIK_A)) {
         effectShowcaseAutoPlay_ = !effectShowcaseAutoPlay_;
         effectShowcaseTimer_ = 0.0f;
     }
+	// Rキーでプリセットリストを再読み込みする。
     if (input->TriggerKey(DIK_R)) {
         LoadEffectPresetNames();
         effectShowcaseSelectedIndex_ = 0;
         effectShowcaseFirstPlay_ = true;
         return;
     }
+	// TABキーでステージ選択画面に戻る。
     if (input->TriggerKey(DIK_TAB)) {
         if (particleManager) {
             particleManager->SetStormActive(false);
             particleManager->ClearParticles();
         }
+		// ステージ選択画面を初期化してから遷移する。
         stageSelect_->Initialize(object3dCommon.get(), input.get());
         RequestSceneChange(SceneType::StageSelect);
         return;
     }
 
+	// 自動再生モードが有効で、プリセットが1つ以上ある場合は、一定時間ごとに次のプリセットへ切り替える。
     if (effectShowcaseAutoPlay_ && presetCount > 0) {
         effectShowcaseTimer_ += 1.0f / 60.0f;
         const float displayInterval = isStormIndex(effectShowcaseSelectedIndex_)
             ? 10.0f
             : effectShowcaseInterval_;
+        // 指定された時間経過後に次のプリセットへ切り替える。
         if (effectShowcaseTimer_ >= displayInterval) {
             selectPreset(effectShowcaseSelectedIndex_ + 1, true);
         }
@@ -2720,6 +2871,7 @@ void MyGame::UpdatePostEffectShowcase() {
     debugFlags_.showSkybox = false;
     postProcess_.SetEnabled(true);
 
+	// PostEffectShowcaseモードでは、パーティクル演出は無効化する。
     if (particleManager) {
         particleManager->SetStormActive(false);
         particleManager->SetDrawGPUParticleSphere(false);
@@ -2731,6 +2883,7 @@ void MyGame::UpdatePostEffectShowcase() {
         if (!input->TriggerKey(hotKey.key)) {
             continue;
         }
+        // 指定されたPostEffectモードを設定する。
         postProcess_.SetPostEffectMode(hotKey.mode);
         if (hotKey.mode == 10) {
             // 初期値0.0だとDissolveが分かりづらいため、展示時は溶け始めが見える値にする。
@@ -2743,6 +2896,7 @@ void MyGame::UpdatePostEffectShowcase() {
         }
     }
 
+	// TABキーでステージ選択画面に戻る。
     if (input->TriggerKey(DIK_TAB)) {
         stageSelect_->Initialize(object3dCommon.get(), input.get());
         RequestSceneChange(SceneType::StageSelect);
@@ -2754,14 +2908,17 @@ void MyGame::DrawEffectShowcaseImGui() {
     // ImGui のフレーム情報と表示サイズを取得する。
     const ImGuiIO& io = ImGui::GetIO();
     const int presetCount = static_cast<int>(effectShowcasePresetNames_.size());
+	//  現在選択中のプリセットインデックスを安全に clamping する。
     const int safeIndex = presetCount > 0
         ? std::clamp(effectShowcaseSelectedIndex_, 0, presetCount - 1)
         : 0;
+	// 現在選択中のプリセット名を取得する。プリセットがない場合は "No showcase presets" を表示する。
     const char* presetName = presetCount > 0
         ? effectShowcasePresetNames_[safeIndex].c_str()
         : "No showcase presets";
 
 #ifdef NDEBUG
+	// デバッグビルドでは、エディタの右パネルを使わずに、画面左上にコンパクトな操作ガイドを表示する。
     const float headerX = 24.0f;
     const float headerWidth = io.DisplaySize.x - 48.0f;
 #else
@@ -2885,10 +3042,11 @@ void MyGame::DrawPostEffectShowcaseImGui() {
 #endif
 }
 
-
+// ゲームプレイ中の更新処理
 void MyGame::UpdateGamePlay() {
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
+	// ゲームプレイ中のカメラ切り替え操作を処理する。
     if (input->TriggerKey(DIK_C)) {
         useFirstPersonCamera_ = !useFirstPersonCamera_;
         if (useFirstPersonCamera_ && player_) {
@@ -2897,14 +3055,17 @@ void MyGame::UpdateGamePlay() {
         }
     }
 
+	// ゲームプレイ中のカメラ操作を更新する。
     if (!useFirstPersonCamera_) {
         if (input->TriggerKey(DIK_V)) {
             bool cur = gameplayCameraController_.IsFollowPlayerMode();
             gameplayCameraController_.SetFollowPlayerMode(!cur);
+			// プレイヤー追従モードの切り替え時に、カメラのピボット位置を更新する。
             if (!cur && player_) {
                 Vector3 pp = player_->GetPosition();
                 pp.y += 0.8f;
                 gameplayCameraController_.SetCameraPivot(pp);
+				// プレイヤー追従モードに切り替えた場合、カメラの位置をリセットする。
             } else if (cur && stageSelect_) {
                 gameplayCameraController_.ResetCamera(
                     camera.get(),
@@ -2913,6 +3074,7 @@ void MyGame::UpdateGamePlay() {
                     stageSelect_->GetSelectedIndex());
             }
         }
+        // ゲームプレイ中のカメラ設定を更新する。
         camera->SetFov(gameplayCameraController_.GetFov());
         gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
         camera->Update();
@@ -2921,20 +3083,28 @@ void MyGame::UpdateGamePlay() {
 
         bool isGuiCaptured = false;
 #ifndef NDEBUG
+
+		// デバッグビルドでは、ImGui がマウスをキャプチャしているかどうかを取得する。
         isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
 #endif
+		// マウスの状態を取得する。
         const auto& mouse = input->GetMouseState();
+
+		// マウスの左ボタンが押されており、GUIがキャプチャされていない場合、カメラの回転を更新する。
         if (mouse.buttons[0] && !isGuiCaptured) {
             RECT rect;
+			// ウィンドウのクライアント領域のサイズを取得する。
             GetClientRect(winApp->GetHwnd(), &rect);
             float cw = static_cast<float>(rect.right - rect.left);
             float ch = static_cast<float>(rect.bottom - rect.top);
+			// クライアント領域の幅と高さが正の値である場合、マウスの位置に基づいてカメラの回転を更新する。
             if (cw > 0.0f && ch > 0.0f) {
                 float sx = static_cast<float>(WinApp::kWindowWidth) / cw;
                 float sy = static_cast<float>(WinApp::kWindowHeight) / ch;
                 float mx = static_cast<float>(mouse.posX) * sx;
                 float my = static_cast<float>(mouse.posY) * sy;
 
+				// マウスカーソルが画面端に近い場合、カメラを回転させるための閾値と回転速度を設定する。
                 const float edgeRatio = 0.15f;
                 const float rotateSpeed = 0.03f;
                 float leftEdge = WinApp::kWindowWidth * edgeRatio;
@@ -2942,11 +3112,14 @@ void MyGame::UpdateGamePlay() {
                 float topEdge = WinApp::kWindowHeight * edgeRatio;
                 float bottomEdge = WinApp::kWindowHeight * (1.0f - edgeRatio);
 
+				// マウスカーソルが画面端に近い場合、カメラを回転させる。
                 if (mx < leftEdge) {
                     fpsCameraYaw_ += rotateSpeed;
                 } else if (mx > rightEdge) {
                     fpsCameraYaw_ -= rotateSpeed;
                 }
+
+				// マウスカーソルが画面端に近い場合、カメラを回転させる。
                 if (my < topEdge) {
                     fpsCameraPitch_ += rotateSpeed;
                 } else if (my > bottomEdge) {
@@ -2955,6 +3128,7 @@ void MyGame::UpdateGamePlay() {
             }
         }
 
+		// キーボードの矢印キーでカメラを回転させる。
         const float keyRotateSpeed = 0.03f;
         if (input->PushKey(DIK_LEFT)) { fpsCameraYaw_ += keyRotateSpeed; }
         if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_ -= keyRotateSpeed; }
@@ -2962,6 +3136,7 @@ void MyGame::UpdateGamePlay() {
         if (input->PushKey(DIK_DOWN)) { fpsCameraPitch_ -= keyRotateSpeed; }
         fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
 
+		// プレイヤーが存在する場合、カメラの位置と回転をプレイヤーの位置に合わせて更新する。
         if (player_) {
             Vector3 pp = player_->GetPosition();
             camera->SetPosition({ pp.x, pp.y + 1.2f, pp.z });
@@ -2970,33 +3145,43 @@ void MyGame::UpdateGamePlay() {
         camera->Update();
     }
 
+	// ゲームプレイ中のカメラガイドを更新する。
     if (gameplayUIManager_) {
         gameplayUIManager_->UpdateCameraGuide(currentMode_ == AppMode::GamePlay, input.get(), winApp.get());
     }
 
+	// ブロック配置モード中またはインベントリが開いているかを判定する。
     bool invOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+
+	// チュートリアルステージが選択されており、チュートリアルスプライトが存在し、インベントリが開いていない場合、チュートリアルスプライトを更新する。
     if (stageSelect_ && stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_ && !invOpen) {
         tutorialSprite_->Update();
     }
+
+	// ブロック配置モード中またはインベントリが開いている場合、配置チュートリアルスプライトを更新する。
     if ((currentMode_ == AppMode::GamePlay_BlockPlace || invOpen) && placementTutorialSprite_) {
         placementTutorialSprite_->Update();
     }
 
+	// ゲームプレイ中の更新処理を行う。
     float dt = 1.0f / 60.0f;
     totalTime_ += dt;
     stageMap_.Update(dt, player_ ? player_->GetPosition() : Vector3{ 0, 0, 0 });
     stageRenderer_->UpdateEffect(stageMap_);
 
+	// プレイヤーが存在する場合、プレイヤーの状態を更新する。
     if (player_) {
         float camRot = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
         player_->Update(input.get(), stageMap_, camRot, lightVP, dxCommon.get());
     }
 
+	// ステージマップの再構築が必要な場合、ステージレンダラーを更新する。
     if (stageMap_.NeedsRebuild()) {
         stageRenderer_->BuildFromStageMap(stageMap_);
         stageMap_.ClearRebuildFlag();
     }
 
+	// プレイヤーが死亡した場合のリスポーン処理を行う。
     stageRespawnController_.Update(
         stageMap_,
         backupMap_,
@@ -3007,29 +3192,34 @@ void MyGame::UpdateGamePlay() {
         &blockPlacementController_,
         &stageEditorController_);
 
+	// プレイヤーの位置を取得し、バブル回収コントローラを更新する。
     Vector3 pPos = player_ ? player_->GetPosition() : Vector3{};
     if (player_) {
         bubblePickupController_.Update(pPos);
     }
 
+	// プレイヤーがゴール位置に到達したかを判定する。
     if (Goal::Check(pPos, { 0.4f, 0.9f, 0.4f }, stageMap_)) {
         isGoalReached_ = true;
     }
 
+	// B キーでブロック配置モードを開く。
     if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
         if (blockInventoryUI_) {
             blockInventoryUI_->ToggleOpen();
         }
     }
 
+	// ブロック配置モード中の更新処理。
     if (isGoalReached_) {
         // Game clear handling can be connected here when the clear scene exists.
     }
 }
 
+// ブロック配置モード中の更新処理。
 void MyGame::UpdateGamePlayBlockPlace() {
     const Int3& cursor = mapCursor_->GetIndex();
-
+	// ブロック配置の回転角度を R キーで 90 度ずつ回転させる。
     if (input->TriggerKey(DIK_R)) {
         placeRotationY_ += 1.5707963f;
         if (placeRotationY_ >= 6.0f) {
@@ -3037,6 +3227,7 @@ void MyGame::UpdateGamePlayBlockPlace() {
         }
     }
 
+	// マウスカーソルの位置に応じて、ステージマップ上のセルインデックスを更新する。
     stageEditorController_.HandleCursorInput(
         input.get(),
         stageMap_,
@@ -3044,8 +3235,10 @@ void MyGame::UpdateGamePlayBlockPlace() {
         lightCamera_.get(),
         camera.get());
 
+	// ブロック配置モード中に選択されているブロックの種類とカスタムIDを取得する。
     BlockType selectedType = BlockType::Ground;
     int selectedCustomId = 0;
+	// ブロック配置UIが存在する場合、選択されているブロックの種類とカスタムIDを取得し、ブロック配置コントローラに設定する。
     if (blockInventoryUI_) {
         selectedType = blockInventoryUI_->GetSelectedBlockType();
         selectedCustomId = blockInventoryUI_->GetSelectedCustomId();
@@ -3053,22 +3246,27 @@ void MyGame::UpdateGamePlayBlockPlace() {
         blockPlacementController_.SetPlaceCustomId(selectedCustomId);
     }
 
+	// ブロック配置プレビューを更新する。
     if (stageRenderer_) {
         stageRenderer_->SetPlacementPreview(stageMap_, cursor, selectedType, selectedCustomId, placeRotationY_);
     }
 
+	// マウス左クリックの押下を検出するためのフラグを管理する。
     static bool prevMouse0 = false;
     bool mouseJustPressed = input->GetMouseState().buttons[0] && !prevMouse0;
     prevMouse0 = input->GetMouseState().buttons[0];
     bool mouseTrigger = false;
+	// マウス左クリックが押された場合、ブロック配置UIが非アクティブであれば配置処理をトリガーする。
     if (mouseJustPressed && (!blockInventoryUI_ || !blockInventoryUI_->IsActive())) {
         mouseTrigger = true;
     }
 
+	// Enter キーまたはマウス左クリックでブロックを配置する。
     if (input->TriggerKey(DIK_RETURN) || mouseTrigger) {
         if (blockPlacementController_.TryPlace(cursor, placeRotationY_)) {
             bool hasRest = (selectedType == BlockType::Ground)
                 || blockInventory_.HasBlock(selectedType, selectedCustomId);
+			// 配置後に残りのブロックがない場合は、ブロック配置モードを終了して通常のゲームプレイに戻す。
             if (!hasRest) {
                 RequestSceneChange(SceneType::GamePlay);
                 placeRotationY_ = 0.0f;
@@ -3079,9 +3277,11 @@ void MyGame::UpdateGamePlayBlockPlace() {
         }
     }
 
+	// ESC または B キーでブロック配置モードを終了して通常のゲームプレイに戻る。
     if (input->TriggerKey(DIK_ESCAPE) || input->TriggerKey(DIK_B)) {
         RequestSceneChange(SceneType::GamePlay);
         placeRotationY_ = 0.0f;
+		// 配置プレビューをクリアする。
         if (stageRenderer_) {
             stageRenderer_->ClearPlacementPreview();
         }
@@ -3118,7 +3318,8 @@ void MyGame::UpdateSceneTransition() {
         && input->TriggerKey(DIK_ESCAPE)) {
         stageMap_ = backupMap_;
         stageRenderer_->BuildFromStageMap(stageMap_);
-
+        
+		//  
         bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
         stageSelect_->Initialize(object3dCommon.get(), input.get());
         isGoalReached_ = false;

@@ -1,5 +1,39 @@
 ﻿#include "Player.h"
+#include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <string>
+#include <vector>
+
+namespace {
+constexpr float kPlayerModelForwardYawOffset = 3.14159265f;
+
+std::string ToLower(std::string text) {
+	std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+		return static_cast<char>(std::tolower(c));
+	});
+	return text;
+}
+
+bool ContainsAnyNameHint(const std::string& text, const std::vector<std::string>& hints) {
+	const std::string lowerText = ToLower(text);
+	for (const auto& hint : hints) {
+		if (lowerText.find(hint) != std::string::npos) {
+			return true;
+		}
+	}
+	return false;
+}
+
+int FindMotionIndexByName(const std::vector<MotionData>& motions, const std::vector<std::string>& hints) {
+	for (size_t i = 0; i < motions.size(); ++i) {
+		if (ContainsAnyNameHint(motions[i].name, hints)) {
+			return static_cast<int>(i);
+		}
+	}
+	return -1;
+}
+}
 
 Player::~Player() = default;
 
@@ -18,11 +52,15 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 
 	skinnedObject_.reset();
 	isSkinned_ = false;
+	animationState_ = AnimationState::Idle;
 }
 
 void Player::InitializeWithSkinnedGltf(Object3dCommon* common, DirectXCommon* dxCommon, const std::string& gltfPath, TextureManager* textureManager) {
 	skinnedObject_ = std::make_unique<SkinnedObject>();
 	skinnedObject_->InitializeFromGltf(common, dxCommon, gltfPath, textureManager);
+	if (auto* model = skinnedObject_->GetModel()) {
+		model->EnsureDefaultPlayerMotions();
+	}
 	// カスタムモーション再生モードにして、再生時間とインデックスをプログラム側で制御する
 	skinnedObject_->SetPlayAnimation(false);
 	skinnedObject_->SetPlayCustomAnimation(true);
@@ -30,17 +68,22 @@ void Player::InitializeWithSkinnedGltf(Object3dCommon* common, DirectXCommon* dx
 	
 	object_.reset();
 	isSkinned_ = true;
+	animationState_ = AnimationState::Idle;
 }
 
 void Player::InitializeWithDefaultSkinned(Object3dCommon* common, DirectXCommon* dxCommon, TextureManager* textureManager) {
 	skinnedObject_ = std::make_unique<SkinnedObject>();
 	skinnedObject_->Initialize(common, dxCommon, textureManager);
+	if (auto* model = skinnedObject_->GetModel()) {
+		model->EnsureDefaultPlayerMotions();
+	}
 	skinnedObject_->SetPlayAnimation(false);
 	skinnedObject_->SetPlayCustomAnimation(true);
 	skinnedObject_->SetAnimationSpeed(1.0f);
 	
 	object_.reset();
 	isSkinned_ = true;
+	animationState_ = AnimationState::Idle;
 }
 
 // 更新：移動・重力・当たり判定の処理
@@ -80,6 +123,8 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	}
 
 	Vector3 move = { 0, 0, 0 };
+	bool hasMoveInput = false;
+	bool hasRunInput = false;
 
 	if (isOnLadder) 
 	{
@@ -92,10 +137,15 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 		float moveVertical = 0.0f;
 		if (input->PushKey(DIK_W)) moveVertical += 1.0f;
 		if (input->PushKey(DIK_S)) moveVertical -= 1.0f;
+		moveVertical += input->GetGamePadState().leftStickY;
+		moveVertical = std::clamp(moveVertical, -1.0f, 1.0f);
 
 		float moveSide = 0.0f;
 		if (input->PushKey(DIK_D)) moveSide += 1.0f;
 		if (input->PushKey(DIK_A)) moveSide -= 1.0f;
+		moveSide += input->GetGamePadState().leftStickX;
+		moveSide = std::clamp(moveSide, -1.0f, 1.0f);
+		hasMoveInput = std::abs(moveVertical) > 0.05f || std::abs(moveSide) > 0.05f;
 
 		// 1. 登る・下りる入力がある時だけ上下移動と吸い寄せを行う
 		if (moveVertical != 0.0f) {
@@ -136,10 +186,9 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 		}
 				else if (moveSide != 0.0f)
 		{
-			// カメラの向きに合わせて左右に移動する
+			// ハシゴ中の横移動もワールド座標基準で扱う。
 			Vector3 nextPos = position_;
-			nextPos.x += moveSide * std::cos(cameraRotY) * walkSpeed_;
-			nextPos.z += -moveSide * std::sin(cameraRotY) * walkSpeed_;
+			nextPos.x += moveSide * walkSpeed_;
 			
 			if (!CheckCollision(nextPos, map)) {
 				position_ = nextPos;
@@ -156,18 +205,30 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 	{
 		// --- 【通常移動モード】（ここが消えていたのでフリーズしていました） ---
 
-		// 入力方向をカメラの回転に合わせる
+		// 入力方向をカメラの水平向きに合わせてワールド移動へ変換する。
 		Vector3 inputDir = { 0, 0, 0 };
-		if (input->PushKey(DIK_W)) inputDir.z += 0.5f;
-		if (input->PushKey(DIK_S)) inputDir.z -= 0.5f;
-		if (input->PushKey(DIK_A)) inputDir.x -= 0.5f;
-		if (input->PushKey(DIK_D)) inputDir.x += 0.5f;
+		if (input->PushKey(DIK_W)) inputDir.z += 1.0f;
+		if (input->PushKey(DIK_S)) inputDir.z -= 1.0f;
+		if (input->PushKey(DIK_A)) inputDir.x -= 1.0f;
+		if (input->PushKey(DIK_D)) inputDir.x += 1.0f;
+		inputDir.x += input->GetGamePadState().leftStickX;
+		inputDir.z += input->GetGamePadState().leftStickY;
 
 		if (inputDir.x != 0 || inputDir.z != 0) {
-			// カメラのY軸回転に合わせて移動ベクトルを計算
+			float inputLength = std::sqrt(inputDir.x * inputDir.x + inputDir.z * inputDir.z);
+			if (inputLength > 1.0f) {
+				inputDir.x /= inputLength;
+				inputDir.z /= inputLength;
+			}
+			hasRunInput = IsRunInputActive(inputDir);
+			const float movementScale = hasRunInput ? 0.8f : 0.5f;
+			inputDir.x *= movementScale;
+			inputDir.z *= movementScale;
+			hasMoveInput = true;
+
 			move.x = inputDir.x * std::cos(cameraRotY) + inputDir.z * std::sin(cameraRotY);
 			move.z = -inputDir.x * std::sin(cameraRotY) + inputDir.z * std::cos(cameraRotY);
-			rotation_.y = std::atan2f(move.x, move.z);
+			rotation_.y = std::atan2f(move.x, move.z) + kPlayerModelForwardYawOffset;
 		}
 
 #pragma region 滑る足場
@@ -247,7 +308,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 #pragma endregion
 
 		// ジャンプ
-		if (isGrounded_ && input->TriggerKey(DIK_SPACE)) {
+		if (isGrounded_ && IsJumpTriggered()) {
 			velocity_.y = 0.2f;
 			isGrounded_ = false;
 		}
@@ -370,37 +431,8 @@ collision_end:
 		skinnedObject_->SetRotation(rotation_);
 		skinnedObject_->SetScale({ 1.0f, 1.0f, 1.0f });
 
-		// 移動状態に合わせてモーション切り替え
-		auto* model = skinnedObject_->GetModel();
-		if (model) {
-			const auto& motions = model->GetMotions();
-			if (motions.size() >= 2) {
-				bool isMoving = (std::abs(velocity_.x) > 0.01f || std::abs(velocity_.z) > 0.01f);
-				if (isOnLadder_) {
-					// はしご登り (あれば3番、なければ歩きで代用)
-					if (motions.size() >= 4) {
-						model->SetActiveMotionIndex(3);
-					} else {
-						model->SetActiveMotionIndex(1);
-					}
-				} else if (!isGrounded_) {
-					// 空中 (あれば2番、なければ歩きで代用)
-					if (motions.size() >= 3) {
-						model->SetActiveMotionIndex(2);
-					} else {
-						model->SetActiveMotionIndex(1);
-					}
-				} else if (isMoving) {
-					// 移動中 (歩き/走り)
-					model->SetActiveMotionIndex(1);
-				} else {
-					// アイドル (静止)
-					model->SetActiveMotionIndex(0);
-				}
-			} else if (motions.size() == 1) {
-				model->SetActiveMotionIndex(0);
-			}
-		}
+		bool isMoving = hasMoveInput || std::abs(velocity_.x) > 0.01f || std::abs(velocity_.z) > 0.01f;
+		ApplySkinnedAnimation(ResolveAnimationState(isMoving, hasRunInput), isMoving);
 
 		skinnedObject_->Update(dxCommon, lightVP);
 	} else if (object_) {
@@ -450,7 +482,7 @@ void Player::DoorWarp(const StageMap& map)
 
 		// 【ワープ実行処理】
 		// ドアの中にいて、Fキーが押され、かつ「ワープ直後フラグ」が立っていない場合のみ実行
-		if (input_->TriggerKey(DIK_F) && !hasJustWarped_)
+		if (IsInteractTriggered() && !hasJustWarped_)
 		{
 			// 2. マップ全体から、自分（gx, gyBottom, gz）と同じドア番号(variant)を持つ相方の座標を検索
 			// ※前回 StageMap に追加した関数を呼び出します
@@ -499,7 +531,7 @@ void Player::KeyUpdate(StageMap& map)
 			static_cast<float>(gz)
 		};
 
-		if (input_->TriggerKey(DIK_F)) {
+		if (IsInteractTriggered()) {
 			hasKey_ = true;
 			cell->type = BlockType::None;
 			cell->isSolid = false;
@@ -538,6 +570,105 @@ void Player::KeyBlockUIUpdate(StageMap& map)
 			}
 		}
 	}
+}
+
+bool Player::IsJumpTriggered() const {
+	return input_ &&
+		(input_->TriggerKey(DIK_SPACE) ||
+		 input_->TriggerControllerButton(XINPUT_GAMEPAD_A));
+}
+
+bool Player::IsInteractTriggered() const {
+	return input_ &&
+		(input_->TriggerKey(DIK_F) ||
+		 input_->TriggerControllerButton(XINPUT_GAMEPAD_X));
+}
+
+bool Player::IsRunInputActive(const Vector3& inputDir) const {
+	if (!input_) {
+		return false;
+	}
+
+	if (input_->PushKey(DIK_LSHIFT) || input_->PushKey(DIK_RSHIFT)) {
+		return true;
+	}
+
+	const float stickPower = std::sqrt(inputDir.x * inputDir.x + inputDir.z * inputDir.z);
+	return input_->IsGamePadConnected() && stickPower > 0.85f;
+}
+
+Player::AnimationState Player::ResolveAnimationState(bool hasMoveInput, bool isRunInput) const {
+	if (isOnLadder_) {
+		return AnimationState::Ladder;
+	}
+	if (!isGrounded_) {
+		return AnimationState::Jump;
+	}
+	if (hasMoveInput) {
+		return isRunInput ? AnimationState::Run : AnimationState::Walk;
+	}
+	return AnimationState::Idle;
+}
+
+void Player::ApplySkinnedAnimation(AnimationState state, bool isMoving) {
+	if (!skinnedObject_) {
+		return;
+	}
+
+	auto* model = skinnedObject_->GetModel();
+	if (!model) {
+		return;
+	}
+
+	const auto& motions = model->GetMotions();
+	if (motions.empty()) {
+		return;
+	}
+
+	int targetMotionIndex = 0;
+	switch (state) {
+	case AnimationState::Idle:
+		targetMotionIndex = FindMotionIndexByName(motions, { "idle", "wait", "stand" });
+		if (targetMotionIndex < 0) targetMotionIndex = 0;
+		break;
+	case AnimationState::Walk:
+		targetMotionIndex = FindMotionIndexByName(motions, { "walk" });
+		if (targetMotionIndex < 0) targetMotionIndex = motions.size() >= 2 ? 1 : 0;
+		break;
+	case AnimationState::Run:
+		targetMotionIndex = FindMotionIndexByName(motions, { "run", "sprint" });
+		if (targetMotionIndex < 0) {
+			targetMotionIndex = FindMotionIndexByName(motions, { "walk" });
+		}
+		if (targetMotionIndex < 0) targetMotionIndex = motions.size() >= 2 ? 1 : 0;
+		break;
+	case AnimationState::Jump:
+		targetMotionIndex = FindMotionIndexByName(motions, { "jump", "air", "fall" });
+		if (targetMotionIndex < 0) targetMotionIndex = motions.size() >= 3 ? 2 : 0;
+		break;
+	case AnimationState::Ladder:
+		targetMotionIndex = FindMotionIndexByName(motions, { "ladder", "climb" });
+		if (targetMotionIndex < 0) targetMotionIndex = motions.size() >= 4 ? 3 : 0;
+		break;
+	}
+
+	model->SetActiveMotionIndex(targetMotionIndex);
+
+	const bool stateChanged = animationState_ != state;
+	animationState_ = state;
+
+	if (motions.size() == 1 && state == AnimationState::Idle && !isMoving) {
+		skinnedObject_->SetPlayCustomAnimation(false);
+		skinnedObject_->ApplyMotion(0.0f);
+		return;
+	}
+
+	if (stateChanged) {
+		skinnedObject_->SetCurrentKeyframeTime(0.0f);
+	}
+
+	skinnedObject_->SetAnimationSpeed(state == AnimationState::Run ? 1.4f : 1.0f);
+	skinnedObject_->SetPlayCustomAnimation(true);
 }
 
 // 衝突判定ロジック
@@ -632,7 +763,7 @@ void Player::PSwitchUpdate(StageMap& map)
 			static_cast<float>(gz)
 		};
 
-		if (input_->TriggerKey(DIK_F)) {
+		if (IsInteractTriggered()) {
 			map.SetPSwitchActive(cellBelow->variant);
 		}
 	}
@@ -640,7 +771,7 @@ void Player::PSwitchUpdate(StageMap& map)
 
 void Player::OnOffSwitchUpdate(StageMap& map)
 {
-	if (input_->TriggerKey(DIK_F)) {
+	if (IsInteractTriggered()) {
 		// プレイヤーの現在位置（マス目）
 		int px = static_cast<int>(std::floor(position_.x + 0.5f));
 		int py = static_cast<int>(std::floor(position_.y + 0.5f));

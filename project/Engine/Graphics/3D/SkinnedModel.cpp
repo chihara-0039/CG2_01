@@ -4,6 +4,7 @@
 #include "MyMath.h"
 #include <cassert>
 #include <cmath>
+#include <cctype>
 #include <algorithm>
 #include <fstream>
 #include <sstream>
@@ -157,6 +158,102 @@ namespace {
             pose[jointIndex] = SampleJointAnimation(motion.jointAnimations[jointIndex], restPose, loopedTime);
         }
         return pose;
+    }
+
+    bool MotionNameContainsAny(const MotionData& motion, const std::vector<std::string>& hints) {
+        std::string name = motion.name;
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+
+        for (const auto& hint : hints) {
+            if (name.find(hint) != std::string::npos) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    int FindMotionIndexByHints(const std::vector<MotionData>& motions, const std::vector<std::string>& hints) {
+        for (size_t i = 0; i < motions.size(); ++i) {
+            if (MotionNameContainsAny(motions[i], hints)) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
+
+    bool JointNameContainsAny(const Joint& joint, const std::vector<std::string>& hints) {
+        std::string name = joint.name;
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+
+        for (const auto& hint : hints) {
+            if (name.find(hint) != std::string::npos) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    int FindJointIndexByHints(const std::vector<Joint>& joints, const std::vector<std::string>& hints) {
+        for (size_t i = 0; i < joints.size(); ++i) {
+            if (JointNameContainsAny(joints[i], hints)) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
+
+    MotionData CreateRestMotion(const std::vector<Joint>& joints, const std::string& name, float duration) {
+        MotionData motion;
+        motion.name = name;
+        motion.duration = duration;
+        motion.jointAnimations.resize(joints.size());
+
+        for (size_t i = 0; i < joints.size(); ++i) {
+            motion.jointAnimations[i].name = joints[i].name;
+            JointKeyframe pose = MakeRestKeyframe(joints[i]);
+            pose.time = 0.0f;
+            motion.jointAnimations[i].keyframes.push_back(pose);
+
+            pose.time = duration;
+            motion.jointAnimations[i].keyframes.push_back(pose);
+        }
+
+        return motion;
+    }
+
+    void AddEulerOffset(MotionData& motion, int jointIndex, size_t keyIndex, const Vector3& offset) {
+        if (jointIndex < 0 || jointIndex >= static_cast<int>(motion.jointAnimations.size())) {
+            return;
+        }
+        auto& keyframes = motion.jointAnimations[static_cast<size_t>(jointIndex)].keyframes;
+        if (keyIndex >= keyframes.size()) {
+            return;
+        }
+
+        auto& pose = keyframes[keyIndex];
+        pose.rotation.x += offset.x;
+        pose.rotation.y += offset.y;
+        pose.rotation.z += offset.z;
+        pose.rotationQuat = Math::MakeQuaternionFromEuler(pose.rotation);
+        pose.isQuaternion = false;
+    }
+
+    void AddTranslationOffset(MotionData& motion, int jointIndex, size_t keyIndex, const Vector3& offset) {
+        if (jointIndex < 0 || jointIndex >= static_cast<int>(motion.jointAnimations.size())) {
+            return;
+        }
+        auto& keyframes = motion.jointAnimations[static_cast<size_t>(jointIndex)].keyframes;
+        if (keyIndex >= keyframes.size()) {
+            return;
+        }
+
+        keyframes[keyIndex].translation.x += offset.x;
+        keyframes[keyIndex].translation.y += offset.y;
+        keyframes[keyIndex].translation.z += offset.z;
     }
 }
 
@@ -998,6 +1095,122 @@ void SkinnedModel::GenerateRunPreset() {
         joints_[i].translation = origTrans[i];
         joints_[i].rotation = origRot[i];
         joints_[i].scale = origScale[i];
+    }
+}
+
+void SkinnedModel::GenerateJumpPreset() {
+    if (motions_.empty()) {
+        motions_.push_back(MotionData{ "Jump", 0.8f, {} });
+        activeMotionIndex_ = 0;
+    }
+
+    MotionData jumpMotion = CreateRestMotion(joints_, "Jump", 0.8f);
+    const int hips = FindJointIndexByHints(joints_, { "hips", "pelvis" });
+    const int spine = FindJointIndexByHints(joints_, { "spine" });
+    const int head = FindJointIndexByHints(joints_, { "head" });
+    const int leftArm = FindJointIndexByHints(joints_, { "leftarm", "left_arm", "leftshoulder", "left shoulder" });
+    const int rightArm = FindJointIndexByHints(joints_, { "rightarm", "right_arm", "rightshoulder", "right shoulder" });
+    const int leftForeArm = FindJointIndexByHints(joints_, { "leftforearm", "left_forearm", "leftelbow", "left elbow" });
+    const int rightForeArm = FindJointIndexByHints(joints_, { "rightforearm", "right_forearm", "rightelbow", "right elbow" });
+    const int leftUpLeg = FindJointIndexByHints(joints_, { "leftupleg", "left_up_leg", "lefthip", "left hip" });
+    const int rightUpLeg = FindJointIndexByHints(joints_, { "rightupleg", "right_up_leg", "righthip", "right hip" });
+    const int leftLeg = FindJointIndexByHints(joints_, { "leftleg", "left_leg", "leftknee", "left knee" });
+    const int rightLeg = FindJointIndexByHints(joints_, { "rightleg", "right_leg", "rightknee", "right knee" });
+
+    const float times[] = { 0.0f, 0.12f, 0.28f, 0.55f, 0.8f };
+    for (auto& jointAnimation : jumpMotion.jointAnimations) {
+        if (jointAnimation.keyframes.empty()) {
+            continue;
+        }
+
+        const JointKeyframe rest = jointAnimation.keyframes.front();
+        jointAnimation.keyframes.clear();
+        for (float time : times) {
+            JointKeyframe key = rest;
+            key.time = time;
+            jointAnimation.keyframes.push_back(key);
+        }
+    }
+
+    // 0: 通常姿勢、1: 踏み込み、2: 蹴り上げ、3: 空中、4: 着地戻り。
+    AddTranslationOffset(jumpMotion, hips, 1, { 0.0f, -0.08f, 0.0f });
+    AddTranslationOffset(jumpMotion, hips, 2, { 0.0f, 0.10f, 0.0f });
+    AddTranslationOffset(jumpMotion, hips, 3, { 0.0f, 0.04f, 0.0f });
+
+    AddEulerOffset(jumpMotion, spine, 1, { 0.20f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, spine, 2, { -0.10f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, spine, 3, { 0.10f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, head, 1, { -0.06f, 0.0f, 0.0f });
+
+    AddEulerOffset(jumpMotion, leftArm, 1, { -0.45f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, rightArm, 1, { -0.45f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, leftArm, 2, { 0.85f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, rightArm, 2, { 0.85f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, leftArm, 3, { 0.45f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, rightArm, 3, { 0.45f, 0.0f, 0.0f });
+
+    AddEulerOffset(jumpMotion, leftForeArm, 2, { 0.35f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, rightForeArm, 2, { 0.35f, 0.0f, 0.0f });
+
+    AddEulerOffset(jumpMotion, leftUpLeg, 1, { 0.55f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, rightUpLeg, 1, { 0.55f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, leftLeg, 1, { -0.55f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, rightLeg, 1, { -0.55f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, leftUpLeg, 3, { 0.22f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, rightUpLeg, 3, { 0.22f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, leftLeg, 3, { -0.25f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, rightLeg, 3, { -0.25f, 0.0f, 0.0f });
+
+    GetMotionData() = jumpMotion;
+}
+
+void SkinnedModel::EnsureDefaultPlayerMotions() {
+    if (joints_.empty()) {
+        return;
+    }
+
+    const int previousActiveMotion = activeMotionIndex_;
+
+    if (motions_.size() == 1 &&
+        FindMotionIndexByHints(motions_, { "idle", "wait", "stand", "walk", "run", "sprint", "jump", "air", "fall", "climb", "ladder" }) < 0) {
+        motions_.front().name = "Walk";
+    }
+
+    if (FindMotionIndexByHints(motions_, { "idle", "wait", "stand" }) < 0) {
+        motions_.push_back(CreateRestMotion(joints_, "Idle", 1.0f));
+    }
+
+    int walkIndex = FindMotionIndexByHints(motions_, { "walk" });
+    if (walkIndex < 0 && !motions_.empty()) {
+        walkIndex = 0;
+    }
+
+    if (FindMotionIndexByHints(motions_, { "run", "sprint" }) < 0 && walkIndex >= 0) {
+        MotionData runMotion = motions_[static_cast<size_t>(walkIndex)];
+        runMotion.name = "Run";
+        const float sourceDuration = std::max(0.001f, runMotion.duration);
+        const float targetDuration = std::max(0.35f, sourceDuration * 0.55f);
+        const float timeScale = targetDuration / sourceDuration;
+        runMotion.duration = targetDuration;
+        for (auto& jointAnimation : runMotion.jointAnimations) {
+            for (auto& keyframe : jointAnimation.keyframes) {
+                keyframe.time *= timeScale;
+            }
+        }
+        motions_.push_back(runMotion);
+    }
+
+    if (FindMotionIndexByHints(motions_, { "jump", "air", "fall" }) < 0) {
+        motions_.push_back(MotionData{ "Jump", 0.8f, {} });
+        activeMotionIndex_ = static_cast<int>(motions_.size()) - 1;
+        GenerateJumpPreset();
+    }
+
+    if (previousActiveMotion >= 0 && previousActiveMotion < static_cast<int>(motions_.size())) {
+        activeMotionIndex_ = previousActiveMotion;
+    } else {
+        int idleIndex = FindMotionIndexByHints(motions_, { "idle", "wait", "stand" });
+        activeMotionIndex_ = idleIndex >= 0 ? idleIndex : 0;
     }
 }
 

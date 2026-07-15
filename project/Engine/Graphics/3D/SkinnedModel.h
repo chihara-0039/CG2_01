@@ -123,6 +123,8 @@ public:
     void ClearKeyframes();
     void GenerateWalkPreset();
     void GenerateRunPreset();
+    void GenerateJumpPreset();
+    void EnsureDefaultPlayerMotions();
     int GetActiveMotionIndex() const { return activeMotionIndex_; }
     void SetActiveMotionIndex(int index);
     const std::vector<MotionData>& GetMotions() const { return motions_; }

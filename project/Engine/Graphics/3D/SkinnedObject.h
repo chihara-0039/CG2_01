@@ -192,7 +192,7 @@ public:
     bool  IsPlayCustomAnimation() const     { return playCustomAnimation_; }
 
     float GetCurrentKeyframeTime() const       { return currentKeyframeTime_; }
-    void  SetCurrentKeyframeTime(float time)   { currentKeyframeTime_ = time; }
+    void  SetCurrentKeyframeTime(float time)   { currentKeyframeTime_ = time; animationTime_ = time; }
 
     /// <summary>現在のモーションから targetMotionIndex へ指定秒数でブレンドする</summary>
     void StartMotionBlend(int targetMotionIndex, float duration);
