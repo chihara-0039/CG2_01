@@ -112,9 +112,13 @@ void MyGame::Initialize() {
     input = std::make_unique<Input>();
     input->Initialize(winApp.get());
 
+    // SRVヒープは SrvManager に集約し、TextureManager はそこから枠を確保する。
+    srvManager = std::make_unique<SrvManager>();
+    srvManager->Initialize(dxCommon.get(), SrvManager::kMaxSRVCount);
+
     // TextureManager は SpriteCommon / Object3dCommon より先に作る
     textureManager = std::make_unique<TextureManager>();
-    textureManager->Initialize(dxCommon.get());
+    textureManager->Initialize(dxCommon.get(), srvManager.get());
 
     spriteCommon = std::make_unique<SpriteCommon>();
     spriteCommon->SetTextureManager(textureManager.get());
@@ -491,6 +495,8 @@ void MyGame::Update() {
     // GamePlay mode has its own camera handling in UpdateGamePlay().
     UpdateSharedCameraControls(isGuiCaptured);
 
+    // シーン更新内の Object3d が最新のビュー行列を参照できるよう、先にカメラ行列を確定する。
+    camera->Update();
 
     // 背景オブジェクトは常にカメラ位置へ追従させる。
     UpdateBackgroundObjects();
@@ -501,10 +507,6 @@ void MyGame::Update() {
 
     // AppMode ごとの本体処理はサブルーチンや専用クラスへ委譲する。
     UpdateCurrentMode(lightVP, isGuiCaptured);
-
-
-    // ここで最終的なカメラ行列を確定し、描画対象へ共有する。
-    camera->Update();
 
     const Matrix4x4& view = camera->GetViewMatrix();
     const Matrix4x4& proj = camera->GetProjectionMatrix();
@@ -2913,6 +2915,7 @@ void MyGame::UpdateGamePlay() {
         }
         camera->SetFov(gameplayCameraController_.GetFov());
         gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
+        camera->Update();
     } else {
         camera->SetFov(0.9f);
 

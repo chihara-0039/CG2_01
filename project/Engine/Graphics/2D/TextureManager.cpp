@@ -101,40 +101,16 @@ ComPtr<ID3D12Resource> UploadTextureData(ID3D12Device* device, const DirectX::Sc
 }
 
 // TextureManagerクラスのメンバー関数の実装。テクスチャの初期化、読み込み、SRVヒープの取得、GPUハンドルの取得、リソース説明の取得などを行う。
-void TextureManager::Initialize(DirectXCommon* dxCommon) {
+void TextureManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) {
 	// DirectXCommonのポインタを保存
     dxCommon_ = dxCommon;
+    srvManager_ = srvManager;
+    assert(dxCommon_);
+    assert(srvManager_);
 
-	// SRVヒープの作成
+	// SRVヒープは SrvManager が一元管理する。TextureManager は必要な枠だけを確保して使う。
     ID3D12Device* device = dxCommon_->GetDevice();
-	// D3D12_DESCRIPTOR_HEAP_DESC構造体を初期化して、SRVヒープのタイプ、ディスクリプタ数、
-    // フラグなどを設定する。SRVヒープは、シェーダーリソースビュー（SRV）を格納するためのデスクリプタヒープで、
-    // GPUがテクスチャリソースにアクセスするために使用される。
-    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-
-	// Typeは、SRV、CBV、UAVのいずれかを指定する。ここではSRVを指定している。
-    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-
-	// NumDescriptorsは、ヒープ内のディスクリプタの数を指定する。
-    // ここでは、最大テクスチャ数を指定している。
-    srvHeapDesc.NumDescriptors = kMaxTextures;
-
-	// Flagsは、ヒープのフラグを指定する。
-    // D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLEを指定すると、
-    // このヒープがシェーダーからアクセス可能になる。
-    // これにより、GPUがテクスチャリソースにアクセスできるようになる。
-    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-
-	// NodeMaskは、マルチGPU環境で使用されるノードマスクを指定する。
-    // ここでは、単一GPU環境を想定しているため、0を指定している。
-    HRESULT hr = device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap_));
-
-	// ヒープの作成に失敗した場合は、HRESULTをチェックしてエラーを検出する。
-    // 失敗した場合は、assertで強制停止させる。
-    assert(SUCCEEDED(hr));
-
-	// ディスクリプタのサイズを取得する。GetDescriptorHandleIncrementSize関数を呼び出して、SRVヒープ内のディスクリプタのサイズを取得する。これにより、テクスチャごとにSRVを作成する際に、正しいオフセットでディスクリプタを配置することができる。
-    descriptorSizeSRV_ = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    HRESULT hr = S_OK;
 
 	// テクスチャデータの初期化。
     // テクスチャデータを格納するための構造体を初期化する。
@@ -172,8 +148,8 @@ void TextureManager::Initialize(DirectXCommon* dxCommon) {
     hr = defaultTexture->WriteToSubresource(0, nullptr, &color, sizeof(uint32_t), sizeof(uint32_t));
     assert(SUCCEEDED(hr));
 
-    D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = srvHeap_->GetCPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = srvHeap_->GetGPUDescriptorHandleForHeapStart();
+    uint32_t index = srvManager_->Allocate();
+    assert(index == 0);
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -181,12 +157,12 @@ void TextureManager::Initialize(DirectXCommon* dxCommon) {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
 
-    device->CreateShaderResourceView(defaultTexture.Get(), &srvDesc, handleCPU);
+    srvManager_->CreateSRV(index, defaultTexture.Get(), srvDesc);
 
     TextureData defaultData;
     defaultData.resource = defaultTexture;
-    defaultData.srvHandleCPU = handleCPU;
-    defaultData.srvHandleGPU = handleGPU;
+    defaultData.srvHandleCPU = srvManager_->GetCPUDescriptorHandle(index);
+    defaultData.srvHandleGPU = srvManager_->GetGPUDescriptorHandle(index);
     defaultData.resourceDesc = desc;
 
     textures_.push_back(defaultData);
@@ -398,15 +374,11 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
     data.resourceDesc = textureResource->GetDesc();
 
     // 10. SRV作成
-    uint32_t index = static_cast<uint32_t>(textures_.size());
-    D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = srvHeap_->GetCPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = srvHeap_->GetGPUDescriptorHandleForHeapStart();
+    uint32_t index = srvManager_->Allocate();
+    assert(index == static_cast<uint32_t>(textures_.size()));
 
-    handleCPU.ptr += (descriptorSizeSRV_ * index);
-    handleGPU.ptr += (descriptorSizeSRV_ * index);
-
-    data.srvHandleCPU = handleCPU;
-    data.srvHandleGPU = handleGPU;
+    data.srvHandleCPU = srvManager_->GetCPUDescriptorHandle(index);
+    data.srvHandleGPU = srvManager_->GetGPUDescriptorHandle(index);
 
 	// D3D12_SHADER_RESOURCE_VIEW_DESC構造体を初期化して、
     // SRVの説明を設定する。
@@ -434,7 +406,7 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
     // テクスチャリソースに対するSRVを作成する。
     // SRVは、GPUがテクスチャリソースにアクセスするためのビューであり、
     // シェーダーからテクスチャを使用するために必要である。
-    dxCommon_->GetDevice()->CreateShaderResourceView(data.resource.Get(), &srvDesc, data.srvHandleCPU);
+    srvManager_->CreateSRV(index, data.resource.Get(), srvDesc);
 
     textures_.push_back(data);
     fileMap_[filePath] = index;
@@ -447,15 +419,10 @@ uint32_t TextureManager::LoadTexture(const std::string& filePath) {
 // SRVヒープのCPUハンドルを取得する関数。
 // 指定されたテクスチャハンドルに対応するSRVのCPUハンドルを返す。
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureHandle) {
-    auto handle = textures_[textureHandle].srvHandleGPU;
-    auto start = srvHeap_->GetGPUDescriptorHandleForHeapStart();
-    int diffIndex = (int)((handle.ptr - start.ptr) / descriptorSizeSRV_);
-    if (diffIndex != (int)textureHandle) {
-        char buf[256];
-        sprintf_s(buf, "[TextureManager] ERROR: GetSrvHandleGPU mismatch! handle=%u, calculated_index=%d\n", textureHandle, diffIndex);
-        OutputDebugStringA(buf);
+    if (textureHandle >= textures_.size()) {
+        return {};
     }
-    return handle;
+    return textures_[textureHandle].srvHandleGPU;
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleCPU(uint32_t textureHandle) const {
@@ -483,19 +450,15 @@ uint32_t TextureManager::RegisterExternalTexture(ID3D12Resource* resource) {
     assert(textures_.size() < kMaxTextures);
 
     // 1. 新しい空きスロットを確保
-    uint32_t index = static_cast<uint32_t>(textures_.size());
+    uint32_t index = srvManager_->Allocate();
+    assert(index == static_cast<uint32_t>(textures_.size()));
     TextureData data;
     data.resource = resource;
     data.resourceDesc = resource->GetDesc();
 
-    // 2. ヒープ内の住所(CPU/GPUハンドル)を計算
-    D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = srvHeap_->GetCPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = srvHeap_->GetGPUDescriptorHandleForHeapStart();
-    handleCPU.ptr += (descriptorSizeSRV_ * index);
-    handleGPU.ptr += (descriptorSizeSRV_ * index);
-
-    data.srvHandleCPU = handleCPU;
-    data.srvHandleGPU = handleGPU;
+    // 2. SrvManager が管理する共通ヒープから、この外部リソース用の住所を取得
+    data.srvHandleCPU = srvManager_->GetCPUDescriptorHandle(index);
+    data.srvHandleGPU = srvManager_->GetGPUDescriptorHandle(index);
 
     // 3. 「このリソースを読み取り用として使うよ」というカードを作成してヒープに登録
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -505,7 +468,7 @@ uint32_t TextureManager::RegisterExternalTexture(ID3D12Resource* resource) {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
 
-    dxCommon_->GetDevice()->CreateShaderResourceView(resource, &srvDesc, data.srvHandleCPU);
+    srvManager_->CreateSRV(index, resource, srvDesc);
 
     // 4. リストに追加してインデックス（ハンドル）を返す
     textures_.push_back(data);

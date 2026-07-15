@@ -22,6 +22,7 @@ public:
 
     void CreateSRVforTexture2D(uint32_t index, ID3D12Resource* resource, DXGI_FORMAT format, UINT mipLevels);
     void CreateSRVforStructuredBuffer(uint32_t index, ID3D12Resource* resource, UINT numElements, UINT structureByteStride);
+    void CreateSRV(uint32_t index, ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
 
     uint32_t GetUseCount() const { return useIndex_; }
     uint32_t GetMaxCount() const { return maxDescriptors_; }
