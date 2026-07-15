@@ -57,8 +57,6 @@
     <ClCompile Include="Engine\Base\StringUtility.cpp" />
     <ClCompile Include="Engine\Graphics\2D\TextureManager.cpp" />
     <ClCompile Include="Engine\Base\WinApp.cpp" />
-    <ClCompile Include="Game\Scene\TitleScene.cpp" />
-    <ClCompile Include="Game\Scene\GameClearScene.cpp" />
     <ClCompile Include="Game\Block\BlockPlacementController.cpp" />
     <ClCompile Include="Game\Block\BubblePickupController.cpp" />
     <ClCompile Include="Game\Block\BlockInventory.cpp" />
@@ -128,9 +126,9 @@
     <ClInclude Include="Engine\Graphics\2D\TextureManager.h" />
     <ClInclude Include="Engine\Base\WinApp.h" />
     <ClInclude Include="Engine\Graphics\3D\ShadowMap.h" />
-    <ClInclude Include="Game\Scene\TitleScene.h" />
+    <ClInclude Include="Game_Archive\Scene\TitleScene.h" />
     <ClInclude Include="Engine\Utility\LightCamera.h" />
-    <ClInclude Include="Game\Scene\GameClearScene.h" />
+    <ClInclude Include="Game_Archive\Scene\GameClearScene.h" />
     <ClInclude Include="Game\Block\BlockPlacementController.h" />
     <ClInclude Include="Game\Block\BubblePickupController.h" />
     <ClInclude Include="Game\Block\BlockInventory.h" />

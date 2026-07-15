@@ -318,6 +318,8 @@
     <ClInclude Include="Game\Scene\SceneManager.h" />
     <ClInclude Include="Game\Scene\SceneType.h" />
     <ClInclude Include="Game\Scene\SceneUpdateContext.h" />
+    <ClInclude Include="Game_Archive\Scene\TitleScene.h" />
+    <ClInclude Include="Game_Archive\Scene\GameClearScene.h" />
     <ClInclude Include="Game\Scene\SkinningEditorController.h" />
     <ClInclude Include="Engine\Graphics\PostProcessRenderer.h" />
     <ClInclude Include="Game\Scene\Skybox.h" />
