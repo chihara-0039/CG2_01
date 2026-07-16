@@ -6,6 +6,7 @@
 #include "externals/imgui/imgui.h"
 #endif
 
+// BlockInventoryUIの初期化
 void BlockInventoryUI::Initialize(DirectXCommon* dxCommon, SpriteCommon* spriteCommon, TextureManager* textureManager, BlockInventory* inventory) {
     assert(spriteCommon);
     assert(textureManager);
@@ -18,6 +19,7 @@ void BlockInventoryUI::Initialize(DirectXCommon* dxCommon, SpriteCommon* spriteC
     // 1. インベントリ背景画像のロード
     panelTextureHandle_ = textureManager_->LoadTexture("Resources/UI/inventory/inventory.png");
     
+	// パネルのサイズを720pxの高さに合わせてスケーリングする
     const D3D12_RESOURCE_DESC& desc = textureManager_->GetResourceDesc(panelTextureHandle_);
     float imgW = static_cast<float>(desc.Width);
     float imgH = static_cast<float>(desc.Height);
@@ -42,6 +44,7 @@ void BlockInventoryUI::Initialize(DirectXCommon* dxCommon, SpriteCommon* spriteC
     float btnSize = 54.0f;
     Vector2 sizeVec = { btnSize, btnSize };
 
+	// ラムダ関数を使ってボタンを追加する処理を簡略化
     auto addBtn = [&](BlockType type, int customId, float lx, float ly, const std::string& texPath) {
         BlockButton btn;
         btn.type = type;
@@ -108,6 +111,7 @@ void BlockInventoryUI::Initialize(DirectXCommon* dxCommon, SpriteCommon* spriteC
     panelSprite_->Update();
 }
 
+// BlockInventoryUIの更新処理
 void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode, const StageMap* stageMap) {
     stageMap_ = stageMap; // 毎フレーム受け取ったポインタを記録
     if (!isGamePlayMode) {
@@ -118,31 +122,39 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
         return;
     }
 
+	// マウス座標をウィンドウクライアント座標に変換する
     const auto& mouse = input->GetMouseState();
     RECT rect;
+	// クライアント領域の幅と高さを取得
     GetClientRect(winApp->GetHwnd(), &rect);
     float currentClientW = static_cast<float>(rect.right - rect.left);
     float currentClientH = static_cast<float>(rect.bottom - rect.top);
 
+	// クライアント領域が0以下の場合は更新をスキップする（ウィンドウ最小化時など）
     if (currentClientW <= 0.0f || currentClientH <= 0.0f) {
         return;
     }
 
 #ifdef NDEBUG
+	// リリースビルドでは、マウス座標をクライアント領域のスケーリングに合わせて変換する
     float mouseX = static_cast<float>(mouse.posX) * (static_cast<float>(WinApp::kClientWidth) / currentClientW);
     float mouseY = static_cast<float>(mouse.posY) * (static_cast<float>(WinApp::kClientHeight) / currentClientH);
 #else
+	// デバッグビルドでは、ウィンドウ全体のスケーリングに合わせてマウス座標を変換する
     float scaleX = static_cast<float>(WinApp::kWindowWidth) / currentClientW;
     float scaleY = static_cast<float>(WinApp::kWindowHeight) / currentClientH;
 
+	// ウィンドウの左右の余白を考慮してマウス座標を補正する
     float swapMouseX = static_cast<float>(mouse.posX) * scaleX;
     float swapMouseY = static_cast<float>(mouse.posY) * scaleY;
 
+	// ウィンドウの左右の余白を考慮してマウス座標を補正する
     float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
     float mouseX = swapMouseX - offsetX;
     float mouseY = swapMouseY;
 #endif
 
+	// マウス左クリックのトリガー判定
     bool clickTrigger = mouse.buttons[0] && !prevMouseLeft_;
     prevMouseLeft_ = mouse.buttons[0];
 
@@ -186,8 +198,10 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
     for (auto& btn : buttons_) {
         // カスタムパーツプロパティの動的同期 (ベース挙動やカラーをリアルタイム適用)
         float colorR = 1.0f, colorG = 1.0f, colorB = 1.0f;
+		// カスタムパーツスロット1〜5の場合、StageMapからベース挙動とカラーを取得して反映
         if (btn.customId >= 1 && btn.customId <= 5 && stageMap) {
             const auto* part = stageMap->GetCustomPart(btn.customId);
+			// カスタムパーツが存在する場合、ベース挙動とカラーを反映
             if (part) {
                 btn.type = part->baseType;
                 colorR = part->colorR;
@@ -235,6 +249,7 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
             activeIndex++;
         }
 
+		// スプライトの座標を更新
         Vector2 screenPos = { currentPos_.x + btn.localPos.x, btn.localPos.y };
         btn.sprite->SetPosition(screenPos);
         btn.sprite->Update();
@@ -242,14 +257,17 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
         // カスタムブロック（スロット1〜5）の3x3上面図シルエット用スプライトの更新
         if (btn.customId >= 1 && btn.customId <= 5 && btn.isAvailable && stageMap) {
             const auto* part = stageMap->GetCustomPart(btn.customId);
+			// カスタムパーツが存在する場合、3x3上面図シルエットを更新
             if (part) {
                 float gridStartX = btn.localPos.x + 10.0f;
                 float gridStartY = btn.localPos.y + 10.0f;
                 float cellSize = 12.0f;
 
+				// 3x3グリッドの各セルに対して、上面図シルエットスプライトを配置
                 for (int z = 0; z < 3; ++z) {
                     for (int x = 0; x < 3; ++x) {
                         int idx = z * 3 + x;
+						// idxが有効範囲内であることを確認
                         if (idx >= 0 && idx < (int)btn.silhouetteSprites.size()) {
                             bool hasBlock = false;
                             for (int y = 0; y < 3; ++y) {
@@ -259,10 +277,12 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
                                 }
                             }
 
+							// スプライトの座標とカラーを更新
                             auto& s = btn.silhouetteSprites[idx];
                             Vector2 cellPos = { currentPos_.x + gridStartX + (float)x * cellSize, gridStartY + (float)z * cellSize };
                             s->SetPosition(cellPos);
 
+							// カスタムパーツのカラーを反映。空セルは薄暗い色で表示
                             if (hasBlock) {
                                 s->SetColor({ part->colorR, part->colorG, part->colorB, 1.0f });
                             } else {
@@ -350,6 +370,7 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
     }
 }
 
+// BlockInventoryUIの描画処理
 void BlockInventoryUI::Draw() {
     spriteCommon_->PreDraw();
 

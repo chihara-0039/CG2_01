@@ -123,22 +123,34 @@ int BlockInventory::GetBlockCount(BlockType type, int customId) const {
     return 0;
 }
 
+// 後方互換用。通常Wallの所持数を返す。
 int BlockInventory::GetBlockCount() const {
+	// 全てのブロックの所持数を合計して返す
     int total = wallCount_ + ladderCount_ + iceCount_ + movingCount_ + crumbleCount_;
+	// カスタムパーツ枠の所持数も合計する
     for (int i = 0; i < 5; ++i) {
         total += customCounts_[i];
     }
     return total;
 }
 
+// 指定ブロックの所持有無を返す。customIdが1～5の場合はカスタムパーツ枠の所持有無を返す。
 bool BlockInventory::HasBlock(BlockType type, int customId) const {
     return GetBlockCount(type, customId) > 0;
     }
 
+// 後方互換用。通常Wallの所持数を確認する。
 bool BlockInventory::HasBlock() const {
-    if (wallCount_ > 0 || ladderCount_ > 0 || iceCount_ > 0 || movingCount_ > 0 || crumbleCount_ > 0) return true;
+	// 全てのブロックの所持数を確認する
+    if (wallCount_ > 0 || ladderCount_ > 0 || iceCount_ > 0 || movingCount_ > 0 || crumbleCount_ > 0) {
+        return true;
+    }
+	// カスタムパーツ枠の所持数も確認する
     for (int i = 0; i < 5; ++i) {
-        if (customCounts_[i] > 0) return true;
+		// カスタムパーツ枠の所持数が1つでもあればtrueを返す
+        if (customCounts_[i] > 0) {
+            return true;
+        }
     }
     return false;
 }
