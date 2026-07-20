@@ -384,6 +384,14 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="CopyDirectXShaderCompilerRuntime" AfterTargets="Build">
+    <ItemGroup>
+      <DirectXShaderCompilerRuntime Include="$(WindowsSdkDir)Redist\D3D\$(Platform)\dxcompiler.dll" />
+      <DirectXShaderCompilerRuntime Include="$(WindowsSdkDir)Redist\D3D\$(Platform)\dxil.dll" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(DirectXShaderCompilerRuntime.Identity)')" Text="DirectX Shader Compiler runtime was not found: %(DirectXShaderCompilerRuntime.Identity)" />
+    <Copy SourceFiles="@(DirectXShaderCompilerRuntime)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
