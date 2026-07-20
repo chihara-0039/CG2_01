@@ -15,6 +15,12 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg
 void WinApp::Initialize() {
     HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
 
+#ifdef USE_IMGUI
+    // Keep Win32 mouse coordinates and the pixels rendered by ImGui in the
+    // same coordinate space, including on displays using DPI scaling.
+    ImGui_ImplWin32_EnableDpiAwareness();
+#endif
+
     // --- メンバ変数名 wc_ に統一 ---
     wc_.lpfnWndProc = WindowProc;
     wc_.lpszClassName = L"CG2WindowClass";
@@ -50,12 +56,14 @@ void WinApp::Finalize() {
 
 bool WinApp::ProcessMessage() {
     MSG msg{};
-    if (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+    // Drain the entire queue every frame. Processing only one message causes
+    // mouse move/click events to build up and makes ImGui feel delayed.
+    while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        if (msg.message == WM_QUIT) {
+            return true;
+        }
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
-    }
-    if (msg.message == WM_QUIT) {
-        return true;
     }
     return false;
 }
