@@ -93,6 +93,7 @@ EditorLayout MakeEditorLayout(const ImVec2& displaySize) {
     layout.mainPanelHeight = (std::max)(220.0f, height - bottomPanel);
     return layout;
 }
+
 }
 
 //  MyGame::Initialize
@@ -141,6 +142,13 @@ void MyGame::Initialize() {
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/axis",   "axis.obj",   textureManager.get())));
     models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/player", "player.obj", textureManager.get())));
 
+    // Blender実制作データを優先し、未作成の開発環境ではサンプルへフォールバックする。
+    blenderRuntimeLevel_.Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
+    const char* runtimeLevelPath = std::filesystem::exists("Resources/Levels/game_level.json")
+        ? "Resources/Levels/game_level.json"
+        : "Resources/Levels/sample_level.json";
+    blenderRuntimeLevel_.Load(runtimeLevelPath);
+
 
     Object3d* debugFloor = CreateObject(models[0].get(), { -25.0f, 0.0f, 0.0f });
     debugFloor->SetScale({ 10.0f, 1.0f, 10.0f });
@@ -176,6 +184,8 @@ void MyGame::Initialize() {
         player_->Initialize(object3dCommon.get(), models[2].get());
     }
     player_->SetPosition({ 0.0f, 1.5f, 0.0f });
+    // Blenderステージを選択するまでは、従来StageMapだけを当たり判定対象にする。
+    player_->SetExternalCollisionBoxes(nullptr);
 
     
     camera = std::make_unique<Camera>();
@@ -195,10 +205,6 @@ void MyGame::Initialize() {
         stageMap_.LoadFromFile("Resources/Stages/stage1.txt");
         playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
-#elif defined(NDEBUG)
-    currentMode_           = AppMode::PostEffectShowcase;
-    debugFlags_.showSkybox = false;
-    postProcess_.SetEnabled(false);
 #else
     currentMode_           = AppMode::StageSelect;
     debugFlags_.showSkybox = true;
@@ -208,6 +214,7 @@ void MyGame::Initialize() {
         playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #endif
+    ApplyRuntimePlayerSpawn();
 
     if (currentMode_ == AppMode::EffectShowcase && !effectShowcasePresetNames_.empty()) {
         effectShowcaseSelectedIndex_ = 0;
@@ -296,6 +303,75 @@ Object3d* MyGame::CreateObject(Model* model, Vector3 initialPosition) {
     Object3d* createdObjectRawPtr = createdObject.get();
     objectList.push_back(std::move(createdObject));
     return createdObjectRawPtr;
+}
+
+bool MyGame::ApplyRuntimePlayerSpawn() {
+    // Blender側にPlayerスポーンがなければ、StageMapのPlayerStartをそのまま利用する。
+    if (!player_ || !blenderRuntimeLevel_.HasPlayerSpawn()) {
+        return false;
+    }
+
+    // Blenderのスポーン座標はPlayer::position_と同じ足元基準として扱う。
+    const Vector3& spawn = blenderRuntimeLevel_.GetPlayerSpawn();
+    player_->SetPosition(spawn);
+    player_->SetRespawnPosition(spawn);
+    return true;
+}
+
+bool MyGame::LoadBlenderStage(bool beginPlay) {
+    const std::string levelPath = blenderLevelPath_.data();
+    if (!blenderRuntimeLevel_.Load(levelPath)) {
+        return false;
+    }
+
+    if (beginPlay) {
+        blenderStageActive_ = true;
+
+        // Blender配置と従来グリッドが重ならないよう、単独プレイ開始時はStageMapを空にする。
+        stageMap_.Clear();
+        backupMap_ = stageMap_;
+        if (stageRenderer_) {
+            stageRenderer_->BuildFromStageMap(stageMap_);
+        }
+
+        // 再読み込み後のBOX一覧とPlayerスポーンをゲームプレイへ接続する。
+        player_->SetExternalCollisionBoxes(&blenderRuntimeLevel_.GetCollisionBoxes());
+        ApplyRuntimePlayerSpawn();
+        RequestSceneChange(SceneType::GamePlay);
+    } else if (blenderStageActive_) {
+        // プレイ中のF5再読み込みでは、ゲームを再起動せず新しい配置へ更新する。
+        player_->SetExternalCollisionBoxes(&blenderRuntimeLevel_.GetCollisionBoxes());
+        ApplyRuntimePlayerSpawn();
+    }
+    return true;
+}
+
+bool MyGame::IsRuntimeLevelVisible() const {
+    return blenderStageActive_ && (currentMode_ == AppMode::StageEditor ||
+        currentMode_ == AppMode::GamePlay ||
+        currentMode_ == AppMode::GamePlay_BlockPlace);
+}
+
+void MyGame::UpdateRuntimeLevelObjects(
+    const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP) {
+    if (!IsRuntimeLevelVisible()) {
+        return;
+    }
+    blenderRuntimeLevel_.Update(view, proj, lightVP);
+}
+
+void MyGame::DrawRuntimeLevelObjects() {
+    if (!IsRuntimeLevelVisible()) {
+        return;
+    }
+    blenderRuntimeLevel_.Draw();
+}
+
+void MyGame::DrawRuntimeLevelShadows(const Matrix4x4& lightVP) {
+    if (!IsRuntimeLevelVisible()) {
+        return;
+    }
+    blenderRuntimeLevel_.DrawShadow(lightVP);
 }
 
 void MyGame::EnsureSkinningEditorInitialized() {
@@ -453,6 +529,13 @@ void MyGame::RunSkinningEditorScene(const SceneUpdateContext& context) {
     skinningEditor_.Update(
         dxCommon.get(), input.get(), camera.get(),
         context.lightViewProjection, context.isGuiCaptured, particleManager.get());
+
+    // C++エディタの保存先をそのままゲーム用ローダーへ渡し、別ツールや変換工程なしで試遊する。
+    if (skinningEditor_.ConsumePlayRequest()) {
+        strncpy_s(blenderLevelPath_.data(), blenderLevelPath_.size(),
+            skinningEditor_.GetSceneFilePath(), _TRUNCATE);
+        LoadBlenderStage(true);
+    }
 }
 
 void MyGame::RunEffectPreviewScene() {
@@ -486,6 +569,16 @@ void MyGame::Update() {
 
     // 入力を取り込み、ゲームプレイ中の ESC 遷移を先に処理する。
     input->Update();
+    // F5は現在のJSONを再読み込みし、F6はBlender単独ステージとして開始する。
+    if (input->TriggerKey(DIK_F5)) {
+        LoadBlenderStage(false);
+    }
+    if (input->TriggerKey(DIK_F6)) {
+        LoadBlenderStage(true);
+    }
+    if (input->TriggerKey(DIK_F3)) {
+        debugFlags_.showCollisionBoxes = !debugFlags_.showCollisionBoxes;
+    }
     UpdateSceneTransition();
 
 
@@ -536,6 +629,7 @@ void MyGame::Update() {
 
     // ステージメッシュ、壁透過、カーソルなどステージ周りの表示を更新する。
     UpdateStagePresentation(view, proj, lightVP);
+    UpdateRuntimeLevelObjects(view, proj, lightVP);
 
 
     // 天候プリセットに合わせてパーティクル設定を同期する。
@@ -657,7 +751,8 @@ void MyGame::UpdateParticleDebugVisibility() {
         currentMode_ != AppMode::EffectPreview &&
         currentMode_ != AppMode::EffectShowcase &&
         currentMode_ != AppMode::PostEffectShowcase) {
-        particleManager->SetDrawGPUParticleSphere(true);
+        // GPUエミッター球はエフェクト調整専用。通常ゲームでは巨大なデバッグ球を表示しない。
+        particleManager->SetDrawGPUParticleSphere(false);
     }
 }
 
@@ -1568,6 +1663,7 @@ void MyGame::UpdateImGui() {
             }
             // ImGui チェックボックス「Show Particles」で ON/OFF を切り替える。
             ImGui::Checkbox("Show Particles",        &debugFlags_.showParticles);
+            ImGui::Checkbox("Show Collision Boxes (F3)", &debugFlags_.showCollisionBoxes);
         }
     }
 
@@ -2126,6 +2222,164 @@ void MyGame::UpdateImGui() {
 }
 #endif // !NDEBUG
 
+void MyGame::DrawCollisionDebugBoxes() {
+    if (!debugFlags_.showCollisionBoxes || !camera || !player_ ||
+        (currentMode_ != AppMode::GamePlay &&
+         currentMode_ != AppMode::GamePlay_BlockPlace &&
+         currentMode_ != AppMode::StageEditor &&
+         currentMode_ != AppMode::SkinningEditor)) {
+        return;
+    }
+
+    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    if (!drawList) {
+        return;
+    }
+
+    const Matrix4x4 viewProjection = Math::Multiply(
+        camera->GetViewMatrix(), camera->GetProjectionMatrix());
+
+#ifdef NDEBUG
+    const float viewportLeft = 0.0f;
+    const float viewportTop = 0.0f;
+    const float viewportWidth = ImGui::GetIO().DisplaySize.x;
+    const float viewportHeight = ImGui::GetIO().DisplaySize.y;
+#else
+    const float viewportLeft = 320.0f;
+    const float viewportTop = 0.0f;
+    const float viewportWidth = static_cast<float>(WinApp::kClientWidth);
+    const float viewportHeight = static_cast<float>(WinApp::kClientHeight);
+#endif
+
+    // 前景描画はImGuiウィンドウ境界を無視するため、当たり判定線を3D領域内へ制限する。
+    drawList->PushClipRect(
+        ImVec2(viewportLeft, viewportTop),
+        ImVec2(viewportLeft + viewportWidth, viewportTop + viewportHeight),
+        true);
+
+    auto project = [&](const Vector3& point, ImVec2& screen) {
+        const float clipX = point.x * viewProjection.m[0][0] + point.y * viewProjection.m[1][0] +
+            point.z * viewProjection.m[2][0] + viewProjection.m[3][0];
+        const float clipY = point.x * viewProjection.m[0][1] + point.y * viewProjection.m[1][1] +
+            point.z * viewProjection.m[2][1] + viewProjection.m[3][1];
+        const float clipW = point.x * viewProjection.m[0][3] + point.y * viewProjection.m[1][3] +
+            point.z * viewProjection.m[2][3] + viewProjection.m[3][3];
+        if (clipW <= 0.01f) {
+            return false;
+        }
+
+        const float ndcX = clipX / clipW;
+        const float ndcY = clipY / clipW;
+        screen.x = viewportLeft + (ndcX * 0.5f + 0.5f) * viewportWidth;
+        screen.y = viewportTop + (-ndcY * 0.5f + 0.5f) * viewportHeight;
+        return true;
+    };
+
+    auto drawBox = [&](const Vector3& minimum, const Vector3& maximum, ImU32 color) {
+        const Vector3 corners[8] = {
+            { minimum.x, minimum.y, minimum.z }, { maximum.x, minimum.y, minimum.z },
+            { maximum.x, maximum.y, minimum.z }, { minimum.x, maximum.y, minimum.z },
+            { minimum.x, minimum.y, maximum.z }, { maximum.x, minimum.y, maximum.z },
+            { maximum.x, maximum.y, maximum.z }, { minimum.x, maximum.y, maximum.z }
+        };
+        ImVec2 projected[8];
+        for (int i = 0; i < 8; ++i) {
+            if (!project(corners[i], projected[i])) {
+                return;
+            }
+        }
+
+        constexpr int edges[12][2] = {
+            {0,1}, {1,2}, {2,3}, {3,0},
+            {4,5}, {5,6}, {6,7}, {7,4},
+            {0,4}, {1,5}, {2,6}, {3,7}
+        };
+        for (const auto& edge : edges) {
+            drawList->AddLine(projected[edge[0]], projected[edge[1]], color, 2.0f);
+        }
+    };
+
+    // C++レベルエディタでは、編集中のBOXだけを水色で常時確認できる。
+    // 保存後のゲームも同じAABB変換を使うため、見た枠と実際の当たり判定が一致する。
+    if (currentMode_ == AppMode::SkinningEditor) {
+        for (const WorldCollisionBox& collider : skinningEditor_.BuildWorldCollisionBoxes()) {
+            drawBox(collider.minimum, collider.maximum, IM_COL32(60, 210, 255, 240));
+        }
+        drawList->PopClipRect();
+        return;
+    }
+
+    // Player position is the foot point; radius.y describes half its height.
+    const Vector3 playerPosition = player_->GetPosition();
+    const Vector3 playerRadius = player_->GetRadius();
+    drawBox(
+        { playerPosition.x - playerRadius.x, playerPosition.y, playerPosition.z - playerRadius.z },
+        { playerPosition.x + playerRadius.x, playerPosition.y + playerRadius.y * 2.0f,
+          playerPosition.z + playerRadius.z },
+        IM_COL32(80, 255, 120, 255));
+
+    // 水色はBlenderから読み込んだ外部BOXコライダーを表す。
+    for (const WorldCollisionBox& collider : blenderRuntimeLevel_.GetCollisionBoxes()) {
+        drawBox(collider.minimum, collider.maximum, IM_COL32(60, 210, 255, 240));
+    }
+    // ピンクの小箱はBlenderで指定したPlayerスポーンの足元座標を表す。
+    if (blenderRuntimeLevel_.HasPlayerSpawn()) {
+        const Vector3& runtimePlayerSpawn = blenderRuntimeLevel_.GetPlayerSpawn();
+        const Vector3 halfSize{ 0.2f, 0.2f, 0.2f };
+        drawBox(
+            { runtimePlayerSpawn.x - halfSize.x, runtimePlayerSpawn.y - halfSize.y,
+              runtimePlayerSpawn.z - halfSize.z },
+            { runtimePlayerSpawn.x + halfSize.x, runtimePlayerSpawn.y + halfSize.y,
+              runtimePlayerSpawn.z + halfSize.z },
+            IM_COL32(255, 80, 220, 255));
+    }
+
+    // Nearby solid cells are enough for collision debugging and avoid scanning
+    // the full 100x100x100 stage every frame.
+    constexpr int debugRange = 12;
+    const int centerX = static_cast<int>(std::floor(playerPosition.x + 0.5f));
+    const int centerY = static_cast<int>(std::floor(playerPosition.y));
+    const int centerZ = static_cast<int>(std::floor(playerPosition.z + 0.5f));
+    const int minX = (std::max)(0, centerX - debugRange);
+    const int maxX = (std::min)(stageMap_.GetWidth() - 1, centerX + debugRange);
+    const int minY = (std::max)(0, centerY - debugRange);
+    const int maxY = (std::min)(stageMap_.GetHeight() - 1, centerY + debugRange);
+    const int minZ = (std::max)(0, centerZ - debugRange);
+    const int maxZ = (std::min)(stageMap_.GetDepth() - 1, centerZ + debugRange);
+
+    for (int y = minY; y <= maxY; ++y) {
+        for (int z = minZ; z <= maxZ; ++z) {
+            for (int x = minX; x <= maxX; ++x) {
+                const MapCell* cell = stageMap_.GetCell(x, y, z);
+                if (!cell || cell->isHidden) {
+                    continue;
+                }
+                const bool pBlockCollision =
+                    cell->type == BlockType::PBlock && !stageMap_.IsPSwitchActive();
+                if (!cell->isSolid && !pBlockCollision) {
+                    continue;
+                }
+
+                Vector3 center = {
+                    static_cast<float>(x),
+                    static_cast<float>(y) + 0.5f,
+                    static_cast<float>(z)
+                };
+                if (cell->type == BlockType::MovingFloor) {
+                    center.x += cell->currentOffsetX;
+                    center.y += cell->currentOffsetY;
+                    center.z += cell->currentOffsetZ;
+                }
+                drawBox(
+                    { center.x - 0.5f, center.y - 0.5f, center.z - 0.5f },
+                    { center.x + 0.5f, center.y + 0.5f, center.z + 0.5f },
+                    IM_COL32(255, 170, 40, 230));
+            }
+        }
+    }
+    drawList->PopClipRect();
+}
+
 // 描画処理を行う関数 Draw() の定義
 void MyGame::Draw() {
     auto commandList = dxCommon->GetCommandList();
@@ -2164,6 +2418,7 @@ void MyGame::Draw() {
     if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
         skinningEditor_.DrawShadow(lightVP); 
     }
+    DrawRuntimeLevelShadows(lightVP);
 	// ステージレンダラーが存在する場合は、ステージレンダラーのシャドウ描画を行う。
     if (stageRenderer_) { 
         stageRenderer_->DrawShadow(lightVP);
@@ -2197,6 +2452,7 @@ void MyGame::Draw() {
     }
 
 	// ImGui の描画処理を終了する。
+    DrawCollisionDebugBoxes();
     dxCommon->EndImGui();
     dxCommon->PostDraw();
 }
@@ -2228,7 +2484,7 @@ void MyGame::RenderScene() {
             terrainObject_->Draw();
         }
 		// EffectPreview または EffectShowcase モードでは、プレイヤーの描画を行わない。
-        if (debugFlags_.showParticles) {
+        if (debugFlags_.showParticles && !IsWindowInactive()) {
             ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
             commandList->SetDescriptorHeaps(1, particleHeaps);
             particleManager->Draw();
@@ -2274,6 +2530,8 @@ void MyGame::RenderScene() {
             object3dCommon->PreDraw();
             commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
         }
+
+        DrawRuntimeLevelObjects();
 
 		// ゲームプレイモードまたはエフェクトプレビューモードで、プレイヤーが存在し、かつ一人称カメラモードでない場合に描画する。
         if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::EffectPreview) {
@@ -2323,7 +2581,9 @@ void MyGame::RenderScene() {
     }
 
 	// パーティクル描画の条件をチェックし、描画する。
-    if (debugFlags_.showParticles) {
+    // 非アクティブ中はUpdateWeatherParticlesが停止しており、雲のWVPは前フレームのままになる。
+    // その状態で描画すると巨大な球状に見えるため、復帰して再更新されるまで描画しない。
+    if (debugFlags_.showParticles && !IsWindowInactive()) {
         ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
         commandList->SetDescriptorHeaps(1, particleHeaps);
         particleManager->Draw();
@@ -3314,6 +3574,7 @@ void MyGame::UpdateStageSelect() {
             playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
 
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+            ApplyRuntimePlayerSpawn();
             gameplayCameraController_.ResetCamera(
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
             blockInventory_.Initialize(0);

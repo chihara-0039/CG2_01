@@ -77,7 +77,13 @@ Transform ReadBlenderTransform(const json& object) {
     //   game Y <- Blender Z
     //   game Z <- Blender Y
     transform.translate = { translation.x, translation.z, translation.y };
-    transform.rotate = { -rotation.x, -rotation.z, rotation.y };
+    // PythonアドオンはBlenderのEuler角を「度」でJSONへ出力する。
+    // Object3dは「ラジアン」を要求するため、軸入れ替えと同時に単位も変換する。
+    transform.rotate = {
+        -rotation.x * kDegreesToRadians,
+        -rotation.z * kDegreesToRadians,
+         rotation.y * kDegreesToRadians
+    };
     transform.scale = { scaling.x, scaling.z, scaling.y };
     return transform;
 }

@@ -161,7 +161,31 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
         }
     }
 
-    // 変化がないフレームでは三角関数計算と Camera への反映を省く。
+    // 画面上の矢印操作と同じ回転をキーボードの矢印キーでも行えるようにする。
+    // LEFT/RIGHTは注視点を中心とする水平旋回、UP/DOWNは上下角度を担当する。
+    const float keyRotateSpeed = 0.025f;
+    if (input->PushKey(DIK_LEFT)) {
+        cameraAngle_ -= keyRotateSpeed;
+        hasCameraParameterChanged = true;
+    }
+    if (input->PushKey(DIK_RIGHT)) {
+        cameraAngle_ += keyRotateSpeed;
+        hasCameraParameterChanged = true;
+    }
+    if (input->PushKey(DIK_UP)) {
+        cameraPitch_ += keyRotateSpeed;
+        hasCameraParameterChanged = true;
+    }
+    if (input->PushKey(DIK_DOWN)) {
+        cameraPitch_ -= keyRotateSpeed;
+        hasCameraParameterChanged = true;
+    }
+
+    // ステージ3は地形を見下ろしやすいよう、ほかのステージより少し低い角度を許可する。
+    const float keyboardMinPitch = currentStageIndex_ == 3 ? 0.2f : 0.3f;
+    cameraPitch_ = std::clamp(cameraPitch_, keyboardMinPitch, 1.5f);
+
+    // 入力や追従対象に変化がないフレームでは、三角関数計算とCameraへの反映を省く。
     if (!hasCameraParameterChanged && !cameraDirty_) {
         return;
     }

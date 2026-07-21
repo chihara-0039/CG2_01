@@ -6,6 +6,7 @@
 #include "Input.h"
 #include "MyMath.h"
 #include "LevelDataLoader.h"
+#include "../Collision/WorldCollisionBox.h"
 #include <d3d12.h>
 #include <vector>
 #include <string>
@@ -107,6 +108,15 @@ public:
 
     /// <summary>プレビュー用 SkinnedObject が有効かどうか</summary>
     bool HasPreviewObject() const { return skinnedObject_ != nullptr; }
+
+    /// <summary>「保存してプレイ」の要求を一度だけ取得する。</summary>
+    bool ConsumePlayRequest();
+
+    /// <summary>エディタとゲームが共有するレベルJSONの保存先を返す。</summary>
+    const char* GetSceneFilePath() const { return sceneFilePath_; }
+
+    /// <summary>編集中のBOXをゲームと同じワールドAABBへ変換する。</summary>
+    std::vector<WorldCollisionBox> BuildWorldCollisionBoxes() const;
 
 private:
     // ========== 内部処理 ==========
@@ -237,7 +247,8 @@ private:
     // Assets から配置した静的OBJの一覧。SkinningEditor中だけで編集・保存する簡易シーンデータ。
     std::vector<SceneObject> sceneObjects_;
     int selectedSceneObjectIndex_ = -1; ///< Scene Objects リストで選択中の配置物。-1 は未選択。
-    char sceneFilePath_[256] = "Resources/Scenes/skinning_scene.json"; ///< Save/Load 先の JSON パス。
+    char sceneFilePath_[256] = "Resources/Levels/game_level.json"; ///< C++エディタとゲームが共有するJSON。
+    bool playRequest_ = false; ///< 保存成功後にMyGameへプレイ開始を通知する。
     char levelDataPath_[256] = "Resources/Levels/sample_level.json"; ///< Blender-style level JSON path.
     std::string loadedLevelName_; ///< Most recently imported Blender level name.
     int levelLoadTotalNodes_ = 0; ///< Number of JSON nodes visited during the latest level import.
