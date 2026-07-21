@@ -66,6 +66,7 @@
     <ClCompile Include="Engine\Graphics\3D\GltfLoader.cpp" />
     <ClCompile Include="Game\Scene\EffectPresetStore.cpp" />
     <ClCompile Include="Game\Scene\LevelDataLoader.cpp" />
+    <ClCompile Include="Game\Scene\BlenderRuntimeLevel.cpp" />
     <ClCompile Include="Game\Scene\SceneFactory.cpp" />
     <ClCompile Include="Game\Scene\SceneManager.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
@@ -97,6 +98,8 @@
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
     <ClInclude Include="Game\Scene\BaseScene.h" />
     <ClInclude Include="Game\Scene\LevelDataLoader.h" />
+    <ClInclude Include="Game\Scene\BlenderRuntimeLevel.h" />
+    <ClInclude Include="Game\Collision\WorldCollisionBox.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
     <ClInclude Include="Game\Scene\SceneFactory.h" />
     <ClInclude Include="Game\Scene\SceneManager.h" />

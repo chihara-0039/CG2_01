@@ -98,7 +98,7 @@ This project implements scene rendering through Grayscale.
 
 - `PostProcessRenderer` first renders the normal 3D scene into a RenderTexture.
 - `Resources/shaders/hlsl/Grayscale.PS.hlsl` samples that RenderTexture, converts RGB to luminance, and writes the grayscale result to the back buffer.
-- In `Development` and `Release`, offscreen rendering is enabled by default and the initial post effect is set to `Grayscale` for evaluation.
+- `Release` starts from the normal `StageSelect` game flow. Post-effect showcase modes remain available from development tools.
 - At runtime, the setting can be confirmed from ImGui: `Offscreen Rendering (RenderTexture)` > `Enable Offscreen Rendering` and `Post Effect: Grayscale`.
 
 ### Extra PostEffects
@@ -116,9 +116,9 @@ The following additional PostEffects can also be selected from the same ImGui co
 
 Vignette / DepthBasedOutline / RadialBlur / Dissolve / Random expose adjustable parameters in ImGui.
 
-### Release PostEffect Showcase Controls
+### PostEffect Showcase Controls
 
-The `Release` build starts in `PostEffectShowcase` mode and enables offscreen rendering automatically.
+`PostEffectShowcase` remains available as a development/evaluation mode, but it is no longer the default `Release` startup mode.
 This mode disables the particle showcase effects so the screen-space PostEffect is easy to inspect.
 Use number keys to switch the visible PostEffect:
 

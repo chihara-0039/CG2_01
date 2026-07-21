@@ -176,9 +176,35 @@ void SkinnedObject::DrawShadow(const Matrix4x4& lightViewProjection) {
         return;
     }
 
-    // TODO: スキニング済み頂点バッファをシャドウ用パイプラインへ渡す実装が必要。
-    // 現状で通常 Object3d の DrawShadow を呼ぶと頂点形式が合わず破綻する可能性があるため、
-    // スキンメッシュの影描画は明示的にスキップしている。
+    // Object3dが保持している共通描画機能から、現在のコマンドリストを取得する。
+    auto* object3dCommon = object3d_->GetObject3dCommon();
+    auto* dxCommon = object3dCommon ? object3dCommon->GetDxCommon() : nullptr;
+    auto* commandList = dxCommon ? dxCommon->GetCommandList() : nullptr;
+    if (!commandList || !object3dCommon->GetRootSignature() ||
+        !object3dCommon->GetShadowPipelineState()) {
+        return;
+    }
+
+    // Compute Shaderでアニメーション適用済み頂点を生成する。
+    // 出力形式はModelVertexDataなので、位置だけを利用する静的モデル用の影パイプラインと共有できる。
+    skinnedModel_->DispatchSkinning(dxCommon);
+
+    commandList->SetGraphicsRootSignature(object3dCommon->GetRootSignature());
+    commandList->SetPipelineState(object3dCommon->GetShadowPipelineState());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    // Object3d::Updateで書き込まれたライト用WVPを、影パスのTransform定数バッファへ設定する。
+    commandList->SetGraphicsRootConstantBufferView(
+        1, object3d_->GetTransformationResource()->GetGPUVirtualAddress());
+
+    // 元モデルの頂点ではなく、Compute Shaderが更新したスキニング済み頂点を描画する。
+    const D3D12_VERTEX_BUFFER_VIEW& skinnedVertexBufferView =
+        skinnedModel_->GetSkinnedVertexBufferView();
+    commandList->IASetVertexBuffers(0, 1, &skinnedVertexBufferView);
+    commandList->DrawInstanced(
+        static_cast<UINT>(skinnedModel_->GetVertexCount()), 1, 0, 0);
+
+    // lightViewProjectionはObject3d::Update時点で定数バッファへ反映済み。
+    // Object3d::DrawShadowと同じインターフェースを維持するため引数自体は残している。
     (void)lightViewProjection;
 }
 void SkinnedObject::DrawSkeleton(Object3dCommon* object3dCommon, Model* cubeModel, const Matrix4x4& view, const Matrix4x4& projection) {

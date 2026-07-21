@@ -13,6 +13,8 @@
 #include <cstdio>   // sprintf_s
 #include <cstdint>
 #include <fstream>
+#include <limits>
+#include <sstream>
 
 namespace {
 	using json = nlohmann::json;
@@ -103,6 +105,50 @@ namespace {
 
 	json Vector3ToJson(const Vector3& value) {
 		return json::array({ value.x, value.y, value.z });
+	}
+
+	/// <summary>OBJ頂点からモデル空間の中心と全体サイズを求める。</summary>
+	bool ReadObjLocalBounds(const std::string& filePath, Vector3& outCenter, Vector3& outSize) {
+		std::ifstream file(filePath);
+		if (!file.is_open()) {
+			return false;
+		}
+
+		const float highest = (std::numeric_limits<float>::max)();
+		Vector3 minimum{ highest, highest, highest };
+		Vector3 maximum{ -highest, -highest, -highest };
+		bool foundVertex = false;
+		std::string line;
+		while (std::getline(file, line)) {
+			if (line.rfind("v ", 0) != 0) {
+				continue;
+			}
+			std::istringstream stream(line.substr(2));
+			Vector3 vertex{};
+			if (!(stream >> vertex.x >> vertex.y >> vertex.z)) {
+				continue;
+			}
+			minimum.x = (std::min)(minimum.x, vertex.x);
+			minimum.y = (std::min)(minimum.y, vertex.y);
+			minimum.z = (std::min)(minimum.z, vertex.z);
+			maximum.x = (std::max)(maximum.x, vertex.x);
+			maximum.y = (std::max)(maximum.y, vertex.y);
+			maximum.z = (std::max)(maximum.z, vertex.z);
+			foundVertex = true;
+		}
+		if (!foundVertex) {
+			return false;
+		}
+
+		outCenter = {
+			(minimum.x + maximum.x) * 0.5f,
+			(minimum.y + maximum.y) * 0.5f,
+			(minimum.z + maximum.z) * 0.5f };
+		outSize = {
+			maximum.x - minimum.x,
+			maximum.y - minimum.y,
+			maximum.z - minimum.z };
+		return true;
 	}
 
 	Vector3 JsonToVector3(const json& value, const Vector3& fallback) {
@@ -524,6 +570,58 @@ void SkinningEditorController::ClearSceneObjects() {
 	sceneEditorStatus_ = "Scene objects cleared.";
 }
 
+bool SkinningEditorController::ConsumePlayRequest() {
+	const bool requested = playRequest_;
+	playRequest_ = false;
+	return requested;
+}
+
+std::vector<WorldCollisionBox> SkinningEditorController::BuildWorldCollisionBoxes() const {
+	std::vector<WorldCollisionBox> boxes;
+	for (const SceneObject& sceneObject : sceneObjects_) {
+		if (sceneObject.disabled || !sceneObject.collider.enabled ||
+			(!sceneObject.collider.type.empty() && sceneObject.collider.type != "BOX")) {
+			continue;
+		}
+
+		// 回転したBOXもゲームの衝突処理で扱えるよう、8頂点を内包するAABBへ変換する。
+		const Matrix4x4 world = Math::MakeAffineMatrix(
+			sceneObject.transform.scale, sceneObject.transform.rotate, sceneObject.transform.translate);
+		const Vector3 half = {
+			std::abs(sceneObject.collider.size.x) * 0.5f,
+			std::abs(sceneObject.collider.size.y) * 0.5f,
+			std::abs(sceneObject.collider.size.z) * 0.5f };
+		const float highest = (std::numeric_limits<float>::max)();
+		WorldCollisionBox box;
+		box.minimum = { highest, highest, highest };
+		box.maximum = { -highest, -highest, -highest };
+
+		for (int x = -1; x <= 1; x += 2) {
+			for (int y = -1; y <= 1; y += 2) {
+				for (int z = -1; z <= 1; z += 2) {
+					const Vector3 local = {
+						sceneObject.collider.center.x + half.x * static_cast<float>(x),
+						sceneObject.collider.center.y + half.y * static_cast<float>(y),
+						sceneObject.collider.center.z + half.z * static_cast<float>(z) };
+					const Vector3 point = {
+						local.x * world.m[0][0] + local.y * world.m[1][0] + local.z * world.m[2][0] + world.m[3][0],
+						local.x * world.m[0][1] + local.y * world.m[1][1] + local.z * world.m[2][1] + world.m[3][1],
+						local.x * world.m[0][2] + local.y * world.m[1][2] + local.z * world.m[2][2] + world.m[3][2] };
+					box.minimum.x = (std::min)(box.minimum.x, point.x);
+					box.minimum.y = (std::min)(box.minimum.y, point.y);
+					box.minimum.z = (std::min)(box.minimum.z, point.z);
+					box.maximum.x = (std::max)(box.maximum.x, point.x);
+					box.maximum.y = (std::max)(box.maximum.y, point.y);
+					box.maximum.z = (std::max)(box.maximum.z, point.z);
+				}
+			}
+		}
+		boxes.push_back(box);
+	}
+
+	return boxes;
+}
+
 bool SkinningEditorController::SaveSceneObjects(const std::string& filePath) {
 	try {
 		// 保存先フォルダがまだ無い場合でも、ボタン一発で保存できるように作成しておく。
@@ -535,22 +633,35 @@ bool SkinningEditorController::SaveSceneObjects(const std::string& filePath) {
 		// JSON には「復元に必要な軽い情報」だけを書く。
 		// GPUリソースや Object3d は実行時リソースなので保存せず、Load 時に assetPath から再生成する。
 		json root;
-		root["version"] = 1;
+		root["name"] = path.stem().string();
+		root["version"] = 2;
 		root["objects"] = json::array();
 		for (const SceneObject& sceneObject : sceneObjects_) {
 			json item;
+			item["type"] = "MESH";
 			item["name"] = sceneObject.name;
-			item["assetPath"] = sceneObject.assetPath;
+			item["file_name"] = sceneObject.assetPath;
 			if (sceneObject.disabled) {
 				item["disabled"] = true;
 			}
-			item["position"] = Vector3ToJson(sceneObject.transform.translate);
-			item["rotation"] = Vector3ToJson(sceneObject.transform.rotate);
-			item["scale"] = Vector3ToJson(sceneObject.transform.scale);
+			// LevelDataLoaderと保存形式を共有するため、Y-up/ラジアンから
+			// Blender互換のZ-up/度へ逆変換して書き出す。
+			constexpr float kRadiansToDegrees = 180.0f / 3.1415926535f;
+			const Vector3& position = sceneObject.transform.translate;
+			const Vector3& rotation = sceneObject.transform.rotate;
+			const Vector3& scale = sceneObject.transform.scale;
+			item["transform"]["translation"] = Vector3ToJson({ position.x, position.z, position.y });
+			item["transform"]["rotation"] = Vector3ToJson({
+				-rotation.x * kRadiansToDegrees,
+				 rotation.z * kRadiansToDegrees,
+				-rotation.y * kRadiansToDegrees });
+			item["transform"]["scaling"] = Vector3ToJson({ scale.x, scale.z, scale.y });
 			if (sceneObject.collider.enabled) {
 				item["collider"]["type"] = sceneObject.collider.type;
-				item["collider"]["center"] = Vector3ToJson(sceneObject.collider.center);
-				item["collider"]["size"] = Vector3ToJson(sceneObject.collider.size);
+				item["collider"]["center"] = Vector3ToJson({
+					sceneObject.collider.center.x, sceneObject.collider.center.z, sceneObject.collider.center.y });
+				item["collider"]["size"] = Vector3ToJson({
+					sceneObject.collider.size.x, sceneObject.collider.size.z, sceneObject.collider.size.y });
 			}
 			if (sceneObject.spawnPoint.enabled) {
 				item["spawn_point"]["enabled"] = true;
@@ -584,6 +695,12 @@ bool SkinningEditorController::LoadSceneObjects(const std::string& filePath) {
 
 		json root;
 		file >> root;
+		// 課題用のversion 2、またはBlender出力JSONは共通ローダーで復元する。
+		if (root.contains("name") && root.contains("objects") && root.at("objects").is_array() &&
+			!root.at("objects").empty() && root.at("objects").front().contains("type")) {
+			file.close();
+			return LoadLevelDataIntoScene(filePath);
+		}
 		const json& objects = root.value("objects", json::array());
 		// ロードは現在の配置を置き換える動作にする。
 		// 既存オブジェクトと混ぜると、保存内容と画面状態が一致しづらいため。
@@ -1136,6 +1253,13 @@ void SkinningEditorController::DrawSceneObjectPanel() {
 	if (ImGui::Button("Load Scene", ImVec2(-FLT_MIN, 24.0f))) {
 		LoadSceneObjects(sceneFilePath_);
 	}
+	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.55f, 0.20f, 1.0f));
+	if (ImGui::Button("Save & Play Level", ImVec2(-FLT_MIN, 26.0f))) {
+		// 保存に失敗した場合は古いJSONを誤って起動しない。
+		playRequest_ = SaveSceneObjects(sceneFilePath_);
+	}
+	ImGui::PopStyleColor();
+	ImGui::TextDisabled("F5: reload during play / F6: play saved level");
 	if (ImGui::Button("Clear Scene Objects", ImVec2(-FLT_MIN, 22.0f))) {
 		ClearSceneObjects();
 	}
@@ -1262,6 +1386,19 @@ void SkinningEditorController::DrawSceneObjectPanel() {
 			}
 			ImGui::DragFloat3("Center", &selectedObject.collider.center.x, 0.05f, -50.0f, 50.0f, "%.2f");
 			ImGui::DragFloat3("Size", &selectedObject.collider.size.x, 0.05f, 0.01f, 50.0f, "%.2f");
+			if (ImGui::Button("Fit Collider To Mesh", ImVec2(-FLT_MIN, 22.0f))) {
+				Vector3 meshCenter{};
+				Vector3 meshSize{};
+				if (ReadObjLocalBounds(selectedObject.assetPath, meshCenter, meshSize)) {
+					// SceneObjectはエンジン座標のOBJを直接描画するため、ここでは軸変換せず格納する。
+					// ワールド拡縮・回転はBuildWorldCollisionBoxesで描画と同じTransformを適用する。
+					selectedObject.collider.center = meshCenter;
+					selectedObject.collider.size = meshSize;
+					sceneEditorStatus_ = "Collider fitted to OBJ bounds: " + selectedObject.name;
+				} else {
+					sceneEditorStatus_ = "Collider fit failed: OBJ vertices could not be read.";
+				}
+			}
 		}
 	}
 

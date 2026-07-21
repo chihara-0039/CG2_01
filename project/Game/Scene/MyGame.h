@@ -45,6 +45,7 @@
 #include "GameplayCameraController.h"
 #include "StageEditorController.h"
 #include "SkinningEditorController.h"
+#include "BlenderRuntimeLevel.h"
 
 // ===== ブロック関連 =====
 #include "../Block/BlockInventory.h"
@@ -119,6 +120,7 @@ private:
         bool showSprite = true;  ///< スプライトを表示するか
         bool showParticles = true;  ///< パーティクルを表示するか
         bool showTerrain = false;  ///< 地形を表示するか
+        bool showCollisionBoxes = false; ///< プレイヤーと周辺ステージの当たり判定を表示するか
     };
 
     // ==========================================================
@@ -138,6 +140,10 @@ private:
     // ==========================================================
     std::vector<std::unique_ptr<Object3d>> objectList; ///< DebugView 用の汎用オブジェクト群
     std::vector<std::unique_ptr<Model>>    models;     ///< 共有モデルリスト (0:block / 1:axis / 2:player)
+
+    BlenderRuntimeLevel blenderRuntimeLevel_; ///< Blender配置OBJ・BOXコライダー・スポーン地点を通常ゲーム向けに管理する。
+    std::array<char, 260> blenderLevelPath_{ "Resources/Levels/game_level.json" }; ///< 読み込むBlenderレベルのパス。
+    bool blenderStageActive_ = false; ///< Blender配置だけで構成したステージをプレイ中か。
 
     std::unique_ptr<Sprite>       sprite;         ///< DebugView 用テストスプライト
     std::unique_ptr<Camera>       camera;         ///< メインカメラ
@@ -330,11 +336,18 @@ private:
     bool IsWindowInactive();
     void UpdateDebugAndEffectObjects(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
     void UpdateStagePresentation(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
+    bool ApplyRuntimePlayerSpawn(); ///< Blender指定地点を開始位置・リスポーン位置へ適用する。
+    bool LoadBlenderStage(bool beginPlay); ///< JSONを再読込し、必要なら単独ステージとしてプレイを開始する。
+    void UpdateRuntimeLevelObjects(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP); ///< 通常ゲームで配置OBJを更新する。
+    void DrawRuntimeLevelObjects(); ///< 通常ゲームのカラーパスへ配置OBJを描画する。
+    void DrawRuntimeLevelShadows(const Matrix4x4& lightVP); ///< 配置OBJをシャドウマップへ描画する。
+    bool IsRuntimeLevelVisible() const; ///< Blenderレベルを表示するゲーム系モードか判定する。
     void UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4& proj);
     void ApplySceneLighting(const Vector3& lightDir);
     void UpdateClearColorForFrame();
     void UpdateGameplayUserInterface();
     void RenderScene();
+    void DrawCollisionDebugBoxes();
     void DrawSkyboxForFrame();
     bool IsPlayerHiddenByWall() const;
 

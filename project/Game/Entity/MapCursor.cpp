@@ -72,9 +72,12 @@ void MapCursor::SetIndex(const Int3& index, const StageMap& stageMap) {
 
 void MapCursor::ClampToStage(const StageMap& stageMap) {
     // カーソルがステージ範囲外へ出ないよう、各軸を有効範囲に丸める。
-    if (index_.x < 0) { index_.x = 0; }
+    // X/Zは原点中心のステージ編集に使えるよう、マップ幅と同じ距離だけ負方向を許可する。
+    const int minimumX = stageMap.GetWidth() > 0 ? -(stageMap.GetWidth() - 1) : 0;
+    const int minimumZ = stageMap.GetDepth() > 0 ? -(stageMap.GetDepth() - 1) : 0;
+    if (index_.x < minimumX) { index_.x = minimumX; }
     if (index_.y < 0) { index_.y = 0; }
-    if (index_.z < 0) { index_.z = 0; }
+    if (index_.z < minimumZ) { index_.z = minimumZ; }
 
     if (stageMap.GetWidth() > 0 && index_.x >= stageMap.GetWidth()) {
         index_.x = stageMap.GetWidth() - 1;

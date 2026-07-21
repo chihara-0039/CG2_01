@@ -729,6 +729,40 @@ bool Player::CheckCollision(const Vector3& pos, StageMap& map) {
 		return true;
 	}
 
+	if (CheckExternalCollision(pos)) {
+		return true;
+	}
+
+	return false;
+}
+
+bool Player::CheckExternalCollision(const Vector3& pos) const {
+	// 外部レベルを使わない従来ステージでは、追加判定を行わず即座に終了する。
+	if (!externalCollisionBoxes_) {
+		return false;
+	}
+
+	// position_は足元基準なので、Y方向だけ上へプレイヤー身長を伸ばす。
+	const Vector3 playerMin = {
+		pos.x - radius_.x,
+		pos.y,
+		pos.z - radius_.z
+	};
+	const Vector3 playerMax = {
+		pos.x + radius_.x,
+		pos.y + radius_.y * 2.0f,
+		pos.z + radius_.z
+	};
+
+	// 辺同士が触れているだけの状態は「重なり」に含めない。
+	// これにより床の上へ静止しているプレイヤーが常時衝突状態になるのを防ぐ。
+	for (const WorldCollisionBox& box : *externalCollisionBoxes_) {
+		if (playerMin.x < box.maximum.x && playerMax.x > box.minimum.x &&
+			playerMin.y < box.maximum.y && playerMax.y > box.minimum.y &&
+			playerMin.z < box.maximum.z && playerMax.z > box.minimum.z) {
+			return true;
+		}
+	}
 	return false;
 }
 

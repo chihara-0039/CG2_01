@@ -1,0 +1,219 @@
+{
+  "name": "Blender_Model_Showcase",
+  "version": 2,
+  "objects": [
+    {
+      "type": "MESH",
+      "name": "Main Ground",
+      "file_name": "Resources/Models/block/block.obj",
+      "transform": {
+        "translation": [0.0, 2.0, -0.5],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [12.0, 10.0, 1.0]
+      },
+      "collider": {
+        "type": "BOX",
+        "center": [0.0, 0.0, 0.0],
+        "size": [1.0, 1.0, 1.0]
+      },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Player Start Marker",
+      "file_name": "Resources/Models/midpoint/midpoint.obj",
+      "transform": {
+        "translation": [0.0, -6.5, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [0.7, 0.7, 0.7]
+      },
+      "spawn_point": {
+        "enabled": true,
+        "type": "Player"
+      },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Left Boundary Wall",
+      "file_name": "Resources/Models/wall/wall.obj",
+      "transform": {
+        "translation": [-11.5, 2.0, 1.5],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [1.0, 10.0, 3.0]
+      },
+      "collider": {
+        "type": "BOX",
+        "center": [0.0, 0.0, 0.0],
+        "size": [1.01, 0.995, 0.947]
+      },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Right Boundary Wall",
+      "file_name": "Resources/Models/wall/wall.obj",
+      "transform": {
+        "translation": [11.5, 2.0, 1.5],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [1.0, 10.0, 3.0]
+      },
+      "collider": {
+        "type": "BOX",
+        "center": [0.0, 0.0, 0.0],
+        "size": [1.01, 0.995, 0.947]
+      },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Stone Steps 01",
+      "file_name": "Resources/Models/cube/cube.obj",
+      "transform": {
+        "translation": [-5.0, -2.0, 0.5],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [2.0, 2.0, 1.0]
+      },
+      "collider": { "type": "BOX", "center": [0.0, 0.0, 0.0], "size": [2.0, 2.0, 2.0] },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Stone Steps 02",
+      "file_name": "Resources/Models/multiMaterial/multiMaterial.obj",
+      "transform": {
+        "translation": [-2.0, 0.0, 1.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [0.45, 0.45, 0.45]
+      },
+      "collider": { "type": "BOX", "center": [1.248, -0.275, 0.613], "size": [4.496, 2.0, 3.226] },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Stone Steps 03",
+      "file_name": "Resources/Models/multiMesh/multiMesh.obj",
+      "transform": {
+        "translation": [1.0, 2.0, 1.5],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [0.45, 0.45, 0.45]
+      },
+      "collider": { "type": "BOX", "center": [1.248, -0.275, 0.613], "size": [4.496, 2.0, 3.226] },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Collapsed Ruins",
+      "file_name": "Resources/Models/CollapsedBlocks/CollapsedBlocks.obj",
+      "transform": {
+        "translation": [5.0, 4.5, 0.0],
+        "rotation": [0.0, 0.0, 12.0],
+        "scaling": [1.2, 1.2, 1.2]
+      },
+      "collider": { "type": "BOX", "center": [0.0, 0.0, 0.0], "size": [1.0, 1.0, 1.0] },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Ancient Door",
+      "file_name": "Resources/Models/door/door.obj",
+      "transform": {
+        "translation": [0.0, 8.5, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [1.8, 1.8, 1.8]
+      },
+      "collider": { "type": "BOX", "center": [0.0, 0.0, 0.0], "size": [0.5, 1.0, 2.0] },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Observation Ladder",
+      "file_name": "Resources/Models/ladder/ladder.obj",
+      "transform": {
+        "translation": [-8.0, 4.5, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [1.5, 1.5, 1.5]
+      },
+      "collider": { "type": "BOX", "center": [0.0, 0.0, 0.0], "size": [1.0, 0.202, 1.0] },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Ice Sculpture",
+      "file_name": "Resources/Models/iceBlock/iceBlock.obj",
+      "transform": {
+        "translation": [7.5, -4.0, 0.0],
+        "rotation": [0.0, 0.0, 20.0],
+        "scaling": [1.4, 1.4, 1.4]
+      },
+      "collider": { "type": "BOX", "center": [0.0, 0.0, 0.0], "size": [1.0, 1.0, 1.0] },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Spike Garden Left",
+      "file_name": "Resources/Models/spike/spike.obj",
+      "transform": {
+        "translation": [-3.0, 6.5, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [1.2, 1.2, 1.2]
+      },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Spike Garden Right",
+      "file_name": "Resources/Models/spike/spike.obj",
+      "transform": {
+        "translation": [3.0, 6.5, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [1.2, 1.2, 1.2]
+      },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Floating Star",
+      "file_name": "Resources/Models/star/star.obj",
+      "transform": {
+        "translation": [-6.5, 0.5, 3.2],
+        "rotation": [0.0, 25.0, 15.0],
+        "scaling": [1.1, 1.1, 1.1]
+      },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Floating Key",
+      "file_name": "Resources/Models/key/key.obj",
+      "transform": {
+        "translation": [6.5, 0.5, 2.8],
+        "rotation": [15.0, 0.0, 30.0],
+        "scaling": [1.4, 1.4, 1.4]
+      },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Bubble Cluster",
+      "file_name": "Resources/Models/soapBubbles/soapBubbles.obj",
+      "transform": {
+        "translation": [8.0, 5.0, 2.5],
+        "rotation": [0.0, 0.0, 0.0],
+        "scaling": [1.6, 1.6, 1.6]
+      },
+      "children": []
+    },
+    {
+      "type": "MESH",
+      "name": "Choice Monument",
+      "file_name": "Resources/Models/choice/choice.obj",
+      "transform": {
+        "translation": [-8.0, -3.5, 0.0],
+        "rotation": [0.0, 0.0, -10.0],
+        "scaling": [1.1, 1.1, 1.1]
+      },
+      "children": []
+    }
+  ]
+}

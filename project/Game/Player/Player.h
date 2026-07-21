@@ -3,8 +3,10 @@
 #include "Input.h"
 #include "StageMap.h"
 #include "SkinnedObject.h"
+#include "../Collision/WorldCollisionBox.h"
 #include <memory>
 #include <string>
+#include <vector>
 
 class DirectXCommon;
 
@@ -127,6 +129,13 @@ public:
 
     /// <summary>AABB の半径 (x:左右 / y:上下 / z:奥行き)。衝突判定の大きさ。</summary>
     const Vector3& GetRadius() const { return radius_; }
+    /// <summary>
+    /// StageMap外に存在するワールドAABB一覧を設定する。
+    /// ポインタ先はPlayerより長く生存し、ゲーム実行中は有効である必要がある。
+    /// </summary>
+    void SetExternalCollisionBoxes(const std::vector<WorldCollisionBox>* boxes) {
+        externalCollisionBoxes_ = boxes;
+    }
 
     // ── ドアワープ ────────────────────────────────────────
 
@@ -213,6 +222,8 @@ private:
     //  isSolid フラグが true のブロックと衝突とみなす。
     // -------------------------------------------------------
     bool CheckCollision(const Vector3& pos, StageMap& map);
+    /// <summary>指定位置のプレイヤーAABBが外部ワールドAABBと重なるか判定する。</summary>
+    bool CheckExternalCollision(const Vector3& pos) const;
     bool IsJumpTriggered() const;
     bool IsInteractTriggered() const;
     bool IsRunInputActive(const Vector3& inputDir) const;
@@ -230,6 +241,7 @@ private:
     Vector3 position_ = { 0, 0, 0 }; // 足元基準のワールド座標
     Vector3 rotation_ = { 0, 0, 0 }; // 回転 (主に Y 軸: 向き)
     Vector3 velocity_ = { 0, 0, 0 }; // 速度 (重力・ジャンプ・移動の合算)
+    const std::vector<WorldCollisionBox>* externalCollisionBoxes_ = nullptr; ///< Blender配置物などの外部当たり判定。所有しない。
     Vector3 respawnPosition_ = { 0.0f, 1.5f, 0.0f }; // リスポーン地点
 
     // ── コライダー ────────────────────────────────────────
