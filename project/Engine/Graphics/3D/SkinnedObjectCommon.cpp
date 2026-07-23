@@ -87,6 +87,7 @@ void SkinnedObjectCommon::SetDefaultLight() {
         lightData_->intensity = 1.0f;
         lightData_->cameraPosition = { 0.0f, 0.0f, -10.0f };
         lightData_->paddingLight = 0.0f;
+        lightData_->pointLightCount = 0;
     }
 }
 

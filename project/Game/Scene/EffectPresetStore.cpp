@@ -325,6 +325,10 @@ bool EffectPresetStore::SaveStormPreset(const std::string& path, const std::stri
     item["lightningFrequency"] = s.lightningFrequency;
     item["lightningAreaX"] = s.lightningAreaX; item["lightningAreaZ"] = s.lightningAreaZ;
     item["lightningStrikeSize"] = s.lightningStrikeSize;
+    item["lightningSizeRandomMin"] = s.lightningSizeRandomMin; item["lightningSizeRandomMax"] = s.lightningSizeRandomMax;
+    item["lightningLengthRandomMin"] = s.lightningLengthRandomMin; item["lightningLengthRandomMax"] = s.lightningLengthRandomMax;
+    item["lightningWidthRandomMin"] = s.lightningWidthRandomMin; item["lightningWidthRandomMax"] = s.lightningWidthRandomMax;
+    item["lightningCoreRandomMin"] = s.lightningCoreRandomMin; item["lightningCoreRandomMax"] = s.lightningCoreRandomMax;
     item["lightningSimultaneousCount"] = s.lightningSimultaneousCount;
     item["lightningSimultaneousSpread"] = s.lightningSimultaneousSpread;
     item["lightningBurstCount"] = s.lightningBurstCount;
@@ -394,6 +398,10 @@ bool EffectPresetStore::LoadStormPreset(const std::string& path, const std::stri
             s.lightningAreaX = item.value("lightningAreaX", legacyAreaX * 0.5f);
             s.lightningAreaZ = item.value("lightningAreaZ", legacyAreaZ * 0.4f);
             s.lightningStrikeSize = item.value("lightningStrikeSize", s.lightningStrikeSize);
+            s.lightningSizeRandomMin = item.value("lightningSizeRandomMin", s.lightningSizeRandomMin); s.lightningSizeRandomMax = item.value("lightningSizeRandomMax", s.lightningSizeRandomMax);
+            s.lightningLengthRandomMin = item.value("lightningLengthRandomMin", s.lightningLengthRandomMin); s.lightningLengthRandomMax = item.value("lightningLengthRandomMax", s.lightningLengthRandomMax);
+            s.lightningWidthRandomMin = item.value("lightningWidthRandomMin", s.lightningWidthRandomMin); s.lightningWidthRandomMax = item.value("lightningWidthRandomMax", s.lightningWidthRandomMax);
+            s.lightningCoreRandomMin = item.value("lightningCoreRandomMin", s.lightningCoreRandomMin); s.lightningCoreRandomMax = item.value("lightningCoreRandomMax", s.lightningCoreRandomMax);
             s.lightningSimultaneousCount = item.value("lightningSimultaneousCount", s.lightningSimultaneousCount);
             s.lightningSimultaneousSpread = item.value("lightningSimultaneousSpread", s.lightningSimultaneousSpread);
             s.lightningBurstCount = item.value("lightningBurstCount", s.lightningBurstCount);

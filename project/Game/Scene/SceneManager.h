@@ -5,7 +5,7 @@
 #include "SceneType.h"
 #include "SceneUpdateContext.h"
 
-class MyGame;
+class GameRuntime;
 class SceneFactory;
 
 class SceneManager {
@@ -15,11 +15,11 @@ public:
     SceneManager(const SceneManager&) = delete;
     SceneManager& operator=(const SceneManager&) = delete;
 
-    void Initialize(const SceneFactory* sceneFactory, SceneType initialScene, MyGame& game);
-    void Update(MyGame& game, const SceneUpdateContext& context);
-    void Draw(MyGame& game);
-    void Finalize(MyGame& game);
-    void ChangeScene(SceneType nextScene, MyGame& game);
+    void Initialize(const SceneFactory* sceneFactory, SceneType initialScene, GameRuntime& game);
+    void Update(GameRuntime& game, const SceneUpdateContext& context);
+    void Draw(GameRuntime& game);
+    void Finalize(GameRuntime& game);
+    void ChangeScene(SceneType nextScene, GameRuntime& game);
 
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
 

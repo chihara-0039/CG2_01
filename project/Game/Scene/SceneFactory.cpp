@@ -1,81 +1,81 @@
 #include "SceneFactory.h"
 
 #include "BaseScene.h"
-#include "MyGame.h"
+#include "GameRuntime.h"
 
 #include <cassert>
 
 namespace {
 class StageSelectScene final : public BaseScene {
 public:
-    void Initialize(MyGame& game) override { game.OnSceneEntered(SceneType::StageSelect); }
-    void Update(MyGame& game, const SceneUpdateContext&) override { game.RunStageSelectScene(); }
-    void Draw(MyGame&) override {}
-    void Finalize(MyGame& game) override { game.OnSceneExited(SceneType::StageSelect); }
+    void Initialize(GameRuntime& game) override { game.OnSceneEntered(SceneType::StageSelect); }
+    void Update(GameRuntime& game, const SceneUpdateContext&) override { game.RunStageSelectScene(); }
+    void Draw(GameRuntime&) override {}
+    void Finalize(GameRuntime& game) override { game.OnSceneExited(SceneType::StageSelect); }
 };
 
 class DebugViewScene final : public BaseScene {
 public:
-    void Initialize(MyGame& game) override { game.OnSceneEntered(SceneType::DebugView); }
-    void Update(MyGame& game, const SceneUpdateContext&) override { game.RunDebugViewScene(); }
-    void Draw(MyGame&) override {}
-    void Finalize(MyGame& game) override { game.OnSceneExited(SceneType::DebugView); }
+    void Initialize(GameRuntime& game) override { game.OnSceneEntered(SceneType::DebugView); }
+    void Update(GameRuntime& game, const SceneUpdateContext&) override { game.RunDebugViewScene(); }
+    void Draw(GameRuntime&) override {}
+    void Finalize(GameRuntime& game) override { game.OnSceneExited(SceneType::DebugView); }
 };
 
 class StageEditorScene final : public BaseScene {
 public:
-    void Initialize(MyGame& game) override { game.OnSceneEntered(SceneType::StageEditor); }
-    void Update(MyGame& game, const SceneUpdateContext&) override { game.RunStageEditorScene(); }
-    void Draw(MyGame&) override {}
-    void Finalize(MyGame& game) override { game.OnSceneExited(SceneType::StageEditor); }
+    void Initialize(GameRuntime& game) override { game.OnSceneEntered(SceneType::StageEditor); }
+    void Update(GameRuntime& game, const SceneUpdateContext&) override { game.RunStageEditorScene(); }
+    void Draw(GameRuntime&) override {}
+    void Finalize(GameRuntime& game) override { game.OnSceneExited(SceneType::StageEditor); }
 };
 
 class GamePlayScene final : public BaseScene {
 public:
-    void Initialize(MyGame& game) override { game.OnSceneEntered(SceneType::GamePlay); }
-    void Update(MyGame& game, const SceneUpdateContext&) override { game.RunGamePlayScene(); }
-    void Draw(MyGame&) override {}
-    void Finalize(MyGame& game) override { game.OnSceneExited(SceneType::GamePlay); }
+    void Initialize(GameRuntime& game) override { game.OnSceneEntered(SceneType::GamePlay); }
+    void Update(GameRuntime& game, const SceneUpdateContext&) override { game.RunGamePlayScene(); }
+    void Draw(GameRuntime&) override {}
+    void Finalize(GameRuntime& game) override { game.OnSceneExited(SceneType::GamePlay); }
 };
 
 class GamePlayBlockPlaceScene final : public BaseScene {
 public:
-    void Initialize(MyGame& game) override { game.OnSceneEntered(SceneType::GamePlayBlockPlace); }
-    void Update(MyGame& game, const SceneUpdateContext&) override { game.RunGamePlayBlockPlaceScene(); }
-    void Draw(MyGame&) override {}
-    void Finalize(MyGame& game) override { game.OnSceneExited(SceneType::GamePlayBlockPlace); }
+    void Initialize(GameRuntime& game) override { game.OnSceneEntered(SceneType::GamePlayBlockPlace); }
+    void Update(GameRuntime& game, const SceneUpdateContext&) override { game.RunGamePlayBlockPlaceScene(); }
+    void Draw(GameRuntime&) override {}
+    void Finalize(GameRuntime& game) override { game.OnSceneExited(SceneType::GamePlayBlockPlace); }
 };
 
 class SkinningEditorScene final : public BaseScene {
 public:
-    void Initialize(MyGame& game) override { game.OnSceneEntered(SceneType::SkinningEditor); }
-    void Update(MyGame& game, const SceneUpdateContext& context) override { game.RunSkinningEditorScene(context); }
-    void Draw(MyGame&) override {}
-    void Finalize(MyGame& game) override { game.OnSceneExited(SceneType::SkinningEditor); }
+    void Initialize(GameRuntime& game) override { game.OnSceneEntered(SceneType::SkinningEditor); }
+    void Update(GameRuntime& game, const SceneUpdateContext& context) override { game.RunSkinningEditorScene(context); }
+    void Draw(GameRuntime&) override {}
+    void Finalize(GameRuntime& game) override { game.OnSceneExited(SceneType::SkinningEditor); }
 };
 
 class EffectPreviewScene final : public BaseScene {
 public:
-    void Initialize(MyGame& game) override { game.OnSceneEntered(SceneType::EffectPreview); }
-    void Update(MyGame& game, const SceneUpdateContext&) override { game.RunEffectPreviewScene(); }
-    void Draw(MyGame&) override {}
-    void Finalize(MyGame& game) override { game.OnSceneExited(SceneType::EffectPreview); }
+    void Initialize(GameRuntime& game) override { game.OnSceneEntered(SceneType::EffectPreview); }
+    void Update(GameRuntime& game, const SceneUpdateContext&) override { game.RunEffectPreviewScene(); }
+    void Draw(GameRuntime&) override {}
+    void Finalize(GameRuntime& game) override { game.OnSceneExited(SceneType::EffectPreview); }
 };
 
 class EffectShowcaseScene final : public BaseScene {
 public:
-    void Initialize(MyGame& game) override { game.OnSceneEntered(SceneType::EffectShowcase); }
-    void Update(MyGame& game, const SceneUpdateContext&) override { game.RunEffectShowcaseScene(); }
-    void Draw(MyGame&) override {}
-    void Finalize(MyGame& game) override { game.OnSceneExited(SceneType::EffectShowcase); }
+    void Initialize(GameRuntime& game) override { game.OnSceneEntered(SceneType::EffectShowcase); }
+    void Update(GameRuntime& game, const SceneUpdateContext&) override { game.RunEffectShowcaseScene(); }
+    void Draw(GameRuntime&) override {}
+    void Finalize(GameRuntime& game) override { game.OnSceneExited(SceneType::EffectShowcase); }
 };
 
 class PostEffectShowcaseScene final : public BaseScene {
 public:
-    void Initialize(MyGame& game) override { game.OnSceneEntered(SceneType::PostEffectShowcase); }
-    void Update(MyGame& game, const SceneUpdateContext&) override { game.RunPostEffectShowcaseScene(); }
-    void Draw(MyGame&) override {}
-    void Finalize(MyGame& game) override { game.OnSceneExited(SceneType::PostEffectShowcase); }
+    void Initialize(GameRuntime& game) override { game.OnSceneEntered(SceneType::PostEffectShowcase); }
+    void Update(GameRuntime& game, const SceneUpdateContext&) override { game.RunPostEffectShowcaseScene(); }
+    void Draw(GameRuntime&) override {}
+    void Finalize(GameRuntime& game) override { game.OnSceneExited(SceneType::PostEffectShowcase); }
 };
 }
 

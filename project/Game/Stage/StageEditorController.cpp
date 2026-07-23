@@ -297,6 +297,21 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
                 ImGui::ColorEdit4("Clear Color", &currentPreset->clearColor.x);
 
                 ImGui::Separator();
+                ImGui::Text("Sky Settings");
+                ImGui::ColorEdit4("Sky Color", &currentPreset->skyColor.x);
+                ImGui::SliderFloat("Sky Brightness", &currentPreset->skyBrightness, 0.0f, 2.0f);
+
+                ImGui::Separator();
+                ImGui::Text("Particle Cloud Settings");
+                ImGui::Checkbox("Enable Particle Clouds", &currentPreset->cloudEnabled);
+                if (currentPreset->cloudEnabled) {
+                    ImGui::ColorEdit4("Cloud Color", &currentPreset->cloudColor.x);
+                    ImGui::SliderFloat("Cloud Density", &currentPreset->cloudDensity, 0.02f, 2.0f);
+                    ImGui::SliderFloat("Cloud Size", &currentPreset->cloudSize, 0.2f, 4.0f);
+                    ImGui::SliderFloat("Cloud Height Above Stage", &currentPreset->cloudAltitudeOffset, 2.0f, 30.0f);
+                }
+
+                ImGui::Separator();
                 ImGui::Text("Particle Settings");
                 ImGui::Checkbox("Enable Particle", &currentPreset->particleEnabled);
                 if (currentPreset->particleEnabled) {
@@ -309,6 +324,17 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
                     ImGui::SliderFloat3("Particle Size", &currentPreset->particleSize.x, 0.01f, 2.0f);
                     ImGui::SliderFloat("LifeTime", &currentPreset->particleLife, 0.1f, 10.0f);
                     ImGui::ColorEdit4("Particle Color", &currentPreset->particleColor.x);
+                    const char* impactNames[] = { "None", "Rain", "Snow" };
+                    int impactIndex = currentPreset->impactEffect == "Rain" ? 1
+                        : currentPreset->impactEffect == "Snow" ? 2 : 0;
+                    if (ImGui::Combo("Ground Impact", &impactIndex, impactNames, IM_ARRAYSIZE(impactNames))) {
+                        currentPreset->impactEffect = impactNames[impactIndex];
+                    }
+                }
+
+                if (!currentPreset->stormPreset.empty()) {
+                    ImGui::Text("Storm Effect: %s", currentPreset->stormPreset.c_str());
+                    ImGui::TextDisabled("Parameters come from the Effect Editor preset.");
                 }
 
                 if (ImGui::Button("Save Preset Changes")) {

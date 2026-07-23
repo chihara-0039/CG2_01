@@ -137,6 +137,41 @@ Use number keys to switch the visible PostEffect:
 
 `TAB` returns to Stage Select. Mouse middle-drag orbits the camera, `Shift + middle-drag` pans, and the mouse wheel zooms.
 
+### Integration In The Game
+
+PostEffects are connected to the normal playable `GamePlay` scene, not only to an engine test or editor screen.
+Every stage uses the RenderTexture path and starts with the original-color `Normal` presentation. Press `1` at any time to demonstrate the required `Grayscale` scene rendering, or use `N` to return to the normal game presentation.
+While controlling the player, use the number keys to change the screen presentation in real time:
+
+| Key | In-game use |
+| --- | --- |
+| `N` | Normal/original-color presentation |
+| `1` | Grayscale presentation |
+| `2` | Vignetting presentation |
+| `3` | Gaussian smoothing |
+| `4`, `5` | 3x3 / 5x5 BoxFilter smoothing |
+| `6` | Luminance-based outline presentation |
+| `7` | Depth-based outline presentation |
+| `8` | RadialBlur presentation |
+| `9` | Dissolve transition presentation |
+| `0` | Animated Random presentation |
+
+The current effect and the controls are displayed at the upper-right of the game screen in both Development and Release builds. The separate `PostEffectShowcase` mode is retained for close comparison and parameter adjustment.
+
+Gameplay starts with the camera following the player. Press `V` to switch to a fixed overview camera centered on the whole stage, and press `V` again to resume player tracking. The player model uses emissive lighting and continuously carries a blue-white point light so nearby geometry remains readable. The renderer supports up to eight simultaneous point lights; Tempest lightning uses a separate light slot and illuminates the scene without disabling the player light.
+
+Future gameplay systems can call `Object3dCommon::ClearPointLights()` once per frame and then register player lights, lightning, torches, projectiles, or stage lamps with `AddPointLight(position, intensity, color, radius)`. The same light array is evaluated by normal, skinned, and instanced 3D rendering.
+
+### Weather Ground-impact Effects
+
+Weather presets now select a dedicated ground-impact style. `Heavy Rain` and its copy reuse the compact rain splash created for `Tempest Storm`; `Snowy` creates a soft snow puff and a few slowly fading flakes instead of a water splash. The `Ground Impact` combo in the Stage Editor can change this behavior between `None`, `Rain`, and `Snow` before saving the preset.
+
+`Tempest Storm` is also available directly in the Stage Editor weather preset list. It loads the editable `Tempest Storm` entry from `Resources/presets/storm_effect_presets.json`, follows the player, and combines its cloud, rain, wind, lightning, light flash, and rain-impact behavior. Adjusting and saving that Effect Editor preset therefore updates the weather version without duplicating the storm parameters.
+
+The old background clouds made from grouped sphere objects have been replaced by the same particle-cloud renderer used by the storm. Each weather preset can independently control `Enable Particle Clouds`, cloud color, density, size, and `Cloud Height Above Stage`. The engine periodically finds the highest occupied stage cell and keeps both ambient and Tempest clouds above that height plus the configured margin.
+
+Weather presets also store `Sky Color` and `Sky Brightness`. These values tint both the skydome and cubemap skybox in real time and can be edited from `Stage Editor > Weather / Environment > Sky Settings`.
+
 ### Main Files
 
 - `Engine/Graphics/PostProcessRenderer.h`
