@@ -9,32 +9,32 @@ SceneManager* SceneManager::GetInstance() {
     return &instance;
 }
 
-void SceneManager::Initialize(const SceneFactory* sceneFactory, SceneType initialScene, MyGame& game) {
+void SceneManager::Initialize(const SceneFactory* sceneFactory, SceneType initialScene, GameRuntime& game) {
     assert(sceneFactory);
     sceneFactory_ = sceneFactory;
     ChangeScene(initialScene, game);
 }
 
-void SceneManager::Update(MyGame& game, const SceneUpdateContext& context) {
+void SceneManager::Update(GameRuntime& game, const SceneUpdateContext& context) {
     if (currentScene_) {
         currentScene_->Update(game, context);
     }
 }
 
-void SceneManager::Draw(MyGame& game) {
+void SceneManager::Draw(GameRuntime& game) {
     if (currentScene_) {
         currentScene_->Draw(game);
     }
 }
 
-void SceneManager::Finalize(MyGame& game) {
+void SceneManager::Finalize(GameRuntime& game) {
     if (currentScene_) {
         currentScene_->Finalize(game);
         currentScene_.reset();
     }
 }
 
-void SceneManager::ChangeScene(SceneType nextScene, MyGame& game) {
+void SceneManager::ChangeScene(SceneType nextScene, GameRuntime& game) {
     assert(sceneFactory_);
 
     if (currentScene_ && currentSceneType_ == nextScene) {

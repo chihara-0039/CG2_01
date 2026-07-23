@@ -17,6 +17,17 @@ struct Material
     float4x4 uvTransform;
 };
 
+static const uint MAX_POINT_LIGHTS = 8;
+
+struct PointLight
+{
+    float3 position;
+    float intensity;
+    float4 color;
+    float radius;
+    float3 padding;
+};
+
 struct DirectionalLight
 {
     float4 color;
@@ -24,6 +35,9 @@ struct DirectionalLight
     float intensity;
     float3 cameraPosition; // カメラの位置を追加
     float paddingLight;        // アライメント用パディング
+    PointLight pointLights[MAX_POINT_LIGHTS];
+    uint pointLightCount;
+    float3 pointLightPadding;
 };
 
 ConstantBuffer<Material> gMaterial : register(b0);
@@ -84,6 +98,23 @@ PixelShaderOutput main(VertexShaderOutput input)
         
         // 1. 拡散反射光 (Diffuse) - ハーフランバートにソフトシャドウを適用
         float3 diffuseColor = (cos * shadowFactor + ambient) * gMaterial.color.rgb * textureColor.rgb * gDirectionalLight.color.rgb * gDirectionalLight.intensity;
+
+        // 複数ポイントライト。プレイヤー、雷、松明などを同時に合成できる。
+        const uint pointLightCount = min(gDirectionalLight.pointLightCount, MAX_POINT_LIGHTS);
+        for (uint lightIndex = 0; lightIndex < pointLightCount; ++lightIndex)
+        {
+            PointLight pointLight = gDirectionalLight.pointLights[lightIndex];
+            float3 toLight = pointLight.position - input.worldPosition;
+            float distanceToLight = length(toLight);
+            if (pointLight.intensity > 0.0f && distanceToLight < pointLight.radius)
+            {
+                float3 pointDirection = toLight / max(distanceToLight, 0.0001f);
+                float pointNdotL = saturate(dot(normalize(input.normal), pointDirection));
+                float attenuation = saturate(1.0f - distanceToLight / pointLight.radius);
+                attenuation *= attenuation;
+                diffuseColor += pointLight.color.rgb * pointNdotL * attenuation * pointLight.intensity * gMaterial.color.rgb * textureColor.rgb;
+            }
+        }
         
         // 2. スペキュラー反射光 (Blinn-Phong Specular) - 影の中ではハイライトを減衰して自然に見せる
         float3 viewDir = normalize(gDirectionalLight.cameraPosition - input.worldPosition);

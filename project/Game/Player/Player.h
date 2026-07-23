@@ -194,7 +194,14 @@ public:
     /// <summary>鍵を持っているか (鍵ブロックで扉を開くために必要)</summary>
     bool HasKey() const  { return hasKey_; }
     void SetHasKey(bool hasKey) { hasKey_ = hasKey; }
-    void SetGlow(float glow) { if (object_) object_->SetEmissive(glow); }
+    void SetGlow(float glow) {
+        if (object_) {
+            object_->SetEmissive(glow);
+        }
+        if (skinnedObject_ && skinnedObject_->GetObject3d()) {
+            skinnedObject_->GetObject3d()->SetEmissive(glow);
+        }
+    }
     void SetEnvironmentCoefficient(float coefficient) {
         if (object_) {
             object_->SetEnvironmentCoefficient(coefficient);

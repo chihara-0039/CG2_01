@@ -204,7 +204,9 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 		return dist01(randomEngine);
 	};
 
-	int cloudCount = 12; // 12個浮かべる
+	// 背景雲は天候と色・密度を共有できるParticleManager側で生成する。
+	// 旧来の球体モデル雲は二重表示を避けるため生成しない。
+	int cloudCount = 0;
 	for (int cloudIndex = 0; cloudIndex < cloudCount; ++cloudIndex) {
 		CloudInstance cloud;
 		// ランダムな位置 (ステージの少し上空、周囲)

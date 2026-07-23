@@ -99,7 +99,7 @@ private:
 
     
     float initialPivotYOffset_ = 8.0f;
-    bool followPlayerMode_ = false;
+    bool followPlayerMode_ = true;
 
     struct CameraPreset {
         float angle;

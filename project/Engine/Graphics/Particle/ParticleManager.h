@@ -80,6 +80,12 @@ public: // サブクラスなど
         float deltaTime = 0.0f;
     };
 
+    enum class WeatherImpactEffect {
+        None,
+        Rain,
+        Snow,
+    };
+
     struct WeatherEmitter {
         bool active = false;
         Vector3 center = {0,0,0};
@@ -91,6 +97,21 @@ public: // サブクラスなど
         Vector3 particleSize = {0.2f, 0.2f, 0.2f};
         float particleLife = 4.0f;
         Vector4 color = {1,1,1,1};
+        WeatherImpactEffect impactEffect = WeatherImpactEffect::None;
+    };
+
+    struct AmbientCloudEmitter {
+        bool active = true;
+        Vector3 center = { 0.0f, 0.0f, 0.0f };
+        float minimumHeight = 10.0f;
+        float areaX = 35.0f;
+        float areaZ = 35.0f;
+        float emitRate = 0.45f;
+        float life = 24.0f;
+        float size = 1.4f;
+        float speed = 0.012f;
+        Vector4 color = { 0.72f, 0.78f, 0.90f, 0.22f };
+        float emitTimer = 0.0f;
     };
 
     struct ParticleGroup {
@@ -189,6 +210,14 @@ public: // サブクラスなど
         float lightningAreaX = 3.3f;
         float lightningAreaZ = 1.8f;
         float lightningStrikeSize = 1.0f;
+        float lightningSizeRandomMin = 0.38f;
+        float lightningSizeRandomMax = 1.45f;
+        float lightningLengthRandomMin = 0.55f;
+        float lightningLengthRandomMax = 1.70f;
+        float lightningWidthRandomMin = 0.35f;
+        float lightningWidthRandomMax = 1.85f;
+        float lightningCoreRandomMin = 0.30f;
+        float lightningCoreRandomMax = 1.80f;
         int lightningSimultaneousCount = 1;
         float lightningSimultaneousSpread = 2.0f;
         int lightningBurstCount = 2;
@@ -239,9 +268,12 @@ public: // メンバ関数
     void EmitHitEffect(const Vector3& pos, const HitEffectSettings& settings);
 
     void SetStormActive(bool active, const Vector3& center = { 0.0f, 0.0f, 0.0f });
+    void SetStormCenter(const Vector3& center) { stormCenter_ = center; }
+    void SetStormMinimumCloudHeight(float height) { stormMinimumCloudHeight_ = height; }
     bool IsStormActive() const { return stormActive_; }
     bool ConsumeStormLightningFlash();
     const Vector3& GetStormLightningPosition() const { return stormLightningPosition_; }
+    float GetStormLightningPowerScale() const { return stormLightningPowerScale_; }
     StormEffectSettings& GetStormSettings() { return stormSettings_; }
     const StormEffectSettings& GetStormSettings() const { return stormSettings_; }
 
@@ -260,6 +292,7 @@ public: // メンバ関数
 
     // 天候エミッターの取得・設定
     WeatherEmitter& GetWeatherEmitter() { return weatherEmitter_; }
+    AmbientCloudEmitter& GetAmbientCloudEmitter() { return ambientCloudEmitter_; }
 
     void ClearParticles() {
         for (auto& [name, group] : particleGroups_) {
@@ -278,6 +311,7 @@ private: // 内部処理
     void CreateRingMesh();
     void CreateCylinderMesh();
     void EmitStormRainSplash(const Vector3& pos, const Vector4& color);
+    void EmitSnowImpact(const Vector3& pos, const Vector4& color);
     void CreateGPUParticleResources();
     void CreateGPUParticlePipeline();
     void InitializeGPUParticles();
@@ -370,11 +404,14 @@ private: // メンバ変数
 
     // 天候用エミッター
     WeatherEmitter weatherEmitter_;
+    AmbientCloudEmitter ambientCloudEmitter_;
 
     bool stormActive_ = false;
     bool stormLightningFlash_ = false;
     Vector3 stormCenter_ = { 0.0f, 0.0f, 0.0f };
+    float stormMinimumCloudHeight_ = 8.0f;
     Vector3 stormLightningPosition_ = { 0.0f, 0.5f, 0.0f };
+    float stormLightningPowerScale_ = 1.0f;
     float stormCloudEmitTimer_ = 0.0f;
     float stormRainEmitTimer_ = 0.0f;
     float stormWindEmitTimer_ = 0.0f;

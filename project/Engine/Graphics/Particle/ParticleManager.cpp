@@ -231,6 +231,42 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         }
     }
 
+    // 通常天候の背景雲も、Tempest Stormと同じ雲用パーティクルで構成する。
+    if (ambientCloudEmitter_.active && ambientCloudEmitter_.emitRate > 0.0f) {
+        ambientCloudEmitter_.emitTimer += deltaTime;
+        const float cloudInterval = 1.0f / (std::max)(ambientCloudEmitter_.emitRate, 0.01f);
+        std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
+        std::uniform_real_distribution<float> zeroOne(0.0f, 1.0f);
+        while (ambientCloudEmitter_.emitTimer >= cloudInterval) {
+            ambientCloudEmitter_.emitTimer -= cloudInterval;
+            const float baseX = ambientCloudEmitter_.center.x + unit(engine) * ambientCloudEmitter_.areaX;
+            const float baseZ = ambientCloudEmitter_.center.z + unit(engine) * ambientCloudEmitter_.areaZ;
+            constexpr int kWispsPerCloud = 3;
+            for (int i = 0; i < kWispsPerCloud && Particles().size() < kMaxParticles; ++i) {
+                const float scale = ambientCloudEmitter_.size * (0.72f + zeroOne(engine) * 0.72f);
+                Particle cloud;
+                cloud.type = Particle::Type::StormCloud;
+                cloud.transform.translate = {
+                    baseX + unit(engine) * 2.4f * ambientCloudEmitter_.size,
+                    ambientCloudEmitter_.minimumHeight + zeroOne(engine) * 3.5f + unit(engine) * 0.45f,
+                    baseZ + unit(engine) * 1.8f * ambientCloudEmitter_.size
+                };
+                cloud.transform.scale = {
+                    (3.0f + zeroOne(engine) * 2.6f) * scale,
+                    (0.85f + zeroOne(engine) * 0.65f) * scale,
+                    1.0f
+                };
+                cloud.transform.rotate = { 0.0f, 0.0f, unit(engine) * 0.08f };
+                cloud.velocity = { ambientCloudEmitter_.speed * (0.72f + zeroOne(engine) * 0.55f), 0.0f, 0.0f };
+                cloud.color = ambientCloudEmitter_.color;
+                cloud.initialAlpha = cloud.color.w;
+                cloud.lifeTime = 0.0f;
+                cloud.maxTime = ambientCloudEmitter_.life * (0.82f + zeroOne(engine) * 0.42f);
+                Particles().push_back(cloud);
+            }
+        }
+    }
+
     // 暴風雷: 雲・雨・風を継続生成し、間欠的に枝分かれ雷を落とす。
     if (stormActive_) {
         auto pushStormParticle = [&](Particle::Type type, const Vector3& position, const Vector3& scale,
@@ -260,7 +296,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             constexpr int kCloudWispsPerEmission = 3;
             const float baseCloudX = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaX : 0.0f;
             const float baseCloudZ = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaZ : 0.0f;
-            const float baseCloudY = storm.cloudHeight + zeroOne(engine) * 1.4f;
+            const float baseCloudY = (std::max)(stormCenter_.y + storm.cloudHeight, stormMinimumCloudHeight_) + zeroOne(engine) * 1.4f;
             for (int wisp = 0; wisp < kCloudWispsPerEmission; ++wisp) {
                 const float cloudScale = storm.randomizeCloudSize ? 0.78f + zeroOne(engine) * 0.95f : 1.0f;
                 const float localSpreadX = unit(engine) * storm.cloudSize * (0.42f + zeroOne(engine) * 0.34f);
@@ -271,7 +307,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 pushStormParticle(Particle::Type::StormCloud,
                     {
                         stormCenter_.x + baseCloudX + localSpreadX,
-                        stormCenter_.y + baseCloudY + localSpreadY,
+                        baseCloudY + localSpreadY,
                         stormCenter_.z + baseCloudZ + localSpreadZ
                     },
                     {
@@ -297,8 +333,9 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             const float rainX = storm.randomizeRainPosition ? unit(engine) * storm.rainAreaX : 0.0f;
             const float rainZ = storm.randomizeRainPosition ? unit(engine) * storm.rainAreaZ : 0.0f;
             const float rainSpeedVariation = storm.randomizeRainSpeed ? 0.78f + zeroOne(engine) * 0.44f : 1.0f;
+            const float rainSpawnBaseY = (std::max)(stormCenter_.y + 2.0f, stormMinimumCloudHeight_ - 5.0f);
             pushStormParticle(Particle::Type::StormRain,
-                { stormCenter_.x + rainX, stormCenter_.y + 2.0f + zeroOne(engine) * 5.5f, stormCenter_.z + rainZ },
+                { stormCenter_.x + rainX, rainSpawnBaseY + zeroOne(engine) * 5.5f, stormCenter_.z + rainZ },
                 { 0.018f, (0.42f + zeroOne(engine) * 0.48f) * storm.rainLength, 1.0f },
                 { (0.027f + zeroOne(engine) * 0.009f) * storm.rainSpeed * rainSpeedVariation, -0.132f * storm.rainSpeed * rainSpeedVariation, unit(engine) * 0.004f },
                 storm.rainColor,
@@ -347,24 +384,40 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             const int simultaneousCount = std::clamp(storm.lightningSimultaneousCount, 1, 8);
             for (int strikeIndex = 0; strikeIndex < simultaneousCount; ++strikeIndex) {
                 HitEffectSettings lightning;
-            lightning.brightness = 2.4f;
+            // One shared energy value keeps each strike visually coherent: small bolts are
+            // short/thin/dim, while rare large bolts grow longer, thicker and brighter.
+            const float energy = storm.randomizeLightningSize ? zeroOne(engine) : 0.5f;
+            const auto rangedScale = [energy](float a, float b, float curve = 1.0f) {
+                const float lo = (std::min)(a, b);
+                const float hi = (std::max)(a, b);
+                return lo + (hi - lo) * std::pow(energy, curve);
+            };
+            const float sizeScale = storm.randomizeLightningSize
+                ? rangedScale(storm.lightningSizeRandomMin, storm.lightningSizeRandomMax) : 1.0f;
+            const float lengthScale = storm.randomizeLightningSize
+                ? rangedScale(storm.lightningLengthRandomMin, storm.lightningLengthRandomMax, 0.85f) : 1.0f;
+            const float widthScale = storm.randomizeLightningSize
+                ? rangedScale(storm.lightningWidthRandomMin, storm.lightningWidthRandomMax, 1.35f) : 1.0f;
+            const float coreScale = storm.randomizeLightningSize
+                ? rangedScale(storm.lightningCoreRandomMin, storm.lightningCoreRandomMax, 1.15f) : 1.0f;
+            lightning.brightness = 2.4f * (0.68f + energy * 0.48f);
             lightning.lifeScale = 1.15f;
-            lightning.size = storm.lightningStrikeSize * (storm.randomizeLightningSize ? 0.72f + zeroOne(engine) * 0.56f : 1.0f);
+            lightning.size = storm.lightningStrikeSize * sizeScale;
             lightning.slashCount = 1;
             lightning.slashSpread = 0.2f;
-            lightning.sparkCount = 18;
+            lightning.sparkCount = std::clamp(static_cast<int>(18.0f * coreScale), 5, 48);
             lightning.sparkSpeed = 1.8f;
-            lightning.sparkLength = 1.4f;
+            lightning.sparkLength = 1.4f * coreScale;
             lightning.ringPower = 0.0f;
-            lightning.corePower = 0.18f;
+            lightning.corePower = 0.18f * coreScale;
             lightning.crossPower = 0.0f;
             lightning.pillarPower = 0.0f;
             lightning.lightningCount = storm.lightningCount;
             lightning.lightningSegments = storm.lightningSegments;
-            lightning.lightningLength = storm.lightningLength;
+            lightning.lightningLength = storm.lightningLength * lengthScale;
             lightning.lightningSpread = storm.lightningSpread;
-            lightning.lightningPower = storm.lightningPower;
-            lightning.lightningWidth = storm.lightningWidth;
+            lightning.lightningPower = storm.lightningPower * (0.72f + energy * 0.53f);
+            lightning.lightningWidth = storm.lightningWidth * widthScale;
             lightning.lightningGlowWidth = storm.lightningGlowWidth;
             lightning.lightningGlowOpacity = storm.lightningGlowOpacity;
             lightning.lightningBranchCount = storm.lightningBranchCount;
@@ -387,12 +440,16 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
 
             const float groupOffsetX = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
             const float groupOffsetZ = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
+            const float lightningCloudY = (std::max)(
+                stormCenter_.y + storm.cloudHeight + 1.2f,
+                stormMinimumCloudHeight_ + 1.2f);
             const Vector3 lightningOrigin = {
                 stormCenter_.x + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaX : 0.0f) + groupOffsetX,
-                stormCenter_.y + storm.cloudHeight + 1.2f + zeroOne(engine) * 0.8f,
+                lightningCloudY + zeroOne(engine) * 0.8f,
                 stormCenter_.z + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaZ : 0.0f) + groupOffsetZ
             };
             stormLightningPosition_ = { lightningOrigin.x, stormCenter_.y + 0.45f, lightningOrigin.z };
+            stormLightningPowerScale_ = 0.35f + energy * 1.15f;
             EmitHitEffect(lightningOrigin, lightning);
             stormLightningFlash_ = true;
             }
@@ -415,12 +472,34 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
             it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
 
-            if (it->type == Particle::Type::StormRain && it->transform.translate.y <= stormCenter_.y + 0.12f) {
-                Vector3 splashPosition = it->transform.translate;
-                splashPosition.y = stormCenter_.y + 0.14f;
-                EmitStormRainSplash(splashPosition, it->color);
-                it = group.particles.erase(it);
-                continue;
+            if (it->type == Particle::Type::StormRain) {
+                bool hitGround = false;
+                float impactY = stormCenter_.y + 0.14f;
+
+                if (stageMap) {
+                    const int blockX = static_cast<int>(std::floor(it->transform.translate.x + 0.5f));
+                    const int blockZ = static_cast<int>(std::floor(it->transform.translate.z + 0.5f));
+                    const int oldBlockY = static_cast<int>(std::floor(oldY + 0.5f));
+                    const int newBlockY = static_cast<int>(std::floor(it->transform.translate.y + 0.5f));
+                    for (int y = oldBlockY; y >= newBlockY; --y) {
+                        const MapCell* cell = stageMap->GetCell(blockX, y, blockZ);
+                        if (cell && cell->type != BlockType::None) {
+                            hitGround = true;
+                            impactY = static_cast<float>(y) + 0.6f;
+                            break;
+                        }
+                    }
+                } else if (it->transform.translate.y <= stormCenter_.y + 0.12f) {
+                    hitGround = true;
+                }
+
+                if (hitGround) {
+                    Vector3 splashPosition = it->transform.translate;
+                    splashPosition.y = impactY;
+                    EmitStormRainSplash(splashPosition, it->color);
+                    it = group.particles.erase(it);
+                    continue;
+                }
             }
 
             if (it->type == Particle::Type::Ring) {
@@ -454,10 +533,20 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 }
 
                 if (hit) {
-                    // ブロック上面(hitY + 0.5f)の少し上で飛沫を生成して元のパーティクルを消滅させる
+                    // 天候ごとに専用の着地表現を生成して元のパーティクルを消滅させる。
                     Vector3 splashPos = it->transform.translate;
                     splashPos.y = (float)hitY + 0.6f;
-                    EmitSplash(splashPos, it->color);
+                    switch (weatherEmitter_.impactEffect) {
+                    case WeatherImpactEffect::Rain:
+                        // Tempest Stormと同じ控えめな雨粒の飛沫を使う。
+                        EmitStormRainSplash(splashPos, it->color);
+                        break;
+                    case WeatherImpactEffect::Snow:
+                        EmitSnowImpact(splashPos, it->color);
+                        break;
+                    case WeatherImpactEffect::None:
+                        break;
+                    }
                     it = group.particles.erase(it);
                     continue;
                 }
@@ -1147,6 +1236,48 @@ void ParticleManager::EmitStormRainSplash(const Vector3& pos, const Vector4& col
         splash.lifeTime = 0.0f;
         splash.maxTime = lifeDistribution(engine);
         Particles().push_back(splash);
+    }
+}
+
+void ParticleManager::EmitSnowImpact(const Vector3& pos, const Vector4& color) {
+    std::uniform_real_distribution<float> angleDistribution(0.0f, 6.2831853f);
+    std::uniform_real_distribution<float> offsetDistribution(-0.07f, 0.07f);
+    std::uniform_real_distribution<float> lifeDistribution(0.28f, 0.52f);
+
+    // 着地した雪がふわっと広がる薄い雪煙。
+    if (Particles().size() < kMaxParticles) {
+        Particle puff;
+        puff.type = Particle::Type::Splash;
+        puff.transform.translate = { pos.x, pos.y + 0.025f, pos.z };
+        puff.transform.scale = { 0.12f, 0.055f, 1.0f };
+        puff.transform.rotate = { 0.0f, 0.0f, angleDistribution(engine) };
+        puff.velocity = { 0.0f, 0.0f, 0.0f };
+        puff.color = { color.x, color.y, color.z, 0.22f };
+        puff.initialAlpha = puff.color.w;
+        puff.lifeTime = 0.0f;
+        puff.maxTime = 0.42f;
+        Particles().push_back(puff);
+    }
+
+    // 数枚だけ跳ね、すぐに速度を失う小さな雪片。
+    constexpr int kFlakeCount = 4;
+    for (int i = 0; i < kFlakeCount && Particles().size() < kMaxParticles; ++i) {
+        const float angle = angleDistribution(engine);
+        Particle flake;
+        flake.type = Particle::Type::Splash;
+        flake.transform.translate = {
+            pos.x + offsetDistribution(engine),
+            pos.y + 0.035f,
+            pos.z + offsetDistribution(engine)
+        };
+        flake.transform.scale = { 0.035f, 0.035f, 1.0f };
+        flake.transform.rotate = { 0.0f, 0.0f, angle };
+        flake.velocity = { std::cos(angle) * 0.006f, 0.006f, std::sin(angle) * 0.006f };
+        flake.color = { color.x, color.y, color.z, (std::max)(color.w, 0.5f) };
+        flake.initialAlpha = flake.color.w;
+        flake.lifeTime = 0.0f;
+        flake.maxTime = lifeDistribution(engine);
+        Particles().push_back(flake);
     }
 }
 

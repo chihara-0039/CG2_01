@@ -39,6 +39,21 @@ void WeatherPresetManager::LoadPresets() {
                     preset.lightDirection.y = item.value("lightDirection_y", -1.0f);
                     preset.lightDirection.z = item.value("lightDirection_z", 0.5f);
 
+                    preset.skyColor.x = item.value("skyColor_r", 1.0f);
+                    preset.skyColor.y = item.value("skyColor_g", 1.0f);
+                    preset.skyColor.z = item.value("skyColor_b", 1.0f);
+                    preset.skyColor.w = item.value("skyColor_a", 1.0f);
+                    preset.skyBrightness = item.value("skyBrightness", 1.0f);
+
+                    preset.cloudEnabled = item.value("cloudEnabled", true);
+                    preset.cloudColor.x = item.value("cloudColor_r", 0.72f);
+                    preset.cloudColor.y = item.value("cloudColor_g", 0.78f);
+                    preset.cloudColor.z = item.value("cloudColor_b", 0.90f);
+                    preset.cloudColor.w = item.value("cloudColor_a", 0.22f);
+                    preset.cloudDensity = item.value("cloudDensity", 0.45f);
+                    preset.cloudSize = item.value("cloudSize", 1.4f);
+                    preset.cloudAltitudeOffset = item.value("cloudAltitudeOffset", 6.0f);
+
                     preset.particleEnabled = item.value("particleEnabled", false);
                     preset.particleTexture = item.value("particleTexture", "Resources/UI/inventory/white.png");
                     preset.emitRate = item.value("emitRate", 100.0f);
@@ -65,6 +80,12 @@ void WeatherPresetManager::LoadPresets() {
                     preset.particleColor.y = item.value("particleColor_g", 1.0f);
                     preset.particleColor.z = item.value("particleColor_b", 1.0f);
                     preset.particleColor.w = item.value("particleColor_a", 1.0f);
+
+                    const std::string inferredImpact = preset.name.find("Snow") != std::string::npos
+                        ? "Snow"
+                        : preset.particleEnabled ? "Rain" : "None";
+                    preset.impactEffect = item.value("impactEffect", inferredImpact);
+                    preset.stormPreset = item.value("stormPreset", "");
 
                     presets_.push_back(preset);
                 }
@@ -102,6 +123,21 @@ void WeatherPresetManager::SavePresets() {
         item["lightDirection_y"] = preset.lightDirection.y;
         item["lightDirection_z"] = preset.lightDirection.z;
 
+        item["skyColor_r"] = preset.skyColor.x;
+        item["skyColor_g"] = preset.skyColor.y;
+        item["skyColor_b"] = preset.skyColor.z;
+        item["skyColor_a"] = preset.skyColor.w;
+        item["skyBrightness"] = preset.skyBrightness;
+
+        item["cloudEnabled"] = preset.cloudEnabled;
+        item["cloudColor_r"] = preset.cloudColor.x;
+        item["cloudColor_g"] = preset.cloudColor.y;
+        item["cloudColor_b"] = preset.cloudColor.z;
+        item["cloudColor_a"] = preset.cloudColor.w;
+        item["cloudDensity"] = preset.cloudDensity;
+        item["cloudSize"] = preset.cloudSize;
+        item["cloudAltitudeOffset"] = preset.cloudAltitudeOffset;
+
         item["particleEnabled"] = preset.particleEnabled;
         item["particleTexture"] = preset.particleTexture;
         item["emitRate"] = preset.emitRate;
@@ -127,6 +163,8 @@ void WeatherPresetManager::SavePresets() {
         item["particleColor_g"] = preset.particleColor.y;
         item["particleColor_b"] = preset.particleColor.z;
         item["particleColor_a"] = preset.particleColor.w;
+        item["impactEffect"] = preset.impactEffect;
+        item["stormPreset"] = preset.stormPreset;
 
         j.push_back(item);
     }
@@ -174,6 +212,11 @@ void WeatherPresetManager::CreateDefaultPresetsIfEmpty() {
             rain.velocityRandom = {1.0f, 2.0f, 1.0f};
             rain.particleSize = {0.05f, 0.5f, 0.05f}; // 細長い
             rain.particleColor = {0.7f, 0.8f, 1.0f, 0.6f};
+            rain.impactEffect = "Rain";
+            rain.skyColor = { 0.58f, 0.66f, 0.82f, 1.0f };
+            rain.skyBrightness = 0.62f;
+            rain.cloudColor = { 0.18f, 0.22f, 0.32f, 0.30f };
+            rain.cloudDensity = 0.75f;
             presets_.push_back(rain);
         }
         {
@@ -191,7 +234,24 @@ void WeatherPresetManager::CreateDefaultPresetsIfEmpty() {
             snow.velocityRandom = {1.5f, 1.0f, 1.5f};
             snow.particleSize = {0.3f, 0.3f, 0.3f}; 
             snow.particleColor = {1.0f, 1.0f, 1.0f, 0.8f};
+            snow.impactEffect = "Snow";
+            snow.skyColor = { 0.78f, 0.84f, 0.92f, 1.0f };
+            snow.skyBrightness = 0.92f;
+            snow.cloudColor = { 0.76f, 0.80f, 0.86f, 0.24f };
             presets_.push_back(snow);
+        }
+        {
+            WeatherPreset tempest;
+            tempest.name = "Tempest Storm";
+            tempest.clearColor = { 0.012f, 0.018f, 0.045f, 1.0f };
+            tempest.lightIntensity = 0.18f;
+            tempest.lightColor = { 0.62f, 0.82f, 1.0f };
+            tempest.lightDirection = { 0.35f, -1.0f, 0.2f };
+            tempest.skyColor = { 0.12f, 0.17f, 0.30f, 1.0f };
+            tempest.skyBrightness = 0.28f;
+            tempest.cloudEnabled = false;
+            tempest.stormPreset = "Tempest Storm";
+            presets_.push_back(tempest);
         }
     }
 }

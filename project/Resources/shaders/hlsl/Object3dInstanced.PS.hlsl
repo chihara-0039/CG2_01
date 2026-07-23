@@ -12,6 +12,17 @@
     float emissive : EMISSIVE0;
 };
 
+static const uint MAX_POINT_LIGHTS = 8;
+
+struct PointLight
+{
+    float3 position;
+    float intensity;
+    float4 color;
+    float radius;
+    float3 padding;
+};
+
 struct DirectionalLight
 {
     float4 color;
@@ -19,9 +30,9 @@ struct DirectionalLight
     float intensity;
     float3 cameraPosition;
     float paddingLight;
-    float3 pointLightPosition;
-    float pointLightIntensity;
-    float4 pointLightColor;
+    PointLight pointLights[MAX_POINT_LIGHTS];
+    uint pointLightCount;
+    float3 pointLightPadding;
 };
 
 ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
@@ -70,17 +81,18 @@ PixelShaderOutput main(VertexShaderOutput input)
     // 1. Diffuse
     float3 diffuseColor = (cos * shadowFactor + ambient) * matColor.rgb * textureColor.rgb * gDirectionalLight.color.rgb * gDirectionalLight.intensity;
     
-    // Point Light Contribution
-    if (gDirectionalLight.pointLightIntensity > 0.0f) {
-        float3 plDir = gDirectionalLight.pointLightPosition - input.worldPosition;
+    // Multiple Point Light Contributions
+    const uint pointLightCount = min(gDirectionalLight.pointLightCount, MAX_POINT_LIGHTS);
+    for (uint lightIndex = 0; lightIndex < pointLightCount; ++lightIndex) {
+        PointLight pointLight = gDirectionalLight.pointLights[lightIndex];
+        float3 plDir = pointLight.position - input.worldPosition;
         float plDist = length(plDir);
-        float plRadius = 10.0f; // effective radius
-        if (plDist < plRadius) {
-            plDir = normalize(plDir);
+        if (pointLight.intensity > 0.0f && plDist < pointLight.radius) {
+            plDir /= max(plDist, 0.0001f);
             float plNdotL = max(0.0f, dot(normalize(input.normal), plDir));
-            float plAtten = saturate(1.0f - (plDist / plRadius)); // linear falloff
-            plAtten *= plAtten; // quadratic falloff
-            float3 plContrib = gDirectionalLight.pointLightColor.rgb * plNdotL * plAtten * gDirectionalLight.pointLightIntensity;
+            float plAtten = saturate(1.0f - (plDist / pointLight.radius));
+            plAtten *= plAtten;
+            float3 plContrib = pointLight.color.rgb * plNdotL * plAtten * pointLight.intensity;
             diffuseColor += plContrib * matColor.rgb * textureColor.rgb;
         }
     }

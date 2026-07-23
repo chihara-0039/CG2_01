@@ -5,6 +5,14 @@
 #include <wrl.h>
 #include "MyMath.h"
 
+struct SkinnedPointLightData {
+    Vector3 position;
+    float intensity;
+    Vector4 color;
+    float radius;
+    float padding[3];
+};
+
 // スキニング描画用シェーダに渡すライト情報。
 struct DirectionalLight {
     Vector4 color;           // 平行光源の色
@@ -12,6 +20,9 @@ struct DirectionalLight {
     float   intensity;       // 平行光源の強さ
     Vector3 cameraPosition;  // スペキュラ計算用のカメラ位置
     float   paddingLight;    // 16 byte alignment padding
+    SkinnedPointLightData pointLights[8];
+    uint32_t pointLightCount;
+    float pointLightPadding[3];
 };
 
 // SkinnedObject 用の RootSignature / PSO / ライトバッファを管理する。
@@ -59,6 +70,18 @@ public:
         if (lightData_) {
             lightData_->cameraPosition = cameraPosition;
         }
+    }
+
+    void ClearPointLights() { if (lightData_) lightData_->pointLightCount = 0; }
+    bool AddPointLight(const Vector3& pos, float intensity, const Vector4& color, float radius = 10.0f) {
+        if (!lightData_ || lightData_->pointLightCount >= 8) return false;
+        SkinnedPointLightData& light = lightData_->pointLights[lightData_->pointLightCount++];
+        light.position = pos;
+        light.intensity = intensity;
+        light.color = color;
+        light.radius = radius > 0.01f ? radius : 0.01f;
+        light.padding[0] = light.padding[1] = light.padding[2] = 0.0f;
+        return true;
     }
 
     D3D12_GPU_VIRTUAL_ADDRESS GetLightGPUVirtualAddress() const {

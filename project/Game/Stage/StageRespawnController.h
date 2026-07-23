@@ -8,7 +8,7 @@
 #include "../Block/BlockPlacementController.h"
 #include "StageEditorController.h"
 
-// 落下などでリスポーンが必要になったとき、ステージ状態と関連コントローラーを初期状態へ戻す。
+// 落下などでリスポーンが必要になったとき、表示中のステージを維持してプレイヤー状態を戻す。
 class StageRespawnController
 {
 public:
@@ -21,7 +21,8 @@ public:
         BlockInventory* blockInventory,
         BubblePickupController* bubblePickupController,
         BlockPlacementController* blockPlacementController,
-        StageEditorController* stageEditorController
+        StageEditorController* stageEditorController,
+        bool restoreStageMap = true
     );
 
 private:

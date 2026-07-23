@@ -143,6 +143,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Game\Environment\WeatherPresetManager.cpp" />
+    <ClCompile Include="Game\Environment\WeatherRuntimeController.cpp" />
     <ClCompile Include="Game\Block\BlockPlacementController.cpp" />
     <ClCompile Include="Game\Block\BubblePickupController.cpp" />
     <ClCompile Include="Game\Block\BlockInventory.cpp">
@@ -170,9 +171,21 @@
     <ClCompile Include="Engine\Graphics\3D\SrvManager.cpp" />
     <ClCompile Include="Game\Player\PlayerBasePosition.cpp" />
     <ClCompile Include="Game\Scene\EffectPresetStore.cpp" />
+    <ClCompile Include="Game\Scene\StormEffectEditorController.cpp" />
+    <ClCompile Include="Game\Scene\HitEffectEditorView.cpp" />
     <ClCompile Include="Game\Scene\LevelDataLoader.cpp" />
     <ClCompile Include="Game\Scene\BlenderRuntimeLevel.cpp" />
     <ClCompile Include="Game\Scene\MyGame.cpp" />
+    <ClCompile Include="Game\Scene\GameBgmController.cpp" />
+    <ClCompile Include="Game\Scene\EffectShowcaseController.cpp" />
+    <ClCompile Include="Game\Scene\PostEffectShowcaseController.cpp" />
+    <ClCompile Include="Game\Scene\GameRuntime.cpp" />
+    <ClCompile Include="Game\Scene\GameRuntimeEditor.cpp" />
+    <ClCompile Include="Game\Scene\GameRuntimeEffects.cpp" />
+    <ClCompile Include="Game\Scene\GameRuntimeGameplay.cpp" />
+    <ClCompile Include="Game\Scene\GameRuntimeLifecycle.cpp" />
+    <ClCompile Include="Game\Scene\GameRuntimeRendering.cpp" />
+    <ClCompile Include="Game\Scene\GameRuntimeScenes.cpp" />
     <ClCompile Include="Game\Scene\SceneFactory.cpp" />
     <ClCompile Include="Game\Scene\SceneManager.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
@@ -286,6 +299,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Game\Environment\WeatherPresetManager.h" />
+    <ClInclude Include="Game\Environment\WeatherRuntimeController.h" />
     <ClInclude Include="Game\Block\BlockPlacementController.h" />
     <ClInclude Include="Game\Block\BubblePickupController.h" />
     <ClInclude Include="Game\Block\BlockInventory.h" />
@@ -312,11 +326,17 @@
     <ClInclude Include="Engine\Graphics\3D\SrvManager.h" />
     <ClInclude Include="Game\Player\PlayerBasePosition.h" />
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
+    <ClInclude Include="Game\Scene\StormEffectEditorController.h" />
+    <ClInclude Include="Game\Scene\HitEffectEditorView.h" />
     <ClInclude Include="Game\Scene\BaseScene.h" />
     <ClInclude Include="Game\Scene\LevelDataLoader.h" />
     <ClInclude Include="Game\Scene\BlenderRuntimeLevel.h" />
     <ClInclude Include="Game\Collision\WorldCollisionBox.h" />
     <ClInclude Include="Game\Scene\MyGame.h" />
+    <ClInclude Include="Game\Scene\GameBgmController.h" />
+    <ClInclude Include="Game\Scene\EffectShowcaseController.h" />
+    <ClInclude Include="Game\Scene\PostEffectShowcaseController.h" />
+    <ClInclude Include="Game\Scene\GameRuntime.h" />
     <ClInclude Include="Game\Scene\SceneFactory.h" />
     <ClInclude Include="Game\Scene\SceneManager.h" />
     <ClInclude Include="Game\Scene\SceneType.h" />

@@ -15,7 +15,7 @@ void GameplayCameraController::Initialize() {
     cameraDistance_ = 35.0f;
     cameraHeight_ = 20.0f;
 
-    followPlayerMode_ = false;
+    followPlayerMode_ = true;
     cameraDirty_ = true;
 }
 
