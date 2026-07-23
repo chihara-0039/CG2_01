@@ -36,6 +36,10 @@ void GameRuntime::Update() {
     Vector3 lightDir = UpdateLightCameraForFrame();
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
 
+    // 雷・ヒット発光の寿命は表示モードに関係なく毎フレーム減衰させる。
+    // 以前はShowcase内だけで減衰していたため、通常ゲームでは次の雷まで残っていた。
+    effectShowcaseController_.TickLight(1.0f / 60.0f);
+
     UpdateHitEffectShortcut();
 
 
@@ -84,6 +88,20 @@ void GameRuntime::Update() {
 void GameRuntime::HandleModeChange() {
     if (currentMode_ == prevMode_) {
         return;
+    }
+
+    // PostEffect表示で無効化したパーティクル表示を、天候を使うシーンへ持ち越さない。
+    if (currentMode_ == AppMode::StageEditor ||
+        currentMode_ == AppMode::GamePlay ||
+        currentMode_ == AppMode::GamePlay_BlockPlace) {
+        debugFlags_.showParticles = true;
+    }
+    if (currentMode_ == AppMode::StageSelect && particleManager) {
+        // 継続型の嵐は寿命の長い雨・風を持つため、停止だけでなく残存粒子も破棄する。
+        weatherRuntimeController_.StopStorm(*particleManager);
+        particleManager->GetWeatherEmitter().active = false;
+        particleManager->GetAmbientCloudEmitter().active = false;
+        particleManager->ClearParticles();
     }
 
     bgmController_.Update(
@@ -273,46 +291,53 @@ void GameRuntime::UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4&
     if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
         sprite->Update();
     }
-
-    if (!debugFlags_.showParticles) {
+    if (!debugFlags_.showParticles || !particleManager || !textureManager) {
         return;
     }
 
-    auto& wpMgr = WeatherPresetManager::GetInstance();
-    const std::string& weatherPresetName = stageMap_.GetWeatherPresetName();
-    WeatherPreset* currentPreset = wpMgr.GetPresetByName(weatherPresetName);
-    if (currentPreset) {
-        auto& emitter = particleManager->GetWeatherEmitter();
-        emitter.active = currentPreset->particleEnabled;
-        if (emitter.active) {
-            if (cachedWeatherPresetName_ != weatherPresetName ||
-                cachedWeatherParticleTexturePath_ != currentPreset->particleTexture) {
-                cachedWeatherPresetName_ = weatherPresetName;
-                cachedWeatherParticleTexturePath_ = currentPreset->particleTexture;
-                cachedWeatherParticleTexture_ = textureManager->LoadTexture(currentPreset->particleTexture);
-                if (cachedWeatherParticleTexture_ != 0) {
-                    particleManager->SetTexture(cachedWeatherParticleTexture_);
-                }
-            }
-            emitter.emitRate = currentPreset->emitRate;
-            emitter.size = currentPreset->emitSize;
-            emitter.velocity = currentPreset->velocity;
-            emitter.velocityRandom = currentPreset->velocityRandom;
-            emitter.particleSize = currentPreset->particleSize;
-            emitter.particleLife = currentPreset->particleLife;
-            emitter.color = currentPreset->particleColor;
+    const bool usesStageWeather =
+        currentMode_ == AppMode::StageEditor ||
+        currentMode_ == AppMode::GamePlay ||
+        currentMode_ == AppMode::GamePlay_BlockPlace;
 
-            emitter.center = { 0.0f, 15.0f, 0.0f };
+    bool lightningFlashed = false;
+    if (usesStageWeather) {
+        if (WeatherPreset* preset =
+            WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName())) {
+            // プリセット編集内容をゲーム内の環境光と背景色へ即時反映する。
+            stageMap_.SetClearColor(preset->clearColor);
+            stageMap_.SetLightIntensity(preset->lightIntensity);
+            stageMap_.SetLightColor(preset->lightColor);
+            stageMap_.SetLightDirection(preset->lightDirection);
         }
+        const Vector3 focusPosition = player_ ? player_->GetPosition() : Vector3{0.0f, 0.0f, 0.0f};
+        WeatherRuntimeController::UpdateContext context{
+            *particleManager,
+            *textureManager,
+            stageMap_,
+            view,
+            proj,
+            focusPosition,
+            stageMap_.GetWeatherPresetName(),
+            false,
+            [this](const std::string& name) { return LoadStormPreset(name); }
+        };
+        lightningFlashed = weatherRuntimeController_.Update(context);
+    } else {
+        // エフェクト編集系ではステージ天候を上書きせず、発生済みエフェクトだけ更新する。
+        particleManager->GetWeatherEmitter().active = false;
+        particleManager->GetAmbientCloudEmitter().active = false;
+        particleManager->Update(
+            1.0f / 60.0f, view, proj,
+            player_ ? player_->GetPosition() : Vector3{0.0f, 0.0f, 0.0f},
+            &stageMap_);
+        lightningFlashed = particleManager->ConsumeStormLightningFlash();
     }
 
-    particleManager->Update(1.0f / 60.0f, view, proj, player_ ? player_->GetPosition() : Vector3{ 0, 0, 0 }, &stageMap_);
-    if ((currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) &&
-        particleManager->ConsumeStormLightningFlash()) {
+    if (lightningFlashed) {
         effectShowcaseController_.NotifyImpact();
     }
 }
-
 void GameRuntime::ApplySceneLighting(const Vector3& lightDir) {
     object3dCommon->SetLightDirection(lightDir);
     object3dCommon->SetLightColor(Vector4(
@@ -322,6 +347,20 @@ void GameRuntime::ApplySceneLighting(const Vector3& lightDir) {
     const bool isEffectPresentation = currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase;
     object3dCommon->SetLightIntensity(isEffectPresentation ? 0.18f : stageMap_.GetLightIntensity());
     object3dCommon->SetCameraPosition(camera->GetPosition());
+    object3dCommon->ClearPointLights();
+
+    const bool isPlayerScene =
+        currentMode_ == AppMode::StageEditor ||
+        currentMode_ == AppMode::GamePlay ||
+        currentMode_ == AppMode::GamePlay_BlockPlace;
+    if (player_ && isPlayerScene) {
+        // プレイヤー本体の発光と、周囲を照らすライトを常時維持する。
+        player_->SetGlow(playerGlow_);
+        Vector3 playerLightPosition = player_->GetPosition();
+        playerLightPosition.y += 0.8f;
+        object3dCommon->AddPointLight(
+            playerLightPosition, playerLightIntensity_, playerLightColor_, 12.0f);
+    }
 
     if (isEffectPresentation) {
         const bool isStorm = IsCurrentEffectStorm();
@@ -344,9 +383,18 @@ void GameRuntime::ApplySceneLighting(const Vector3& lightDir) {
         const Vector3 lightPosition = isStorm && particleManager
             ? particleManager->GetStormLightningPosition()
             : effectPreviewPosition_;
-        object3dCommon->SetPointLight(lightPosition, lightIntensity, lightColor);
-    } else {
-        object3dCommon->SetPointLight({ 0.0f, 0.0f, 0.0f }, 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f });
+        object3dCommon->AddPointLight(lightPosition, lightIntensity, lightColor, 18.0f);
+    } else if (weatherRuntimeController_.IsStormActive() && particleManager) {
+        // 嵐の雷光はプレイヤーライトを消さず、追加ライトとして重ねる。
+        const float lightningEnvelope = effectShowcaseController_.GetLightRatio();
+        if (lightningEnvelope > 0.0f) {
+            const auto& storm = particleManager->GetStormSettings();
+            object3dCommon->AddPointLight(
+                particleManager->GetStormLightningPosition(),
+                storm.pointLightPower * lightningEnvelope * lightningEnvelope,
+                storm.lightningColor,
+                24.0f);
+        }
     }
 }
 

@@ -22,18 +22,18 @@ enum class BlockType : uint32_t {
     CrumblingFloor,
     IceBlock,
     MovingFloor,
-    Key,        // 拾える鍵
-    KeyBlock,   // 鍵で開くブロック
-    Spike,       // トゲ
-    EnemyWalker, // 敵（歩行）
-    EnemyFlyer,  // 敵（飛行）
-    EnemyChaser,  // 敵（追尾）
-    PBlockAppears, // 🌟 追加：押すと出現するPブロック
-	Checkpoint,      // 🌟 追加：中間地点
-	TimedBlock,      // 🌟 追加：時間差ブロック
-    OnOffSwitch,    // 🔴 追加：ON/OFF切り替えスイッチ
-    OnBlock,        // 🔴 追加：ONの時に実体化するブロック（赤）
-    OffBlock,      // 🔵 追加：OFFの時に実体化するブロック（青）
+    Key,            // 拾える鍵
+    KeyBlock,       // 鍵で開くブロック
+    Spike,          // トゲ
+    EnemyWalker,    // 敵（歩行）
+    EnemyFlyer,     // 敵（飛行）
+    EnemyChaser,    // 敵（追尾）
+    PBlockAppears,  // 押すと出現するPブロック
+	Checkpoint,     // 中間地点
+	TimedBlock,     // 時間差ブロック
+    OnOffSwitch,    // ON/OFF切り替えスイッチ
+    OnBlock,        // ONの時に実体化するブロック（赤）
+    OffBlock,       // OFFの時に実体化するブロック（青）
     TransparentBlock
 };
 
@@ -71,9 +71,9 @@ inline const char* BlockTypeToString(BlockType type) {
     case BlockType::EnemyWalker:       return "EnemyWalker";
     case BlockType::EnemyFlyer:        return "EnemyFlyer";
     case BlockType::EnemyChaser:       return "EnemyChaser";
-    case BlockType::PBlockAppears:     return "PBlock (On)"; // 🌟 追加
+    case BlockType::PBlockAppears:     return "PBlock (On)";
 	case BlockType::Checkpoint:        return "Checkpoint";
-	case BlockType::TimedBlock:        return "TimedBlock"; // 🌟 追加
+	case BlockType::TimedBlock:        return "TimedBlock";
     case BlockType::OnOffSwitch:       return "OnOffSwitch";
     case BlockType::OnBlock:           return "OnBlock";
     case BlockType::OffBlock:          return "OffBlock";
@@ -246,7 +246,8 @@ public:
         }
         return nullptr;
     }
-    // 
+
+	// Mutable 版の GetCustomPart
     CustomBlockPart* GetCustomPart(int id) {
         if (id >= 1 && id <= (int)customParts_.size()) {
             return &customParts_[id - 1];
@@ -273,15 +274,19 @@ public:
     const Vector4& GetClearColor() const { return clearColor_; }
     void SetClearColor(const Vector4& color) { clearColor_ = color; }
 
+	// ライトの強さ、色、方向のゲッター・セッター
     float GetLightIntensity() const { return lightIntensity_; }
     void SetLightIntensity(float intensity) { lightIntensity_ = intensity; }
 
+	// ライトの色のゲッター・セッター
     const Vector3& GetLightColor() const { return lightColor_; }
     void SetLightColor(const Vector3& color) { lightColor_ = color; }
 
+	// ライトの方向のゲッター・セッター
     const Vector3& GetLightDirection() const { return lightDirection_; }
     void SetLightDirection(const Vector3& dir) { lightDirection_ = dir; }
 
+	// 天候プリセット名のゲッター・セッター
     const std::string& GetWeatherPresetName() const { return weatherPresetName_; }
     void SetWeatherPresetName(const std::string& name) { weatherPresetName_ = name; }
 

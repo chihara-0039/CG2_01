@@ -111,7 +111,8 @@ void GameRuntime::Initialize() {
         playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #endif
-    ApplyRuntimePlayerSpawn();
+    // 起動時はグリッドステージを表示するため、Level Editor用のSpawnで
+    // PlayerStartを上書きしない。Blenderステージ開始時だけ適用する。
 
     if (currentMode_ == AppMode::EffectShowcase) {
         effectShowcaseController_.Reset();
@@ -173,6 +174,13 @@ void GameRuntime::Initialize() {
         textureManager->LoadTexture("Resources/UI/tutorial/placement_tutorial.png"));
     placementTutorialSprite_->SetPosition({ 20, 20 });
     placementTutorialSprite_->SetSize({ 682, 185 });
+
+    // ゴール到達後にステージ選択へ戻る操作を案内する。
+    clearGuideTexture_ = textureManager->LoadTexture("Resources/UI/clear_guide.png");
+    clearGuideSprite_ = std::make_unique<Sprite>();
+    clearGuideSprite_->Initialize(spriteCommon.get(), clearGuideTexture_);
+    clearGuideSprite_->SetPosition({ 288.0f, 620.0f });
+    clearGuideSprite_->SetSize({ 704.0f, 64.0f });
 
 
     gameplayCameraController_.Initialize();

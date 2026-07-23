@@ -3,12 +3,14 @@
 #include <cmath>
 
 namespace {
+	// ステージマップ上の座標が有効なリスポーン位置かどうかを判定する。
 bool IsUsableGridRespawn(const StageMap& stageMap, const Vector3& position) {
     if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z) ||
         position.y < -9.0f) {
         return false;
     }
 
+	// ステージマップの範囲内かどうかを確認する。
     const int x = static_cast<int>(std::floor(position.x + 0.5f));
     const int z = static_cast<int>(std::floor(position.z + 0.5f));
     if (x < 0 || x >= stageMap.GetWidth() || z < 0 || z >= stageMap.GetDepth()) {
@@ -27,6 +29,7 @@ bool IsUsableGridRespawn(const StageMap& stageMap, const Vector3& position) {
 }
 }
 
+// ステージの落下リスポーン処理を行う。プレイヤーが落下した場合、チェックポイント位置に戻す。
 void StageRespawnController::Update(
     StageMap& stageMap,
     const StageMap& backupMap,
@@ -38,22 +41,25 @@ void StageRespawnController::Update(
     StageEditorController* stageEditorController,
     bool restoreStageMap
 ) {
+	// プレイヤーが存在しない場合は何もしない。
     if (!player) {
         return;
     }
 
+	// プレイヤーが落下していない場合は何もしない。
     if (player->GetPosition().y >= kFallY) {
         isRespawning_ = false;
         return;
     }
 
+	// すでにリスポーン処理中の場合は何もしない。
     if (isRespawning_) {
         return;
     }
 
     isRespawning_ = true;
 
-    // ==================================================
+  // ==================================================
   // 今のチェックポイント位置を保存
   // ==================================================
     Vector3 currentRespawnPos = player->GetRespawnPosition();

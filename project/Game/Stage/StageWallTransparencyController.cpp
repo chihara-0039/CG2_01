@@ -4,6 +4,7 @@
 #include "Object3d.h"
 #include "StageTransparencyPolicy.h"
 
+// 壁オブジェクトの透過処理を行う。プレイヤーの位置とステージごとの透過エリアに応じて、壁のアルファ値を更新する。
 void StageWallTransparencyController::Apply(
     std::vector<Object3d*>& wallObjects,
     const Vector3& cameraPos,
@@ -63,6 +64,7 @@ void StageWallTransparencyController::Apply(
             std::abs(wallCellZ - playerCellZ) <= 1 &&
             wallCellY <= playerCellY + 2;
 
+		// 透過対象の壁は半透明にする。
         if (insideTransparencyArea) {
             obj->SetColor({ 1.0f, 1.0f, 1.0f, transparencyAlpha });
         }

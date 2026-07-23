@@ -141,9 +141,11 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                         auto it = std::find(orders.begin(), orders.end(), order);
                         size_t idx = std::distance(orders.begin(), it);
 
+						// 出現時間と消滅時間を計算
                         float appearTime = static_cast<float>(idx) * kAppearDelay;
                         float disappearTime = appearTime + kActiveDuration;
 
+						// 現在の経過時間を周期内に収める
                         float localCycleTime = std::fmod(accumulatedTime_, cycleDuration);
                         if (localCycleTime >= appearTime && localCycleTime < disappearTime) {
                             cell.isSolid = true;
@@ -253,12 +255,14 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                         toPlayer.y * toPlayer.y +
                         toPlayer.z * toPlayer.z);
 
+					// プレイヤーがスポーン位置からどれくらい離れているかを計算
                     float playerDistanceFromSpawn = std::sqrt(
                         (playerPos.x - spawnPos.x) * (playerPos.x - spawnPos.x) +
                         (playerPos.y - spawnPos.y) * (playerPos.y - spawnPos.y) +
                         (playerPos.z - spawnPos.z) * (playerPos.z - spawnPos.z)
                     );
 
+					// プレイヤーがスポーン位置から8マス以内にいる場合のみ追尾する
                     if (playerDistanceFromSpawn < 8.0f && distanceToPlayer > 0.05f) {
                         float speed = 1.2f; // 秒速 1.2 マス
                         Vector3 directionToPlayer = {
@@ -278,6 +282,7 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                             nextPos.y - spawnPos.y,
                             nextPos.z - spawnPos.z
                         };
+						// 8 マス以上離れないように制限する
                         float offsetDistanceFromSpawn = std::sqrt(
                             nextOffset.x * nextOffset.x +
                             nextOffset.y * nextOffset.y +
@@ -317,6 +322,7 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
     }
 }
 
+// ステージデータをファイルに保存する。SaveToFile はステージサイズを最初に書き出すため、LoadFromFile が最初にこの3値を読んでグリッドを確保する。
 void StageMap::SaveToFile(const std::string& filename) {
     std::ofstream ofs(filename);
     if (!ofs.is_open()) return;
@@ -372,11 +378,13 @@ void StageMap::SaveToFile(const std::string& filename) {
                     saveVariant = (cell->moveOffset.x + 10) | ((cell->moveOffset.y + 10) << 8) | ((cell->moveOffset.z + 10) << 16);
                 }
 
+				// 座標、ブロック種別、回転角度、variant を保存する。
                 ofs << x << " " << y << " " << z << " "
                     << static_cast<int>(cell->type) << " "
                     << cell->rotationX << " " << cell->rotationY << " "
                     << saveVariant << "\n";
 
+				// ドアブロックの場合、ドア先座標を保存する。
                 if (cell->type == BlockType::Door) {
                     ofs << cell->doorTargetIndex.x << " "
                         << cell->doorTargetIndex.y << " "
@@ -388,6 +396,7 @@ void StageMap::SaveToFile(const std::string& filename) {
     ofs.close();
 }
 
+// ステージファイルを読み込む。LoadFromFile はステージサイズを最初に読み込むため、Initialize() でグリッドを確保する。
 void StageMap::LoadFromFile(const std::string& filename) {
     std::ifstream ifs(filename);
     if (!ifs.is_open()) return;
@@ -396,6 +405,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
     std::string firstLine;
     if (!std::getline(ifs, firstLine)) return;
 
+	// 1行目の "width height depth" を読み込む
     std::stringstream ss(firstLine);
     int w, h, d;
     if (!(ss >> w >> h >> d)) return;
@@ -414,6 +424,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
     while (std::getline(ifs, line)) {
         if (line.empty()) continue;
 
+		// 行の先頭トークンを取得して、行の種類を判定する。
         std::stringstream lineSS(line);
         std::string token;
         lineSS >> token;
@@ -430,6 +441,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
                 name = name.substr(1);
             }
 
+			// パーツスロットの範囲内であれば復元する
             if (id >= 1 && id <= (int)customParts_.size()) {
                 auto& part = customParts_[id - 1];
                 part.id = id;
@@ -442,7 +454,9 @@ void StageMap::LoadFromFile(const std::string& filename) {
         } else if (token == "PARTCELL") {
             // カスタムブロックの内部セル情報。3x3x3 のどこに何のブロックがあるかを復元する。
             int id, lx, ly, lz, typeVal;
+			// 互換性重視のパース設計：
             if (lineSS >> id >> lx >> ly >> lz >> typeVal) {
+                // 座標が 0～2 の範囲内であることを確認してから配置する
                 if (id >= 1 && id <= (int)customParts_.size()) {
                     auto& part = customParts_[id - 1];
 
@@ -458,11 +472,13 @@ void StageMap::LoadFromFile(const std::string& filename) {
                         partCleared[id - 1] = true;
                     }
 
+					// 座標が 0～2 の範囲内であることを確認してから配置する
                     if (lx >= 0 && lx < 3 && ly >= 0 && ly < 3 && lz >= 0 && lz < 3) {
                         part.cells[ly][lz][lx].type = static_cast<BlockType>(typeVal);
                     }
                 }
             }
+			// ステージの見た目を再現するため、天候プリセット名とライト設定も復元する。
         } else if (token == "PRESET") {
             // 天候プリセット名は空白を含められるようにダブルクォート付きで保存している。
             std::string presetName;
@@ -473,6 +489,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
             if (start != std::string::npos && end != std::string::npos && start < end) {
                 weatherPresetName_ = presetName.substr(start + 1, end - start - 1);
             }
+		// 天候プリセット名を復元したら、ステージの見た目を再現するために ApplyWeatherPreset を呼ぶ。
         } else if (token == "ENVIRONMENT") {
             // 背景色、ライト強度、ライト色、ライト方向を復元する。
             lineSS >> clearColor_.x >> clearColor_.y >> clearColor_.z >> clearColor_.w
@@ -492,9 +509,11 @@ void StageMap::LoadFromFile(const std::string& filename) {
                 // さらに variant があれば読み込む（なければデフォルトの0を使用）
                 lineSS >> variant;
 
+				// 座標がステージ内にあるか確認してから配置する
                 BlockType type = static_cast<BlockType>(typeVal);
                 SetBlock(x, y, z, type, variant);
                 MapCell* cell = GetCell(x, y, z);
+				// 角度を復元する
                 if (cell) {
                     cell->rotationX = rotX;
                     cell->rotationY = rotY;
@@ -517,7 +536,7 @@ void StageMap::LoadFromFile(const std::string& filename) {
     RebuildEnemyList();
 }
 
-
+// ステージ全体を初期化する（全セルを None に置き換える）
 void StageMap::Clear() {
     for (MapCell& cell : cells_) {
         cell = MapCell{};
@@ -536,6 +555,7 @@ void StageMap::Clear() {
     ResetTime();
 }
 
+// 指定された座標がステージ内にあるかどうかを判定する
 bool StageMap::IsInside(int x, int y, int z) const {
     return
         x >= 0 && x < width_ &&
@@ -543,10 +563,12 @@ bool StageMap::IsInside(int x, int y, int z) const {
         z >= 0 && z < depth_;
 }
 
+// Int3 版の IsInside
 bool StageMap::IsInside(const Int3& index) const {
     return IsInside(index.x, index.y, index.z);
 }
 
+// セルのインデックスを 1 次元配列に変換する
 const MapCell* StageMap::GetCell(int x, int y, int z) const {
     if (!IsInside(x, y, z)) {
         return nullptr;
@@ -554,10 +576,12 @@ const MapCell* StageMap::GetCell(int x, int y, int z) const {
     return &cells_[ToIndex(x, y, z)];
 }
 
+// Int3 版の GetCell
 const MapCell* StageMap::GetCell(const Int3& index) const {
     return GetCell(index.x, index.y, index.z);
 }
 
+// Mutable 版の GetCell
 MapCell* StageMap::GetCell(int x, int y, int z) {
     if (!IsInside(x, y, z)) {
         return nullptr;
@@ -565,30 +589,36 @@ MapCell* StageMap::GetCell(int x, int y, int z) {
     return &cells_[ToIndex(x, y, z)];
 }
 
+// Int3 版の GetCell
 MapCell* StageMap::GetCell(const Int3& index) {
     return GetCell(index.x, index.y, index.z);
 }
 
+// 指定座標のブロックを新しいタイプとバリアントで置き換える
 bool StageMap::SetBlock(int x, int y, int z, BlockType type, int variant) {
     if (!IsInside(x, y, z)) {
         return false;
     }
 
+	// 指定座標のブロックを新しいタイプとバリアントで置き換える
     cells_[ToIndex(x, y, z)] = MakeCell(type, variant);
     RebuildMovingFloorList();
     RebuildEnemyList();
     return true;
 }
 
+// Int3 版の SetBlock
 bool StageMap::SetBlock(const Int3& index, BlockType type, int variant) {
     return SetBlock(index.x, index.y, index.z, type, variant);
 }
 
+// 指定座標のブロックを削除する（None に置き換える）
 bool StageMap::RemoveBlock(int x, int y, int z) {
     if (!IsInside(x, y, z)) {
         return false;
     }
 
+	// 指定座標のブロックを None に置き換える
     cells_[ToIndex(x, y, z)] = MakeCell(BlockType::None, 0);
     RebuildMovingFloorList();
     RebuildEnemyList();
@@ -596,18 +626,22 @@ bool StageMap::RemoveBlock(int x, int y, int z) {
     return true;
 }
 
+// Int3 版の RemoveBlock
 bool StageMap::RemoveBlock(const Int3& index) {
     return RemoveBlock(index.x, index.y, index.z);
 }
 
+// PSwitch の状態を切り替える
 void StageMap::SetPSwitchActive(int switchId) {
     StageMapGimmickSystem::SetPSwitchActive(*this, switchId);
 }
 
+// PSwitch の状態をリセットする（再構築なし）
 void StageMap::ResetPSwitchStateNoRebuild() {
     StageMapGimmickSystem::ResetPSwitchStateNoRebuild(*this);
 }
 
+// ステージ全体の ON/OFF 状態を切り替える
 void StageMap::ToggleOnState() {
     StageMapGimmickSystem::ToggleOnState(*this);
 }
@@ -636,16 +670,19 @@ const MapCell* StageMap::GetIntersectingMovingFloor(
             continue;
         }
 
+		// 動く足場の中心座標を計算（セルの中心 + 現在のオフセット）
         float floorCenterX = static_cast<float>(ref.x) + cell->currentOffsetX;
         float floorCenterY = static_cast<float>(ref.y) + 0.5f + cell->currentOffsetY;
         float floorCenterZ = static_cast<float>(ref.z) + cell->currentOffsetZ;
 
+		// プレイヤーの中心座標を計算（AABBの中心）
         float playerCenterX = pX;
         float playerCenterY = pY + rY;
         float playerCenterZ = pZ;
 
         float blockSize = 0.5f;
 
+		// AABB（軸平行境界ボックス）同士の交差判定
         if (std::abs(playerCenterX - floorCenterX) < (rX + blockSize) &&
             std::abs(playerCenterY - floorCenterY) < (rY + blockSize) &&
             std::abs(playerCenterZ - floorCenterZ) < (rZ + blockSize)) {
@@ -716,10 +753,12 @@ Int3 StageMap::FindPairedDoor(int srcX, int srcY, int srcZ) const
     return { srcX, srcY, srcZ };
 }
 
+// 座標 (x, y, z) を 1 次元配列のインデックスに変換する
 int StageMap::ToIndex(int x, int y, int z) const {
     return x + (z * width_) + (y * width_ * depth_);
 }
 
+// Int3 版の ToIndex
 MapCell StageMap::MakeCell(BlockType type, int variant) {
     MapCell cell{};
     cell.type = type;
@@ -787,11 +826,13 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
     return cell;
 }
 
+// PSwitch の状態をリセットする（再構築あり）
 void StageMap::ResetPSwitchState()
 {
     StageMapGimmickSystem::ResetPSwitchState(*this);
 }
 
+// 動く足場のリストを再構築する
 void StageMap::RebuildMovingFloorList() {
     movingFloors_.clear();
 
@@ -807,6 +848,7 @@ void StageMap::RebuildMovingFloorList() {
     }
 }
 
+// 敵のリストを再構築する
 void StageMap::RebuildEnemyList() {
     enemies_.clear();
 

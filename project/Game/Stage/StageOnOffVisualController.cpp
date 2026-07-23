@@ -2,10 +2,12 @@
 
 #include "Object3d.h"
 
+// StageMapのON/OFF状態に応じて、描画オブジェクトの色を更新する。
 std::vector<Object3d*> StageOnOffVisualController::Apply(
     const StageMap& stageMap,
     const std::vector<std::unique_ptr<Object3d>>& objects) {
 
+	// 変更があったオブジェクトのポインタを返す。
     std::vector<Object3d*> dirtyObjects;
     const bool isOn = stageMap.IsOnState();
     size_t objIndex = 0;
@@ -19,6 +21,7 @@ std::vector<Object3d*> StageOnOffVisualController::Apply(
                     continue;
                 }
 
+				// オブジェクト配列のインデックスが範囲外になったら終了する。
                 if (objIndex >= objects.size()) {
                     return dirtyObjects;
                 }

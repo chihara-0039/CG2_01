@@ -24,6 +24,7 @@ void StageMapGimmickSystem::SetPSwitchActive(StageMap& stageMap, int switchId) {
     }
 }
 
+// Pスイッチの状態をリセットする（再構築なし）
 void StageMapGimmickSystem::ResetPSwitchStateNoRebuild(StageMap& stageMap) {
     stageMap.isPSwitchActive_ = false;
 

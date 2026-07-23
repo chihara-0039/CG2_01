@@ -2,6 +2,11 @@
 #include "GameRuntime.h"
 
 void GameRuntime::OnSceneEntered(SceneType sceneType) {
+    // 画面効果はシーン固有の状態として扱い、前のシーンから持ち越さない。
+    // Dissolveの内部タイマーも同時に止めるため、Controller経由で初期化する。
+    EnsurePostProcessInitialized();
+    postEffectShowcaseController_.Reset(postProcess_);
+
     switch (sceneType) {
     case SceneType::StageSelect:
         currentMode_ = AppMode::StageSelect;
@@ -33,6 +38,22 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
     }
 
     HandleModeChange();
+
+    // 天候を使わないシーンでは、Emitterを止めるだけでなく既に生成済みの
+    // 雨・雪・雲も破棄する。これにより遷移タイミングに依存した残留を防ぐ。
+    const bool usesStageWeather =
+        sceneType == SceneType::StageEditor ||
+        sceneType == SceneType::GamePlay ||
+        sceneType == SceneType::GamePlayBlockPlace;
+    const bool ownsEffectParticles =
+        sceneType == SceneType::EffectPreview ||
+        sceneType == SceneType::EffectShowcase;
+    if (!usesStageWeather && !ownsEffectParticles && particleManager) {
+        weatherRuntimeController_.StopStorm(*particleManager);
+        particleManager->GetWeatherEmitter().active = false;
+        particleManager->GetAmbientCloudEmitter().active = false;
+        particleManager->ClearParticles();
+    }
 }
 
 void GameRuntime::OnSceneExited(SceneType sceneType) {

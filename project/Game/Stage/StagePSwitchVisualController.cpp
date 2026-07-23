@@ -21,6 +21,7 @@ void ApplyScale(
 }
 }
 
+// PスイッチのON/OFF状態に応じて、描画オブジェクトのスケールを更新する。
 std::vector<Object3d*> StagePSwitchVisualController::Apply(
     bool active,
     std::vector<StagePSwitchVisualObject>& switchObjects,

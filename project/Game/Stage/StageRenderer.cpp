@@ -351,6 +351,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, cell->rotationY, 0.0f },
 						BlockType::Ladder
 					);
+					// Ladderだけを透明化対象として保存
 					if (cell->variant >= 1 && cell->variant <= 5) {
 						const auto* part = stageMap.GetCustomPart(cell->variant);
 						if (part) {
@@ -376,6 +377,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					int insideCustomId = UnpackBubbleCustomId(cell->variant);
 					BlockType insideType = UnpackBubbleType(cell->variant);
 
+					// カスタムパーツIDが1〜5の範囲内であれば、カスタムパーツの色を適用する
 					if (insideCustomId >= 1 && insideCustomId <= 5) {
 						const auto* part = stageMap.GetCustomPart(insideCustomId);
 						if (part) {
@@ -443,7 +445,10 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				}
 				break;
 
+				// ブロックの種類が PBlock（Pブロック）の場合
 				case BlockType::PBlock:
+
+				// Pブロックは、押されて消えている状態と、実体化している状態の両方があるため、描画オブジェクトを生成する際に状態に応じて色を変える
 				case BlockType::PBlockAppears:
 				{
 					Object3d* obj = CreateStageObject(
@@ -473,6 +478,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				}
 				break;
 
+				// ブロックの種類が TimedBlock（時間で消える足場）の場合
 				case BlockType::TimedBlock:
 				{
 					Object3d* newObj = CreateStageObject(
@@ -492,6 +498,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				}
 				break;
 
+				// ブロックの種類が CrumblingFloor（崩れる足場）の場合
 				case BlockType::CrumblingFloor:
 				{
 					Object3d* newObj = CreateStageObject(
@@ -502,7 +509,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						BlockType::CrumblingFloor
 					);
 
-					// ★追加：生成に成功したら専用の管理リストに記録する
+					// 生成に成功したら専用の管理リストに記録する
 					if (newObj) {
 						CrumblingFloorInstance instance;
 						instance.object = newObj;
@@ -545,7 +552,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					}
 				}
 					break;
-					// ▼ 追加：鍵の場合
+					// 鍵の場合
 				case BlockType::Key:
 					CreateStageObject(
 						keyModel_.get(),
@@ -571,6 +578,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						{ 0.0f, 0.0f, 0.0f }
 					);
 					break;
+
+				//トゲの場合
 				case BlockType::Spike:
 					{
 						CreateStageObject(
@@ -582,6 +591,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						);
 					}
 					break;
+
+				// ブロックの種類が EnemyWalker（歩く敵）の場合
 				case BlockType::EnemyWalker:
 					{
 						Object3d* obj = CreateStageObject(
@@ -600,6 +611,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						}
 					}
 					break;
+
+				// ブロックの種類が EnemyFlyer（飛行する敵）の場合
 				case BlockType::EnemyFlyer:
 					{
 						Object3d* obj = CreateStageObject(
@@ -618,6 +631,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						}
 					}
 					break;
+
+				// ブロックの種類が EnemyChaser（追尾する敵）の場合
 				case BlockType::EnemyChaser:
 					{
 						Object3d* obj = CreateStageObject(
@@ -636,6 +651,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 						}
 					}
 					break;
+
+				// ブロックの種類が EnemyShooter（弾を撃つ敵）の場合
 				case BlockType::OnOffSwitch: 
 				{
 					Object3d* obj = CreateStageObject(
@@ -652,6 +669,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					}
 				} 
 					break;
+
+				// ブロックの種類が OnBlock（ONブロック）の場合
 				case BlockType::OnBlock: 
 				{
 					Object3d* obj = CreateStageObject(
@@ -668,6 +687,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 					}
 				}
 					break;
+
+				// ブロックの種類が OffBlock（OFFブロック）の場合
 				case BlockType::OffBlock: 
 				{
 					Object3d* obj = CreateStageObject(
@@ -685,6 +706,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				}
 					break;
 
+				// ブロックの種類が TransparentBlock（透明ブロック）の場合
 				case BlockType::TransparentBlock:
 				{
 					Object3d* obj = CreateStageObject(
@@ -762,8 +784,11 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 		}
 	}
 
+	// ステージマップのセル情報を元に、動く床の位置を更新する
 	for (auto& instance : movingFloorInstances_) {
+		// ステージマップからセル情報を取得
 		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
+		// セルが存在し、かつ動く床のセルである場合のみ位置を更新
 		if (cell && cell->type == BlockType::MovingFloor) {
 			Vector3 basePosition = {
 				static_cast<float>(instance.cellIndex.x) * blockScale_.x,
@@ -784,8 +809,10 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 		}
 	}
 
+	// ステージマップのセル情報を元に、敵の位置を更新する
 	for (auto& instance : enemyInstances_) {
 		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
+		// セルが存在し、かつ敵のセルである場合のみ位置を更新
 		if (cell && (cell->type == BlockType::EnemyWalker || cell->type == BlockType::EnemyFlyer || cell->type == BlockType::EnemyChaser)) {
 			Vector3 basePosition = {
 				static_cast<float>(instance.cellIndex.x) * blockScale_.x,
@@ -805,6 +832,7 @@ void StageRenderer::Update(const StageMap& stageMap, const Matrix4x4& lightVP) {
 		}
 	}
 
+	// ステージマップのセル情報を元に、時間で消える足場の表示状態を更新する
 	for (auto& instance : timedBlockInstances_) {
 		const MapCell* cell = stageMap.GetCell(instance.cellIndex.x, instance.cellIndex.y, instance.cellIndex.z);
 		if (cell && cell->type == BlockType::TimedBlock) {
@@ -883,6 +911,7 @@ void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
 		firstGroup = &previewRenderGroups_.front();
 	}
 
+	// ビュー行列とプロジェクション行列を取得して定数バッファに設定
 	if (firstGroup && !firstGroup->instances.empty() && viewProjectionData_) {
 		Object3d* firstObj = firstGroup->instances.front().object;
 		viewProjectionData_->viewProjection = Math::Multiply(firstObj->GetViewMatrix(), firstObj->GetProjectionMatrix());
@@ -917,6 +946,7 @@ void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
 		}
 	};
 
+	// 影描画用のグループを描画
 	drawGroups(renderGroups_);
 	drawGroups(previewRenderGroups_);
 
@@ -924,6 +954,7 @@ void StageRenderer::DrawShadow(const Matrix4x4& lightVP) {
 	commandList->SetPipelineState(object3dCommon_->GetShadowPipelineState());
 }
 
+// 全てのオブジェクトの透明描画処理を呼び出す
 void StageRenderer::DrawTransparent()
 {
 	auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
@@ -935,6 +966,7 @@ void StageRenderer::DrawTransparent()
 		commandList->SetDescriptorHeaps(1, heaps);
 	}
 
+	// インスタンシング用PSOの設定（透明描画用）
 	commandList->SetPipelineState(object3dCommon_->GetInstancedAlphaPipelineState());
 	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -946,6 +978,7 @@ void StageRenderer::DrawTransparent()
 		firstGroup = &previewRenderGroups_.front();
 	}
 
+	// ビュー行列とプロジェクション行列を取得して定数バッファに設定
 	if (firstGroup && !firstGroup->instances.empty() && viewProjectionData_) {
 		Object3d* firstObj = firstGroup->instances.front().object;
 		viewProjectionData_->viewProjection = Math::Multiply(firstObj->GetViewMatrix(), firstObj->GetProjectionMatrix());
@@ -961,7 +994,7 @@ void StageRenderer::DrawTransparent()
 	auto drawGroups = [commandList, this](std::vector<RenderGroup>& groups) {
 		for (auto& group : groups) {
 
-			
+			// インスタンス数を取得
 			UINT numInstances = static_cast<UINT>(group.instances.size());
 			if (numInstances == 0) continue;
 
@@ -990,6 +1023,7 @@ void StageRenderer::DrawTransparent()
 		}
 		};
 
+	// 透明描画用のグループを描画
 	drawGroups(transparentRenderGroups_);
 	drawGroups(previewRenderGroups_);
 
@@ -1008,6 +1042,7 @@ void StageRenderer::Draw() {
 		commandList->SetDescriptorHeaps(1, heaps);
 	}
 
+	// インスタンシング用PSOの設定
 	commandList->SetPipelineState(object3dCommon_->GetInstancedPipelineState());
 	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -1063,6 +1098,7 @@ void StageRenderer::Draw() {
 		}
 	};
 
+	// 描画用のグループを描画
 	drawGroups(renderGroups_);
 	drawGroups(previewRenderGroups_);
 
@@ -1077,11 +1113,14 @@ void StageRenderer::Draw() {
 	}
 }
 
+// 指定したモデルのインスタンス描画用バッファを取得、または必要に応じて作成する
 ID3D12Resource* StageRenderer::GetOrCreateInstancedBuffer(Model* model, UINT numInstances) {
 	auto& info = instancedBuffers_[model];
+	// 既存のバッファがない、または必要なインスタンス数が現在の最大数を超える場合、新しいバッファを作成する
 	if (!info.buffer || info.maxInstances < numInstances) {
 		info.maxInstances = numInstances + 64;
 
+		// D3D12_HEAP_PROPERTIES と D3D12_RESOURCE_DESC を使ってバッファを作成
 		D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
 		D3D12_RESOURCE_DESC resDesc = {};
 		resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -1089,6 +1128,7 @@ ID3D12Resource* StageRenderer::GetOrCreateInstancedBuffer(Model* model, UINT num
 		resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
 		resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
 
+		// 既存のバッファがある場合は解放する
 		HRESULT hr = object3dCommon_->GetDxCommon()->GetDevice()->CreateCommittedResource(
 			&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
 			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
@@ -1110,7 +1150,6 @@ void StageRenderer::Clear() {
 	timedBlockInstances_.clear(); // ★追加：時間差ブロックリストをクリア
 
 
-	//5/19佐倉
 	pSwitchObjects_.clear();
 	pBlockObjects_.clear();
 
@@ -1132,7 +1171,7 @@ void StageRenderer::ApplyOnOffVisualState(const StageMap& stageMap) {
 	}
 }
 
-// 🌟 配置プレビュー表示機能の実装
+// 配置プレビュー表示機能の実装
 void StageRenderer::SetPlacementPreview(
 	const StageMap& stageMap,
 	const Int3& cursorIndex,
@@ -1258,11 +1297,12 @@ Object3d* StageRenderer::CreateStageObject(
 		break;
 	}
 
+	// 初期化後に行列を更新しておく
 	obj->Update(Math::MakeIdentity4x4());
 	return obj;
 }
 
-//5/19佐倉
+// PSwitchのON/OFF状態に応じて、PSwitchとPBlockの見た目を更新する
 void StageRenderer::ApplyPSwitchVisualState(const StageMap& stageMap)
 {
 	for (Object3d* obj : StagePSwitchVisualController::Apply(
@@ -1279,13 +1319,17 @@ void StageRenderer::BuildRenderGroups() {
 	objectToInstanceMap_.clear();
 	std::unordered_map<Model*, size_t> modelToGroupIndex;
 
+	// 各オブジェクトをモデルごとにグループ化
 	for (size_t i = 0; i < activeObjectCount_; ++i) {
 		Object3d* obj = objects_[i].get();
 		if (!obj || !obj->GetModel()) continue;
 
+		// モデルごとにグループ化するためのマップを使用
 		Model* model = obj->GetModel();
 		auto it = modelToGroupIndex.find(model);
 		size_t groupIndex = 0;
+
+		// モデルがまだグループ化されていない場合、新しいグループを作成
 		if (it == modelToGroupIndex.end()) {
 			groupIndex = renderGroups_.size();
 			modelToGroupIndex[model] = groupIndex;
@@ -1293,9 +1337,11 @@ void StageRenderer::BuildRenderGroups() {
 			group.model = model;
 			renderGroups_.push_back(std::move(group));
 		} else {
+			// 既存のグループがある場合、そのインデックスを取得
 			groupIndex = it->second;
 		}
 
+		// インスタンス情報をグループに追加
 		RenderInstance inst;
 		inst.object = obj;
 		inst.index = i;
@@ -1313,6 +1359,7 @@ void StageRenderer::BuildRenderGroups() {
 		group.maxInstances = numInstances;
 		group.isDirty = true; // 初回は転送が必要
 
+		// GPUバッファに初期データを転送
 		InstanceData* dataBegin = nullptr;
 		HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
 		if (SUCCEEDED(hr)) {
@@ -1340,13 +1387,16 @@ void StageRenderer::BuildPreviewRenderGroups() {
 	previewRenderGroups_.clear();
 	std::unordered_map<Model*, size_t> modelToGroupIndex;
 
+	// 各プレビューオブジェクトをモデルごとにグループ化
 	for (size_t i = 0; i < previewObjects_.size(); ++i) {
 		Object3d* obj = previewObjects_[i].get();
 		if (!obj || !obj->GetModel()) continue;
 
+		// モデルごとにグループ化するためのマップを使用
 		Model* model = obj->GetModel();
 		auto it = modelToGroupIndex.find(model);
 		size_t groupIndex = 0;
+		// モデルがまだグループ化されていない場合、新しいグループを作成
 		if (it == modelToGroupIndex.end()) {
 			groupIndex = previewRenderGroups_.size();
 			modelToGroupIndex[model] = groupIndex;
@@ -1354,9 +1404,11 @@ void StageRenderer::BuildPreviewRenderGroups() {
 			group.model = model;
 			previewRenderGroups_.push_back(std::move(group));
 		} else {
+			// 既存のグループがある場合、そのインデックスを取得
 			groupIndex = it->second;
 		}
 
+		// インスタンス情報をグループに追加
 		RenderInstance inst;
 		inst.object = obj;
 		inst.index = i;
@@ -1365,26 +1417,32 @@ void StageRenderer::BuildPreviewRenderGroups() {
 
 	// プレビューオブジェクト用のバッファ更新
 	for (auto& group : previewRenderGroups_) {
+		// インスタンス数を取得
 		UINT numInstances = static_cast<UINT>(group.instances.size());
 		group.instanceData.resize(numInstances);
 		group.buffer = GetOrCreateInstancedBuffer(group.model, numInstances);
 		group.maxInstances = numInstances;
 		group.isDirty = true; // 初回は転送が必要
 
+		// GPUバッファに初期データを転送
 		InstanceData* dataBegin = nullptr;
 		HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+
+		// 転送が成功した場合、各インスタンスのデータをコピー
 		if (SUCCEEDED(hr)) {
 			for (UINT i = 0; i < numInstances; ++i) {
 				Object3d* obj = group.instances[i].object;
 				const auto& tf = obj->GetTransform();
 				group.instanceData[i].world = Math::MakeAffineMatrix(tf.scale, tf.rotate, tf.translate);
 
+				// マテリアル情報もコピー
 				const auto& mat = obj->GetMaterial();
 				group.instanceData[i].color = mat.color;
 				group.instanceData[i].shininess = mat.shininess;
 				group.instanceData[i].metallic = mat.metallic;
 				group.instanceData[i].emissive = mat.emissive;
 
+				// キャッシュデータをGPUバッファにコピー
 				dataBegin[i] = group.instanceData[i];
 			}
 			group.buffer->Unmap(0, nullptr);
@@ -1406,6 +1464,7 @@ void StageRenderer::MarkDirty(Object3d* obj) {
 			const auto& tf = obj->GetTransform();
 			group.instanceData[instIdx].world = Math::MakeAffineMatrix(tf.scale, tf.rotate, tf.translate);
 
+			// マテリアル情報も更新
 			const auto& mat = obj->GetMaterial();
 			group.instanceData[instIdx].color = mat.color;
 			group.instanceData[instIdx].shininess = mat.shininess;
@@ -1417,16 +1476,20 @@ void StageRenderer::MarkDirty(Object3d* obj) {
 	}
 }
 
+// --- 高速インスタンシング用：透明描画グループの再構築 ---
 void StageRenderer::RebuildTransparencyGroups()
 {
 	renderGroups_.clear();
 	transparentRenderGroups_.clear();
 	objectToInstanceMap_.clear();
 
+	// オブジェクトをモデルごとにグループ化するラムダ関数
 	auto AddToGroups = [&](std::vector<RenderGroup>& groups, Object3d* obj, size_t index) {
 		Model* model = obj->GetModel();
 
+		// 既存のグループを検索
 		RenderGroup* targetGroup = nullptr;
+		// 既存のグループが見つからなければ新しいグループを作成
 		for (auto& group : groups) {
 			if (group.model == model) {
 				targetGroup = &group;
@@ -1434,6 +1497,7 @@ void StageRenderer::RebuildTransparencyGroups()
 			}
 		}
 
+		// 既存のグループが見つからなければ新しいグループを作成
 		if (!targetGroup) {
 			RenderGroup group;
 			group.model = model;
@@ -1441,10 +1505,12 @@ void StageRenderer::RebuildTransparencyGroups()
 			targetGroup = &groups.back();
 		}
 
+		// インスタンス情報をグループに追加
 		RenderInstance inst;
 		inst.object = obj;
 		inst.index = index;
 
+		// インスタンスのインデックスを取得してから追加
 		size_t instanceIndex = targetGroup->instances.size();
 		targetGroup->instances.push_back(inst);
 
@@ -1461,6 +1527,7 @@ void StageRenderer::RebuildTransparencyGroups()
 		}
 	};
 
+	// MovingFloorオブジェクトかどうかを判定するラムダ関数
 	auto IsMovingFloorObject = [&](Object3d* obj) {
 		for (const auto& instance : movingFloorInstances_) {
 			if (instance.object == obj) {
@@ -1470,6 +1537,7 @@ void StageRenderer::RebuildTransparencyGroups()
 		return false;
 	};
 
+	// 全てのオブジェクトを走査して、透明か不透明かでグループ分けする
 	for (size_t i = 0; i < activeObjectCount_; ++i) {
 		Object3d* obj = objects_[i].get();
 		if (!obj || !obj->GetModel()) continue;
@@ -1481,8 +1549,10 @@ void StageRenderer::RebuildTransparencyGroups()
 			continue;
 		}
 
+		// マテリアルのアルファ値を取得して透明か不透明かを判定
 		const auto& mat = obj->GetMaterial();
 
+		// 透明度が0.99未満なら透明描画グループに追加、そうでなければ通常描画グループに追加
 		if (mat.color.w < 0.99f) {
 			AddToGroups(transparentRenderGroups_, obj, i);
 		} else {
@@ -1490,14 +1560,17 @@ void StageRenderer::RebuildTransparencyGroups()
 		}
 	}
 
+	// 各グループのインスタンスデータを構築するラムダ関数
 	auto BuildGroupData = [&](std::vector<RenderGroup>& groups) {
 		for (auto& group : groups) {
 			UINT numInstances = static_cast<UINT>(group.instances.size());
 			group.instanceData.resize(numInstances);
 			
+			// 既存のバッファがない、または必要なインスタンス数が現在の最大数を超える場合、新しいバッファを作成
 			if (!group.buffer || group.maxInstances < numInstances) {
 				group.maxInstances = numInstances + 64;
 
+				// D3D12_HEAP_PROPERTIES と D3D12_RESOURCE_DESC を使ってバッファを作成
 				D3D12_HEAP_PROPERTIES heapProps = {
 					D3D12_HEAP_TYPE_UPLOAD,
 					D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
@@ -1506,6 +1579,7 @@ void StageRenderer::RebuildTransparencyGroups()
 					1
 				};
 
+				// バッファのリソース記述子を設定
 				D3D12_RESOURCE_DESC resDesc = {};
 				resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 				resDesc.Width = sizeof(InstanceData) * group.maxInstances;
@@ -1515,6 +1589,7 @@ void StageRenderer::RebuildTransparencyGroups()
 				resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 				resDesc.SampleDesc.Count = 1;
 
+				// 既存のバッファがある場合は解放する
 				HRESULT hr = object3dCommon_->GetDxCommon()->GetDevice()->CreateCommittedResource(
 					&heapProps,
 					D3D12_HEAP_FLAG_NONE,
@@ -1527,10 +1602,14 @@ void StageRenderer::RebuildTransparencyGroups()
 				assert(SUCCEEDED(hr));
 			}
 
+			// Dirtyフラグを立てて、次回の描画時にGPUバッファに転送する
 			group.isDirty = true;
 
+			// GPUバッファに初期データを転送
 			InstanceData* dataBegin = nullptr;
 			HRESULT hr = group.buffer->Map(0, nullptr, (void**)&dataBegin);
+
+			// 転送が成功した場合、各インスタンスのデータをコピー
 			if (SUCCEEDED(hr)) {
 				for (UINT i = 0; i < numInstances; ++i) {
 					Object3d* obj = group.instances[i].object;
@@ -1557,6 +1636,7 @@ void StageRenderer::RebuildTransparencyGroups()
 	BuildGroupData(transparentRenderGroups_);
 }
 
+// 壁の透明化処理を更新する
 void StageRenderer::UpdateWallTransparency(
 	const Vector3& cameraPos,
 	const Vector3& playerPos,
@@ -1565,6 +1645,7 @@ void StageRenderer::UpdateWallTransparency(
 	int currentStageIndex
 )
 {
+	// 壁の透明化処理を適用する
 	StageWallTransparencyController::Apply(
 		wallObjects_,
 		cameraPos,
@@ -1575,34 +1656,41 @@ void StageRenderer::UpdateWallTransparency(
 	RebuildTransparencyGroups();
 }
 
+// 雲の透明化処理を更新する
 void StageRenderer::UpdateCloudTransparency(
 	const Vector3& cameraPos,
 	const Vector3& playerPos
 )
 {
+	// カメラから自機への視線ベクトルを計算
 	Vector3 viewLine = {
 		playerPos.x - cameraPos.x,
 		playerPos.y - cameraPos.y,
 		playerPos.z - cameraPos.z
 	};
 
+	// 視線ベクトルの長さの二乗を計算
 	float lineLenSq =
 		viewLine.x * viewLine.x +
 		viewLine.y * viewLine.y +
 		viewLine.z * viewLine.z;
 
+	// 視線ベクトルがほぼゼロの場合は処理をスキップ
 	if (lineLenSq <= 0.0001f) {
 		return;
 	}
 
+	// 雲のリストを走査して、視線に近い雲を透明化する
 	for (auto& cloud : clouds_) {
 		for (size_t i = 0; i < cloud.objects.size(); ++i) {
 			Object3d* obj = cloud.objects[i].get();
 
+			// 雲オブジェクトが存在しない場合はスキップ
 			if (!obj) {
 				continue;
 			}
 
+			// 雲の位置を取得
 			Vector3 cloudPos = obj->GetPosition();
 
 			Vector3 cameraToCloud = {
@@ -1612,8 +1700,7 @@ void StageRenderer::UpdateCloudTransparency(
 			};
 
 			// カメラ→自機の線分上のどの位置に雲が近いか
-			float t =
-				(cameraToCloud.x * viewLine.x +
+			float t = (cameraToCloud.x * viewLine.x +
 					cameraToCloud.y * viewLine.y +
 					cameraToCloud.z * viewLine.z) / lineLenSq;
 
@@ -1623,6 +1710,7 @@ void StageRenderer::UpdateCloudTransparency(
 				continue;
 			}
 
+			// 視線上の最近接点を計算
 			Vector3 closestPoint = {
 				cameraPos.x + viewLine.x * t,
 				cameraPos.y + viewLine.y * t,

@@ -144,16 +144,16 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
             bool hitDownGuide = isMouseInsideGuide(centerX + downGuideOffset.x, bottomGuideY + downGuideOffset.y);
 
             if (hitLeftGuide) {
-                cameraAngle_ += rotateSpeed;
-                hasCameraParameterChanged = true;
-            } else if (hitRightGuide) {
                 cameraAngle_ -= rotateSpeed;
                 hasCameraParameterChanged = true;
+            } else if (hitRightGuide) {
+                cameraAngle_ += rotateSpeed;
+                hasCameraParameterChanged = true;
             } else if (hitUpGuide) {
-                cameraPitch_ += rotateSpeed;
+                cameraPitch_ -= rotateSpeed;
                 hasCameraParameterChanged = true;
             } else if (hitDownGuide) {
-                cameraPitch_ -= rotateSpeed;
+                cameraPitch_ += rotateSpeed;
                 hasCameraParameterChanged = true;
             }
 
@@ -165,19 +165,19 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     // LEFT/RIGHTは注視点を中心とする水平旋回、UP/DOWNは上下角度を担当する。
     const float keyRotateSpeed = 0.025f;
     if (input->PushKey(DIK_LEFT)) {
-        cameraAngle_ -= keyRotateSpeed;
-        hasCameraParameterChanged = true;
-    }
-    if (input->PushKey(DIK_RIGHT)) {
         cameraAngle_ += keyRotateSpeed;
         hasCameraParameterChanged = true;
     }
+    if (input->PushKey(DIK_RIGHT)) {
+        cameraAngle_ -= keyRotateSpeed;
+        hasCameraParameterChanged = true;
+    }
     if (input->PushKey(DIK_UP)) {
-        cameraPitch_ += keyRotateSpeed;
+        cameraPitch_ -= keyRotateSpeed;
         hasCameraParameterChanged = true;
     }
     if (input->PushKey(DIK_DOWN)) {
-        cameraPitch_ -= keyRotateSpeed;
+        cameraPitch_ += keyRotateSpeed;
         hasCameraParameterChanged = true;
     }
 

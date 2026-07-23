@@ -7,6 +7,9 @@
 
 void GameRuntime::UpdateGamePlay() {
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
+    EnsurePostProcessInitialized();
+    postEffectShowcaseController_.UpdateGameplay(*input, postProcess_);
+    postEffectShowcaseController_.DrawGameplayImGui(postProcess_);
 
     if (input->TriggerKey(DIK_C)) {
         useFirstPersonCamera_ = !useFirstPersonCamera_;
@@ -64,24 +67,24 @@ void GameRuntime::UpdateGamePlay() {
                 float bottomEdge = WinApp::kWindowHeight * (1.0f - edgeRatio);
 
                 if (scaledMouseX < leftEdge) {
-                    fpsCameraYaw_ += rotateSpeed;
-                } else if (scaledMouseX > rightEdge) {
                     fpsCameraYaw_ -= rotateSpeed;
+                } else if (scaledMouseX > rightEdge) {
+                    fpsCameraYaw_ += rotateSpeed;
                 }
 
                 if (scaledMouseY < topEdge) {
-                    fpsCameraPitch_ += rotateSpeed;
-                } else if (scaledMouseY > bottomEdge) {
                     fpsCameraPitch_ -= rotateSpeed;
+                } else if (scaledMouseY > bottomEdge) {
+                    fpsCameraPitch_ += rotateSpeed;
                 }
             }
         }
 
         const float keyRotateSpeed = 0.03f;
-        if (input->PushKey(DIK_LEFT)) { fpsCameraYaw_ += keyRotateSpeed; }
-        if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_ -= keyRotateSpeed; }
-        if (input->PushKey(DIK_UP)) { fpsCameraPitch_ += keyRotateSpeed; }
-        if (input->PushKey(DIK_DOWN)) { fpsCameraPitch_ -= keyRotateSpeed; }
+        if (input->PushKey(DIK_LEFT)) { fpsCameraYaw_ -= keyRotateSpeed; }
+        if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_ += keyRotateSpeed; }
+        if (input->PushKey(DIK_UP)) { fpsCameraPitch_ -= keyRotateSpeed; }
+        if (input->PushKey(DIK_DOWN)) { fpsCameraPitch_ += keyRotateSpeed; }
         fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
 
         if (player_) {
@@ -147,10 +150,28 @@ void GameRuntime::UpdateGamePlay() {
     }
 
     if (isGoalReached_) {
+        if (clearGuideSprite_) {
+            clearGuideSprite_->Update();
+        }
+
+        // ゴール後は明示操作でステージ選択へ戻す。
+        // 押した瞬間に復元して、次に同じステージを始めても崩壊床等が残らないようにする。
+        if (input->TriggerKey(DIK_SPACE)) {
+            stageMap_ = backupMap_;
+            stageRenderer_->BuildFromStageMap(stageMap_);
+            bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+            stageSelect_->Initialize(object3dCommon.get(), input.get());
+            isGoalReached_ = false;
+            RequestSceneChange(SceneType::StageSelect);
+        }
     }
 }
 
 void GameRuntime::UpdateGamePlayBlockPlace() {
+    EnsurePostProcessInitialized();
+    postEffectShowcaseController_.UpdateGameplay(*input, postProcess_);
+    postEffectShowcaseController_.DrawGameplayImGui(postProcess_);
+
     const Int3& cursor = mapCursor_->GetIndex();
     if (input->TriggerKey(DIK_R)) {
         placeRotationY_ += 1.5707963f;
@@ -217,6 +238,11 @@ void GameRuntime::UpdateStageSelect() {
     if (stageSelect_->IsFnished()) {
         std::string path = "Resources/Stages/" + stageSelect_->GetSelectedFileName();
         if (std::filesystem::exists(path)) {
+            // グリッドステージ開始時はBlenderステージの衝突・Spawnを無効化する。
+            blenderStageActive_ = false;
+            if (player_) {
+                player_->SetExternalCollisionBoxes(nullptr);
+            }
             stageMap_.LoadFromFile(path);
             backupMap_ = stageMap_;
             stageRenderer_->BuildFromStageMap(stageMap_);
@@ -224,7 +250,6 @@ void GameRuntime::UpdateStageSelect() {
             playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
 
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
-            ApplyRuntimePlayerSpawn();
             gameplayCameraController_.ResetCamera(
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
             blockInventory_.Initialize(0);

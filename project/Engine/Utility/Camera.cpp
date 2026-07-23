@@ -49,8 +49,9 @@ void Camera::UpdateBlenderStyle(const Input* input, bool isGuiCaptured, HWND hwn
 
     // 1. 回転 (マウス中ボタンのみ)
     if (mouse.buttons[2] && !input->PushKey(DIK_LSHIFT)) {
-        transform_.rotate.y += mouse.x * rotateSpeed;
-        transform_.rotate.x += mouse.y * rotateSpeed;
+        // 水平ドラッグはゲームカメラと同じ反転方向で旋回させる。
+        transform_.rotate.y -= mouse.x * rotateSpeed;
+        transform_.rotate.x -= mouse.y * rotateSpeed;
     }
 
     // 2. パン/並行移動 (Shift + マウス中ボタン)
@@ -104,4 +105,4 @@ void Camera::DrawImGui() {
         distance_ = 20.0f;
     }
 #endif
-}
+}

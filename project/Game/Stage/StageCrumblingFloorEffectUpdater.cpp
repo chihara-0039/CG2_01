@@ -3,11 +3,13 @@
 #include "Object3d.h"
 #include "StageMap.h"
 
+// 崩れる床の進行状態を描画オブジェクトに反映する。
 std::vector<Object3d*> StageCrumblingFloorEffectUpdater::Apply(
     const StageMap& stageMap,
     bool isEditorMode,
     const std::vector<std::unique_ptr<Object3d>>& objects) {
 
+	// 変更があったオブジェクトのポインタを返す。
     std::vector<Object3d*> dirtyObjects;
     size_t objIndex = 0;
 
@@ -39,6 +41,7 @@ std::vector<Object3d*> StageCrumblingFloorEffectUpdater::Apply(
                         cell->colorB,
                         cell->opacity
                     });
+					// 変更があったオブジェクトとしてリストに追加する。
                     dirtyObjects.push_back(obj);
                 }
 

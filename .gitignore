@@ -49,3 +49,5 @@ imgui.ini
 # --- Local submission packages ---
 CG2_01_Project_Submission.zip
 CG2_01_Project_Submission/
+# Local Release packages generated for evaluation/submission checks.
+artifacts/

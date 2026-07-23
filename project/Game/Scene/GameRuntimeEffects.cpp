@@ -199,7 +199,6 @@ void GameRuntime::EmitEffectPreviewBurst() {
 
 void GameRuntime::UpdateEffectPreview() {
     debugFlags_.showParticles = true;
-    effectShowcaseController_.TickLight(1.0f / 60.0f);
     if (particleManager) {
         particleManager->SetDrawGPUParticleSphere(effectPreviewStormMode_ ? false : effectPreviewShowGPUParticleSphere_);
         if (effectPreviewStormMode_ && !particleManager->IsStormActive()) {

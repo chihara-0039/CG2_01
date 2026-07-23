@@ -1,5 +1,6 @@
 #include "StageTransparencyPolicy.h"
 
+// ステージごとの透過エリア判定を行う。
 bool StageTransparencyPolicy::IsTransparencyArea(int stageIndex, int x, int y, int z) {
     switch (stageIndex) {
     case 0:

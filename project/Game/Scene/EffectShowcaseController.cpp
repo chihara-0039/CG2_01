@@ -66,7 +66,6 @@ bool EffectShowcaseController::Update(
     Input& input, ParticleManager* particles, const Vector3& position,
     const LoadPreset& loadStorm, const LoadPreset& loadHit,
     const SimpleAction& emitHit, const SimpleAction& refreshPresets) {
-    TickLight(1.0f / 60.0f);
     if (firstPlay_) {
         firstPlay_ = false;
         SelectPreset(selectedIndex_, true, particles, position, loadStorm, loadHit, emitHit);

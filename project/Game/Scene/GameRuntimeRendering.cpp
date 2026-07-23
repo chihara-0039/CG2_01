@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include "externals/imgui/imgui.h"
+#include "../Environment/WeatherPresetManager.h"
 
 void GameRuntime::DrawCollisionDebugBoxes() {
     if (!debugFlags_.showCollisionBoxes || !camera || !player_ ||
@@ -157,12 +158,31 @@ void GameRuntime::DrawCollisionDebugBoxes() {
 void GameRuntime::Draw() {
     auto commandList = dxCommon->GetCommandList();
 
-    if (skydomeObject_) {
-        if (postProcessInitialized_ && postProcess_.GetSkyboxLinkMode() == 1) {
-            skydomeObject_->SetColor(postProcess_.GetClearColor());
-        } else {
-            skydomeObject_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+    Vector4 skyTint = {1.0f, 1.0f, 1.0f, 1.0f};
+    const bool usesStageWeather =
+        currentMode_ == AppMode::StageEditor ||
+        currentMode_ == AppMode::GamePlay ||
+        currentMode_ == AppMode::GamePlay_BlockPlace;
+    if (usesStageWeather) {
+        if (const WeatherPreset* preset =
+            WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName())) {
+            skyTint = {
+                std::clamp(preset->skyColor.x * preset->skyBrightness, 0.0f, 2.0f),
+                std::clamp(preset->skyColor.y * preset->skyBrightness, 0.0f, 2.0f),
+                std::clamp(preset->skyColor.z * preset->skyBrightness, 0.0f, 2.0f),
+                preset->skyColor.w
+            };
         }
+    } else if (postProcessInitialized_ && postProcess_.GetSkyboxLinkMode() == 1) {
+        skyTint = postProcess_.GetClearColor();
+    }
+
+    // 天候の色と明るさは、メッシュ天球とキューブマップの両方へ同じ値を渡す。
+    if (skydomeObject_) {
+        skydomeObject_->SetColor(skyTint);
+    }
+    if (skybox_) {
+        skybox_->SetColor(skyTint);
     }
 
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
@@ -350,6 +370,10 @@ void GameRuntime::RenderScene() {
     if ((currentMode_ == AppMode::GamePlay_BlockPlace || isInventoryOpen) && placementTutorialSprite_) {
         spriteCommon->PreDraw();
         placementTutorialSprite_->Draw();
+    }
+    if (currentMode_ == AppMode::GamePlay && isGoalReached_ && clearGuideSprite_) {
+        spriteCommon->PreDraw();
+        clearGuideSprite_->Draw();
     }
 }
 

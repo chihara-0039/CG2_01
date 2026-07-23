@@ -38,6 +38,10 @@ const char* GetEffectName(int mode) {
 }
 } // namespace
 
+void PostEffectShowcaseController::Reset(PostProcessRenderer& postProcess) {
+    ReturnToNormal(postProcess);
+}
+
 bool PostEffectShowcaseController::Update(
     Input& input, ParticleManager* particleManager, PostProcessRenderer& postProcess) {
     postProcess.SetEnabled(true);
@@ -49,19 +53,109 @@ bool PostEffectShowcaseController::Update(
         particleManager->ClearParticles();
     }
 
+    if (input.TriggerKey(DIK_N)) {
+        ReturnToNormal(postProcess);
+    }
     for (const PostEffectBinding& binding : kBindings) {
         if (!input.TriggerKey(binding.key)) {
             continue;
         }
-        postProcess.SetPostEffectMode(binding.mode);
         if (binding.mode == 10) {
-            postProcess.SetDissolveThreshold(0.35f);
+            StartDissolve(postProcess);
         } else if (binding.mode == 11) {
+            dissolvePlaying_ = false;
+            returnToNormalNextFrame_ = false;
+            postProcess.SetPostEffectMode(binding.mode);
             postProcess.SetRandomMode(0);
             postProcess.SetRandomStrength(0.55f);
+        } else {
+            dissolvePlaying_ = false;
+            returnToNormalNextFrame_ = false;
+            postProcess.SetPostEffectMode(binding.mode);
         }
     }
+    UpdateDissolve(postProcess);
     return input.TriggerKey(DIK_TAB);
+}
+
+void PostEffectShowcaseController::UpdateGameplay(
+    Input& input, PostProcessRenderer& postProcess) {
+    postProcess.SetEnabled(true);
+    if (input.TriggerKey(DIK_N)) {
+        ReturnToNormal(postProcess);
+    }
+    for (const PostEffectBinding& binding : kBindings) {
+        if (!input.TriggerKey(binding.key)) {
+            continue;
+        }
+        if (binding.mode == 10) {
+            StartDissolve(postProcess);
+        } else if (binding.mode == 11) {
+            dissolvePlaying_ = false;
+            returnToNormalNextFrame_ = false;
+            postProcess.SetPostEffectMode(binding.mode);
+            postProcess.SetRandomMode(0);
+            postProcess.SetRandomStrength(0.55f);
+        } else {
+            dissolvePlaying_ = false;
+            returnToNormalNextFrame_ = false;
+            postProcess.SetPostEffectMode(binding.mode);
+        }
+    }
+    UpdateDissolve(postProcess);
+}
+
+void PostEffectShowcaseController::StartDissolve(PostProcessRenderer& postProcess) {
+    dissolvePlaying_ = true;
+    returnToNormalNextFrame_ = false;
+    dissolveThreshold_ = 0.0f;
+    postProcess.SetDissolveThreshold(0.0f);
+    postProcess.SetPostEffectMode(10);
+}
+
+void PostEffectShowcaseController::UpdateDissolve(PostProcessRenderer& postProcess) {
+    if (returnToNormalNextFrame_) {
+        ReturnToNormal(postProcess);
+        return;
+    }
+    if (!dissolvePlaying_) {
+        return;
+    }
+    dissolveThreshold_ += (1.0f / 60.0f) / kDissolveDurationSeconds;
+    if (dissolveThreshold_ >= 1.0f) {
+        // threshold=1の完全消去フレームを描画してから、次フレームで通常へ戻す。
+        dissolvePlaying_ = false;
+        dissolveThreshold_ = 1.0f;
+        returnToNormalNextFrame_ = true;
+        postProcess.SetDissolveThreshold(1.0f);
+        return;
+    }
+    postProcess.SetDissolveThreshold(dissolveThreshold_);
+}
+
+void PostEffectShowcaseController::ReturnToNormal(PostProcessRenderer& postProcess) {
+    dissolvePlaying_ = false;
+    returnToNormalNextFrame_ = false;
+    dissolveThreshold_ = 0.0f;
+    postProcess.SetDissolveThreshold(0.0f);
+    postProcess.SetPostEffectMode(0);
+}
+
+void PostEffectShowcaseController::DrawGameplayImGui(
+    const PostProcessRenderer& postProcess) const {
+    const ImGuiIO& io = ImGui::GetIO();
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav;
+    constexpr float width = 360.0f;
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - width - 18.0f, 18.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, 74.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.68f);
+    ImGui::Begin("CG5 Gameplay PostEffect", nullptr, flags);
+    ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.36f, 1.0f), "CG5 PostEffect: %s",
+        GetEffectName(postProcess.GetPostEffectMode()));
+    ImGui::TextUnformatted("N: Normal  1: Grayscale  9: Full Dissolve  2-0: Extra");
+    ImGui::End();
 }
 
 void PostEffectShowcaseController::DrawImGui(const PostProcessRenderer& postProcess) const {
@@ -86,7 +180,7 @@ void PostEffectShowcaseController::DrawImGui(const PostProcessRenderer& postProc
     ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.36f, 1.0f), "POST EFFECT SHOWCASE");
     ImGui::SetWindowFontScale(1.15f);
     ImGui::Text("Current : %s", GetEffectName(postProcess.GetPostEffectMode()));
-    ImGui::TextUnformatted("CG5 Evaluation Task 1 dedicated mode");
+    ImGui::TextUnformatted("N: Normal / 9: Full Dissolve / 1-0: PostEffects");
     ImGui::End();
 
 #ifdef NDEBUG

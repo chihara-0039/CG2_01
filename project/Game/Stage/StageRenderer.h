@@ -34,7 +34,7 @@ public:
 
     void ApplyPSwitchVisualState(const StageMap& stageMap);
 
-    // 🌟 配置プレビュー表示機能
+    // 配置プレビュー表示機能
     void SetPlacementPreview(
         const StageMap& stageMap,
         const Int3& cursorIndex,
@@ -46,7 +46,7 @@ public:
 
     void Clear();
 
-    // StageRenderer.h
+	// ON/OFFブロックとスイッチの視覚状態をステージマップに基づいて更新する
     void ApplyOnOffVisualState(const StageMap& stageMap);
 
 private:
@@ -87,20 +87,20 @@ private:
     std::vector<CloudInstance> clouds_;
     std::vector<std::unique_ptr<Object3d>> objects_;
     size_t activeObjectCount_ = 0;
-    std::vector<std::unique_ptr<Object3d>> previewObjects_; // 🌟 半透明プレビュー用オブジェクト
+    std::vector<std::unique_ptr<Object3d>> previewObjects_; // 半透明プレビュー用オブジェクト
     Vector3 blockScale_{ 1.0f, 1.0f, 1.0f };
 
 private:
     Object3d* CreateStageObject(Model* model, const Vector3& position, const Vector3& scale, const Vector3& rotation, BlockType type = BlockType::None);
 
-    // ▼ 追加：動く足場とマップ上のセル位置を紐付ける構造体
+    // 動く足場とマップ上のセル位置を紐付ける構造体
         struct MovingFloorInstance 
         {
             Object3d* object = nullptr; // 3Dオブジェクトへのポインタ
             Int3 cellIndex;            // StageMap上での [x, y, z] の位置
         };
 
-    // ▼ 追加：ステージ内のすべての動く足場を管理するリスト
+    // ステージ内のすべての動く足場を管理するリスト
     std::vector<MovingFloorInstance> movingFloorInstances_;
 
     // 動く足場の管理リストの近くに追加
@@ -108,8 +108,8 @@ private:
         Object3d* object = nullptr; // 3Dオブジェクトへのポインタ
         Int3 cellIndex;             // StageMap上での [x, y, z] 位置
     };
-    std::vector<CrumblingFloorInstance> crumblingFloorInstances_; // ★追加：崩れる足場の管理リスト
-    // ▼ 追加：ステージ内のすべての敵キャラクターを管理するリスト
+    std::vector<CrumblingFloorInstance> crumblingFloorInstances_; // 崩れる足場の管理リスト
+    // ステージ内のすべての敵キャラクターを管理するリスト
     struct EnemyInstance 
     {
         Object3d* object = nullptr; // 3Dオブジェクトへのポインタ
@@ -120,7 +120,7 @@ private:
     std::vector<StagePSwitchVisualObject> pSwitchObjects_;
     std::vector<StagePSwitchVisualObject> pBlockObjects_;
 
-    //5/26佐倉
+	// 壁のオブジェクトを管理するリスト
     std::vector<Object3d*> wallObjects_;
     struct TimedBlockInstance {
         Object3d* object = nullptr;
@@ -141,6 +141,7 @@ private:
         float padding[3];
     };
 
+	// インスタンシング描画用の定数バッファ構造体 (View/Projection)
     struct ViewProjectionMatrix {
         Matrix4x4 viewProjection;
         Matrix4x4 lightViewProjection;
@@ -165,11 +166,13 @@ private:
 
     // --- 高速インスタンシング描画用グループ管理構造とメソッド ---
 public:
+	// インスタンス描画用のオブジェクト情報を保持する構造体
     struct RenderInstance {
         Object3d* object = nullptr;
         size_t index = 0; // objects_ または previewObjects_ 内のインデックス
     };
 
+	// モデルごとにインスタンシング描画用のグループを管理する構造体
     struct RenderGroup {
         Model* model = nullptr;
         std::vector<RenderInstance> instances;
@@ -180,6 +183,7 @@ public:
     };
 
 private:
+	// インスタンシング描画用のグループリスト
     std::vector<RenderGroup> renderGroups_;
     std::vector<RenderGroup> previewRenderGroups_;
     // オブジェクトの生ポインタから、renderGroups_ 内の [グループインデックス, インスタンスインデックス] を高速に引くためのマップ
@@ -195,6 +199,7 @@ private:
 
 public:
 
+	// 壁の透過処理
     void UpdateWallTransparency(
         const Vector3& cameraPos,
         const Vector3& playerPos,
