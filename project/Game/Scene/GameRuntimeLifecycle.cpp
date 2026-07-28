@@ -2,6 +2,7 @@
 #include "GameRuntime.h"
 #include "../Environment/WeatherPresetManager.h"
 #include "ModelManager.h"
+#include "externals/imgui/imgui.h"
 #include <filesystem>
 #include <memory>
 
@@ -49,7 +50,11 @@ void GameRuntime::Initialize() {
     const char* runtimeLevelPath = std::filesystem::exists("Resources/Levels/game_level.json")
         ? "Resources/Levels/game_level.json"
         : "Resources/Levels/sample_level.json";
+    strncpy_s(
+        blenderLevelPath_.data(), blenderLevelPath_.size(),
+        runtimeLevelPath, _TRUNCATE);
     blenderRuntimeLevel_.Load(runtimeLevelPath);
+    SyncBlenderLevelWriteTime();
 
 
     Object3d* debugFloor = CreateObject(models[0].get(), { -25.0f, 0.0f, 0.0f });
@@ -219,6 +224,7 @@ bool GameRuntime::LoadBlenderStage(bool beginPlay) {
     if (!blenderRuntimeLevel_.Load(levelPath)) {
         return false;
     }
+    SyncBlenderLevelWriteTime();
 
     if (beginPlay) {
         blenderStageActive_ = true;
@@ -232,11 +238,115 @@ bool GameRuntime::LoadBlenderStage(bool beginPlay) {
         player_->SetExternalCollisionBoxes(&blenderRuntimeLevel_.GetCollisionBoxes());
         ApplyRuntimePlayerSpawn();
         RequestSceneChange(SceneType::GamePlay);
-    } else if (blenderStageActive_) {
+    } else if (currentMode_ == AppMode::StageEditor) {
+        // 外部ツールで作成したレベルを、シーン遷移せずステージエディター内へ表示する。
+        // 読み込んだBOXコライダーとスポーン地点も同時に反映し、見た目だけでなく
+        // 実際のゲーム用レベルとして確認できる状態にする。
+        blenderStageActive_ = true;
         player_->SetExternalCollisionBoxes(&blenderRuntimeLevel_.GetCollisionBoxes());
         ApplyRuntimePlayerSpawn();
+        camera->ForceReset(player_->GetPosition(), 18.0f, { 0.35f, 0.0f, 0.0f });
+    } else if (blenderStageActive_) {
+        player_->SetExternalCollisionBoxes(&blenderRuntimeLevel_.GetCollisionBoxes());
     }
     return true;
+}
+
+void GameRuntime::SyncBlenderLevelWriteTime() {
+    std::error_code error;
+    const std::filesystem::path levelPath(blenderLevelPath_.data());
+    if (!std::filesystem::exists(levelPath, error) || error) {
+        blenderLevelWatchInitialized_ = false;
+        return;
+    }
+
+    blenderLevelWriteTime_ = std::filesystem::last_write_time(levelPath, error);
+    if (!error) {
+        pendingBlenderLevelWriteTime_ = blenderLevelWriteTime_;
+        blenderLevelWatchInitialized_ = true;
+        blenderLevelReloadPending_ = false;
+        blenderLevelChangeStableTime_ = 0.0f;
+    }
+}
+
+void GameRuntime::UpdateBlenderLevelFileWatch() {
+    // エディターから明示的に読み込んだ外部レベルだけを監視する。
+    // 初期パスを常時監視すると、F5操作や別ステージ編集中に意図せず混在してしまう。
+    if (!blenderStageActive_) {
+        return;
+    }
+
+    const std::filesystem::path levelPath(blenderLevelPath_.data());
+    std::error_code error;
+    if (!std::filesystem::exists(levelPath, error) || error) {
+        return;
+    }
+
+    const auto currentWriteTime = std::filesystem::last_write_time(levelPath, error);
+    if (error) {
+        return;
+    }
+
+    if (!blenderLevelWatchInitialized_) {
+        blenderLevelWriteTime_ = currentWriteTime;
+        pendingBlenderLevelWriteTime_ = currentWriteTime;
+        blenderLevelWatchInitialized_ = true;
+        return;
+    }
+
+    if (currentWriteTime != blenderLevelWriteTime_) {
+        if (!blenderLevelReloadPending_ || currentWriteTime != pendingBlenderLevelWriteTime_) {
+            pendingBlenderLevelWriteTime_ = currentWriteTime;
+            blenderLevelChangeStableTime_ = 0.0f;
+        }
+        blenderLevelReloadPending_ = true;
+        blenderLevelChangeStableTime_ += 1.0f / 60.0f;
+    }
+
+    // BlenderがJSONを書き終える前に開かないよう、更新時刻が安定してから確認を出す。
+    if (blenderLevelReloadPending_ &&
+        blenderLevelChangeStableTime_ >= 0.5f &&
+        !blenderReloadDialogOpen_) {
+        ImGui::OpenPopup("Blenderレベルの外部変更");
+        blenderReloadDialogOpen_ = true;
+    }
+
+    bool keepDialogOpen = true;
+    if (ImGui::BeginPopupModal(
+        "Blenderレベルの外部変更", &keepDialogOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("Blenderレベルファイルの変更を検出しました。");
+        ImGui::Text("File: %s", blenderLevelPath_.data());
+        ImGui::Separator();
+        ImGui::TextUnformatted("変更内容をエンジンへ再読み込みしますか？");
+
+        if (ImGui::Button("再読み込み", ImVec2(150.0f, 0.0f))) {
+            const bool runtimeReloaded = LoadBlenderStage(false);
+            const bool editorReloaded =
+                currentMode_ != AppMode::SkinningEditor ||
+                skinningEditor_.ReloadExternalLevel(blenderLevelPath_.data());
+            if (runtimeReloaded && editorReloaded) {
+                blenderLevelReloadPending_ = false;
+            }
+            blenderReloadDialogOpen_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("今回は無視", ImVec2(150.0f, 0.0f))) {
+            blenderLevelWriteTime_ = pendingBlenderLevelWriteTime_;
+            blenderLevelReloadPending_ = false;
+            blenderLevelChangeStableTime_ = 0.0f;
+            blenderReloadDialogOpen_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    if (!keepDialogOpen) {
+        blenderLevelWriteTime_ = pendingBlenderLevelWriteTime_;
+        blenderLevelReloadPending_ = false;
+        blenderLevelChangeStableTime_ = 0.0f;
+        blenderReloadDialogOpen_ = false;
+    }
 }
 
 bool GameRuntime::IsRuntimeLevelVisible() const {

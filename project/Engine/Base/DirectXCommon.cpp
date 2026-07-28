@@ -97,6 +97,23 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
+    // ImGuiの組み込みフォントは日本語グリフを持たないため、日本語UIが「?」になる。
+    // Windows標準のメイリオを日本語グリフ範囲付きで読み込み、ダイアログやエディタを
+    // UTF-8の日本語で表示できるようにする。
+    ImGuiIO& imguiIO = ImGui::GetIO();
+    ImFont* japaneseFont = imguiIO.Fonts->AddFontFromFileTTF(
+        "C:/Windows/Fonts/meiryo.ttc",
+        16.0f,
+        nullptr,
+        imguiIO.Fonts->GetGlyphRangesJapanese());
+
+    // Windows側でフォントが削除・変更されていても、ImGui自体は起動できるようにする。
+    if (japaneseFont != nullptr) {
+        imguiIO.FontDefault = japaneseFont;
+    } else {
+        imguiIO.Fonts->AddFontDefault();
+    }
+
     // 2. Win32バックエンドの初期化
     ImGui_ImplWin32_Init(winApp_->GetHwnd());
 
@@ -432,25 +449,36 @@ void DirectXCommon::PreDraw(bool clearDepth) {
     scissorRect.bottom = WinApp::kWindowHeight;
     commandList_->RSSetScissorRects(1, &scissorRect);
 #else
-    // 画面上部中央に 1280x720 のゲーム画面を描画するためのオフセット計算
-    float offsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
-    float offsetY = 0.0f; // 上詰めに変更
+    // Unity風ワークスペース:
+    // 上Toolbar、左Hierarchy、中央Scene、右Inspector、下Console。
+    constexpr float hierarchyWidth =
+        static_cast<float>(WinApp::kWindowWidth) * 0.15f;
+    constexpr float inspectorWidth =
+        static_cast<float>(WinApp::kWindowWidth) * 0.20f;
+    constexpr float toolbarHeight = 38.0f;
+    constexpr float consoleHeight =
+        static_cast<float>(WinApp::kWindowHeight) * 0.32f;
+    constexpr float editorViewportWidth =
+        static_cast<float>(WinApp::kWindowWidth) - hierarchyWidth - inspectorWidth;
+    constexpr float editorViewportHeight =
+        static_cast<float>(WinApp::kWindowHeight) - toolbarHeight - consoleHeight;
 
-    // ビューポート / シザー (ゲーム画面 1280x720 に制限)
     D3D12_VIEWPORT viewport{};
-    viewport.Width = static_cast<float>(WinApp::kClientWidth);
-    viewport.Height = static_cast<float>(WinApp::kClientHeight);
-    viewport.TopLeftX = offsetX;
-    viewport.TopLeftY = offsetY;
+    viewport.Width = editorViewportWidth;
+    viewport.Height = editorViewportHeight;
+    viewport.TopLeftX = hierarchyWidth;
+    viewport.TopLeftY = toolbarHeight;
     viewport.MinDepth = 0.0f;
     viewport.MaxDepth = 1.0f;
     commandList_->RSSetViewports(1, &viewport);
 
     D3D12_RECT scissorRect{};
-    scissorRect.left = static_cast<LONG>(offsetX);
-    scissorRect.top = static_cast<LONG>(offsetY);
-    scissorRect.right = scissorRect.left + WinApp::kClientWidth;
-    scissorRect.bottom = scissorRect.top + WinApp::kClientHeight;
+    scissorRect.left = static_cast<LONG>(hierarchyWidth);
+    scissorRect.top = static_cast<LONG>(toolbarHeight);
+    scissorRect.right =
+        static_cast<LONG>(hierarchyWidth + editorViewportWidth);
+    scissorRect.bottom =
+        static_cast<LONG>(toolbarHeight + editorViewportHeight);
     commandList_->RSSetScissorRects(1, &scissorRect);
 #endif
 }

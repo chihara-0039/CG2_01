@@ -101,12 +101,22 @@ void EffectShowcaseController::DrawImGui() const {
     const char* name = count > 0 ? presetNames_[safeIndex].c_str() : "No showcase presets";
 #ifdef NDEBUG
     const float headerX = 24.0f, headerWidth = io.DisplaySize.x - 48.0f;
+    const float headerY = 20.0f;
 #else
-    const float headerX = 344.0f, headerWidth = io.DisplaySize.x - headerX - 24.0f;
+    const float hierarchyWidth =
+        std::clamp(io.DisplaySize.x * 0.15f, 240.0f, 300.0f);
+    const float inspectorWidth =
+        std::clamp(io.DisplaySize.x * 0.20f, 340.0f, 400.0f);
+    const float headerX = hierarchyWidth + 24.0f;
+    const float headerWidth =
+        io.DisplaySize.x - hierarchyWidth - inspectorWidth - 48.0f;
+    const float headerY = 58.0f;
 #endif
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav;
-    ImGui::SetNextWindowPos(ImVec2(headerX, 20.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(
+        ImVec2(headerX, headerY),
+        ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(headerWidth, 94.0f), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.72f);
     ImGui::Begin("Effect Showcase Header", nullptr, flags);

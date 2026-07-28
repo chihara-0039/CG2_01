@@ -107,7 +107,11 @@ public:
     //  isGuiCaptured が true のとき (ImGui 上でクリック中) は
     //  カメラ操作を無効化してウィンドウ操作を優先する。
     // -------------------------------------------------------
-    void UpdateBlenderStyle(const class Input* input, bool isGuiCaptured, HWND hwnd);
+    void UpdateBlenderStyle(
+        const class Input* input,
+        bool isGuiCaptured,
+        HWND hwnd,
+        bool invertOrbit = false);
 
     // -------------------------------------------------------
     //  GetTransform : Transform 構造体への参照を返す。

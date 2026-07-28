@@ -13,8 +13,8 @@ namespace {
 	// エディタ用のウィンドウレイアウト情報をまとめる構造体
 	struct StageEditorLayout {
 		float rightPanelWidth = 320.0f;
-		float bottomPanelHeight = 360.0f;
-		float mainPanelHeight = 720.0f;
+		float toolbarHeight = 38.0f;
+		float panelHeight = 1080.0f;
 	};
 
 	// ディスプレイサイズに応じて、エディタ用のウィンドウレイアウトを計算する。
@@ -24,23 +24,14 @@ namespace {
 		const float height = (std::max)(displaySize.y, 1.0f);
 
 		// 画面幅に応じて右側パネルの幅を調整する。最小300px、最大380pxの範囲でスケーリングする。
-		float sidePanel = std::clamp(width * 0.18f, 300.0f, 380.0f);
+		float sidePanel = std::clamp(width * 0.20f, 320.0f, 400.0f);
 		if (width < 1360.0f) {
-			sidePanel = std::clamp(width * 0.22f, 260.0f, 320.0f);
-		}
-		if (width - sidePanel * 2.0f < 560.0f) {
-			sidePanel = (std::max)(220.0f, (width - 560.0f) * 0.5f);
-		}
-
-		// 画面高さに応じて下側パネルの高さを調整する。最小280px、最大420pxの範囲でスケーリングする。
-		float bottomPanel = std::clamp(height * 0.32f, 280.0f, 420.0f);
-		if (height < 820.0f) {
-			bottomPanel = std::clamp(height * 0.28f, 220.0f, 320.0f);
+			sidePanel = std::clamp(width * 0.25f, 280.0f, 340.0f);
 		}
 
 		layout.rightPanelWidth = sidePanel;
-		layout.bottomPanelHeight = bottomPanel;
-		layout.mainPanelHeight = (std::max)(220.0f, height - bottomPanel);
+		layout.toolbarHeight = 38.0f;
+		layout.panelHeight = (std::max)(300.0f, height - layout.toolbarHeight);
 		return layout;
 	}
 }
@@ -190,10 +181,10 @@ void StageEditorController::HandleCameraInput(Input* input, Camera* camera) {
 
 	// IJKL / UO キーによるエディタカメラの平行移動・回転
 	if (input->PushKey(DIK_J)) {
-		camTf.rotate.y -= 0.02f;
+		camTf.rotate.y += 0.02f;
 	}
 	if (input->PushKey(DIK_L)) {
-		camTf.rotate.y += 0.02f;
+		camTf.rotate.y -= 0.02f;
 	}
 	if (input->PushKey(DIK_I)) {
 		camTf.translate.z += 0.2f;
@@ -270,8 +261,11 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
 	const StageEditorLayout layout = MakeStageEditorLayout(io.DisplaySize);
 
 	// 右側パネルに配置：ステージの保存・読み込み管理
-	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - layout.rightPanelWidth, 0), ImGuiCond_Always);
-	ImGui::SetNextWindowSize(ImVec2(layout.rightPanelWidth, layout.mainPanelHeight), ImGuiCond_Always);
+	ImGui::SetNextWindowPos(
+		ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
+		ImGuiCond_Always);
+	ImGui::SetNextWindowSize(
+		ImVec2(layout.rightPanelWidth, layout.panelHeight), ImGuiCond_Always);
 	ImGui::SetNextWindowBgAlpha(1.0f); // 透過なし
 	ImGui::Begin("Stage Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
@@ -902,8 +896,9 @@ void StageEditorController::DrawEditorToolbar(StageMap& stageMap, StageRenderer*
 
 					float last_button_x2 = ImGui::GetItemRectMax().x;
 					float next_button_x2 = last_button_x2 + ImGui::GetStyle().ItemSpacing.x + 140;
-					if (n + 1 < cat.types.size() && next_button_x2 < window_visible_x2)
+					if (n + 1 < cat.types.size() && next_button_x2 < window_visible_x2) {
 						ImGui::SameLine();
+					}
 				}
 				ImGui::EndTabItem();
 			}

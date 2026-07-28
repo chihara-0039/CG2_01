@@ -3,27 +3,47 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <filesystem>
 #include <iterator>
+#include <vector>
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
 
 namespace {
 // エディタの各パネル寸法をまとめ、画面サイズ変更時の計算を一か所に保つ。
-struct EditorLayout { float leftPanelWidth=320.0f; float rightPanelWidth=320.0f; float bottomPanelHeight=360.0f; float mainPanelHeight=720.0f; };
+struct EditorLayout {
+    float leftPanelWidth = 280.0f;
+    float rightPanelWidth = 380.0f;
+    float toolbarHeight = 38.0f;
+    float bottomPanelHeight = 340.0f;
+    float viewportX = 280.0f;
+    float viewportY = 38.0f;
+    float viewportWidth = 1260.0f;
+    float viewportHeight = 702.0f;
+    float sidePanelHeight = 1042.0f;
+};
 
 // ゲーム表示領域を確保しながら、現在のウィンドウに合うパネル寸法を求める。
 EditorLayout MakeEditorLayout(const ImVec2& displaySize) {
     EditorLayout layout;
     const float width=(std::max)(displaySize.x,1.0f), height=(std::max)(displaySize.y,1.0f);
-    float sidePanel=std::clamp(width*0.18f,300.0f,380.0f);
-    if(width<1360.0f) sidePanel=std::clamp(width*0.22f,260.0f,320.0f);
-    if(width-sidePanel*2.0f<560.0f) sidePanel=(std::max)(220.0f,(width-560.0f)*0.5f);
+    const float leftPanel = std::clamp(width * 0.15f, 240.0f, 300.0f);
+    const float rightPanel = std::clamp(width * 0.20f, 340.0f, 400.0f);
+    const float toolbarHeight = 38.0f;
     float bottomPanel=std::clamp(height*0.32f,280.0f,420.0f);
-    if(height<820.0f) bottomPanel=std::clamp(height*0.28f,220.0f,320.0f);
-    layout.leftPanelWidth=layout.rightPanelWidth=sidePanel;
+    if (height < 820.0f) {
+        bottomPanel = std::clamp(height * 0.28f, 220.0f, 320.0f);
+    }
+    layout.leftPanelWidth=leftPanel;
+    layout.rightPanelWidth=rightPanel;
+    layout.toolbarHeight=toolbarHeight;
     layout.bottomPanelHeight=bottomPanel;
-    layout.mainPanelHeight=(std::max)(220.0f,height-bottomPanel);
+    layout.viewportX=leftPanel;
+    layout.viewportY=toolbarHeight;
+    layout.viewportWidth=(std::max)(480.0f,width-leftPanel-rightPanel);
+    layout.viewportHeight=(std::max)(300.0f,height-toolbarHeight-bottomPanel);
+    layout.sidePanelHeight=(std::max)(300.0f,height-toolbarHeight);
     return layout;
 }
 
@@ -62,11 +82,41 @@ void GameRuntime::DrawEffectPreviewEditorImGui() {
 void GameRuntime::UpdateImGui() {
     ImGuiIO& io        = ImGui::GetIO();
     const EditorLayout layout = MakeEditorLayout(io.DisplaySize);
+    camera->SetAspectRatio(layout.viewportWidth / layout.viewportHeight);
 
-    ImGui::SetNextWindowPos( ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(layout.leftPanelWidth, layout.mainPanelHeight), ImGuiCond_Always);
+    // Unity風の上部ツールバー。主要モードへ常に同じ位置から移動できる。
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, layout.toolbarHeight), ImGuiCond_Always);
+    ImGui::Begin(
+        "Main Toolbar", nullptr,
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+    ImGui::TextUnformatted("CG2 Engine");
+    ImGui::SameLine();
+    if (ImGui::Button("Scene")) {
+        RequestSceneChange(SceneType::StageEditor);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Play")) {
+        RequestSceneChange(SceneType::GamePlay);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Effects")) {
+        RequestSceneChange(SceneType::EffectPreview);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Animation")) {
+        RequestSceneChange(SceneType::SkinningEditor);
+    }
+    ImGui::End();
+
+    // 左列はHierarchyとシーン共通設定。
+    ImGui::SetNextWindowPos(
+        ImVec2(0, layout.toolbarHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(
+        ImVec2(layout.leftPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(1.0f);
-    ImGui::Begin("Information", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+    ImGui::Begin("Hierarchy", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
     ImGui::Text("FPS: %.1f (%.3f ms/f)", io.Framerate, 1000.0f / io.Framerate);
     ImGui::SameLine(layout.leftPanelWidth - 60.0f);
@@ -133,9 +183,104 @@ void GameRuntime::UpdateImGui() {
         postProcess_.DrawImGui();
     }
 
+    if (currentMode_ == AppMode::StageEditor &&
+        ImGui::CollapsingHeader("External Level", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::TextWrapped("Load a stage JSON exported by Blender or another external tool.");
+
+        // Resources/Levelsへ保存された外部レベルを毎フレーム列挙する。
+        // Blenderで新しいJSONを書き出した直後でも、専用の更新操作なしで一覧へ現れる。
+        std::vector<std::filesystem::path> externalLevelFiles;
+        std::error_code directoryError;
+        const std::filesystem::path externalLevelDirectory = "Resources/Levels";
+        if (std::filesystem::exists(externalLevelDirectory, directoryError) && !directoryError) {
+            for (const auto& entry :
+                 std::filesystem::directory_iterator(externalLevelDirectory, directoryError)) {
+                if (directoryError) {
+                    break;
+                }
+                if (entry.is_regular_file() && entry.path().extension() == ".json") {
+                    externalLevelFiles.push_back(entry.path());
+                }
+            }
+            std::sort(externalLevelFiles.begin(), externalLevelFiles.end());
+        }
+
+        ImGui::TextUnformatted("Saved External Levels:");
+        if (ImGui::BeginListBox("##ExternalLevelList", ImVec2(-FLT_MIN, 90.0f))) {
+            for (const std::filesystem::path& levelFile : externalLevelFiles) {
+                const std::string levelPath = levelFile.generic_string();
+                const bool selected = levelPath == blenderLevelPath_.data();
+                if (ImGui::Selectable(levelFile.filename().string().c_str(), selected)) {
+                    strncpy_s(
+                        blenderLevelPath_.data(),
+                        blenderLevelPath_.size(),
+                        levelPath.c_str(),
+                        _TRUNCATE);
+
+                    // 一覧で別ファイルを選んだだけでは読み込まず、Load操作を待つ。
+                    blenderStageActive_ = false;
+                    if (player_) {
+                        player_->SetExternalCollisionBoxes(nullptr);
+                    }
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndListBox();
+        }
+
+        const bool pathChanged = ImGui::InputText(
+            "Level JSON",
+            blenderLevelPath_.data(),
+            blenderLevelPath_.size());
+        if (pathChanged && blenderStageActive_) {
+            // パスを入力しただけでは読み込まない。次のLoad操作まで現在の外部レベルを外す。
+            blenderStageActive_ = false;
+            if (player_) {
+                player_->SetExternalCollisionBoxes(nullptr);
+            }
+        }
+
+        // エディターを終了せず、指定した外部レベルを現在の編集画面へ読み込む。
+        if (ImGui::Button("Load in Editor", ImVec2(-FLT_MIN, 0.0f))) {
+            LoadBlenderStage(false);
+        }
+
+        // 同じファイルを上書きした後、変更検知を待たずに手動で再読込できる。
+        if (ImGui::Button("Reload External Level", ImVec2(-FLT_MIN, 0.0f))) {
+            LoadBlenderStage(false);
+        }
+
+        // 外部レベルを読み込み、そのまま通常ゲームとして開始する。
+        if (ImGui::Button("Play External Level", ImVec2(-FLT_MIN, 0.0f))) {
+            LoadBlenderStage(true);
+        }
+
+        if (blenderStageActive_) {
+            // ネイティブのグリッドステージだけを編集したい場合に外部レベルを取り外す。
+            if (ImGui::Button("Hide External Level", ImVec2(-FLT_MIN, 0.0f))) {
+                blenderStageActive_ = false;
+                if (player_) {
+                    player_->SetExternalCollisionBoxes(nullptr);
+                    stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+                }
+            }
+        }
+
+        ImGui::TextWrapped("%s", blenderRuntimeLevel_.GetStatus().c_str());
+        ImGui::TextDisabled("External changes are detected after loading.");
+    }
+
 
     if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Use First-Person Camera", &useFirstPersonCamera_);
+        if (currentMode_ == AppMode::StageEditor &&
+            ImGui::Button("Frame Stage / Player", ImVec2(-FLT_MIN, 0.0f))) {
+            const Vector3 focus =
+                player_ ? player_->GetPosition() : Vector3{ 8.0f, 1.0f, 8.0f };
+            camera->ForceReset(focus, 18.0f, { 0.35f, 0.0f, 0.0f });
+        }
         if (useFirstPersonCamera_) {
             ImGui::SliderFloat("FPS Yaw",   &fpsCameraYaw_,   -6.28f, 6.28f);
             ImGui::SliderFloat("FPS Pitch", &fpsCameraPitch_, -1.4f,  1.4f);
@@ -163,16 +308,23 @@ void GameRuntime::UpdateImGui() {
     }
 
     if (currentMode_ == AppMode::EffectPreview) {
-        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - layout.rightPanelWidth, 0), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(layout.rightPanelWidth, layout.mainPanelHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(
+            ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
+            ImGuiCond_Always);
+        ImGui::SetNextWindowSize(
+            ImVec2(layout.rightPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(1.0f);
         ImGui::Begin("Effect Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         DrawEffectPreviewEditorImGui();
         ImGui::End();
     }
 
-    ImGui::SetNextWindowPos( ImVec2(0, io.DisplaySize.y - layout.bottomPanelHeight), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, layout.bottomPanelHeight),     ImGuiCond_Always);
+    // 下部はシーンビューと同じ幅のコンソール／タイムライン／操作パネル。
+    ImGui::SetNextWindowPos(
+        ImVec2(layout.viewportX, io.DisplaySize.y - layout.bottomPanelHeight),
+        ImGuiCond_Always);
+    ImGui::SetNextWindowSize(
+        ImVec2(layout.viewportWidth, layout.bottomPanelHeight), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(1.0f);
     ImGui::Begin("Tools & Controls", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
@@ -485,7 +637,9 @@ void GameRuntime::UpdateImGui() {
 
         if (ImGui::CollapsingHeader("Player Settings")) {
             ImGui::SliderFloat("Player Glow", &playerGlow_, 0.0f, 5.0f);
-            if (player_) player_->SetGlow(playerGlow_);
+            if (player_) {
+                player_->SetGlow(playerGlow_);
+            }
         }
 
         if (ImGui::CollapsingHeader("Environment Map", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -514,11 +668,33 @@ void GameRuntime::UpdateImGui() {
     ImGui::End(); // 下パネルここまで
 
     if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_ && skinningEditor_.HasPreviewObject()) {
-        ImGui::SetNextWindowPos( ImVec2(io.DisplaySize.x - layout.rightPanelWidth, 0), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(layout.rightPanelWidth, layout.mainPanelHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(
+            ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
+            ImGuiCond_Always);
+        ImGui::SetNextWindowSize(
+            ImVec2(layout.rightPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(1.0f);
         ImGui::Begin("Skinning Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         skinningEditor_.DrawImGuiSidePanel(camera.get(), player_.get(), models[2].get());
+        ImGui::End();
+    }
+
+    const bool hasDedicatedInspector =
+        currentMode_ == AppMode::StageEditor ||
+        currentMode_ == AppMode::EffectPreview ||
+        (currentMode_ == AppMode::SkinningEditor &&
+         skinningEditorInitialized_ && skinningEditor_.HasPreviewObject());
+    if (!hasDedicatedInspector) {
+        ImGui::SetNextWindowPos(
+            ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
+            ImGuiCond_Always);
+        ImGui::SetNextWindowSize(
+            ImVec2(layout.rightPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
+        ImGui::Begin("Inspector", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "[ Inspector ]");
+        ImGui::Text("Mode: %d", static_cast<int>(currentMode_));
+        ImGui::Separator();
+        ImGui::TextWrapped("Select an editor mode to inspect and edit its properties.");
         ImGui::End();
     }
 }

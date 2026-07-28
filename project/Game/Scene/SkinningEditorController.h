@@ -118,6 +118,9 @@ public:
     /// <summary>編集中のBOXをゲームと同じワールドAABBへ変換する。</summary>
     std::vector<WorldCollisionBox> BuildWorldCollisionBoxes() const;
 
+    /// Blenderなど外部ツールが更新したレベルJSONを、開いている編集シーンへ再読込する。
+    bool ReloadExternalLevel(const std::string& filePath);
+
 private:
     // ========== 内部処理 ==========
 

@@ -5,6 +5,53 @@
 #include "externals/imgui/imgui.h"
 #include "../Environment/WeatherPresetManager.h"
 
+namespace {
+#ifndef NDEBUG
+// ImGuiのワークスペースと一致する、左上シーンビューの描画領域を求める。
+struct EditorViewportRect {
+    float x;
+    float y;
+    float width;
+    float height;
+};
+
+EditorViewportRect GetEditorViewportRect() {
+    const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+    const float width = (std::max)(displaySize.x, 1.0f);
+    const float height = (std::max)(displaySize.y, 1.0f);
+
+    const float leftPanel = std::clamp(width * 0.15f, 240.0f, 300.0f);
+    const float rightPanel = std::clamp(width * 0.20f, 340.0f, 400.0f);
+    const float toolbarHeight = 38.0f;
+    float bottomPanel = std::clamp(height * 0.32f, 280.0f, 420.0f);
+    if (height < 820.0f) {
+        bottomPanel = std::clamp(height * 0.28f, 220.0f, 320.0f);
+    }
+    return {
+        leftPanel,
+        toolbarHeight,
+        (std::max)(480.0f, width - leftPanel - rightPanel),
+        (std::max)(300.0f, height - toolbarHeight - bottomPanel)
+    };
+}
+
+void SetEditorSceneViewport(ID3D12GraphicsCommandList* commandList) {
+    const EditorViewportRect rect = GetEditorViewportRect();
+    const D3D12_VIEWPORT viewport = {
+        rect.x, rect.y, rect.width, rect.height, 0.0f, 1.0f
+    };
+    const D3D12_RECT scissor = {
+        static_cast<LONG>(rect.x),
+        static_cast<LONG>(rect.y),
+        static_cast<LONG>(rect.x + rect.width),
+        static_cast<LONG>(rect.y + rect.height)
+    };
+    commandList->RSSetViewports(1, &viewport);
+    commandList->RSSetScissorRects(1, &scissor);
+}
+#endif
+} // namespace
+
 void GameRuntime::DrawCollisionDebugBoxes() {
     if (!debugFlags_.showCollisionBoxes || !camera || !player_ ||
         (currentMode_ != AppMode::GamePlay &&
@@ -28,10 +75,11 @@ void GameRuntime::DrawCollisionDebugBoxes() {
     const float viewportWidth = ImGui::GetIO().DisplaySize.x;
     const float viewportHeight = ImGui::GetIO().DisplaySize.y;
 #else
-    const float viewportLeft = 320.0f;
-    const float viewportTop = 0.0f;
-    const float viewportWidth = static_cast<float>(WinApp::kClientWidth);
-    const float viewportHeight = static_cast<float>(WinApp::kClientHeight);
+    const EditorViewportRect editorViewport = GetEditorViewportRect();
+    const float viewportLeft = editorViewport.x;
+    const float viewportTop = editorViewport.y;
+    const float viewportWidth = editorViewport.width;
+    const float viewportHeight = editorViewport.height;
 #endif
 
     drawList->PushClipRect(
@@ -204,7 +252,9 @@ void GameRuntime::Draw() {
         skinningEditor_.DrawShadow(lightVP); 
     }
     DrawRuntimeLevelShadows(lightVP);
-    if (stageRenderer_) { 
+    const bool showNativeStageShadow =
+        !(currentMode_ == AppMode::StageEditor && blenderStageActive_);
+    if (stageRenderer_ && showNativeStageShadow) {
         stageRenderer_->DrawShadow(lightVP);
     }
 
@@ -215,14 +265,26 @@ void GameRuntime::Draw() {
         RenderScene();
         postProcess_.EndRender(commandList);
         dxCommon->PreDraw(false);
+#ifndef NDEBUG
+        SetEditorSceneViewport(commandList);
+#endif
         postProcess_.DrawToBackBuffer(commandList, camera->GetProjectionMatrix());
     } else {
 #ifdef NDEBUG
         D3D12_VIEWPORT viewport = { 0.0f, 0.0f, (float)WinApp::kWindowWidth, (float)WinApp::kWindowHeight, 0.0f, 1.0f };
         D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
 #else
-        D3D12_VIEWPORT viewport = { 320.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f };
-        D3D12_RECT scissor = { 320, 0, 1600, 720 };
+        const EditorViewportRect editorViewport = GetEditorViewportRect();
+        D3D12_VIEWPORT viewport = {
+            editorViewport.x, editorViewport.y,
+            editorViewport.width, editorViewport.height, 0.0f, 1.0f
+        };
+        D3D12_RECT scissor = {
+            static_cast<LONG>(editorViewport.x),
+            static_cast<LONG>(editorViewport.y),
+            static_cast<LONG>(editorViewport.x + editorViewport.width),
+            static_cast<LONG>(editorViewport.y + editorViewport.height)
+        };
 #endif
         commandList->RSSetViewports(1, &viewport);
         commandList->RSSetScissorRects(1, &scissor);
@@ -289,7 +351,9 @@ void GameRuntime::RenderScene() {
             currentMode_ == AppMode::GamePlay_BlockPlace ||
             currentMode_ == AppMode::EffectPreview;
 
-        if (isGameMode && stageRenderer_) {
+        const bool showNativeStage =
+            !(currentMode_ == AppMode::StageEditor && blenderStageActive_);
+        if (isGameMode && stageRenderer_ && showNativeStage) {
             stageRenderer_->Draw();
             stageRenderer_->DrawTransparent();
             object3dCommon->PreDraw();
@@ -315,7 +379,8 @@ void GameRuntime::RenderScene() {
             }
         }
 
-        if ((currentMode_ == AppMode::StageEditor ||
+        if (showNativeStage &&
+            (currentMode_ == AppMode::StageEditor ||
              currentMode_ == AppMode::GamePlay_BlockPlace) &&
             mapCursor_) {
             mapCursor_->Draw();

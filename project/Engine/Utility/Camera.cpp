@@ -29,7 +29,11 @@ void Camera::Update() {
     projectionMatrix_ = Math::MakePerspectiveFovMatrix(fov_, aspectRatio_, nearClip_, farClip_);
 }
 
-void Camera::UpdateBlenderStyle(const Input* input, bool isGuiCaptured, HWND hwnd) {
+void Camera::UpdateBlenderStyle(
+    const Input* input,
+    bool isGuiCaptured,
+    HWND hwnd,
+    bool invertOrbit) {
 
     // ★ 修正：バグ対策のガード処理
     // 1. ウィンドウにフォーカスがない時は何もしない
@@ -49,9 +53,10 @@ void Camera::UpdateBlenderStyle(const Input* input, bool isGuiCaptured, HWND hwn
 
     // 1. 回転 (マウス中ボタンのみ)
     if (mouse.buttons[2] && !input->PushKey(DIK_LSHIFT)) {
-        // 水平ドラッグはゲームカメラと同じ反転方向で旋回させる。
-        transform_.rotate.y -= mouse.x * rotateSpeed;
-        transform_.rotate.x -= mouse.y * rotateSpeed;
+        // ステージ編集・配置中だけ、通常のツール表示とは上下左右を反転できる。
+        const float orbitDirection = invertOrbit ? 1.0f : -1.0f;
+        transform_.rotate.y += mouse.x * rotateSpeed * orbitDirection;
+        transform_.rotate.x += mouse.y * rotateSpeed * orbitDirection;
     }
 
     // 2. パン/並行移動 (Shift + マウス中ボタン)
@@ -64,7 +69,9 @@ void Camera::UpdateBlenderStyle(const Input* input, bool isGuiCaptured, HWND hwn
 
     // 3. ズーム (マウスホイール)
     distance_ -= mouse.wheel * 0.01f;
-    if (distance_ < 1.0f) distance_ = 1.0f;
+    if (distance_ < 1.0f) {
+        distance_ = 1.0f;
+    }
 
     // 最終的な座標計算
     Matrix4x4 matRot = Math::Multiply(Math::MakeRotateXMatrix(transform_.rotate.x), Math::MakeRotateYMatrix(transform_.rotate.y));

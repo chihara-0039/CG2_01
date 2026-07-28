@@ -18,12 +18,7 @@ void GameRuntime::Update() {
 
 
     input->Update();
-    if (input->TriggerKey(DIK_F5)) {
-        LoadBlenderStage(false);
-    }
-    if (input->TriggerKey(DIK_F6)) {
-        LoadBlenderStage(true);
-    }
+    UpdateBlenderLevelFileWatch();
     if (input->TriggerKey(DIK_F3)) {
         debugFlags_.showCollisionBoxes = !debugFlags_.showCollisionBoxes;
     }
@@ -117,6 +112,10 @@ void GameRuntime::HandleModeChange() {
     if (currentMode_ == AppMode::SkinningEditor) {
         EnsureSkinningEditorInitialized();
         camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
+    } else if (currentMode_ == AppMode::StageEditor) {
+        // 旧左パネルを廃止して広がったシーンビューの中央へ、編集対象を再配置する。
+        const Vector3 focus = player_ ? player_->GetPosition() : Vector3{ 8.0f, 1.0f, 8.0f };
+        camera->ForceReset(focus, 18.0f, { 0.35f, 0.0f, 0.0f });
     } else if (currentMode_ == AppMode::EffectPreview || currentMode_ == AppMode::EffectShowcase) {
         EnsureTerrainInitialized();
         camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
@@ -183,7 +182,11 @@ void GameRuntime::UpdateHitEffectShortcut() {
 
 void GameRuntime::UpdateSharedCameraControls(bool isGuiCaptured) {
     if (currentMode_ != AppMode::GamePlay) {
-        camera->UpdateBlenderStyle(input.get(), isGuiCaptured, winApp->GetHwnd());
+        const bool invertEditorOrbit =
+            currentMode_ == AppMode::StageEditor ||
+            currentMode_ == AppMode::GamePlay_BlockPlace;
+        camera->UpdateBlenderStyle(
+            input.get(), isGuiCaptured, winApp->GetHwnd(), invertEditorOrbit);
     }
 }
 
@@ -268,20 +271,25 @@ void GameRuntime::UpdateDebugAndEffectObjects(const Matrix4x4& view, const Matri
 }
 
 void GameRuntime::UpdateStagePresentation(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP) {
-    if (stageRenderer_) {
+    // ステージエディターで外部レベルを確認している間は、グリッドステージを重ねない。
+    const bool showNativeStage =
+        !(currentMode_ == AppMode::StageEditor && blenderStageActive_);
+
+    if (stageRenderer_ && showNativeStage) {
         stageRenderer_->SetIsEditorMode(currentMode_ == AppMode::StageEditor);
         stageRenderer_->SetCamera(view, proj);
         stageRenderer_->Update(stageMap_, lightVP);
     }
 
-    if (stageRenderer_ && player_) {
+    if (stageRenderer_ && player_ && showNativeStage) {
         stageRenderer_->UpdateCloudTransparency(
             camera->GetPosition(),
             player_->GetPosition()
         );
     }
 
-    if (mapCursor_ && (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace)) {
+    if (mapCursor_ && showNativeStage &&
+        (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace)) {
         mapCursor_->SetCamera(view, proj);
         mapCursor_->Update(lightVP);
     }
