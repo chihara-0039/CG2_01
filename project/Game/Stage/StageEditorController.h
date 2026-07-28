@@ -109,8 +109,8 @@ private:
     bool RepeatKey(Input* input, BYTE key, int firstDelay = 20, int interval = 5);
 
 	int newStageWidth_ = 100;    // 新規ステージの幅（X方向）
-	int newStageHeight_ = 100;    // 新規スチEEジの高さEE方向！E
-	int newStageDepth_ = 100;    // 新規スチEEジのサイズを指定するE力バチEァEEmGui用EE
+	int newStageHeight_ = 100;    // 新規ステージの高さ（Y方向）
+	int newStageDepth_ = 100;    // 新規ステージの深さ（Z方向）
 
     // --- プレイリスト(Campaign)管理 ---
     std::vector<std::string> campaignFiles_;

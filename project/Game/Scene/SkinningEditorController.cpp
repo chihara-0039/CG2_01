@@ -1464,6 +1464,15 @@ void SkinningEditorController::DrawSceneObjectPanel() {
 	}
 }
 
+bool SkinningEditorController::ReloadExternalLevel(const std::string& filePath) {
+	if (filePath.empty()) {
+		return false;
+	}
+	strncpy_s(levelDataPath_, filePath.c_str(), _TRUNCATE);
+	strncpy_s(sceneFilePath_, filePath.c_str(), _TRUNCATE);
+	return LoadLevelDataIntoScene(filePath);
+}
+
 // ==========================================================
 //  SkinningEditorController::DrawImGuiSidePanel
 //  右パネル (Skinning Editor) の内容を描画する

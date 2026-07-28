@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CG2 C++ Engine Level Editor",
     "author": "CG2_01",
-    "version": (2, 0, 0),
+    "version": (2, 1, 0),
     "blender": (3, 3, 0),
     "location": "3D View > Sidebar > CG2 Level",
     "description": "CG2_01のレベルJSONをBlenderで読み書きします",
@@ -114,6 +114,8 @@ def _import_node(node, level_path, parent=None):
     if file_name:
         obj["file_name"] = file_name
     obj["disabled"] = bool(node.get("disabled", False))
+    obj["spawn_enabled"] = False
+    obj["spawn_type"] = "Player"
 
     collider = node.get("collider")
     if isinstance(collider, dict):
@@ -256,6 +258,26 @@ class CG2_OT_add_collider(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class CG2_OT_initialize_object_properties(bpy.types.Operator):
+    """Blender 5.2でも安全にCG2用プロパティを追加する。"""
+    bl_idname = "cg2.initialize_object_properties"
+    bl_label = "Initialize CG2 Properties"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            return {'CANCELLED'}
+        if "level_type" not in obj:
+            obj["level_type"] = "MESH" if obj.type == 'MESH' else obj.type
+        required = ("level_type", "disabled", "spawn_enabled", "spawn_type")
+        if any(name not in obj for name in required):
+            layout.operator(CG2_OT_initialize_object_properties.bl_idname, icon='ADD')
+            layout.label(text="Initialize before editing CG2 settings.")
+            return
+        return {'FINISHED'}
+
+
 class _ColliderDrawer:
     handle = None
 
@@ -324,6 +346,7 @@ classes = (
     CG2_OT_import_level,
     CG2_OT_export_level,
     CG2_OT_add_collider,
+    CG2_OT_initialize_object_properties,
     CG2_PT_level_editor,
 )
 

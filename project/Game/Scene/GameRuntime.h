@@ -122,6 +122,12 @@ private:
     BlenderRuntimeLevel blenderRuntimeLevel_;
     std::array<char, 260> blenderLevelPath_{ "Resources/Levels/game_level.json" };
     bool blenderStageActive_ = false;
+    std::filesystem::file_time_type blenderLevelWriteTime_{};
+    std::filesystem::file_time_type pendingBlenderLevelWriteTime_{};
+    bool blenderLevelWatchInitialized_ = false;
+    bool blenderLevelReloadPending_ = false;
+    bool blenderReloadDialogOpen_ = false;
+    float blenderLevelChangeStableTime_ = 0.0f;
 
     std::unique_ptr<Sprite>       sprite;
     std::unique_ptr<Camera>       camera;
@@ -261,6 +267,8 @@ private:
     void UpdateStagePresentation(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
     bool ApplyRuntimePlayerSpawn();
     bool LoadBlenderStage(bool beginPlay);
+    void UpdateBlenderLevelFileWatch();
+    void SyncBlenderLevelWriteTime();
     void UpdateRuntimeLevelObjects(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
     void DrawRuntimeLevelObjects();
     void DrawRuntimeLevelShadows(const Matrix4x4& lightVP);

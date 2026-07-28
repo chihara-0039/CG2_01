@@ -4,6 +4,7 @@
 #include "ParticleManager.h"
 #include "PostProcessRenderer.h"
 #include "externals/imgui/imgui.h"
+#include <algorithm>
 #include <iterator>
 
 namespace {
@@ -148,7 +149,18 @@ void PostEffectShowcaseController::DrawGameplayImGui(
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav;
     constexpr float width = 360.0f;
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - width - 18.0f, 18.0f), ImGuiCond_Always);
+#ifdef NDEBUG
+    const float sceneRight = io.DisplaySize.x;
+    const float gameplayHeaderY = 18.0f;
+#else
+    // Inspectorの左端をシーンビュー右端として扱い、HUDをパネルの裏へ入れない。
+    const float inspectorWidth =
+        std::clamp(io.DisplaySize.x * 0.20f, 340.0f, 400.0f);
+    const float sceneRight = io.DisplaySize.x - inspectorWidth;
+    const float gameplayHeaderY = 56.0f;
+#endif
+    ImGui::SetNextWindowPos(
+        ImVec2(sceneRight - width - 18.0f, gameplayHeaderY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(width, 74.0f), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.68f);
     ImGui::Begin("CG5 Gameplay PostEffect", nullptr, flags);
@@ -167,12 +179,19 @@ void PostEffectShowcaseController::DrawImGui(const PostProcessRenderer& postProc
 #ifdef NDEBUG
     const float headerX = 24.0f;
     const float headerWidth = io.DisplaySize.x - 48.0f;
+    const float headerY = 20.0f;
 #else
-    const float headerX = 344.0f;
-    const float headerWidth = io.DisplaySize.x - headerX - 24.0f;
+    const float hierarchyWidth =
+        std::clamp(io.DisplaySize.x * 0.15f, 240.0f, 300.0f);
+    const float inspectorWidth =
+        std::clamp(io.DisplaySize.x * 0.20f, 340.0f, 400.0f);
+    const float headerX = hierarchyWidth + 24.0f;
+    const float headerWidth =
+        io.DisplaySize.x - hierarchyWidth - inspectorWidth - 48.0f;
+    const float headerY = 58.0f;
 #endif
 
-    ImGui::SetNextWindowPos(ImVec2(headerX, 20.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(headerX, headerY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(headerWidth, 92.0f), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.72f);
     ImGui::Begin("PostEffect Showcase Header", nullptr, flags);
