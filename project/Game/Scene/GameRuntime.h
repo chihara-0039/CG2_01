@@ -99,9 +99,10 @@ private:
     struct DebugDrawFlags {
         bool show3DObjects = true;
         bool showSkybox = true;
-        bool showSprite = true;
+        bool showSprite = false;
         bool showParticles = true;
-        bool showTerrain = false;
+        // DebugView の比較対象として、地形は起動直後から表示する。
+        bool showTerrain = true;
         bool showCollisionBoxes = false;
     };
 
@@ -201,7 +202,7 @@ private:
     float fpsCameraPitch_ = 0.0f;
     float fpsCameraFov_ = 0.9f;
     float placeRotationY_ = 0.0f;
-    float playerGlow_ = 1.0f;
+    float playerGlow_ = 0.0f;
     float playerLightIntensity_ = 4.0f;
     Vector4 playerLightColor_ = { 0.68f, 0.84f, 1.0f, 1.0f };
     float debugObjectEnvironmentCoefficient_ = 0.25f;
