@@ -24,6 +24,7 @@ struct ModelVertexData {
     Vector4 position; // ローカル座標 (xyz + w=1.0)
     Vector2 texcoord; // UV 座標 (0.0〜1.0)
     Vector3 normal;   // 法線ベクトル (正規化済み)
+    Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
 };
 
 // ==============================================================

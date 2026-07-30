@@ -2,6 +2,7 @@
 #include "SkinnedModel.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -79,7 +80,7 @@ public:
 
     // -------------------------------------------------------
     //  DrawSkeleton : ボーン構造をデバッグ可視化する。
-    //  各ジョイント (関節) の位置に cubeModel を小さく描画し、
+    //  各ジョイントと親子関係をデバッグ専用のOctahedral形状で描画し、
     //  選択中のジョイントは色を変えて強調表示する。
     //  スキニングエディタのビューポートで常時表示している。
     // -------------------------------------------------------
@@ -104,6 +105,10 @@ public:
 
     void SetScale(const Vector3& scale)  { scale_ = scale; }
     const Vector3& GetScale() const      { return scale_; }
+
+    /// <summary>モデル本来のテクスチャを使うか。OFFでは確認用の白テクスチャを使う。</summary>
+    void SetUseModelTexture(bool enabled) { useModelTexture_ = enabled; }
+    bool IsUsingModelTexture() const { return useModelTexture_; }
 
     // -------------------------------------------------------
     //  SetCamera : ビュー/プロジェクション行列を内部に保存する。
@@ -136,6 +141,31 @@ public:
     void SetShowJointAxes(bool show) { showJointAxes_ = show; }
     bool IsShowJointAxes() const     { return showJointAxes_; }
 
+    /// <summary>各Jointの名前をビューポート上へ重ねて表示する。</summary>
+    void SetShowJointNames(bool show) { showJointNames_ = show; }
+    bool IsShowJointNames() const     { return showJointNames_; }
+
+    /// <summary>読み込まれているJoint総数。</summary>
+    size_t GetSkeletonJointCount() const {
+        return skinnedModel_ ? skinnedModel_->GetJoints().size() : 0;
+    }
+
+    /// <summary>親を持つJoint数。通常は描画すべきBone総数と一致する。</summary>
+    size_t GetExpectedBoneCount() const {
+        if (!skinnedModel_) {
+            return 0;
+        }
+        return static_cast<size_t>(std::count_if(
+            skinnedModel_->GetJoints().begin(),
+            skinnedModel_->GetJoints().end(),
+            [](const Joint& joint) {
+                return joint.parentIndex >= 0;
+            }));
+    }
+
+    /// <summary>直前のDrawSkeletonで実際に描画したBone数。</summary>
+    size_t GetLastDrawnBoneCount() const { return lastDrawnBoneCount_; }
+
     // ── ジョイント選択 (スキニングエディタで使用) ─────────
     // レイキャストで選択されたジョイントのインデックスを保持する。
     // DrawSkeleton() で選択中ジョイントの色を変えて強調表示する。
@@ -148,6 +178,9 @@ public:
 
     /// <summary>指定ジョイントの現在のワールド座標を取得する。</summary>
     bool TryGetJointWorldPosition(int jointIndex, Vector3& outPosition) const;
+
+    /// <summary>指定ジョイントの現在のワールド行列を取得する。</summary>
+    bool TryGetJointWorldMatrix(int jointIndex, Matrix4x4& outMatrix) const;
 
     /// <summary>名前候補でジョイントを探し、そのワールド座標を取得する。</summary>
     bool TryGetJointWorldPosition(const std::vector<std::string>& nameHints, Vector3& outPosition) const;
@@ -201,9 +234,18 @@ public:
     float GetBlendRate() const { return blendRate_; }
 
 private:
+    // 木箱などのゲーム用モデルに依存しない、白一色のデバッグ用メッシュを生成する。
+    // boneDebugModel_ はY軸方向を向く先細りボーン、jointDebugModel_ は関節マーカー。
+    void CreateSkeletonDebugModels(DirectXCommon* dxCommon, TextureManager* textureManager);
+    // モデル切替時に、旧Modelを参照するデバッグ描画オブジェクトを先に破棄する。
+    void ResetModelDependentResources();
+    void DispatchSkinningOnce(DirectXCommon* dxCommon);
+
     // ── 主要コンポーネント ────────────────────────────────
     std::unique_ptr<SkinnedModel> skinnedModel_; // スキニング計算・アニメーションデータ
     std::unique_ptr<Object3d>     object3d_;     // GPU 描画コマンド発行 (頂点バッファはここが持つ)
+    uint32_t whiteTextureHandle_ = 0;
+    bool useModelTexture_ = false;
 
     // ── ワールドトランスフォーム ──────────────────────────
     Vector3 position_ = { 0.0f, 0.0f, 0.0f };
@@ -228,16 +270,25 @@ private:
     float blendDuration_ = 0.35f;        // 補間にかける秒数
     float blendElapsed_  = 0.0f;         // 補間開始からの経過秒
     float blendRate_     = 0.0f;         // 現在の補間率 (0..1)
+    bool skinningDispatchedThisFrame_ = false;
 
     // ── スケルトン可視化 ──────────────────────────────────
     bool showSkeleton_      = true;  // true: ボーンを描画する
     bool showJointAxes_     = true;  // true: 選択中ジョイントのローカル軸を描画する
+    bool showJointNames_    = true;  // true: Joint名を画面上へ表示する
     int  selectedJointIndex_ = -1;   // 選択中ジョイントのインデックス (-1: 未選択)
+    size_t lastDrawnBoneCount_ = 0;   // 直前のフレームで描画したボーン数
+
+    // DrawSkeleton()専用の白いメッシュ。ゲーム内の木箱テクスチャを流用しない。
+    std::unique_ptr<Model> boneDebugModel_;
+    std::unique_ptr<Model> boneEdgeDebugModel_;
+    std::unique_ptr<Model> jointDebugModel_;
 
     // DrawSkeleton() で使うジョイント・ボーンのビジュアル用 Object3d 群。
-    // ジョイントごとに立方体 (jointVisuals_) とつなぎ棒 (boneVisuals_) を持つ。
-    std::vector<std::unique_ptr<Object3d>> jointVisuals_; // 各関節の位置を示すキューブ
-    std::vector<std::unique_ptr<Object3d>> boneVisuals_;  // 親子関節をつなぐ棒
+    std::vector<std::unique_ptr<Object3d>> jointVisuals_; // 各関節のOctahedralマーカー
+    std::vector<std::unique_ptr<Object3d>> jointOutlineVisuals_; // Jointの黒い外形
+    std::vector<std::unique_ptr<Object3d>> boneVisuals_;  // 親子関節を結ぶOctahedralボーン
+    std::vector<std::unique_ptr<Object3d>> boneOutlineVisuals_;  // Bone表面の黒い稜線
     std::vector<std::unique_ptr<Object3d>> axisVisuals_;  // 選択中関節のローカル軸
 };
 

@@ -594,7 +594,9 @@ bool Player::IsRunInputActive(const Vector3& inputDir) const {
 	}
 
 	const float stickPower = std::sqrt(inputDir.x * inputDir.x + inputDir.z * inputDir.z);
-	return input_->IsGamePadConnected() && stickPower > 0.85f;
+	const GamePadState& gamePad = input_->GetGamePadState();
+	return input_->IsGamePadConnected() &&
+		(stickPower > 0.85f || gamePad.rightTrigger > 0.35f);
 }
 
 Player::AnimationState Player::ResolveAnimationState(bool hasMoveInput, bool isRunInput) const {
@@ -625,54 +627,116 @@ void Player::ApplySkinnedAnimation(AnimationState state, bool isMoving) {
 		return;
 	}
 
+	const bool stateChanged = animationState_ != state;
+
+	// 自動生成される Idle はバインドポーズなので、停止時に選ぶとTポーズへ戻ってしまう。
+	// 待機専用モーションがないモデルでは、直前のGPUスキニング結果を速度0で保持する。
+	if (state == AnimationState::Idle) {
+		const int activeMotionIndex = model->GetActiveMotionIndex();
+		if (activeMotionIndex >= 0 &&
+			activeMotionIndex < static_cast<int>(motions.size())) {
+			const std::string& activeMotionName =
+				motions[static_cast<size_t>(activeMotionIndex)].name;
+			const bool activeMotionIsGeneratedIdle =
+				ToLower(activeMotionName) == "idle";
+
+			// 通常の移動停止では直前の姿勢を保持する。
+			// Jump/Ladderから戻った直後は空中・登攀姿勢を固定せず、
+			// 下の処理で歩行モーション由来の待機姿勢へ明示的に戻す。
+			const bool canHoldCurrentPose =
+				animationState_ != AnimationState::Jump &&
+				animationState_ != AnimationState::Ladder;
+			if (!activeMotionIsGeneratedIdle && canHoldCurrentPose) {
+				animationState_ = state;
+				skinnedObject_->SetAnimationSpeed(0.0f);
+				skinnedObject_->SetPlayCustomAnimation(true);
+				return;
+			}
+		}
+
+		// 起動直後など、既に生成Idleが選ばれている場合は歩行モーションの
+		// 自然なフレームへ切り替えて停止姿勢として保持する。
+		int holdMotionIndex = FindMotionIndexByName(motions, { "walk", "run", "sprint" });
+		if (holdMotionIndex < 0) {
+			holdMotionIndex = 0;
+		}
+		model->SetActiveMotionIndex(holdMotionIndex);
+		if (stateChanged || skinnedObject_->GetCurrentKeyframeTime() <= 0.0f) {
+			const float holdTime =
+				(std::max)(0.0f, motions[static_cast<size_t>(holdMotionIndex)].duration * 0.25f);
+			skinnedObject_->SetCurrentKeyframeTime(holdTime);
+		}
+		animationState_ = state;
+		skinnedObject_->SetAnimationSpeed(0.0f);
+		skinnedObject_->SetPlayCustomAnimation(true);
+		return;
+	}
+
 	int targetMotionIndex = 0;
 	switch (state) {
 	case AnimationState::Idle:
-		targetMotionIndex = FindMotionIndexByName(motions, { "idle", "wait", "stand" });
-		if (targetMotionIndex < 0) targetMotionIndex = 0;
+		// Idle は上の停止姿勢保持処理で完結する。
 		break;
 	case AnimationState::Walk:
 		targetMotionIndex = FindMotionIndexByName(motions, { "walk" });
-		if (targetMotionIndex < 0) targetMotionIndex = motions.size() >= 2 ? 1 : 0;
+		if (targetMotionIndex < 0) {
+			targetMotionIndex = motions.size() >= 2 ? 1 : 0;
+		}
 		break;
 	case AnimationState::Run:
 		targetMotionIndex = FindMotionIndexByName(motions, { "run", "sprint" });
 		if (targetMotionIndex < 0) {
 			targetMotionIndex = FindMotionIndexByName(motions, { "walk" });
 		}
-		if (targetMotionIndex < 0) targetMotionIndex = motions.size() >= 2 ? 1 : 0;
+		if (targetMotionIndex < 0) {
+			targetMotionIndex = motions.size() >= 2 ? 1 : 0;
+		}
 		break;
 	case AnimationState::Jump:
 		targetMotionIndex = FindMotionIndexByName(motions, { "jump", "air", "fall" });
-		if (targetMotionIndex < 0) targetMotionIndex = motions.size() >= 3 ? 2 : 0;
+		if (targetMotionIndex < 0) {
+			// ジャンプ専用モーションがない場合も、自動生成Idle（Tポーズ）は
+			// 選ばず、GPUスキニング可能な移動モーションを流用する。
+			targetMotionIndex = FindMotionIndexByName(motions, { "walk", "run", "sprint" });
+		}
+		if (targetMotionIndex < 0) {
+			targetMotionIndex = motions.size() >= 2 ? 1 : 0;
+		}
 		break;
 	case AnimationState::Ladder:
 		targetMotionIndex = FindMotionIndexByName(motions, { "ladder", "climb" });
-		if (targetMotionIndex < 0) targetMotionIndex = motions.size() >= 4 ? 3 : 0;
+		if (targetMotionIndex < 0) {
+			targetMotionIndex = motions.size() >= 4 ? 3 : 0;
+		}
 		break;
 	}
 
 	model->SetActiveMotionIndex(targetMotionIndex);
 
-	const bool stateChanged = animationState_ != state;
 	animationState_ = state;
-
-	if (motions.size() == 1 && state == AnimationState::Idle && !isMoving) {
-		skinnedObject_->SetPlayCustomAnimation(false);
-		skinnedObject_->ApplyMotion(0.0f);
-		return;
-	}
 
 	if (stateChanged) {
 		skinnedObject_->SetCurrentKeyframeTime(0.0f);
 	}
 
+	// モーションが1本しかないモデルでも再生を止めない。
+	// 停止時にカスタムアニメーションを無効化すると、GPUスキニングへ
+	// バインドポーズ（Tポーズ）が渡るため、待機中も有効な姿勢を維持する。
 	skinnedObject_->SetAnimationSpeed(state == AnimationState::Run ? 1.4f : 1.0f);
 	skinnedObject_->SetPlayCustomAnimation(true);
 }
 
 // 衝突判定ロジック
 bool Player::CheckCollision(const Vector3& pos, StageMap& map) {
+	// DebugView は表示中の地形と StageMap が別物なので、グリッドの壁判定を使わない。
+	// 足元だけは簡易床として残し、自由移動中に落下し続けないようにする。
+	if (!stageCollisionEnabled_) {
+		if (pos.y < 0.0f) {
+			return true;
+		}
+		return CheckExternalCollision(pos);
+	}
+
 	// プレイヤーの当たり判定ボックス（四隅など）が StageMap の solid なセルに重なっているか
 	// 足元、腰、頭の3段階で高さをチェック
 	float checkOffsetsY[] = { 0.1f, 0.8f, 1.5f };

@@ -38,6 +38,9 @@ public:
     // 通常の 3D 描画用 RootSignature / PSO / プリミティブ種別を CommandList に設定する。
     void PreDraw();
 
+    // 深度判定を行わず、不透明なデバッグ形状を常に手前へ描画する。
+    void PreDrawDebugOverlay();
+
     DirectXCommon* GetDxCommon() const { return dxCommon_; }
 
     ID3D12RootSignature* GetRootSignature() const { return rootSignature_.Get(); }
@@ -124,6 +127,7 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> debugOverlayPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skinnedPipelineState_;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> lightResource_;

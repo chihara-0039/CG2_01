@@ -14,6 +14,24 @@
 using json = nlohmann::json;
 
 namespace {
+    bool IsFiniteMatrix(const Matrix4x4& matrix) {
+        for (const auto& row : matrix.m) {
+            for (float value : row) {
+                if (!std::isfinite(value)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    float SanitizeWeight(float weight) {
+        if (!std::isfinite(weight) || weight <= 0.0f) {
+            return 0.0f;
+        }
+        return weight;
+    }
+
     // 座標を行列で変換し、w 成分で透視除算する。
     Vector3 TransformCoord(const Vector3& position, const Matrix4x4& matrix) {
         float homogeneousW =
@@ -264,6 +282,11 @@ namespace {
 }
 
 SkinnedModel::~SkinnedModel() {
+    if (cpuSkinnedVertexBuffer_ && mappedSkinnedVertices_) {
+        cpuSkinnedVertexBuffer_->Unmap(0, nullptr);
+        mappedSkinnedVertices_ = nullptr;
+    }
+
     if (jointBuffer_ && mappedPalette_) {
         jointBuffer_->Unmap(0, nullptr);
         mappedPalette_ = nullptr;
@@ -603,14 +626,31 @@ void SkinnedModel::Update(DirectXCommon* dxCommon) {
     if (mappedPalette_ && !joints_.empty()) {
         for (size_t i = 0; i < joints_.size(); ++i) {
             Matrix4x4 skeletonSpaceMatrix = Math::Multiply(joints_[i].offsetMatrix, joints_[i].globalMatrix);
+            if (!IsFiniteMatrix(skeletonSpaceMatrix)) {
+                skeletonSpaceMatrix = Math::MakeIdentity4x4();
+            }
+            Matrix4x4 inverseTranspose =
+                Math::Transpose(Math::Inverse(skeletonSpaceMatrix));
+            if (!IsFiniteMatrix(inverseTranspose)) {
+                inverseTranspose = Math::MakeIdentity4x4();
+            }
             mappedPalette_[i].skeletonSpaceMatrix = skeletonSpaceMatrix;
-            mappedPalette_[i].skeletonSpaceInverseTransposeMatrix = Math::Transpose(Math::Inverse(skeletonSpaceMatrix));
+            mappedPalette_[i].skeletonSpaceInverseTransposeMatrix = inverseTranspose;
         }
+    }
+
+    // GPUスキニング使用中はCPUで全頂点を再計算しない。
+    // CPU版はGPUバッファを生成できなかった場合だけフォールバックとして動かす。
+    if (!useGpuSkinning_) {
+        UpdateCpuSkinnedVertices();
     }
 }
 
 void SkinnedModel::DispatchSkinning(DirectXCommon* dxCommon) {
     if (!dxCommon || skinnedVertices_.empty()) {
+        return;
+    }
+    if (!useGpuSkinning_ || joints_.empty()) {
         return;
     }
 
@@ -633,11 +673,89 @@ void SkinnedModel::DispatchSkinning(DirectXCommon* dxCommon) {
     commandList->SetComputeRootUnorderedAccessView(3, skinnedVertexBuffer_->GetGPUVirtualAddress());
     commandList->SetComputeRootConstantBufferView(4, skinningInformationBuffer_->GetGPUVirtualAddress());
 
-    constexpr UINT kNumThreads = 1024;
+    constexpr UINT kNumThreads = 64;
     UINT threadGroupCount = static_cast<UINT>((skinnedVertices_.size() + kNumThreads - 1) / kNumThreads);
     commandList->Dispatch(threadGroupCount, 1, 1);
 
+    // UAVへの書き込みを完了させてから頂点入力として読み取る。
+    D3D12_RESOURCE_BARRIER uavBarrier = {};
+    uavBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+    uavBarrier.UAV.pResource = skinnedVertexBuffer_.Get();
+    commandList->ResourceBarrier(1, &uavBarrier);
     TransitionSkinnedVertexBuffer(commandList, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+}
+
+void SkinnedModel::UpdateCpuSkinnedVertices() {
+    if (!mappedSkinnedVertices_) {
+        return;
+    }
+
+    for (size_t vertexIndex = 0; vertexIndex < skinnedVertices_.size(); ++vertexIndex) {
+        const SkinnedVertexData& source = skinnedVertices_[vertexIndex];
+        ModelVertexData& destination = mappedSkinnedVertices_[vertexIndex];
+        destination.texcoord = source.texcoord;
+        destination.color = source.color;
+
+        if (joints_.empty()) {
+            destination.position = source.position;
+            destination.normal = source.normal;
+            continue;
+        }
+
+        Vector3 skinnedPosition = { 0.0f, 0.0f, 0.0f };
+        Vector3 skinnedNormal = { 0.0f, 0.0f, 0.0f };
+        float totalWeight = 0.0f;
+        const Vector3 sourcePosition = {
+            source.position.x,
+            source.position.y,
+            source.position.z
+        };
+
+        for (int influenceIndex = 0; influenceIndex < 4; ++influenceIndex) {
+            const float weight = source.weights[influenceIndex];
+            if (weight <= 0.0f) {
+                continue;
+            }
+
+            const int jointIndex = std::clamp(
+                source.jointIndices[influenceIndex],
+                0,
+                static_cast<int>(joints_.size()) - 1);
+            const Matrix4x4 skinningMatrix = Math::Multiply(
+                joints_[jointIndex].offsetMatrix,
+                joints_[jointIndex].globalMatrix);
+            const Vector3 position = TransformCoord(sourcePosition, skinningMatrix);
+            const Matrix4x4 normalMatrix = Math::Transpose(Math::Inverse(skinningMatrix));
+            const Vector3 normal = TransformNormal(source.normal, normalMatrix);
+
+            skinnedPosition.x += position.x * weight;
+            skinnedPosition.y += position.y * weight;
+            skinnedPosition.z += position.z * weight;
+            skinnedNormal.x += normal.x * weight;
+            skinnedNormal.y += normal.y * weight;
+            skinnedNormal.z += normal.z * weight;
+            totalWeight += weight;
+        }
+
+        if (totalWeight <= 0.0f) {
+            destination.position = source.position;
+            destination.normal = source.normal;
+            continue;
+        }
+
+        const float inverseWeight = 1.0f / totalWeight;
+        destination.position = {
+            skinnedPosition.x * inverseWeight,
+            skinnedPosition.y * inverseWeight,
+            skinnedPosition.z * inverseWeight,
+            1.0f
+        };
+        destination.normal = Math::Normalize({
+            skinnedNormal.x * inverseWeight,
+            skinnedNormal.y * inverseWeight,
+            skinnedNormal.z * inverseWeight
+        });
+    }
 }
 
 void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
@@ -652,6 +770,10 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
     if (skinningInformationBuffer_) {
         skinningInformationBuffer_->Unmap(0, nullptr);
         mappedSkinningInformation_ = nullptr;
+    }
+    if (cpuSkinnedVertexBuffer_ && mappedSkinnedVertices_) {
+        cpuSkinnedVertexBuffer_->Unmap(0, nullptr);
+        mappedSkinnedVertices_ = nullptr;
     }
 
     auto device = dxCommon->GetDevice();
@@ -676,6 +798,7 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
             vertMap[i].position = skinnedVertices_[i].position;
             vertMap[i].texcoord = skinnedVertices_[i].texcoord;
             vertMap[i].normal = skinnedVertices_[i].normal;
+            vertMap[i].color = skinnedVertices_[i].color;
         }
         vertexBuffer_->Unmap(0, nullptr);
 
@@ -693,9 +816,29 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
         VertexInfluence* influenceMap = nullptr;
         influenceBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&influenceMap));
         for (size_t i = 0; i < skinnedVertices_.size(); ++i) {
+            float sanitizedWeights[4] = {};
+            float totalWeight = 0.0f;
             for (int influenceIndex = 0; influenceIndex < 4; ++influenceIndex) {
-                influenceMap[i].weights[influenceIndex] = skinnedVertices_[i].weights[influenceIndex];
-                influenceMap[i].jointIndices[influenceIndex] = skinnedVertices_[i].jointIndices[influenceIndex];
+                sanitizedWeights[influenceIndex] =
+                    SanitizeWeight(skinnedVertices_[i].weights[influenceIndex]);
+                totalWeight += sanitizedWeights[influenceIndex];
+            }
+            if (totalWeight <= 1.0e-6f) {
+                sanitizedWeights[0] = 1.0f;
+                totalWeight = 1.0f;
+            }
+
+            for (int influenceIndex = 0; influenceIndex < 4; ++influenceIndex) {
+                influenceMap[i].weights[influenceIndex] =
+                    sanitizedWeights[influenceIndex] / totalWeight;
+                // Compute Shaderへ範囲外のボーン番号を渡すとDevice Hungになる。
+                // 読み込み元が壊れていても必ず有効なパレット番号へ収める。
+                const int maximumJointIndex =
+                    (std::max)(0, static_cast<int>(joints_.size()) - 1);
+                influenceMap[i].jointIndices[influenceIndex] = std::clamp(
+                    skinnedVertices_[i].jointIndices[influenceIndex],
+                    0,
+                    maximumJointIndex);
             }
         }
         influenceBuffer_->Unmap(0, nullptr);
@@ -725,30 +868,55 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
         }
     }
 
+    // CPU版はGPU版とは別のUploadバッファへ保持し、障害時の比較基準として残す。
+    D3D12_RESOURCE_DESC cpuSkinnedVertexDesc = resDesc;
+    cpuSkinnedVertexDesc.Width = sizeVB;
+    cpuSkinnedVertexDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    hr = device->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &cpuSkinnedVertexDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&cpuSkinnedVertexBuffer_));
+
+    if (SUCCEEDED(hr)) {
+        hr = cpuSkinnedVertexBuffer_->Map(
+            0,
+            nullptr,
+            reinterpret_cast<void**>(&mappedSkinnedVertices_));
+    }
+    if (SUCCEEDED(hr) && mappedSkinnedVertices_) {
+        cpuSkinnedVertexBufferView_.BufferLocation = cpuSkinnedVertexBuffer_->GetGPUVirtualAddress();
+        cpuSkinnedVertexBufferView_.SizeInBytes = sizeVB;
+        cpuSkinnedVertexBufferView_.StrideInBytes = sizeof(ModelVertexData);
+        UpdateCpuSkinnedVertices();
+    }
+
+    // Compute Shaderが書き込むGPU専用頂点バッファ。
     D3D12_HEAP_PROPERTIES defaultHeapProps = {};
     defaultHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-    defaultHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-    defaultHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
     defaultHeapProps.CreationNodeMask = 1;
     defaultHeapProps.VisibleNodeMask = 1;
 
-    D3D12_RESOURCE_DESC skinnedVertexDesc = resDesc;
-    skinnedVertexDesc.Width = sizeVB;
-    skinnedVertexDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
+    D3D12_RESOURCE_DESC gpuSkinnedVertexDesc = resDesc;
+    gpuSkinnedVertexDesc.Width = sizeVB;
+    gpuSkinnedVertexDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     hr = device->CreateCommittedResource(
         &defaultHeapProps,
         D3D12_HEAP_FLAG_NONE,
-        &skinnedVertexDesc,
+        &gpuSkinnedVertexDesc,
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         nullptr,
         IID_PPV_ARGS(&skinnedVertexBuffer_));
-
     if (SUCCEEDED(hr)) {
         skinnedVertexBufferState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         skinnedVertexBufferView_.BufferLocation = skinnedVertexBuffer_->GetGPUVirtualAddress();
         skinnedVertexBufferView_.SizeInBytes = sizeVB;
         skinnedVertexBufferView_.StrideInBytes = sizeof(ModelVertexData);
+    } else {
+        useGpuSkinning_ = false;
     }
 
     D3D12_RESOURCE_DESC skinningInfoDesc = resDesc;
@@ -765,9 +933,12 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
     if (SUCCEEDED(hr)) {
         skinningInformationBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&mappedSkinningInformation_));
         mappedSkinningInformation_->numVertices = static_cast<uint32_t>(skinnedVertices_.size());
+        mappedSkinningInformation_->numJoints = static_cast<uint32_t>(joints_.size());
     }
     
-    CreateComputeSkinningPipeline(dxCommon);
+    if (useGpuSkinning_ && !joints_.empty()) {
+        CreateComputeSkinningPipeline(dxCommon);
+    }
 }
 
 void SkinnedModel::CreateComputeSkinningPipeline(DirectXCommon* dxCommon) {
@@ -883,8 +1054,14 @@ void SkinnedModel::ApplyMotion(float time) {
     }
 
     // Duration 
-    float loopedTime = std::fmod(time, activeMotion.duration);
-    if (loopedTime < 0.0f) loopedTime += activeMotion.duration;
+    const float safeDuration =
+        (std::isfinite(activeMotion.duration) && activeMotion.duration > 0.0f)
+        ? activeMotion.duration
+        : 0.001f;
+    float loopedTime = std::fmod(time, safeDuration);
+    if (loopedTime < 0.0f) {
+        loopedTime += safeDuration;
+    }
 
     for (size_t i = 0; i < joints_.size(); ++i) {
         if (i >= activeMotion.jointAnimations.size()) {
@@ -1222,7 +1399,10 @@ void SkinnedModel::EnsureDefaultPlayerMotions() {
 
 float SkinnedModel::GetMotionDuration() const {
     if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
-        return motions_[activeMotionIndex_].duration;
+        const float duration = motions_[activeMotionIndex_].duration;
+        if (std::isfinite(duration) && duration > 0.0f) {
+            return duration;
+        }
     }
     return 2.0f;
 }

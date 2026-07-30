@@ -68,7 +68,9 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input, int startI
 void StageSelect::Update()
 {
 	// ステージファイルが一つもない場合は何もしない
-	if (stageFiles_.empty()) return;
+	if (stageFiles_.empty()) {
+		return;
+	}
 
 	// 0:正面 1:右 2:裏 3:左 4:上 5:下
 	//WSADの順番に書いている{ W(上), S(下), A(左), D(右)
@@ -86,6 +88,18 @@ void StageSelect::Update()
 	if (input_->TriggerKey(DIK_S)) { selectedStageIndex_ = moveTable[selectedStageIndex_][1]; }
 	if (input_->TriggerKey(DIK_A)) { selectedStageIndex_ = moveTable[selectedStageIndex_][2]; }
 	if (input_->TriggerKey(DIK_D)) { selectedStageIndex_ = moveTable[selectedStageIndex_][3]; }
+	if (input_->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_UP)) {
+		selectedStageIndex_ = moveTable[selectedStageIndex_][0];
+	}
+	if (input_->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_DOWN)) {
+		selectedStageIndex_ = moveTable[selectedStageIndex_][1];
+	}
+	if (input_->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_LEFT)) {
+		selectedStageIndex_ = moveTable[selectedStageIndex_][2];
+	}
+	if (input_->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_RIGHT)) {
+		selectedStageIndex_ = moveTable[selectedStageIndex_][3];
+	}
 
 	// --- 目標角度の設定 ---
 	float targetDegX = 0.0f;
@@ -117,7 +131,8 @@ void StageSelect::Update()
 	stageObject_->SetRotation({ currentRotationX_, currentRotationY_, 0.0f });
 
 	// --- スペースキーで決定 ---
-	if (input_->TriggerKey(DIK_SPACE))
+	if (input_->TriggerKey(DIK_SPACE) ||
+		input_->TriggerControllerButton(XINPUT_GAMEPAD_A))
 	{
 		// 実際にその番号に対応するファイルが存在する場合のみ決定
 		if (selectedStageIndex_ < (int)stageFiles_.size())

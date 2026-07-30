@@ -18,6 +18,8 @@ struct EmitterSphere
     float frequency;
     float frequencyTime;
     uint emit;
+    float particleScale;
+    float3 padding;
 };
 
 struct PerFrame
@@ -95,7 +97,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         float32_t3 randomDirection = generator.Generate3d() * 2.0f - 1.0f;
         float32_t3 randomOffset = randomDirection * gEmitter.radius;
-        float32_t scale = 0.18f + generator.Generate1d() * 0.45f;
+        float32_t scale =
+            (0.18f + generator.Generate1d() * 0.45f) * gEmitter.particleScale;
         float32_t3 velocity = normalize(randomDirection + float32_t3(0.1f, 0.9f, 0.0f));
         velocity *= 0.35f + generator.Generate1d() * 1.25f;
 

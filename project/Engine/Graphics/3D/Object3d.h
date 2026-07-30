@@ -33,6 +33,9 @@ public:
     // Updates world, WVP, and light-view-projection matrices.
     void Update(const Matrix4x4& lightVP);
 
+    // Uses a caller-provided world matrix for joint-attached objects.
+    void UpdateWithWorldMatrix(const Matrix4x4& worldMatrix, const Matrix4x4& lightVP);
+
     // Draws the assigned model with the current transform and material.
     void Draw();
 

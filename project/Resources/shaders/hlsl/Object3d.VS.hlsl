@@ -4,6 +4,7 @@ struct VertexShaderOutput
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL0;
     float4 lightSpacePosition : POSITION0;
+    float4 color : COLOR0;
     float3 worldPosition : POSITION1; // ワールド空間の位置を追加
 };
 
@@ -20,6 +21,7 @@ struct VertexSgaderInput
 {
     float4 position : POSITION0;
     float2 texcoord : TEXCOORD0;
+    float4 color : COLOR0;
     float3 normal : NORMAL0;
 };
 
@@ -28,6 +30,7 @@ VertexShaderOutput main(VertexSgaderInput input)
     VertexShaderOutput output;
     output.position = mul(input.position, gTransformationMatrix.WVP);
     output.texcoord = input.texcoord;
+    output.color = input.color;
     output.normal = normalize(mul((float3x3) gTransformationMatrix.World, input.normal));
     
     // その世界座標を「ライト視点の行列」で変換してピクセルシェーダーに送る
