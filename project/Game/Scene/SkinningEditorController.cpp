@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstdio>   // sprintf_s
 #include <cstdint>
 #include <fstream>
@@ -62,6 +63,30 @@ namespace {
 
 	bool IsObjAssetIndex(int index, int objStartIndex, int gltfStartIndex) {
 		return index >= objStartIndex && index < gltfStartIndex;
+	}
+
+	// ジョイント行列から拡大率とシアーを除き、向きと位置だけを取り出す。
+	// モデル側の拡大率が武器へ重複適用されることによる巨大化を防ぐ。
+	Matrix4x4 MakeRigidJointMatrix(const Matrix4x4& source) {
+		Matrix4x4 result = Math::MakeIdentity4x4();
+
+		for (int row = 0; row < 3; ++row) {
+			const float x = source.m[row][0];
+			const float y = source.m[row][1];
+			const float z = source.m[row][2];
+			const float length = std::sqrt(x * x + y * y + z * z);
+
+			if (length > 0.0001f) {
+				result.m[row][0] = x / length;
+				result.m[row][1] = y / length;
+				result.m[row][2] = z / length;
+			}
+		}
+
+		result.m[3][0] = source.m[3][0];
+		result.m[3][1] = source.m[3][1];
+		result.m[3][2] = source.m[3][2];
+		return result;
 	}
 
 	bool SplitModelPath(const std::string& fullPath, std::string& directory, std::string& fileName) {
@@ -247,6 +272,7 @@ void SkinningEditorController::Initialize(
 	object3dCommon_ = object3dCommon;
 	dxCommon_ = dxCommon;
 	textureManager_ = textureManager;
+	LoadWeaponAttachmentSettings();
 
 	// ----------------------------------------------------------
 	// 1. glTF モデルのスキャン (Resources/Models 以下を再帰探索)
@@ -264,9 +290,28 @@ void SkinningEditorController::Initialize(
 	//    起動時はインデックス 0 (デフォルト人型) で初期化する
 	// ----------------------------------------------------------
 	skinnedObject_ = std::make_unique<SkinnedObject>();
-	ChangePreviewModel(0);
+	int restoredModelIndex = 0;
+	if (!savedPreviewModelPath_.empty()) {
+		const auto savedModel = std::find(
+			modelPaths_.begin(),
+			modelPaths_.end(),
+			savedPreviewModelPath_);
+		if (savedModel != modelPaths_.end()) {
+			restoredModelIndex = static_cast<int>(
+				std::distance(modelPaths_.begin(), savedModel));
+		}
+	}
+	ApplyPreviewModelChange(restoredModelIndex);
 	skinnedObject_->SetPosition({ 0.0f, 0.0f, 0.0f }); // 地面 (Y=0) に接地
 	skinnedObject_->SetScale({ 1.0f, 1.0f, 1.0f });
+
+	// 武器フォルダを走査するため、自作モデルはフォルダへ追加するだけで選択候補になる。
+	ScanWeaponModels();
+	if (!weaponPaths_.empty()) {
+		LoadSelectedWeapon();
+	} else {
+		weaponStatus_ = "No weapon models in Resources/Models/weapon.";
+	}
 
 	// ----------------------------------------------------------
 	// 4. デバッグ用グリッド線の生成 (-10m 〜 +10m / 1m 刻み / X軸・Z軸方向)
@@ -313,6 +358,17 @@ void SkinningEditorController::Update(
 	const Matrix4x4& lightVP,
 	bool                 isGuiCaptured,
 	ParticleManager* particleManager) {
+	// ImGui描画中の即時切替は、そのフレームの描画コマンドが参照中の
+	// GPUバッファを解放してしまう。次フレーム先頭でGPU完了後に差し替える。
+	if (pendingModelIndex_ >= 0) {
+		const int requestedModelIndex = pendingModelIndex_;
+		pendingModelIndex_ = -1;
+		if (dxCommon_) {
+			dxCommon_->WaitForGpu();
+		}
+		ApplyPreviewModelChange(requestedModelIndex);
+	}
+
 	// ----------------------------------------------------------
 	// 1. レイキャストによるジョイントクリック選択
 	//    OBJ モードはスケルトンがないためこのブロックをスキップする
@@ -418,10 +474,12 @@ void SkinningEditorController::Update(
 	} else if (skinnedObject_) {
 		// glTF / デフォルト人型モード: SkinnedObject を更新する
 		skinnedObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+		skinnedObject_->SetUseModelTexture(usePreviewModelTexture_);
 		skinnedObject_->Update(dxCommon, lightVP);
 	}
 
-	UpdateHandParticleEmitter(particleManager);
+	UpdateHandParticleEmitter(particleManager, skinnedObject_.get());
+	UpdateEquippedWeapon(skinnedObject_.get(), dxCommon, camera, lightVP);
 
 	// Assets から配置した SceneObject は、UI で編集された Transform を毎フレーム Object3d に反映する。
 	// 保存対象は SceneObject::transform 側なので、Object3d の値を直接編集せずここで同期する。
@@ -452,59 +510,39 @@ void SkinningEditorController::Update(
 	}
 }
 
-void SkinningEditorController::UpdateHandParticleEmitter(ParticleManager* particleManager) {
-	if (!emitHandParticles_ || !particleManager || !skinnedObject_ || isObjPreviewMode_) {
+void SkinningEditorController::UpdateHandParticleEmitter(
+	ParticleManager* particleManager,
+	SkinnedObject* target) {
+	handParticleAttachedThisFrame_ = false;
+	if (!emitHandParticles_ || !particleManager || !target) {
+		if (particleManager) {
+			particleManager->SetDrawGPUParticleSphere(false);
+		}
 		return;
 	}
 
 	// 初回だけ手に相当するジョイントを名前候補から探してキャッシュする。
 	if (handParticleJointIndex_ < 0) {
-		handParticleJointIndex_ = skinnedObject_->FindJointIndexByNameHints({
-			"hand_r", "r_hand", "right_hand", "righthand", "hand.r",
-			"hand_l", "l_hand", "left_hand", "lefthand", "hand.l", "hand"
+		handParticleJointIndex_ = target->FindJointIndexByNameHints({
+			"left_hand", "lefthand", "hand_l", "l_hand", "hand.l",
+			"mixamorig:lefthand", "mixamorig_left_hand"
 		});
 	}
 
 	// アニメーション後のジョイント行列から、手の現在ワールド座標を取得する。
 	Vector3 handPosition{};
-	if (!skinnedObject_->TryGetJointWorldPosition(handParticleJointIndex_, handPosition)) {
+	if (!target->TryGetJointWorldPosition(handParticleJointIndex_, handPosition)) {
+		particleManager->SetDrawGPUParticleSphere(false);
 		return;
 	}
 
 	// 毎フレーム出すと強すぎるため、一定間隔で小さな火花として発生させる。
-	handParticleTimer_ += 1.0f / 60.0f;
-	if (handParticleTimer_ < 0.18f) {
-		return;
-	}
-	handParticleTimer_ = 0.0f;
+	particleManager->SetGPUParticleEmitterPosition(handPosition);
+	particleManager->ConfigureGPUParticleEmitter(0.08f, 8u, 0.11f, 0.18f);
+	particleManager->SetDrawGPUParticleSphere(true);
+	handParticleAttachedThisFrame_ = true;
 
 	// 既存のヒットエフェクトを手元用に小さく調整して使う。
-	ParticleManager::HitEffectSettings settings{};
-	settings.size = 0.32f;
-	settings.brightness = 0.85f;
-	settings.lifeScale = 0.55f;
-	settings.slashCount = 2;
-	settings.sparkCount = 14;
-	settings.sparkSpeed = 0.58f;
-	settings.sparkLength = 0.45f;
-	settings.scatterRadius = 0.22f;
-	settings.ringPower = 0.15f;
-	settings.corePower = 0.75f;
-	settings.crossPower = 0.0f;
-	settings.pillarPower = 0.0f;
-	settings.lightningCount = 0;
-	settings.randomizePosition = true;
-	settings.randomizeDirection = true;
-	settings.randomizeScale = true;
-	settings.randomizeLifetime = true;
-	settings.randomizeColor = true;
-	settings.coreColor = { 1.0f, 0.52f, 0.14f, 1.0f };
-	settings.slashColor = { 1.0f, 0.42f, 0.08f, 1.0f };
-	settings.sparkColor = { 1.0f, 0.72f, 0.18f, 1.0f };
-	settings.sparkSecondaryColor = { 0.34f, 0.72f, 1.0f, 1.0f };
-	settings.ringColor = { 1.0f, 0.38f, 0.08f, 1.0f };
-
-	particleManager->EmitHitEffect(handPosition, settings);
 }
 
 bool SkinningEditorController::PlaceSelectedAssetInScene() {
@@ -886,6 +924,273 @@ bool SkinningEditorController::AppendLevelObjectRecursive(const LevelObjectData&
 //  SkinningEditorController::Draw
 //  グリッド線・スキニングメッシュ・スケルトンを描画する
 // ==========================================================
+void SkinningEditorController::UpdateEquippedWeapon(
+	SkinnedObject* target,
+	DirectXCommon* dxCommon,
+	Camera* camera,
+	const Matrix4x4& lightVP) {
+	weaponAttachedThisFrame_ = false;
+	if (!showEquippedWeapon_ || !target) {
+		return;
+	}
+	if (!equippedWeapon_) {
+		if (weaponPaths_.empty()) {
+			ScanWeaponModels();
+		}
+		if (!LoadSelectedWeapon()) {
+			return;
+		}
+	}
+
+	const auto& characterJoints = target->GetModel()->GetJoints();
+	if (weaponHandJointIndex_ < 0 ||
+		weaponHandJointIndex_ >= static_cast<int>(characterJoints.size())) {
+		weaponHandJointIndex_ = target->FindJointIndexByNameHints({
+			"right_hand", "righthand", "hand_r", "r_hand", "hand.r",
+			"mixamorig:righthand", "mixamorig_right_hand"
+		});
+	}
+
+	Matrix4x4 handWorld{};
+	if (!target->TryGetJointWorldMatrix(weaponHandJointIndex_, handWorld)) {
+		weaponStatus_ = "Right-hand joint was not found.";
+		return;
+	}
+
+	equippedWeapon_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+	equippedWeapon_->Update(dxCommon, lightVP);
+
+	// glTFの原点が柄に置かれているとは限らない。
+	// 先に握り位置を原点へ移し、その原点を右手ジョイントへ一致させる。
+	const Matrix4x4 gripToOrigin = Math::MakeTranslateMatrix({
+		-weaponGripPoint_.x,
+		-weaponGripPoint_.y,
+		-weaponGripPoint_.z
+	});
+	const Matrix4x4 localAttachment = Math::MakeAffineMatrix(
+		weaponAttachmentTransform_.scale,
+		weaponAttachmentTransform_.rotate,
+		weaponAttachmentTransform_.translate);
+	const Matrix4x4 rigidHandWorld = MakeRigidJointMatrix(handWorld);
+	const Matrix4x4 weaponWorld = Math::Multiply(
+		Math::Multiply(gripToOrigin, localAttachment),
+		rigidHandWorld);
+	equippedWeapon_->GetObject3d()->UpdateWithWorldMatrix(weaponWorld, lightVP);
+	weaponStatus_ = "Attached to: " +
+		characterJoints[static_cast<size_t>(weaponHandJointIndex_)].name;
+	weaponAttachedThisFrame_ = true;
+}
+
+void SkinningEditorController::UpdateDebugViewAttachments(
+	SkinnedObject* target,
+	DirectXCommon* dxCommon,
+	Camera* camera,
+	const Matrix4x4& lightVP,
+	ParticleManager* particleManager) {
+	if (!target) {
+		if (particleManager) {
+			particleManager->SetDrawGPUParticleSphere(false);
+		}
+		return;
+	}
+
+	// プレビューとは別スケルトンを扱うため、毎フレーム名前から安全に再解決する。
+	handParticleJointIndex_ = -1;
+	weaponHandJointIndex_ = -1;
+	UpdateHandParticleEmitter(particleManager, target);
+	UpdateEquippedWeapon(target, dxCommon, camera, lightVP);
+}
+
+void SkinningEditorController::DrawDebugViewAttachments() {
+	if (showEquippedWeapon_ && equippedWeapon_) {
+		equippedWeapon_->Draw();
+	}
+}
+
+void SkinningEditorController::DrawDebugViewAttachmentImGui(SkinnedObject* target) {
+	ImGui::SeparatorText("CG4 Debug Equipment");
+	if (ImGui::Checkbox("Equip Large Sword (Right Hand)", &showEquippedWeapon_)) {
+		weaponHandJointIndex_ = -1;
+		if (showEquippedWeapon_ && !equippedWeapon_) {
+			if (weaponPaths_.empty()) {
+				ScanWeaponModels();
+			}
+			LoadSelectedWeapon();
+		}
+	}
+	if (ImGui::Checkbox("GPU Particles (Left Hand)", &emitHandParticles_)) {
+		handParticleJointIndex_ = -1;
+	}
+
+	if (target) {
+		ImGui::Checkbox("Use Character Texture", &usePreviewModelTexture_);
+		target->SetUseModelTexture(usePreviewModelTexture_);
+	}
+
+	ImGui::Text("Weapon models found: %zu", weaponPaths_.size());
+	ImGui::TextColored(
+		weaponAttachedThisFrame_
+			? ImVec4(0.35f, 1.0f, 0.45f, 1.0f)
+			: ImVec4(1.0f, 0.55f, 0.30f, 1.0f),
+		"Weapon: %s",
+		showEquippedWeapon_ ? weaponStatus_.c_str() : "OFF");
+	ImGui::TextColored(
+		handParticleAttachedThisFrame_
+			? ImVec4(0.35f, 1.0f, 0.45f, 1.0f)
+			: ImVec4(1.0f, 0.55f, 0.30f, 1.0f),
+		"Left-hand GPU particles: %s",
+		emitHandParticles_
+			? (handParticleAttachedThisFrame_ ? "Attached" : "Joint not resolved")
+			: "OFF");
+	ImGui::TextDisabled("Sword follows RightHand / particles follow LeftHand.");
+}
+
+void SkinningEditorController::ScanWeaponModels() {
+	weaponPaths_.clear();
+	weaponNames_.clear();
+
+	const std::filesystem::path weaponDirectory = "Resources/Models/weapon";
+	if (!std::filesystem::exists(weaponDirectory)) {
+		selectedWeaponIndex_ = 0;
+		return;
+	}
+
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(weaponDirectory)) {
+		if (!entry.is_regular_file()) {
+			continue;
+		}
+
+		std::string extension = entry.path().extension().string();
+		std::transform(
+			extension.begin(),
+			extension.end(),
+			extension.begin(),
+			[](unsigned char character) {
+				return static_cast<char>(std::tolower(character));
+			});
+		if (extension != ".gltf" && extension != ".glb") {
+			continue;
+		}
+
+		weaponPaths_.push_back(entry.path().generic_string());
+		weaponNames_.push_back(entry.path().stem().string());
+	}
+
+	std::vector<size_t> order(weaponPaths_.size());
+	for (size_t index = 0; index < order.size(); ++index) {
+		order[index] = index;
+	}
+	std::sort(order.begin(), order.end(), [this](size_t left, size_t right) {
+		return weaponNames_[left] < weaponNames_[right];
+	});
+
+	std::vector<std::string> sortedPaths;
+	std::vector<std::string> sortedNames;
+	sortedPaths.reserve(order.size());
+	sortedNames.reserve(order.size());
+	for (size_t index : order) {
+		sortedPaths.push_back(weaponPaths_[index]);
+		sortedNames.push_back(weaponNames_[index]);
+	}
+	weaponPaths_ = std::move(sortedPaths);
+	weaponNames_ = std::move(sortedNames);
+	selectedWeaponIndex_ = std::clamp(
+		selectedWeaponIndex_,
+		0,
+		(std::max)(0, static_cast<int>(weaponPaths_.size()) - 1));
+}
+
+bool SkinningEditorController::LoadSelectedWeapon() {
+	if (!object3dCommon_ || !dxCommon_ || !textureManager_ ||
+		selectedWeaponIndex_ < 0 ||
+		selectedWeaponIndex_ >= static_cast<int>(weaponPaths_.size())) {
+		weaponStatus_ = "Weapon selection is invalid.";
+		return false;
+	}
+
+	auto weapon = std::make_unique<SkinnedObject>();
+	weapon->InitializeFromGltf(
+		object3dCommon_,
+		dxCommon_,
+		weaponPaths_[selectedWeaponIndex_],
+		textureManager_);
+	weapon->SetUseModelTexture(true);
+	weapon->SetShowSkeleton(false);
+	equippedWeapon_ = std::move(weapon);
+	weaponHandJointIndex_ = -1;
+	weaponStatus_ = "Loaded: " + weaponPaths_[selectedWeaponIndex_];
+	return true;
+}
+
+void SkinningEditorController::LoadWeaponAttachmentSettings() {
+	const std::filesystem::path settingsPath =
+		"Resources/Settings/skinning_editor_weapon.json";
+	std::ifstream input(settingsPath);
+	if (!input.is_open()) {
+		return;
+	}
+
+	try {
+		const json settings = json::parse(input);
+		const auto readVector3 = [&settings](const char* key, Vector3& value) {
+			if (!settings.contains(key) ||
+				!settings[key].is_array() ||
+				settings[key].size() != 3) {
+				return;
+			}
+			value.x = settings[key][0].get<float>();
+			value.y = settings[key][1].get<float>();
+			value.z = settings[key][2].get<float>();
+		};
+
+		readVector3("position", weaponAttachmentTransform_.translate);
+		readVector3("rotation", weaponAttachmentTransform_.rotate);
+		readVector3("scale", weaponAttachmentTransform_.scale);
+		readVector3("grip_point", weaponGripPoint_);
+		savedPreviewModelPath_ = settings.value("character_model", std::string{});
+	} catch (const std::exception&) {
+		weaponStatus_ = "Weapon pose settings could not be read.";
+	}
+}
+
+void SkinningEditorController::SaveWeaponAttachmentSettings() const {
+	const std::filesystem::path settingsPath =
+		"Resources/Settings/skinning_editor_weapon.json";
+	std::error_code directoryError;
+	std::filesystem::create_directories(settingsPath.parent_path(), directoryError);
+
+	json settings;
+	settings["position"] = {
+		weaponAttachmentTransform_.translate.x,
+		weaponAttachmentTransform_.translate.y,
+		weaponAttachmentTransform_.translate.z
+	};
+	settings["rotation"] = {
+		weaponAttachmentTransform_.rotate.x,
+		weaponAttachmentTransform_.rotate.y,
+		weaponAttachmentTransform_.rotate.z
+	};
+	settings["scale"] = {
+		weaponAttachmentTransform_.scale.x,
+		weaponAttachmentTransform_.scale.y,
+		weaponAttachmentTransform_.scale.z
+	};
+	settings["grip_point"] = {
+		weaponGripPoint_.x,
+		weaponGripPoint_.y,
+		weaponGripPoint_.z
+	};
+	if (selectedModelIndex_ >= 0 &&
+		selectedModelIndex_ < static_cast<int>(modelPaths_.size())) {
+		settings["character_model"] = modelPaths_[selectedModelIndex_];
+	}
+
+	std::ofstream output(settingsPath);
+	if (output.is_open()) {
+		output << settings.dump(2);
+	}
+}
+
 void SkinningEditorController::Draw(Object3dCommon* object3dCommon, Camera* camera) {
 	// グリッド線の描画 (モードに関わらず常に表示)
 	for (auto& line : gridLines_) {
@@ -908,6 +1213,9 @@ void SkinningEditorController::Draw(Object3dCommon* object3dCommon, Camera* came
 		skinnedObject_->DrawSkeleton(
 			object3dCommon, debugCubeModel_.get(),
 			camera->GetViewMatrix(), camera->GetProjectionMatrix());
+		if (showEquippedWeapon_ && equippedWeapon_) {
+			equippedWeapon_->Draw();
+		}
 	}
 }
 
@@ -952,7 +1260,14 @@ void SkinningEditorController::DrawImGuiTimeline() {
 
 	auto* model = skinnedObject_->GetModel();
 	float  duration = model->GetMotionDuration();
+	if (!std::isfinite(duration) || duration <= 0.0f) {
+		duration = 0.001f;
+	}
 	float  curTime = skinnedObject_->GetCurrentKeyframeTime();
+	if (!std::isfinite(curTime)) {
+		curTime = 0.0f;
+		skinnedObject_->SetCurrentKeyframeTime(curTime);
+	}
 	bool   playCustom = skinnedObject_->IsPlayCustomAnimation();
 
 	// ----------------------------------------------------------
@@ -960,13 +1275,14 @@ void SkinningEditorController::DrawImGuiTimeline() {
 	// ----------------------------------------------------------
 	ImGui::PushItemWidth(-1.0f);
 	if (ImGui::SliderFloat("##TimelineSlider", &curTime, 0.0f, duration,
-						   "Current Time: %.2f sec / %.2f sec")) {
+						   "Current Time: %.2f sec")) {
 		skinnedObject_->SetCurrentKeyframeTime(curTime);
 		if (!playCustom) {
 			skinnedObject_->ApplyMotion(curTime); // 停止中はシークと同時に適用
 		}
 	}
 	ImGui::PopItemWidth();
+	ImGui::Text("Duration: %.2f sec", duration);
 
 	// ----------------------------------------------------------
 	// トラックのビジュアル描画 (キーフレームひし形・目盛り・再生カーソル)
@@ -1640,6 +1956,10 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 	if (ImGui::Checkbox("Play Test Animation", &playAnim)) {
 		skinnedObject_->SetPlayAnimation(playAnim);
 	}
+	ImGui::Checkbox("Use Model Texture", &usePreviewModelTexture_);
+	if (!usePreviewModelTexture_) {
+		ImGui::TextDisabled("Texture preview is OFF (neutral white material).");
+	}
 
 	float speed = skinnedObject_->GetAnimationSpeed();
 	if (ImGui::SliderFloat("Anim Speed", &speed, 0.0f, 3.0f, "%.2f")) {
@@ -1656,8 +1976,29 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 		skinnedObject_->SetShowJointAxes(showJointAxes);
 	}
 
+	bool showJointNames = skinnedObject_->IsShowJointNames();
+	if (ImGui::Checkbox("Show Joint Names", &showJointNames)) {
+		skinnedObject_->SetShowJointNames(showJointNames);
+	}
+
+	const size_t expectedBoneCount = skinnedObject_->GetExpectedBoneCount();
+	const size_t drawnBoneCount = skinnedObject_->GetLastDrawnBoneCount();
+	const ImVec4 boneCountColor =
+		drawnBoneCount == expectedBoneCount
+		? ImVec4(0.35f, 0.90f, 0.48f, 1.0f)
+		: ImVec4(1.0f, 0.42f, 0.28f, 1.0f);
+	ImGui::Text(
+		"Skeleton: %zu joints / %zu bones",
+		skinnedObject_->GetSkeletonJointCount(),
+		expectedBoneCount);
+	ImGui::TextColored(
+		boneCountColor,
+		"Rendered Bones: %zu / %zu",
+		drawnBoneCount,
+		expectedBoneCount);
+
 	// 手ジョイントの位置をエミッターとして使う評価課題用の確認機能。
-	if (ImGui::Checkbox("Emit Particles From Hand", &emitHandParticles_)) {
+	if (ImGui::Checkbox("Emit Particles From Left Hand", &emitHandParticles_)) {
 		handParticleTimer_ = 0.0f;
 		handParticleJointIndex_ = -1;
 	}
@@ -1665,14 +2006,130 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 		const int resolvedJoint = handParticleJointIndex_ >= 0
 			? handParticleJointIndex_
 			: skinnedObject_->FindJointIndexByNameHints({
-				"hand_r", "r_hand", "right_hand", "righthand", "hand.r",
-				"hand_l", "l_hand", "left_hand", "lefthand", "hand.l", "hand"
+				"left_hand", "lefthand", "hand_l", "l_hand", "hand.l",
+				"mixamorig:lefthand", "mixamorig_left_hand"
 			});
 		if (resolvedJoint >= 0 && resolvedJoint < static_cast<int>(skinnedObject_->GetModel()->GetJoints().size())) {
 			ImGui::Text("Emitter Joint: %s", skinnedObject_->GetModel()->GetJoints()[resolvedJoint].name.c_str());
 		} else {
 			ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.25f, 1.0f), "Emitter Joint: not found");
 		}
+	}
+
+	ImGui::Separator();
+	ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.25f, 1.0f), "[ Right Hand Weapon ]");
+	if (ImGui::Checkbox("Equip Right Hand Weapon", &showEquippedWeapon_)) {
+		weaponHandJointIndex_ = -1;
+	}
+
+	const char* selectedWeaponName =
+		selectedWeaponIndex_ >= 0 &&
+		selectedWeaponIndex_ < static_cast<int>(weaponNames_.size())
+		? weaponNames_[selectedWeaponIndex_].c_str()
+		: "No weapon";
+	if (ImGui::BeginCombo("Weapon Model", selectedWeaponName)) {
+		for (int index = 0; index < static_cast<int>(weaponNames_.size()); ++index) {
+			const bool selected = index == selectedWeaponIndex_;
+			if (ImGui::Selectable(weaponNames_[index].c_str(), selected)) {
+				selectedWeaponIndex_ = index;
+				LoadSelectedWeapon();
+			}
+			if (selected) {
+				ImGui::SetItemDefaultFocus();
+			}
+		}
+		ImGui::EndCombo();
+	}
+	const float weaponButtonWidth = ImGui::GetContentRegionAvail().x * 0.5f;
+	if (ImGui::Button("Refresh Weapon List", ImVec2(weaponButtonWidth, 24.0f))) {
+		ScanWeaponModels();
+		if (!weaponPaths_.empty()) {
+			LoadSelectedWeapon();
+		}
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Reload Weapon", ImVec2(-FLT_MIN, 24.0f))) {
+		LoadSelectedWeapon();
+	}
+	ImGui::TextWrapped("%s", weaponStatus_.c_str());
+	bool weaponPoseChanged = ImGui::DragFloat3(
+		"Weapon Position",
+		&weaponAttachmentTransform_.translate.x,
+		0.01f,
+		-5.0f,
+		5.0f,
+		"%.2f");
+	weaponPoseChanged |= ImGui::DragFloat3(
+		"Weapon Rotation",
+		&weaponAttachmentTransform_.rotate.x,
+		0.01f,
+		-6.2832f,
+		6.2832f,
+		"%.2f rad");
+	weaponPoseChanged |= ImGui::DragFloat3(
+		"Weapon Scale",
+		&weaponAttachmentTransform_.scale.x,
+		0.01f,
+		0.01f,
+		5.0f,
+		"%.2f");
+	weaponPoseChanged |= ImGui::DragFloat3(
+		"Weapon Grip Point",
+		&weaponGripPoint_.x,
+		0.01f,
+		-10.0f,
+		10.0f,
+		"%.2f");
+	if (ImGui::Button("Reset Weapon Transform", ImVec2(-FLT_MIN, 24.0f))) {
+		weaponAttachmentTransform_ = {
+			{ 0.35f, 0.35f, 0.35f },
+			{ 1.5707963f, 0.0f, 0.55f },
+			{ 0.0f, 0.0f, 0.0f }
+		};
+		// 柄の端ではなく握りの中央が右手ジョイントへ重なる位置。
+		weaponGripPoint_ = { 0.0f, -0.25f, 0.0f };
+		weaponPoseChanged = true;
+	}
+	if (ImGui::Button("Recommended Sword Pose", ImVec2(-FLT_MIN, 24.0f))) {
+		weaponAttachmentTransform_ = {
+			{ 0.35f, 0.35f, 0.35f },
+			{ 1.5707963f, 0.0f, 0.55f },
+			{ 0.0f, 0.0f, 0.0f }
+		};
+		// 柄の端ではなく握りの中央が右手ジョイントへ重なる位置。
+		weaponGripPoint_ = { 0.0f, -0.25f, 0.0f };
+		weaponPoseChanged = true;
+	}
+	ImGui::TextDisabled("90-degree correction presets:");
+	if (ImGui::Button("Rotate Z +90", ImVec2(weaponButtonWidth, 22.0f))) {
+		weaponAttachmentTransform_.rotate = { 0.0f, 0.0f, 1.5707963f };
+		weaponPoseChanged = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Rotate Z -90", ImVec2(-FLT_MIN, 22.0f))) {
+		weaponAttachmentTransform_.rotate = { 0.0f, 0.0f, -1.5707963f };
+		weaponPoseChanged = true;
+	}
+	if (ImGui::Button("Rotate X +90", ImVec2(weaponButtonWidth, 22.0f))) {
+		weaponAttachmentTransform_.rotate = { 1.5707963f, 0.0f, 0.0f };
+		weaponPoseChanged = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Rotate X -90", ImVec2(-FLT_MIN, 22.0f))) {
+		weaponAttachmentTransform_.rotate = { -1.5707963f, 0.0f, 0.0f };
+		weaponPoseChanged = true;
+	}
+	if (ImGui::Button("Rotate Y +90", ImVec2(weaponButtonWidth, 22.0f))) {
+		weaponAttachmentTransform_.rotate = { 0.0f, 1.5707963f, 0.0f };
+		weaponPoseChanged = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Rotate Y -90", ImVec2(-FLT_MIN, 22.0f))) {
+		weaponAttachmentTransform_.rotate = { 0.0f, -1.5707963f, 0.0f };
+		weaponPoseChanged = true;
+	}
+	if (weaponPoseChanged) {
+		SaveWeaponAttachmentSettings();
 	}
 
 	if (ImGui::Button("Reset to T-Pose", ImVec2(-FLT_MIN, 24))) {
@@ -1707,6 +2164,21 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 		camera->SetTarget({ 0.0f, 1.0f, 0.0f });
 		camera->SetDistance(3.5f);
 		camera->SetRotation({ 1.5708f, 0.0f, 0.0f }); // 真上
+	}
+
+	ImGui::Separator();
+	if (ImGui::CollapsingHeader("Controls / Guide", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::BulletText("MMB drag: Orbit camera");
+		ImGui::BulletText("Shift + MMB drag: Pan camera");
+		ImGui::BulletText("Mouse wheel: Zoom");
+		ImGui::BulletText("Left click a joint: Select bone");
+		ImGui::BulletText("Timeline diamond: Jump to keyframe");
+		ImGui::BulletText("Right stick: Orbit camera (Xbox)");
+		ImGui::BulletText("Left stick: Pan camera (Xbox)");
+		ImGui::BulletText("LB / RB: Zoom camera (Xbox)");
+		ImGui::TextWrapped(
+			"The weapon follows the right-hand joint. "
+			"The GPU emitter follows the left-hand joint.");
 	}
 
 	// ----------------------------------------------------------
@@ -1944,7 +2416,20 @@ void SkinningEditorController::ChangePreviewModel(int index) {
 	if (index < 0 || index >= static_cast<int>(modelPaths_.size())) {
 		return;
 	}
+
+	// 実際のGPUリソース差し替えは、次回Updateの先頭まで遅延させる。
+	pendingModelIndex_ = index;
+}
+
+void SkinningEditorController::ApplyPreviewModelChange(int index) {
+	// モデルごとにジョイント配列が異なるため、装備先を再検索する。
+	weaponHandJointIndex_ = -1;
+
+	if (index < 0 || index >= static_cast<int>(modelPaths_.size())) {
+		return;
+	}
 	selectedModelIndex_ = index;
+	savedPreviewModelPath_ = modelPaths_[index];
 
 	// モデルごとにジョイント名が違うため、プレビュー切り替え時に検索をやり直す。
 	handParticleJointIndex_ = -1;
@@ -1989,6 +2474,8 @@ void SkinningEditorController::ChangePreviewModel(int index) {
 		skinnedObject_->InitializeFromGltf(
 			object3dCommon_, dxCommon_, modelPaths_[index], textureManager_);
 	}
+
+	SaveWeaponAttachmentSettings();
 }
 
 // ==========================================================

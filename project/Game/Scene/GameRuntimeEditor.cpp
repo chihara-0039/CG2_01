@@ -640,7 +640,16 @@ void GameRuntime::UpdateImGui() {
             if (player_) {
                 player_->SetGlow(playerGlow_);
             }
+            if (skinningEditorInitialized_ && player_) {
+                skinningEditor_.DrawDebugViewAttachmentImGui(player_->GetSkinnedObject());
+            }
         }
+
+        ImGui::SeparatorText("Debug View Controls");
+        ImGui::Text("W/A/S/D or Left Stick : Move");
+        ImGui::Text("SPACE or Xbox A       : Jump");
+        ImGui::Text("Mouse Drag / Right Stick : Camera");
+        ImGui::Text("Mouse Wheel / Triggers   : Zoom");
 
         if (ImGui::CollapsingHeader("Environment Map", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::SliderFloat("Debug Objects", &debugObjectEnvironmentCoefficient_, 0.0f, 1.0f);

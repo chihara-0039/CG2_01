@@ -101,6 +101,20 @@ public:
     /// <param name="defaultObjModel">インデックス 1 (OBJ プレイヤー) のモデル</param>
     void DrawImGuiSidePanel(Camera* camera, Player* player, Model* defaultObjModel);
 
+    /// <summary>DebugView のプレイヤーへ右手武器と左手 GPU パーティクルを追従させる。</summary>
+    void UpdateDebugViewAttachments(
+        SkinnedObject* target,
+        DirectXCommon* dxCommon,
+        Camera* camera,
+        const Matrix4x4& lightVP,
+        ParticleManager* particleManager);
+
+    /// <summary>DebugView 用の右手武器だけを描画する。</summary>
+    void DrawDebugViewAttachments();
+
+    /// <summary>DebugView の評価課題用装備設定を描画する。</summary>
+    void DrawDebugViewAttachmentImGui(SkinnedObject* target);
+
     // ========== ゲッター ==========
 
     /// <summary>プレビュー用 SkinnedObject へのポインタを返す (非所有)</summary>
@@ -140,6 +154,7 @@ private:
     /// glTF インデックス  : SkinnedObject で glTF を表示
     /// </summary>
     void ChangePreviewModel(int index);
+    void ApplyPreviewModelChange(int index);
 
     /// <summary>
     /// 現在選択中のモデルをプレイヤーに反映する。
@@ -150,7 +165,22 @@ private:
     void ApplyModelToPlayer(Player* player, Model* defaultObjModel);
 
     /// <summary>手ジョイントの現在位置から評価課題用パーティクルを発生させる。</summary>
-    void UpdateHandParticleEmitter(ParticleManager* particleManager);
+    void UpdateHandParticleEmitter(ParticleManager* particleManager, SkinnedObject* target);
+
+    /// <summary>Blender製の剣を右手ジョイントへ追従させる。</summary>
+    void UpdateEquippedWeapon(
+        SkinnedObject* target,
+        DirectXCommon* dxCommon,
+        Camera* camera,
+        const Matrix4x4& lightVP);
+
+    /// <summary>Resources/Models/weapon以下の装備モデルを一覧化する。</summary>
+    void ScanWeaponModels();
+
+    /// <summary>現在選択中の武器モデルを右手装備として読み込む。</summary>
+    bool LoadSelectedWeapon();
+    void LoadWeaponAttachmentSettings();
+    void SaveWeaponAttachmentSettings() const;
 
     /// <summary>
     /// 右側 Inspector に、配置済みシーンオブジェクトの一覧・Transform編集・保存/読込UIを描画する。
@@ -225,6 +255,7 @@ private:
 
     std::vector<std::string> modelPaths_; ///< ファイルパス (OBJ/glTF は実際のパス, Default は識別子)
     std::vector<std::string> modelNames_; ///< UI 表示用のモデル名
+    std::string savedPreviewModelPath_; ///< 再起動後に復元するモデルパス。
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> assetThumbnailHandles_; ///< ImGui 用ヒープにコピー済みのサムネイルハンドル
     std::vector<bool> assetHasThumbnail_; ///< サムネイルが実在するかどうか
     std::unordered_map<uint32_t, D3D12_GPU_DESCRIPTOR_HANDLE> assetThumbnailCache_;
@@ -233,6 +264,7 @@ private:
     int gltfStartIndex_ = 0;  ///< glTF ファイルが始まるインデックス (スキャン後に確定)
     int selectedModelIndex_   = 0; ///< 現在プレビュー中のモデルインデックス
     int activeGameModelIndex_ = 0; ///< ゲームに反映済みのモデルインデックス
+    int pendingModelIndex_ = -1; ///< 次フレーム先頭で安全に適用するモデル番号。
     char motionName_[128] = "CustomMotion";
     char motionPath_[256] = "Resources/Animations/custom_motion.json";
     std::string motionStatus_;
@@ -243,9 +275,30 @@ private:
     int assetTileSize_ = 82;           ///< Pixel size used by model asset tiles.
     std::string assetBrowserStatus_;   ///< Short feedback text shown after browser actions.
     // 手ジョイント連動パーティクルの状態。
-    bool emitHandParticles_ = false;
+    bool emitHandParticles_ = true;
     float handParticleTimer_ = 0.0f;
     int handParticleJointIndex_ = -1;
+    bool handParticleAttachedThisFrame_ = false;
+
+    // CG4加点要素「武器を手に持たせる」用の装備モデル。
+    std::unique_ptr<SkinnedObject> equippedWeapon_;
+    Transform weaponAttachmentTransform_ = {
+        { 0.35f, 0.35f, 0.35f },
+        { 1.5707963f, 0.0f, 0.55f },
+        { 0.0f, 0.0f, 0.0f }
+    };
+    // 武器モデル内で「握る位置」として扱うローカル座標。
+    // モデル原点ではなく、この点が右手ジョイントへ一致するように取り付ける。
+    // sword.glb の柄の中央を右手ジョイントへ合わせるローカル基準点。
+    Vector3 weaponGripPoint_ = { 0.0f, -0.25f, 0.0f };
+    bool showEquippedWeapon_ = true;
+    bool usePreviewModelTexture_ = false;
+    int weaponHandJointIndex_ = -1;
+    bool weaponAttachedThisFrame_ = false;
+    std::string weaponStatus_;
+    std::vector<std::string> weaponPaths_;
+    std::vector<std::string> weaponNames_;
+    int selectedWeaponIndex_ = 0;
 
     // Assets から配置した静的OBJの一覧。SkinningEditor中だけで編集・保存する簡易シーンデータ。
     std::vector<SceneObject> sceneObjects_;

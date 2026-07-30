@@ -4,6 +4,7 @@
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL0;
     float4 lightSpacePosition : POSITION0;
+    float4 color : COLOR0;
     float3 worldPosition : POSITION1;
 };
 
@@ -23,6 +24,7 @@ struct VertexShaderInput
     float4 position : POSITION0;
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL0;
+    float4 color : COLOR0;
     int4 jointIndices : BLENDINDICES0;
     float4 weights : BLENDWEIGHT0;
 };
@@ -45,6 +47,7 @@ VertexShaderOutput main(VertexShaderInput input)
     // Standard transformations
     output.position = mul(deformedPosition, gTransformationMatrix.WVP);
     output.texcoord = input.texcoord;
+    output.color = input.color;
     output.normal = normalize(mul(deformedNormal, (float3x3)gTransformationMatrix.World));
     
     float4 worldPos = mul(deformedPosition, gTransformationMatrix.World);

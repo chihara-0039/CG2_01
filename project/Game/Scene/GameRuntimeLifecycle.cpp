@@ -101,6 +101,9 @@ void GameRuntime::Initialize() {
 
 #ifdef DEVELOPMENT
     currentMode_           = AppMode::DebugView;
+    // 評価確認用の DebugView では、従来のデバッグオブジェクトと地形を最初から表示する。
+    debugFlags_.show3DObjects = true;
+    debugFlags_.showTerrain = true;
     debugFlags_.showSkybox = false;
     postProcess_.SetEnabled(false);
     if (std::filesystem::exists("Resources/Stages/stage1.txt")) {

@@ -11,7 +11,8 @@ void GameRuntime::UpdateGamePlay() {
     postEffectShowcaseController_.UpdateGameplay(*input, postProcess_);
     postEffectShowcaseController_.DrawGameplayImGui(postProcess_);
 
-    if (input->TriggerKey(DIK_C)) {
+    if (input->TriggerKey(DIK_C) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
         useFirstPersonCamera_ = !useFirstPersonCamera_;
         if (useFirstPersonCamera_ && player_) {
             fpsCameraYaw_ = player_->GetRotation().y;
@@ -20,7 +21,8 @@ void GameRuntime::UpdateGamePlay() {
     }
 
     if (!useFirstPersonCamera_) {
-        if (input->TriggerKey(DIK_V)) {
+        if (input->TriggerKey(DIK_V) ||
+            input->TriggerControllerButton(XINPUT_GAMEPAD_Y)) {
             bool wasFollowingPlayer = gameplayCameraController_.IsFollowPlayerMode();
             gameplayCameraController_.SetFollowPlayerMode(!wasFollowingPlayer);
             if (!wasFollowingPlayer && player_) {
@@ -85,6 +87,11 @@ void GameRuntime::UpdateGamePlay() {
         if (input->PushKey(DIK_RIGHT)) { fpsCameraYaw_ += keyRotateSpeed; }
         if (input->PushKey(DIK_UP)) { fpsCameraPitch_ -= keyRotateSpeed; }
         if (input->PushKey(DIK_DOWN)) { fpsCameraPitch_ += keyRotateSpeed; }
+        const GamePadState& gamePad = input->GetGamePadState();
+        if (gamePad.connected) {
+            fpsCameraYaw_ += gamePad.rightStickX * keyRotateSpeed * 1.5f;
+            fpsCameraPitch_ -= gamePad.rightStickY * keyRotateSpeed * 1.5f;
+        }
         fpsCameraPitch_ = std::clamp(fpsCameraPitch_, -1.4f, 1.4f);
 
         if (player_) {
@@ -116,6 +123,7 @@ void GameRuntime::UpdateGamePlay() {
 
     if (player_) {
         float cameraYawForMovement = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
+        player_->SetStageCollisionEnabled(true);
         player_->Update(input.get(), stageMap_, cameraYawForMovement, lightVP, dxCommon.get());
     }
 
@@ -143,7 +151,9 @@ void GameRuntime::UpdateGamePlay() {
         isGoalReached_ = true;
     }
 
-    if (input->TriggerKey(DIK_B) && blockInventory_.HasBlock()) {
+    if ((input->TriggerKey(DIK_B) ||
+         input->TriggerControllerButton(XINPUT_GAMEPAD_LEFT_SHOULDER)) &&
+        blockInventory_.HasBlock()) {
         if (blockInventoryUI_) {
             blockInventoryUI_->ToggleOpen();
         }
@@ -156,7 +166,8 @@ void GameRuntime::UpdateGamePlay() {
 
         // ゴール後は明示操作でステージ選択へ戻す。
         // 押した瞬間に復元して、次に同じステージを始めても崩壊床等が残らないようにする。
-        if (input->TriggerKey(DIK_SPACE)) {
+        if (input->TriggerKey(DIK_SPACE) ||
+            input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
             stageMap_ = backupMap_;
             stageRenderer_->BuildFromStageMap(stageMap_);
             bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
@@ -261,7 +272,8 @@ void GameRuntime::UpdateStageSelect() {
 
 void GameRuntime::UpdateSceneTransition() {
     if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)
-        && input->TriggerKey(DIK_ESCAPE)) {
+        && (input->TriggerKey(DIK_ESCAPE) ||
+            input->TriggerControllerButton(XINPUT_GAMEPAD_B))) {
         stageMap_ = backupMap_;
         stageRenderer_->BuildFromStageMap(stageMap_);
         

@@ -343,6 +343,9 @@ void GameRuntime::RenderScene() {
             stageSelect_->Draw();
         }
     } else if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
+        if (terrainObject_ && debugFlags_.showTerrain) {
+            terrainObject_->Draw();
+        }
         skinningEditor_.Draw(object3dCommon.get(), camera.get());
     } else {
         const bool isGameMode =
@@ -390,13 +393,18 @@ void GameRuntime::RenderScene() {
             if (terrainObject_ && debugFlags_.showTerrain) {
                 terrainObject_->Draw();
             }
-            for (auto& obj : objectList) {
-                if (obj) {
-                    obj->Draw();
+            if (debugFlags_.show3DObjects) {
+                for (auto& obj : objectList) {
+                    if (obj) {
+                        obj->Draw();
+                    }
                 }
             }
             if (player_) { 
                 player_->Draw();
+            }
+            if (skinningEditorInitialized_) {
+                skinningEditor_.DrawDebugViewAttachments();
             }
         }
     }

@@ -213,6 +213,11 @@ public:
 
     SkinnedObject* GetSkinnedObject() const { return skinnedObject_.get(); }
     bool IsSkinned() const { return isSkinned_; }
+    /// <summary>
+    /// ステージグリッドとの衝突を有効化する。
+    /// DebugView では表示物と StageMap が一致しないため無効化して使用する。
+    /// </summary>
+    void SetStageCollisionEnabled(bool enabled) { stageCollisionEnabled_ = enabled; }
 
 private:
     enum class AnimationState {
@@ -242,6 +247,7 @@ private:
     std::unique_ptr<Object3d>      object_;        // OBJ モデル用 (通常)
     std::unique_ptr<SkinnedObject> skinnedObject_; // glTF スキニング用
     bool isSkinned_ = false;                       // スキニングモードかどうか
+    bool stageCollisionEnabled_ = true;             // StageMap による壁・床判定を使うか
     AnimationState animationState_ = AnimationState::Idle; // 現在のプレイヤーアニメーション状態
 
     // ── トランスフォーム ──────────────────────────────────

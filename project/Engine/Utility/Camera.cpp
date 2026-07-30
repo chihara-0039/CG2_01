@@ -46,6 +46,7 @@ void Camera::UpdateBlenderStyle(
     }
 
     const auto& mouse = input->GetMouseState(); //
+    const auto& gamePad = input->GetGamePadState();
     const float rotateSpeed = 0.005f; //
     const float panSpeed = 0.02f; //
 
@@ -69,6 +70,35 @@ void Camera::UpdateBlenderStyle(
 
     // 3. ズーム (マウスホイール)
     distance_ -= mouse.wheel * 0.01f;
+
+    // Xbox コントローラーでも、マウスと同じ編集カメラを操作できるようにする。
+    if (gamePad.connected) {
+        constexpr float kPadRotateSpeed = 0.035f;
+        constexpr float kPadPanSpeed = 0.08f;
+        constexpr float kPadZoomSpeed = 0.12f;
+
+        const float orbitDirection = invertOrbit ? 1.0f : -1.0f;
+        transform_.rotate.y += gamePad.rightStickX * kPadRotateSpeed * orbitDirection;
+        transform_.rotate.x -= gamePad.rightStickY * kPadRotateSpeed * orbitDirection;
+
+        Matrix4x4 padRotation = Math::Multiply(
+            Math::MakeRotateXMatrix(transform_.rotate.x),
+            Math::MakeRotateYMatrix(transform_.rotate.y));
+        target_.x +=
+            (padRotation.m[0][0] * gamePad.leftStickX +
+             padRotation.m[2][0] * gamePad.leftStickY) * kPadPanSpeed;
+        target_.z +=
+            (padRotation.m[0][2] * gamePad.leftStickX +
+             padRotation.m[2][2] * gamePad.leftStickY) * kPadPanSpeed;
+
+        if ((gamePad.buttons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0) {
+            distance_ -= kPadZoomSpeed;
+        }
+        if ((gamePad.buttons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0) {
+            distance_ += kPadZoomSpeed;
+        }
+    }
+
     if (distance_ < 1.0f) {
         distance_ = 1.0f;
     }
