@@ -111,7 +111,16 @@ void GameRuntime::HandleModeChange() {
 
     if (currentMode_ == AppMode::SkinningEditor) {
         EnsureSkinningEditorInitialized();
+        EnsureTerrainInitialized();
+        debugFlags_.showTerrain = true;
+        terrainObject_->SetPosition({ 0.0f, -0.45f, 0.0f });
+        terrainObject_->SetScale({ 0.22f, 0.22f, 0.22f });
         camera->ForceReset({ 0.0f, 1.0f, 0.0f }, 3.5f, { 0.1f, 0.0f, 0.0f });
+    } else if (currentMode_ == AppMode::DebugView) {
+        // DebugViewへ戻った時は、評価確認用の標準オブジェクトと地形を復帰させる。
+        debugFlags_.show3DObjects = true;
+        debugFlags_.showTerrain = true;
+        EnsureTerrainInitialized();
     } else if (currentMode_ == AppMode::StageEditor) {
         // 旧左パネルを廃止して広がったシーンビューの中央へ、編集対象を再配置する。
         const Vector3 focus = player_ ? player_->GetPosition() : Vector3{ 8.0f, 1.0f, 8.0f };
@@ -181,7 +190,7 @@ void GameRuntime::UpdateHitEffectShortcut() {
 }
 
 void GameRuntime::UpdateSharedCameraControls(bool isGuiCaptured) {
-    if (currentMode_ != AppMode::GamePlay) {
+    if (currentMode_ != AppMode::GamePlay && currentMode_ != AppMode::DebugView) {
         const bool invertEditorOrbit =
             currentMode_ == AppMode::StageEditor ||
             currentMode_ == AppMode::GamePlay_BlockPlace;
@@ -205,7 +214,8 @@ void GameRuntime::UpdateParticleDebugVisibility() {
     if (particleManager &&
         currentMode_ != AppMode::EffectPreview &&
         currentMode_ != AppMode::EffectShowcase &&
-        currentMode_ != AppMode::PostEffectShowcase) {
+        currentMode_ != AppMode::PostEffectShowcase &&
+        currentMode_ != AppMode::SkinningEditor) {
         particleManager->SetDrawGPUParticleSphere(false);
     }
 }
@@ -235,8 +245,23 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
 
     player_->SetCamera(view, proj);
     if (currentMode_ == AppMode::DebugView) {
+        // DebugView の見た目は StageMap と一致しないため、不可視のステージ壁を無効化する。
+        player_->SetStageCollisionEnabled(false);
         player_->Update(input.get(), stageMap_, camera->GetRotation().y, lightVP, dxCommon.get());
+
+        // 衝突判定後に確定した座標を追う。入力方向だけでカメラが先行する状態を防ぐ。
+        camera->SetFov(gameplayCameraController_.GetFov());
+        gameplayCameraController_.SetFollowPlayerMode(true);
+        gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
+        camera->Update();
+        player_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+
+        // CG4 評価課題の装備は Animation モードではなく通常 DebugView で確認する。
+        EnsureSkinningEditorInitialized();
+        skinningEditor_.UpdateDebugViewAttachments(
+            player_->GetSkinnedObject(), dxCommon.get(), camera.get(), lightVP, particleManager.get());
     } else if (currentMode_ != AppMode::GamePlay) {
+        player_->SetStageCollisionEnabled(true);
         player_->UpdateTransform(lightVP);
     }
 }
@@ -253,15 +278,21 @@ void GameRuntime::UpdateDebugAndEffectObjects(const Matrix4x4& view, const Matri
                 obj->Update(lightVP);
             }
         }
-
-        if (debugFlags_.showTerrain) {
-            EnsureTerrainInitialized();
-            terrainObject_->SetCamera(view, proj);
-            terrainObject_->Update(lightVP);
-        }
     }
 
-    if ((currentMode_ == AppMode::EffectPreview ||
+    // Terrain は通常デバッグオブジェクトとは別の表示項目として更新する。
+    // Show 3D Objectsを切っても、Show Terrainが有効なら地形だけを確認できる。
+    if (debugFlags_.showTerrain && currentMode_ == AppMode::DebugView) {
+        EnsureTerrainInitialized();
+        // DebugView はプレイヤー確認が主目的なので、地形を足元へ寄せて扱いやすい縮尺にする。
+        terrainObject_->SetPosition({ 0.0f, -0.45f, 0.0f });
+        terrainObject_->SetScale({ 0.25f, 0.25f, 0.25f });
+        terrainObject_->SetCamera(view, proj);
+        terrainObject_->Update(lightVP);
+    }
+
+    if ((currentMode_ == AppMode::SkinningEditor ||
+         currentMode_ == AppMode::EffectPreview ||
          currentMode_ == AppMode::EffectShowcase ||
          currentMode_ == AppMode::PostEffectShowcase)) {
         EnsureTerrainInitialized();
@@ -358,6 +389,7 @@ void GameRuntime::ApplySceneLighting(const Vector3& lightDir) {
     object3dCommon->ClearPointLights();
 
     const bool isPlayerScene =
+        currentMode_ == AppMode::DebugView ||
         currentMode_ == AppMode::StageEditor ||
         currentMode_ == AppMode::GamePlay ||
         currentMode_ == AppMode::GamePlay_BlockPlace;
@@ -366,8 +398,16 @@ void GameRuntime::ApplySceneLighting(const Vector3& lightDir) {
         player_->SetGlow(playerGlow_);
         Vector3 playerLightPosition = player_->GetPosition();
         playerLightPosition.y += 0.8f;
-        object3dCommon->AddPointLight(
-            playerLightPosition, playerLightIntensity_, playerLightColor_, 12.0f);
+        // DebugViewでは発光スライダーを周囲光にも連動させる。
+        // ゲームプレイ中の常時プレイヤーライトは従来どおり維持する。
+        const float pointLightIntensity =
+            currentMode_ == AppMode::DebugView
+            ? playerLightIntensity_ * std::clamp(playerGlow_ / 5.0f, 0.0f, 1.0f)
+            : playerLightIntensity_;
+        if (pointLightIntensity > 0.001f) {
+            object3dCommon->AddPointLight(
+                playerLightPosition, pointLightIntensity, playerLightColor_, 12.0f);
+        }
     }
 
     if (isEffectPresentation) {
@@ -451,6 +491,6 @@ void GameRuntime::UpdateDebugView() {
         particleManager->Emit({ 0, 0, 0 }, 10);
     }
 
-    stageEditorController_.HandleCursorInput(
-        input.get(), stageMap_, mapCursor_.get(), lightCamera_.get(), camera.get());
+    // DebugView では StageEditor のカーソル操作を呼ばない。
+    // 同じ WASD 入力で編集カーソルとカメラまで動き、プレイヤーから離れる原因になるため。
 }

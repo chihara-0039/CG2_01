@@ -62,6 +62,24 @@ void Object3dCommon::PreDraw() {
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
+void Object3dCommon::PreDrawDebugOverlay() {
+    auto commandList = dxCommon_->GetCommandList();
+
+    if (!rootSignature_ || !debugOverlayPipelineState_) {
+        assert(false && "RootSignature or DebugOverlayPipelineState is NULL!");
+        return;
+    }
+
+    if (textureManager_) {
+        ID3D12DescriptorHeap* heaps[] = { textureManager_->GetSrvHeap() };
+        commandList->SetDescriptorHeaps(1, heaps);
+    }
+
+    commandList->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList->SetPipelineState(debugOverlayPipelineState_.Get());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+}
+
 
 void Object3dCommon::PreDrawPlayerHighlight() {
     auto commandList = dxCommon_->GetCommandList();
@@ -230,6 +248,7 @@ void Object3dCommon::CreateSkinnedPipeline() {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT,  1, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
@@ -255,6 +274,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -290,6 +310,19 @@ void Object3dCommon::CreateGraphicsPipeline() {
         assert(false);
     } else {
         OutputDebugStringA("CreateGraphicsPipelineState Success!\n");
+    }
+
+    // ボーンやジョイントはモデル内部に存在するため、通常の深度判定では
+    // キャラクター本体に隠れる。通常モデル用PSOを変えず、デバッグ形状だけ
+    // 深度判定・深度書き込みを無効にした専用PSOで描画する。
+    psoDesc.DepthStencilState.DepthEnable = FALSE;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+        &psoDesc, IID_PPV_ARGS(&debugOverlayPipelineState_));
+    if (FAILED(hr)) {
+        OutputDebugStringA("CreateDebugOverlayPipelineState Failed!!\n");
+        assert(false);
     }
 }
 
@@ -356,6 +389,7 @@ void Object3dCommon::CreatePlayerHighlightPipeline() {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};

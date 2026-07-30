@@ -506,11 +506,35 @@ void DirectXCommon::PostDraw() {
     commandQueue_->ExecuteCommandLists(1, commandLists);
 
     // フリップ
-    swapChain_->Present(1, 0);
+    hr = swapChain_->Present(1, 0);
+    if (FAILED(hr)) {
+        const HRESULT removedReason = device_ ? device_->GetDeviceRemovedReason() : S_OK;
+        char message[256]{};
+        std::snprintf(
+            message,
+            sizeof(message),
+            "DirectXCommon::PostDraw Present failed. HRESULT=0x%08lX, DeviceRemovedReason=0x%08lX\n",
+            static_cast<unsigned long>(hr),
+            static_cast<unsigned long>(removedReason));
+        OutputDebugStringA(message);
+        return;
+    }
 
     // フェンスでGPU完了待ち
     fenceValue_++;
-    commandQueue_->Signal(fence_.Get(), fenceValue_);
+    hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
+    if (FAILED(hr)) {
+        const HRESULT removedReason = device_ ? device_->GetDeviceRemovedReason() : S_OK;
+        char message[256]{};
+        std::snprintf(
+            message,
+            sizeof(message),
+            "DirectXCommon::PostDraw Signal failed. HRESULT=0x%08lX, DeviceRemovedReason=0x%08lX\n",
+            static_cast<unsigned long>(hr),
+            static_cast<unsigned long>(removedReason));
+        OutputDebugStringA(message);
+        return;
+    }
 
     if (fence_->GetCompletedValue() < fenceValue_) {
         fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);

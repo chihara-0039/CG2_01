@@ -73,6 +73,8 @@ public: // サブクラスなど
         float frequency = 0.5f;    // 射出間隔（秒）
         float frequencyTime = 0.0f;
         uint32_t emit = 0;         // CPU側で判定した「このフレーム射出するか」
+        float particleScale = 1.0f;
+        float padding[3] = {};
     };
 
     struct GPUParticlePerFrame {
@@ -289,6 +291,19 @@ public: // メンバ関数
 
     void SetDrawGPUParticleSphere(bool draw) { drawGPUParticleSphere_ = draw; }
     bool GetDrawGPUParticleSphere() const { return drawGPUParticleSphere_; }
+    void SetGPUParticleEmitterPosition(const Vector3& position) {
+        gpuParticleEmitter_.translate = position;
+    }
+    void ConfigureGPUParticleEmitter(
+        float radius,
+        uint32_t count,
+        float frequency,
+        float particleScale = 1.0f) {
+        gpuParticleEmitter_.radius = radius;
+        gpuParticleEmitter_.count = count;
+        gpuParticleEmitter_.frequency = frequency;
+        gpuParticleEmitter_.particleScale = particleScale;
+    }
 
     // 天候エミッターの取得・設定
     WeatherEmitter& GetWeatherEmitter() { return weatherEmitter_; }

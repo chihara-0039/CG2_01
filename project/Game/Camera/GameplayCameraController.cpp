@@ -34,6 +34,7 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 #endif
 
     bool hasCameraParameterChanged = false;
+    const GamePadState& gamePad = input->GetGamePadState();
 
     if (followPlayerMode_) {
         // プレイヤー追従時は、上半身付近をカメラの注視点にする。
@@ -144,10 +145,10 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
             bool hitDownGuide = isMouseInsideGuide(centerX + downGuideOffset.x, bottomGuideY + downGuideOffset.y);
 
             if (hitLeftGuide) {
-                cameraAngle_ -= rotateSpeed;
+                cameraAngle_ += rotateSpeed;
                 hasCameraParameterChanged = true;
             } else if (hitRightGuide) {
-                cameraAngle_ += rotateSpeed;
+                cameraAngle_ -= rotateSpeed;
                 hasCameraParameterChanged = true;
             } else if (hitUpGuide) {
                 cameraPitch_ -= rotateSpeed;
@@ -165,11 +166,11 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     // LEFT/RIGHTは注視点を中心とする水平旋回、UP/DOWNは上下角度を担当する。
     const float keyRotateSpeed = 0.025f;
     if (input->PushKey(DIK_LEFT)) {
-        cameraAngle_ += keyRotateSpeed;
+        cameraAngle_ -= keyRotateSpeed;
         hasCameraParameterChanged = true;
     }
     if (input->PushKey(DIK_RIGHT)) {
-        cameraAngle_ -= keyRotateSpeed;
+        cameraAngle_ += keyRotateSpeed;
         hasCameraParameterChanged = true;
     }
     if (input->PushKey(DIK_UP)) {
@@ -179,6 +180,36 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     if (input->PushKey(DIK_DOWN)) {
         cameraPitch_ += keyRotateSpeed;
         hasCameraParameterChanged = true;
+    }
+
+    // Xbox右スティックで、現在の矢印キー操作と同じ向きにカメラを回す。
+    // Input側でデッドゾーン処理済みなので、微小なドリフトだけ追加で除外する。
+    if (gamePad.connected) {
+        const float stickRotateSpeed = 0.045f;
+        if (std::abs(gamePad.rightStickX) > 0.05f) {
+            cameraAngle_ += gamePad.rightStickX * stickRotateSpeed;
+            hasCameraParameterChanged = true;
+        }
+        if (std::abs(gamePad.rightStickY) > 0.05f) {
+            cameraPitch_ -= gamePad.rightStickY * stickRotateSpeed;
+            hasCameraParameterChanged = true;
+        }
+
+        // 右トリガーでズームイン、左トリガーでズームアウトする。
+        const float triggerZoom = gamePad.rightTrigger - gamePad.leftTrigger;
+        if (std::abs(triggerZoom) > 0.02f) {
+            float minFov = minFov_;
+            float maxFov = maxFov_;
+            if (currentStageIndex_ == 3) {
+                minFov = 0.25f;
+                maxFov = 0.80f;
+            }
+
+            cameraFov_ -= triggerZoom * 0.018f;
+            cameraFov_ = std::clamp(cameraFov_, minFov, maxFov);
+            camera->SetFov(cameraFov_);
+            hasCameraParameterChanged = true;
+        }
     }
 
     // ステージ3は地形を見下ろしやすいよう、ほかのステージより少し低い角度を許可する。

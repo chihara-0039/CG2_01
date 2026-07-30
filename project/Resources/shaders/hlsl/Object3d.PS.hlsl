@@ -4,6 +4,7 @@
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL0;
     float4 lightSpacePosition : POSITION0;
+    float4 color : COLOR0;
     float3 worldPosition : POSITION1; // ワールド空間の位置を追加
 };
 
@@ -15,6 +16,7 @@ struct Material
     float metallic;
     float emissive;
     float4x4 uvTransform;
+    float environmentCoefficient;
 };
 
 static const uint MAX_POINT_LIGHTS = 8;
@@ -50,6 +52,7 @@ SamplerState gSampler : register(s0);
 
 // 5番目のスロット(t1)に届いているシャドウマップを受け取る
 Texture2D<float> gShadowMap : register(t1);
+TextureCube<float4> gEnvironmentTexture : register(t2);
 
 struct PixelShaderOutput
 {
@@ -62,7 +65,7 @@ PixelShaderOutput main(VertexShaderOutput input)
     
     // テクスチャのサンプリング（既存）
     float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
-    float4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
+    float4 textureColor = gTexture.Sample(gSampler, transformedUV.xy) * input.color;
     
     // ライティング計算
     if (gMaterial.enableLighting != 0)
@@ -141,9 +144,18 @@ PixelShaderOutput main(VertexShaderOutput input)
         
         // 4. 自発光 (Emission) - 光源がなくても自己発光する
         float3 emissiveColor = gMaterial.color.rgb * gMaterial.emissive;
+
+        // 5. Environment Map - CPU 側の Inspector スライダー値を反射量に使用する。
+        float3 reflectionDirection = reflect(-viewDir, normalize(input.normal));
+        float3 environmentColor =
+            gEnvironmentTexture.Sample(gSampler, reflectionDirection).rgb;
+        float3 environmentReflection =
+            environmentColor * saturate(gMaterial.environmentCoefficient);
         
         // 最終カラー合成
-        output.color.rgb = diffuseColor + specColor + rimColor + emissiveColor;
+        output.color.rgb =
+            diffuseColor + specColor + rimColor + emissiveColor +
+            environmentReflection;
         output.color.a = gMaterial.color.a * textureColor.a;
     }
     else

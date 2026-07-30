@@ -2,6 +2,22 @@
 #include "MyMath.h" // 必ずインクルード
 #include "WinApp.h"
 #include <cassert>
+#include <cstdio>
+
+namespace {
+void LogDirectXFailure(const char* operation, HRESULT hr, ID3D12Device* device) {
+    char message[256]{};
+    const HRESULT removedReason = device ? device->GetDeviceRemovedReason() : S_OK;
+    std::snprintf(
+        message,
+        sizeof(message),
+        "Sprite: %s failed. HRESULT=0x%08lX, DeviceRemovedReason=0x%08lX\n",
+        operation,
+        static_cast<unsigned long>(hr),
+        static_cast<unsigned long>(removedReason));
+    OutputDebugStringA(message);
+}
+}
 
 void Sprite::Initialize(SpriteCommon* spriteCommon, uint32_t textureHandle) {
     assert(spriteCommon);
@@ -106,7 +122,18 @@ void Sprite::CreateVertexBuffer() {
     resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
     resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
 
-    device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer_));
+    const HRESULT hr = device->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &resDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&vertexBuffer_));
+    if (FAILED(hr) || !vertexBuffer_) {
+        LogDirectXFailure("CreateCommittedResource(vertex)", hr, device);
+        vertexBufferView_ = {};
+        return;
+    }
 
     vertexBufferView_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
     vertexBufferView_.SizeInBytes = sizeof(VertexData) * 6;
@@ -154,8 +181,20 @@ void Sprite::CreateTransformationMatrixBuffer() {
 
 // 頂点データの更新（サイズや切り抜き変更時）
 void Sprite::UpdateVertexData() {
+    if (!vertexBuffer_ || !spriteCommon_ || !spriteCommon_->GetDxCommon()) {
+        OutputDebugStringA("Sprite: Vertex update skipped because the required resource is null.\n");
+        return;
+    }
+
     VertexData* vertMap = nullptr;
-    vertexBuffer_->Map(0, nullptr, (void**)&vertMap);
+    const HRESULT hr = vertexBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&vertMap));
+    if (FAILED(hr) || !vertMap) {
+        LogDirectXFailure(
+            "Map(vertex)",
+            hr,
+            spriteCommon_->GetDxCommon()->GetDevice());
+        return;
+    }
 
     // テクスチャ全体のサイズ取得
     auto& texDesc = spriteCommon_->GetTextureManager()->GetResourceDesc(textureHandle_);

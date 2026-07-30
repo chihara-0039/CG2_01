@@ -40,7 +40,10 @@ void Object3d::Initialize(Object3dCommon* object3dCommon) {
 void Object3d::Update(const Matrix4x4& lightVP) {
     // 1. ワールド行列の計算
     Matrix4x4 worldMatrix = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    UpdateWithWorldMatrix(worldMatrix, lightVP);
+}
 
+void Object3d::UpdateWithWorldMatrix(const Matrix4x4& worldMatrix, const Matrix4x4& lightVP) {
     // 2. カメラ視点の WVP 行列の計算
     Matrix4x4 wvpMatrix = Math::Multiply(worldMatrix, Math::Multiply(viewMatrix_, projectionMatrix_));
     Matrix4x4 worldInverseTransposeMatrix = Math::Inverse(Math::Transpose(worldMatrix));

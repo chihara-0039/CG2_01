@@ -11,6 +11,7 @@ struct SkinnedVertexData {
     Vector4 position; // ローカル座標 (xyz + w=1.0)
     Vector2 texcoord; // UV 座標 (0.0?1.0)
     Vector3 normal;   // 法線ベクトル (正規化済み)
+    Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
     int32_t jointIndices[4]; // 影響を受けるボーンのインデックス
     float   weights[4];      // ウェイト
 };
@@ -72,6 +73,8 @@ struct WellForGPU {
 
 struct SkinningInformationForGPU {
     uint32_t numVertices = 0;
+    uint32_t numJoints = 0;
+    uint32_t padding[2] = {};
 };
 
 // スキニング可能な人型モデルクラス
@@ -96,7 +99,12 @@ public:
     // D3D12 描画用バッファビュー
     const D3D12_VERTEX_BUFFER_VIEW& GetVertexBufferView() const { return vertexBufferView_; }
     const D3D12_VERTEX_BUFFER_VIEW& GetInfluenceBufferView() const { return influenceBufferView_; }
-    const D3D12_VERTEX_BUFFER_VIEW& GetSkinnedVertexBufferView() const { return skinnedVertexBufferView_; }
+    const D3D12_VERTEX_BUFFER_VIEW& GetSkinnedVertexBufferView() const {
+        if (joints_.empty()) {
+            return vertexBufferView_;
+        }
+        return useGpuSkinning_ ? skinnedVertexBufferView_ : cpuSkinnedVertexBufferView_;
+    }
     ID3D12Resource* GetJointBuffer() const { return jointBuffer_.Get(); }
     size_t GetVertexCount() const { return skinnedVertices_.size(); }
 
@@ -155,6 +163,8 @@ private:
     void GenerateHumanoidMesh();
     void AddCubeMesh(const Vector3& center, const Vector3& size, int jointIndex);
     void SmoothWeights();
+    // GPU Compute Skinningの切り分け中にもモデルを正しく動かせるCPU版スキニング。
+    void UpdateCpuSkinnedVertices();
     void CreateComputeSkinningPipeline(DirectXCommon* dxCommon);
     void TransitionSkinnedVertexBuffer(ID3D12GraphicsCommandList* commandList, D3D12_RESOURCE_STATES stateAfter);
 
@@ -169,13 +179,18 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> influenceBuffer_;
     Microsoft::WRL::ComPtr<ID3D12Resource> jointBuffer_;
     Microsoft::WRL::ComPtr<ID3D12Resource> skinnedVertexBuffer_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> cpuSkinnedVertexBuffer_;
     Microsoft::WRL::ComPtr<ID3D12Resource> skinningInformationBuffer_;
     WellForGPU* mappedPalette_ = nullptr;
     SkinningInformationForGPU* mappedSkinningInformation_ = nullptr;
+    ModelVertexData* mappedSkinnedVertices_ = nullptr;
     D3D12_VERTEX_BUFFER_VIEW               vertexBufferView_{};
     D3D12_VERTEX_BUFFER_VIEW               influenceBufferView_{};
     D3D12_VERTEX_BUFFER_VIEW               skinnedVertexBufferView_{};
+    D3D12_VERTEX_BUFFER_VIEW               cpuSkinnedVertexBufferView_{};
     D3D12_RESOURCE_STATES                  skinnedVertexBufferState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    // 評価課題ではCompute ShaderによるGPUスキニングを標準にする。
+    bool useGpuSkinning_ = true;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;

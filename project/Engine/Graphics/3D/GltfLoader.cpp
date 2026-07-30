@@ -213,7 +213,7 @@ bool GltfLoader::LoadGltfModel(
     }
 
     // 1. テクスチャパスの取得
-    outTexturePath = "Resources/uvChecker.png"; // デフォルト
+    outTexturePath = "Resources/Models/Work/human/white.png";
     if (!model.images.empty()) {
         std::string imgUri = model.images[0].uri;
         if (!imgUri.empty()) {
@@ -361,6 +361,21 @@ bool GltfLoader::LoadGltfModel(
 
     for (const auto& mesh : model.meshes) {
         for (const auto& prim : mesh.primitives) {
+            Vector4 primitiveColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+            if (prim.material >= 0 &&
+                prim.material < static_cast<int>(model.materials.size())) {
+                const auto& factor =
+                    model.materials[static_cast<size_t>(prim.material)]
+                        .pbrMetallicRoughness.baseColorFactor;
+                if (factor.size() == 4) {
+                    primitiveColor = {
+                        static_cast<float>(factor[0]),
+                        static_cast<float>(factor[1]),
+                        static_cast<float>(factor[2]),
+                        static_cast<float>(factor[3])
+                    };
+                }
+            }
 
             // アクセッサからのデータ抽出ヘルパー
             auto getFloatAttribute = [&](const std::string& name, std::vector<float>& outVec) {
@@ -460,6 +475,7 @@ bool GltfLoader::LoadGltfModel(
                     uint32_t vIdx = idx[i];
 
                     SkinnedVertexData v{};
+                    v.color = primitiveColor;
                     v.position = { posData[vIdx * 3 + 0], posData[vIdx * 3 + 1], posData[vIdx * 3 + 2], 1.0f };
                     // 右手系から左手系へ変換（Z反転）
                     v.position.z *= -1.0f;
