@@ -23,6 +23,21 @@ public:
     // 回収演出やSEを呼び出すための通知先を登録する。
     void SetCollectCallback(std::function<void(const Vector3&)> callback);
 
+    // 現在のステージを開始してから回収したシャボン玉の数を返す。
+    int GetCollectedCount() const { return collectedCount_; }
+
+    // 現在のステージに配置されていたシャボン玉の総数を返す。
+    int GetTotalPickupCount() const { return totalPickupCount_; }
+
+    // ゴール解放までに回収する必要がある残数を返す。
+    int GetRemainingPickupCount() const {
+        const int remainingCount = totalPickupCount_ - collectedCount_;
+        return remainingCount > 0 ? remainingCount : 0;
+    }
+
+    // シャボン玉がないステージは最初からゴール可能として扱う。
+    bool AreAllPickupsCollected() const { return GetRemainingPickupCount() == 0; }
+
 private:
     // ワールド座標を最寄りのステージセル座標へ変換する。
     Int3 ToGridIndex(const Vector3& position) const;
@@ -35,4 +50,6 @@ private:
     StageRenderer* stageRenderer_ = nullptr;
     BlockInventory* inventory_ = nullptr;
     std::function<void(const Vector3&)> collectCallback_;
+    int collectedCount_ = 0;
+    int totalPickupCount_ = 0;
 };

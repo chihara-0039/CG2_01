@@ -11,6 +11,11 @@ void GameRuntime::UpdateGamePlay() {
     postEffectShowcaseController_.UpdateGameplay(*input, postProcess_);
     postEffectShowcaseController_.DrawGameplayImGui(postProcess_);
 
+    // UI操作中はプレイヤー物理とゲーム用カメラを止め、現在の状態を保持する。
+    if (isGamePaused_ || (blockInventoryUI_ && blockInventoryUI_->IsActive())) {
+        return;
+    }
+
     if (input->TriggerKey(DIK_C) ||
         input->TriggerControllerButton(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
         useFirstPersonCamera_ = !useFirstPersonCamera_;
@@ -140,20 +145,29 @@ void GameRuntime::UpdateGamePlay() {
         &blockInventory_,
         &bubblePickupController_,
         &blockPlacementController_,
-        &stageEditorController_);
+        &stageEditorController_,
+        false);
 
     Vector3 pPos = player_ ? player_->GetPosition() : Vector3{};
     if (player_) {
         bubblePickupController_.Update(pPos);
     }
 
-    if (Goal::Check(pPos, { 0.4f, 0.9f, 0.4f }, stageMap_)) {
+    // 全シャボン玉の回収後だけクリアを成立させる。
+    // ゴール接触中のロック状態も保持し、未達成の理由をUIへ表示できるようにする。
+    const bool isTouchingGoal =
+        player_ != nullptr && Goal::Check(pPos, { 0.4f, 0.9f, 0.4f }, stageMap_);
+    const bool hasCollectedAllPickups = bubblePickupController_.AreAllPickupsCollected();
+    isGoalBlocked_ = isTouchingGoal && !hasCollectedAllPickups;
+    if (isTouchingGoal && hasCollectedAllPickups) {
         isGoalReached_ = true;
+        isGoalBlocked_ = false;
     }
 
     if ((input->TriggerKey(DIK_B) ||
          input->TriggerControllerButton(XINPUT_GAMEPAD_LEFT_SHOULDER)) &&
-        blockInventory_.HasBlock()) {
+        blockInventory_.HasBlock() &&
+        player_ && player_->IsGrounded()) {
         if (blockInventoryUI_) {
             blockInventoryUI_->ToggleOpen();
         }
@@ -173,6 +187,7 @@ void GameRuntime::UpdateGamePlay() {
             bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
             stageSelect_->Initialize(object3dCommon.get(), input.get());
             isGoalReached_ = false;
+            isGoalBlocked_ = false;
             RequestSceneChange(SceneType::StageSelect);
         }
     }
@@ -183,7 +198,6 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
     postEffectShowcaseController_.UpdateGameplay(*input, postProcess_);
     postEffectShowcaseController_.DrawGameplayImGui(postProcess_);
 
-    const Int3& cursor = mapCursor_->GetIndex();
     if (input->TriggerKey(DIK_R)) {
         placeRotationY_ += 1.5707963f;
         if (placeRotationY_ >= 6.0f) {
@@ -197,6 +211,9 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
         mapCursor_.get(),
         lightCamera_.get(),
         camera.get());
+
+    // 入力処理後の最新カーソル座標を配置プレビューと確定処理に使用する。
+    const Int3 cursor = mapCursor_->GetIndex();
 
     BlockType selectedType = BlockType::Ground;
     int selectedCustomId = 0;
@@ -219,7 +236,9 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
         mouseTrigger = true;
     }
 
-    if (input->TriggerKey(DIK_RETURN) || mouseTrigger) {
+    if (input->TriggerKey(DIK_RETURN) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_A) ||
+        mouseTrigger) {
         if (blockPlacementController_.TryPlace(cursor, placeRotationY_)) {
             bool hasRest = (selectedType == BlockType::Ground)
                 || blockInventory_.HasBlock(selectedType, selectedCustomId);
@@ -233,7 +252,9 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
         }
     }
 
-    if (input->TriggerKey(DIK_ESCAPE) || input->TriggerKey(DIK_B)) {
+    if (input->TriggerKey(DIK_ESCAPE) ||
+        input->TriggerKey(DIK_B) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
         RequestSceneChange(SceneType::GamePlay);
         placeRotationY_ = 0.0f;
         if (stageRenderer_) {
@@ -241,7 +262,8 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
         }
     }
 
-    stageEditorController_.HandleCameraInput(input.get(), camera.get());
+    // 配置中のカメラは通常プレイと同じ追従カメラで更新する。
+    // エディタ専用カメラを重ねて更新すると視点が跳ぶため、ここでは呼び出さない。
 }
 
 void GameRuntime::UpdateStageSelect() {
@@ -264,6 +286,10 @@ void GameRuntime::UpdateStageSelect() {
             gameplayCameraController_.ResetCamera(
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
             blockInventory_.Initialize(0);
+            bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+            blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+            isGoalReached_ = false;
+            isGoalBlocked_ = false;
         }
         RequestSceneChange(SceneType::GamePlay);
     }
@@ -271,17 +297,50 @@ void GameRuntime::UpdateStageSelect() {
 
 
 void GameRuntime::UpdateSceneTransition() {
-    if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)
-        && (input->TriggerKey(DIK_ESCAPE) ||
-            input->TriggerControllerButton(XINPUT_GAMEPAD_B))) {
-        stageMap_ = backupMap_;
-        stageRenderer_->BuildFromStageMap(stageMap_);
-        
-        bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
-        stageSelect_->Initialize(object3dCommon.get(), input.get());
-        isGoalReached_ = false;
-        if (player_) { player_->Respawn(); }
-        RequestSceneChange(SceneType::StageSelect);
+    const bool isGameplayMode =
+        currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace;
+    if (!isGameplayMode) {
+        isGamePaused_ = false;
+        return;
     }
+
+    // ブロック配置モードではBを配置キャンセル専用にする。
+    if (currentMode_ == AppMode::GamePlay_BlockPlace) {
+        return;
+    }
+
+    // インベントリ中のBはインベントリ側だけで処理する。
+    if (blockInventoryUI_ && blockInventoryUI_->IsActive()) {
+        return;
+    }
+
+    if (input->TriggerKey(DIK_ESCAPE) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_START)) {
+        isGamePaused_ = !isGamePaused_;
+        return;
+    }
+
+    if (isGamePaused_ && input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+        isGamePaused_ = false;
+    }
+}
+
+void GameRuntime::ReturnToStageSelect() {
+    stageMap_ = backupMap_;
+    if (stageRenderer_) {
+        stageRenderer_->BuildFromStageMap(stageMap_);
+    }
+
+    bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+    if (stageSelect_) {
+        stageSelect_->Initialize(object3dCommon.get(), input.get());
+    }
+    isGoalReached_ = false;
+    isGoalBlocked_ = false;
+    isGamePaused_ = false;
+    if (player_) {
+        player_->Respawn();
+    }
+    RequestSceneChange(SceneType::StageSelect);
 }
 

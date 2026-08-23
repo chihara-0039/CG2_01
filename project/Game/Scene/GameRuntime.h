@@ -194,6 +194,8 @@ private:
     AppMode        prevMode_ = AppMode::DebugView;
     DebugDrawFlags debugFlags_;
     bool           isGoalReached_ = false;
+    bool           isGamePaused_ = false;
+    bool           isGoalBlocked_ = false;
     int            placeableBlockCount_ = 0;
     float          totalTime_ = 0.0f;
 
@@ -250,6 +252,7 @@ private:
     void UpdateTitle();
     void UpdateStageSelect();
     void UpdateSceneTransition();
+    void ReturnToStageSelect();
     void HandleModeChange();
     void EnsureSkinningEditorInitialized();
     void EnsureTerrainInitialized();
@@ -278,6 +281,7 @@ private:
     void ApplySceneLighting(const Vector3& lightDir);
     void UpdateClearColorForFrame();
     void UpdateGameplayUserInterface();
+    void DrawPauseMenu();
     void RenderScene();
     void DrawCollisionDebugBoxes();
     void DrawSkyboxForFrame();

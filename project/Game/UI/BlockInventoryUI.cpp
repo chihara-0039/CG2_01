@@ -338,6 +338,47 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
         }
     }
 
+    // コントローラーでは十字キーで選択し、Aで決定、Bで閉じる。
+    // 開閉アニメーション中の誤入力を避けるため、完全に開いた状態だけ受け付ける。
+    if (state_ == State::Opened) {
+        int selectedIndex = -1;
+        for (int i = 0; i < static_cast<int>(buttons_.size()); ++i) {
+            const auto& btn = buttons_[i];
+            if (btn.type == selectedBlockType_ && btn.customId == selectedCustomId_ && btn.isAvailable) {
+                selectedIndex = i;
+                break;
+            }
+        }
+
+        const bool movePrevious =
+            input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_LEFT) ||
+            input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_UP);
+        const bool moveNext =
+            input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_RIGHT) ||
+            input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_DOWN);
+        if ((movePrevious || moveNext) && !buttons_.empty()) {
+            const int direction = movePrevious ? -1 : 1;
+            int candidate = selectedIndex >= 0 ? selectedIndex : 0;
+            for (int count = 0; count < static_cast<int>(buttons_.size()); ++count) {
+                candidate = (candidate + direction + static_cast<int>(buttons_.size())) %
+                    static_cast<int>(buttons_.size());
+                if (buttons_[candidate].isAvailable) {
+                    selectedBlockType_ = buttons_[candidate].type;
+                    selectedCustomId_ = buttons_[candidate].customId;
+                    break;
+                }
+            }
+        }
+
+        if (input->TriggerControllerButton(XINPUT_GAMEPAD_A) &&
+            selectedBlockType_ != BlockType::None) {
+            useRequested_ = true;
+            ToggleOpen();
+        } else if (input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+            ToggleOpen();
+        }
+    }
+
     // フォーカス枠の位置更新
     for (const auto& btn : buttons_) {
         if (btn.type == selectedBlockType_ && btn.customId == selectedCustomId_) {

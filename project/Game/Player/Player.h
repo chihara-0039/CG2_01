@@ -112,6 +112,7 @@ public:
 
     void SetPosition(const Vector3& pos) { position_ = pos; }
     const Vector3& GetPosition() const   { return position_; }
+    bool IsGrounded() const { return isGrounded_; }
 
     void SetRotation(const Vector3& rot) { rotation_ = rot; }
     const Vector3& GetRotation() const   { return rotation_; }
