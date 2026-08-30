@@ -97,7 +97,7 @@ void GameRuntime::HandleModeChange() {
         currentMode_ == AppMode::GamePlay_BlockPlace) {
         debugFlags_.showParticles = true;
     }
-    if (currentMode_ == AppMode::StageSelect && particleManager) {
+    if ((currentMode_ == AppMode::Title || currentMode_ == AppMode::StageSelect) && particleManager) {
         // 継続型の嵐は寿命の長い雨・風を持つため、停止だけでなく残存粒子も破棄する。
         weatherRuntimeController_.StopStorm(*particleManager);
         particleManager->GetWeatherEmitter().active = false;
@@ -201,6 +201,7 @@ void GameRuntime::UpdateSharedCameraControls(bool isGuiCaptured) {
     // インベントリを開く前の視点が失われるため、ここでは更新しない。
     if (currentMode_ != AppMode::GamePlay &&
         currentMode_ != AppMode::GamePlay_BlockPlace &&
+        currentMode_ != AppMode::GameClear &&
         currentMode_ != AppMode::DebugView) {
         const bool invertEditorOrbit = currentMode_ == AppMode::StageEditor;
         camera->UpdateBlenderStyle(

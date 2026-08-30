@@ -8,8 +8,24 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
     postEffectShowcaseController_.Reset(postProcess_);
 
     switch (sceneType) {
+    case SceneType::Title:
+        currentMode_ = AppMode::Title;
+        titleTimer_ = 0.0f;
+        break;
     case SceneType::StageSelect:
         currentMode_ = AppMode::StageSelect;
+        break;
+    case SceneType::GameClear:
+        currentMode_ = AppMode::GameClear;
+        gameClearTimer_ = 0.0f;
+        gameClearFireworkTimer_ = 0.0f;
+        gameClearCelebrationStarted_ = false;
+        // クリア文字と花火が同じ座標系になるよう、ランタイム側も専用カメラへ揃える。
+        if (camera) {
+            camera->SetPosition({ 0.0f, 2.0f, -20.0f });
+            camera->SetRotation({ 0.25f, 0.0f, 0.0f });
+            camera->Update();
+        }
         break;
     case SceneType::DebugView:
         currentMode_ = AppMode::DebugView;
@@ -63,8 +79,12 @@ void GameRuntime::OnSceneExited(SceneType sceneType) {
 }
 
 void GameRuntime::RequestSceneChange(SceneType sceneType) {
-    if (sceneType == SceneType::StageSelect) {
+    if (sceneType == SceneType::Title) {
+        currentMode_ = AppMode::Title;
+    } else if (sceneType == SceneType::StageSelect) {
         currentMode_ = AppMode::StageSelect;
+    } else if (sceneType == SceneType::GameClear) {
+        currentMode_ = AppMode::GameClear;
     } else if (sceneType == SceneType::DebugView) {
         currentMode_ = AppMode::DebugView;
     } else if (sceneType == SceneType::StageEditor) {
@@ -85,8 +105,14 @@ void GameRuntime::RequestSceneChange(SceneType sceneType) {
 }
 
 SceneType GameRuntime::GetCurrentSceneType() const {
+    if (currentMode_ == AppMode::Title) {
+        return SceneType::Title;
+    }
     if (currentMode_ == AppMode::StageSelect) {
         return SceneType::StageSelect;
+    }
+    if (currentMode_ == AppMode::GameClear) {
+        return SceneType::GameClear;
     }
     if (currentMode_ == AppMode::DebugView) {
         return SceneType::DebugView;
@@ -116,8 +142,16 @@ SceneType GameRuntime::GetCurrentSceneType() const {
     return SceneType::DebugView;
 }
 
+void GameRuntime::RunTitleScene() {
+    UpdateTitle();
+}
+
 void GameRuntime::RunStageSelectScene() {
     UpdateStageSelect();
+}
+
+void GameRuntime::RunGameClearScene(bool celebrationReady) {
+    UpdateGameClear(celebrationReady);
 }
 
 void GameRuntime::RunDebugViewScene() {

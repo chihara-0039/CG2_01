@@ -210,6 +210,7 @@ void GameRuntime::Draw() {
     const bool usesStageWeather =
         currentMode_ == AppMode::StageEditor ||
         currentMode_ == AppMode::GamePlay ||
+        currentMode_ == AppMode::GameClear ||
         currentMode_ == AppMode::GamePlay_BlockPlace;
     if (usesStageWeather) {
         if (const WeatherPreset* preset =
@@ -365,7 +366,8 @@ void GameRuntime::RenderScene() {
 
         DrawRuntimeLevelObjects();
 
-        if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::EffectPreview) {
+        if (currentMode_ == AppMode::GamePlay ||
+            currentMode_ == AppMode::EffectPreview) {
             if (player_ && !useFirstPersonCamera_) {
                 player_->Draw();
                 if (IsPlayerHiddenByWall()) {
@@ -415,6 +417,13 @@ void GameRuntime::RenderScene() {
         particleManager->Draw();
     }
 
+    // シーン固有モデルはパーティクルの後に描き、クリア文字を花火より手前に見せる。
+    if (sceneManager_) {
+        object3dCommon->PreDraw();
+        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+        sceneManager_->Draw(*this);
+    }
+
     if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
         spriteCommon->PreDraw();
         if (sprite) { sprite->Draw(); }
@@ -443,10 +452,6 @@ void GameRuntime::RenderScene() {
     if ((currentMode_ == AppMode::GamePlay_BlockPlace || isInventoryOpen) && placementTutorialSprite_) {
         spriteCommon->PreDraw();
         placementTutorialSprite_->Draw();
-    }
-    if (currentMode_ == AppMode::GamePlay && isGoalReached_ && clearGuideSprite_) {
-        spriteCommon->PreDraw();
-        clearGuideSprite_->Draw();
     }
 }
 

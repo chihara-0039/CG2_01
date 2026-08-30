@@ -472,6 +472,14 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
             it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
 
+            if (it->type == Particle::Type::Firework) {
+                // 炸裂後の火花を徐々に落下させ、花火らしい放物線を作る。
+                it->velocity.y -= 0.0012f * deltaTime * 60.0f;
+                const float remaining = 1.0f - it->lifeTime / it->maxTime;
+                const float scale = 0.035f + 0.075f * remaining;
+                it->transform.scale = { scale, scale, 1.0f };
+            }
+
             if (it->type == Particle::Type::StormRain) {
                 bool hitGround = false;
                 float impactY = stormCenter_.y + 0.14f;
@@ -1355,6 +1363,69 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
         p.maxTime = distLife(engine);
 
         Particles().push_back(p);
+    }
+}
+
+void ParticleManager::EmitFireworkBurst(const Vector3& pos) {
+    constexpr int kSparkCount = 84;
+    constexpr float kPi = 3.14159265f;
+    std::uniform_real_distribution<float> zeroOne(0.0f, 1.0f);
+    std::uniform_real_distribution<float> angle(0.0f, kPi * 2.0f);
+    std::uniform_real_distribution<float> speed(0.035f, 0.075f);
+    std::uniform_real_distribution<float> life(1.15f, 1.85f);
+    std::uniform_real_distribution<float> offset(-0.08f, 0.08f);
+
+    const int palette = static_cast<int>(zeroOne(engine) * 4.0f) % 4;
+    Vector4 primary = { 1.0f, 0.34f, 0.12f, 1.0f };
+    Vector4 secondary = { 1.0f, 0.88f, 0.24f, 1.0f };
+    if (palette == 1) {
+        primary = { 0.22f, 0.72f, 1.0f, 1.0f };
+        secondary = { 0.72f, 0.94f, 1.0f, 1.0f };
+    } else if (palette == 2) {
+        primary = { 1.0f, 0.20f, 0.68f, 1.0f };
+        secondary = { 0.72f, 0.30f, 1.0f, 1.0f };
+    } else if (palette == 3) {
+        primary = { 0.34f, 1.0f, 0.40f, 1.0f };
+        secondary = { 1.0f, 0.92f, 0.36f, 1.0f };
+    }
+
+    // 球面上へ均等に近い方向で火花を飛ばす。
+    for (int i = 0; i < kSparkCount && Particles().size() < kMaxParticles; ++i) {
+        const float azimuth = angle(engine);
+        const float y = zeroOne(engine) * 2.0f - 1.0f;
+        const float horizontal = std::sqrt((std::max)(0.0f, 1.0f - y * y));
+        const float sparkSpeed = speed(engine);
+
+        Particle spark;
+        spark.type = Particle::Type::Firework;
+        spark.transform.translate = { pos.x + offset(engine), pos.y + offset(engine), pos.z + offset(engine) };
+        spark.transform.scale = { 0.11f, 0.11f, 1.0f };
+        spark.transform.rotate = { 0.0f, 0.0f, azimuth };
+        spark.velocity = {
+            std::cos(azimuth) * horizontal * sparkSpeed,
+            y * sparkSpeed,
+            std::sin(azimuth) * horizontal * sparkSpeed
+        };
+        spark.color = (i % 4 == 0) ? secondary : primary;
+        spark.initialAlpha = 1.0f;
+        spark.lifeTime = 0.0f;
+        spark.maxTime = life(engine);
+        Particles().push_back(spark);
+    }
+
+    // 炸裂中心の閃光と広がる輪で「開く」瞬間を強調する。
+    if (Particles().size() < kMaxParticles) {
+        Particle flash;
+        flash.type = Particle::Type::Ring;
+        flash.transform.translate = pos;
+        flash.transform.scale = { 0.35f, 0.35f, 1.0f };
+        flash.transform.rotate = {};
+        flash.velocity = {};
+        flash.color = secondary;
+        flash.initialAlpha = 0.9f;
+        flash.lifeTime = 0.0f;
+        flash.maxTime = 0.42f;
+        Particles().push_back(flash);
     }
 }
 

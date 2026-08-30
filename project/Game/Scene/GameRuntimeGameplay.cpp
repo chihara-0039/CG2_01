@@ -5,11 +5,26 @@
 #include <cmath>
 #include "externals/imgui/imgui.h"
 
+void GameRuntime::UpdateTitle() {
+    titleTimer_ += 1.0f / 60.0f;
+
+    if (input->TriggerKey(DIK_SPACE) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
+        stageSelect_->Initialize(object3dCommon.get(), input.get());
+        RequestSceneChange(SceneType::StageSelect);
+    }
+}
+
 void GameRuntime::UpdateGamePlay() {
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
     EnsurePostProcessInitialized();
     postEffectShowcaseController_.UpdateGameplay(*input, postProcess_);
     postEffectShowcaseController_.DrawGameplayImGui(postProcess_);
+
+    if (isGoalReached_) {
+        UpdateGoalCelebration();
+        return;
+    }
 
     // UI操作中はプレイヤー物理とゲーム用カメラを止め、現在の状態を保持する。
     if (isGamePaused_ || (blockInventoryUI_ && blockInventoryUI_->IsActive())) {
@@ -159,9 +174,15 @@ void GameRuntime::UpdateGamePlay() {
         player_ != nullptr && Goal::Check(pPos, { 0.4f, 0.9f, 0.4f }, stageMap_);
     const bool hasCollectedAllPickups = bubblePickupController_.AreAllPickupsCollected();
     isGoalBlocked_ = isTouchingGoal && !hasCollectedAllPickups;
-    if (isTouchingGoal && hasCollectedAllPickups) {
+    if (isTouchingGoal && hasCollectedAllPickups && !isGoalReached_) {
         isGoalReached_ = true;
         isGoalBlocked_ = false;
+        goalCelebrationTimer_ = 0.0f;
+        if (particleManager && player_) {
+            Vector3 effectPosition = player_->GetPosition();
+            effectPosition.y += 1.2f;
+            particleManager->EmitHitEffect(effectPosition);
+        }
     }
 
     if ((input->TriggerKey(DIK_B) ||
@@ -174,23 +195,84 @@ void GameRuntime::UpdateGamePlay() {
     }
 
     if (isGoalReached_) {
-        if (clearGuideSprite_) {
-            clearGuideSprite_->Update();
-        }
-
-        // ゴール後は明示操作でステージ選択へ戻す。
-        // 押した瞬間に復元して、次に同じステージを始めても崩壊床等が残らないようにする。
-        if (input->TriggerKey(DIK_SPACE) ||
-            input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
-            stageMap_ = backupMap_;
-            stageRenderer_->BuildFromStageMap(stageMap_);
-            bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
-            stageSelect_->Initialize(object3dCommon.get(), input.get());
-            isGoalReached_ = false;
-            isGoalBlocked_ = false;
-            RequestSceneChange(SceneType::StageSelect);
-        }
+        UpdateGoalCelebration();
     }
+}
+
+void GameRuntime::UpdateGoalCelebration() {
+    constexpr float kCelebrationDuration = 2.5f;
+    goalCelebrationTimer_ += 1.0f / 60.0f;
+
+    // スター取得直後は操作を止め、プレイヤーを中心にカメラを回して見せる。
+    if (player_ && camera) {
+        const Vector3 center = player_->GetPosition();
+        const float angle = goalCelebrationTimer_ * 1.8f;
+        camera->SetPosition({
+            center.x + std::sin(angle) * 5.5f,
+            center.y + 2.8f,
+            center.z + std::cos(angle) * 5.5f
+        });
+        camera->SetRotation({ 0.25f, angle + 3.1415926f, 0.0f });
+        camera->Update();
+    }
+
+    DrawGoalCelebrationOverlay();
+    if (goalCelebrationTimer_ >= kCelebrationDuration) {
+        RequestSceneChange(SceneType::GameClear);
+    }
+}
+
+void GameRuntime::UpdateGameClear(bool celebrationReady) {
+    gameClearTimer_ += 1.0f / 60.0f;
+
+    // COURSE CLEAR の全文字が揃った瞬間から、画面を離れるまで花火を繰り返す。
+    if (!celebrationReady) {
+        return;
+    }
+
+    gameClearFireworkTimer_ += 1.0f / 60.0f;
+    const bool firstFirework = !gameClearCelebrationStarted_;
+    const int previousBeat = static_cast<int>((gameClearFireworkTimer_ - 1.0f / 60.0f) / 0.75f);
+    const int currentBeat = static_cast<int>(gameClearFireworkTimer_ / 0.75f);
+    if (particleManager && (firstFirework || currentBeat != previousBeat)) {
+        const int positionIndex = currentBeat % 3;
+        const float x = positionIndex == 0 ? -4.2f : (positionIndex == 1 ? 4.2f : 0.0f);
+        const float y = positionIndex == 2 ? 2.8f : 1.2f;
+        // COURSE CLEAR は z=0。花火は奥の z=3.5 で左右・中央を順番に炸裂させる。
+        particleManager->EmitFireworkBurst({ x, y, 3.5f });
+    }
+    gameClearCelebrationStarted_ = true;
+
+    DrawGameClearOverlay();
+    if (input->TriggerKey(DIK_SPACE) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
+        ReturnToStageSelect();
+    }
+}
+
+void GameRuntime::DrawGoalCelebrationOverlay() {
+    const float progress = std::clamp(goalCelebrationTimer_ / 2.5f, 0.0f, 1.0f);
+    ImGui::SetNextWindowPos(ImVec2(640.0f, 105.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::Begin("Goal Celebration", nullptr,
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::SetWindowFontScale(1.4f + std::sin(progress * 3.1415926f) * 0.35f);
+    ImGui::TextColored(ImVec4(1.0f, 0.88f, 0.2f, 1.0f), "STAR GET!");
+    ImGui::End();
+}
+
+void GameRuntime::DrawGameClearOverlay() {
+    if (!gameClearCelebrationStarted_) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2(640.0f, 620.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowBgAlpha(0.45f);
+    ImGui::Begin("Game Clear", nullptr,
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::TextUnformatted("Press SPACE / Xbox A to Stage Select");
+    ImGui::End();
 }
 
 void GameRuntime::UpdateGamePlayBlockPlace() {
