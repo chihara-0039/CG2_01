@@ -60,7 +60,7 @@ $robocopyArgs = @(
     $ProjectRoot,
     $sourceDir,
     "/E", "/R:1", "/W:1",
-    "/XD", ".vs", "monthly_submission_docs", "monthly_submission_output", "video_check",
+    "/XD", ".vs", "monthly_submission_docs", "monthly_submission_output", "monthly_submission_ready_20260831", $OutputRoot, "video_check",
     "/XF", "*.user", "*.suo", "*.VC.db", "*.VC.opendb", "*.vsidx", "*.ipch", "imgui.ini"
 )
 & robocopy @robocopyArgs | Out-Null
@@ -84,7 +84,9 @@ $readMe = @"
 
 - プレイヤーの移動、ジャンプ、追従カメラ
 - Xboxコントローラー操作
-- ステージ探索とゴール判定
+- ステージ探索とスター取得判定
+- タイトル、ステージセレクト、ゲーム、クリアのシーン遷移
+- スター取得演出、CONGRATULATION表示、継続する花火演出
 - 地形、ライト、スカイボックスの描画
 - ステージエディタと外部レベルJSON読込
 - Blender編集データの変更検知と再読込
@@ -99,7 +101,7 @@ $readMe = @"
 - 右手武器と左手パーティクルのジョイント追従
 - ポストエフェクトとエフェクトエディタ
 
-※課題確認の都合でクリアシーンを無効化している場合がありますが、星の座標への到達判定は実装済みです。
+※BaseScene、SceneManager、SceneFactoryを用いて各シーンのライフサイクルを管理しています。
 "@
 Set-Content -LiteralPath (Join-Path $packageRoot "ReadMe.md") -Value $readMe -Encoding utf8
 
