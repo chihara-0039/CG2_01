@@ -100,7 +100,7 @@ void GameRuntime::Initialize() {
     stageMap_.Initialize(100, 100, 100);
 
 #ifdef DEVELOPMENT
-    currentMode_           = AppMode::DebugView;
+    currentMode_           = AppMode::Title;
     // 評価確認用の DebugView では、従来のデバッグオブジェクトと地形を最初から表示する。
     debugFlags_.show3DObjects = true;
     debugFlags_.showTerrain = true;
@@ -111,7 +111,7 @@ void GameRuntime::Initialize() {
         playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #else
-    currentMode_           = AppMode::StageSelect;
+    currentMode_           = AppMode::Title;
     debugFlags_.showSkybox = true;
     postProcess_.SetEnabled(false);
     if (std::filesystem::exists("Resources/Stages/stage01.txt")) {

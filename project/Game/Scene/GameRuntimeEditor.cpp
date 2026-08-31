@@ -548,19 +548,36 @@ void GameRuntime::UpdateImGui() {
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ Game Controls & Objective ]");
         ImGui::Text("A / D : Move Left / Right");
         ImGui::Text("SPACE : Jump");
+        ImGui::Text("Xbox A: Jump / Confirm Clear");
         ImGui::Text("B     : Block Inventory");
         ImGui::Text("ESC   : Return to Stage Select");
         ImGui::Separator();
-        ImGui::Text("Objective: Pick up bubbles and reach the Goal!");
+        ImGui::Text("Objective: Collect every bubble, then reach the Goal!");
+        const int collectedCount = bubblePickupController_.GetCollectedCount();
+        const int totalPickupCount = bubblePickupController_.GetTotalPickupCount();
+        const int remainingPickupCount = bubblePickupController_.GetRemainingPickupCount();
+        ImGui::TextColored(
+            ImVec4(0.3f, 0.9f, 1.0f, 1.0f),
+            "Bubbles: %d / %d",
+            collectedCount,
+            totalPickupCount
+        );
 
         ImGui::NextColumn();
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Player Debug ]");
         Vector3 playerPosition = player_->GetPosition();
         ImGui::Text("Pos: X:%.2f Y:%.2f Z:%.2f", playerPosition.x, playerPosition.y, playerPosition.z);
         if (isGoalReached_) {
-            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "GOAL REACHED!");
+            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "STAGE CLEAR!");
+            ImGui::Text("Press SPACE / Xbox A to continue.");
+        } else if (isGoalBlocked_) {
+            ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.15f, 1.0f), "GOAL LOCKED!");
+            ImGui::Text("Collect %d more bubble%s.", remainingPickupCount, remainingPickupCount == 1 ? "" : "s");
+        } else if (bubblePickupController_.AreAllPickupsCollected()) {
+            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.5f, 1.0f), "Goal unlocked!");
+            ImGui::Text("Status: Reach the star Goal");
         } else {
-            ImGui::Text("Status: Playing");
+            ImGui::Text("Status: Collect %d more bubble%s", remainingPickupCount, remainingPickupCount == 1 ? "" : "s");
         }
         ImGui::Columns(1);
 

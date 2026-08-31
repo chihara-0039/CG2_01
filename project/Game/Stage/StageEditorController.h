@@ -104,6 +104,8 @@ private:
     int selectedTimedOrderId_ = 0;
 	int holdFrame_ = 0; // キーを押し続けているフレーム数をカウントする変数（長押し判定用）
 	int placeHoldFrame_ = 0; // ブロック配置の長押しフレーム数
+    int controllerMoveHoldFrame_ = 0; // 左スティック／方向パッドのリピート入力用
+    int controllerVerticalHoldFrame_ = 0; // LB／RBによる上下移動のリピート入力用
 
 	// キーのリピート入力を判定するヘルパー関数
     bool RepeatKey(Input* input, BYTE key, int firstDelay = 20, int interval = 5);

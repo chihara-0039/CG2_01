@@ -17,6 +17,20 @@ void BubblePickupController::Initialize(
     stageMap_ = stageMap;
     stageRenderer_ = stageRenderer;
     inventory_ = inventory;
+
+    // ステージの読込・復元時に総数を数え直し、回収判定とUI表示で同じ値を参照する。
+    collectedCount_ = 0;
+    totalPickupCount_ = 0;
+    for (int y = 0; y < stageMap_->GetHeight(); ++y) {
+        for (int z = 0; z < stageMap_->GetDepth(); ++z) {
+            for (int x = 0; x < stageMap_->GetWidth(); ++x) {
+                const MapCell* cell = stageMap_->GetCell(x, y, z);
+                if (cell != nullptr && cell->type == BlockType::BubblePickup) {
+                    ++totalPickupCount_;
+                }
+            }
+        }
+    }
 }
 
 void BubblePickupController::SetCollectCallback(std::function<void(const Vector3&)> callback) {
@@ -75,6 +89,7 @@ bool BubblePickupController::TryCollectAt(const Int3& index) {
 
     // マップ上からシャボン玉を消す
     stageMap_->RemoveBlock(index);
+    ++collectedCount_;
 
     // 見た目を再構築
     stageRenderer_->BuildFromStageMap(*stageMap_);

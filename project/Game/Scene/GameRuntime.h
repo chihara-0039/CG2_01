@@ -72,7 +72,12 @@ public:
     void RequestSceneChange(SceneType sceneType);
     SceneType GetCurrentSceneType() const;
 
+    Object3dCommon* GetObject3dCommon() const { return object3dCommon.get(); }
+    Input* GetInput() const { return input.get(); }
+
+    void RunTitleScene();
     void RunStageSelectScene();
+    void RunGameClearScene(bool celebrationReady);
     void RunDebugViewScene();
     void RunStageEditorScene();
     void RunGamePlayScene();
@@ -85,7 +90,9 @@ public:
 private:
     // 実行中の画面種別。SceneTypeとゲーム内部の更新分岐を対応付ける。
     enum class AppMode {
+        Title,
         StageSelect,
+        GameClear,
         DebugView,
         StageEditor,
         GamePlay,
@@ -194,6 +201,13 @@ private:
     AppMode        prevMode_ = AppMode::DebugView;
     DebugDrawFlags debugFlags_;
     bool           isGoalReached_ = false;
+    float          goalCelebrationTimer_ = 0.0f;
+    float          gameClearTimer_ = 0.0f;
+    float          gameClearFireworkTimer_ = 0.0f;
+    bool           gameClearCelebrationStarted_ = false;
+    float          titleTimer_ = 0.0f;
+    bool           isGamePaused_ = false;
+    bool           isGoalBlocked_ = false;
     int            placeableBlockCount_ = 0;
     float          totalTime_ = 0.0f;
 
@@ -246,10 +260,15 @@ private:
     void UpdateGameplayPostEffects();
     void EmitEffectPreviewBurst();
     void UpdateGamePlay();
+    void UpdateGoalCelebration();
+    void UpdateGameClear(bool celebrationReady);
+    void DrawGoalCelebrationOverlay();
+    void DrawGameClearOverlay();
     void UpdateGamePlayBlockPlace();
     void UpdateTitle();
     void UpdateStageSelect();
     void UpdateSceneTransition();
+    void ReturnToStageSelect();
     void HandleModeChange();
     void EnsureSkinningEditorInitialized();
     void EnsureTerrainInitialized();
@@ -278,6 +297,7 @@ private:
     void ApplySceneLighting(const Vector3& lightDir);
     void UpdateClearColorForFrame();
     void UpdateGameplayUserInterface();
+    void DrawPauseMenu();
     void RenderScene();
     void DrawCollisionDebugBoxes();
     void DrawSkyboxForFrame();

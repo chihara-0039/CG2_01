@@ -38,7 +38,13 @@ void GameRuntime::Update() {
     UpdateHitEffectShortcut();
 
 
-    UpdateSharedCameraControls(isGuiCaptured);
+    // インベントリやポーズを開いている間は、カメラの距離・角度を変更しない。
+    const bool gameplayUiBlocksCamera =
+        (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) &&
+        (isGamePaused_ || (blockInventoryUI_ && blockInventoryUI_->IsActive()));
+    if (!gameplayUiBlocksCamera) {
+        UpdateSharedCameraControls(isGuiCaptured);
+    }
 
     camera->Update();
 
@@ -91,7 +97,7 @@ void GameRuntime::HandleModeChange() {
         currentMode_ == AppMode::GamePlay_BlockPlace) {
         debugFlags_.showParticles = true;
     }
-    if (currentMode_ == AppMode::StageSelect && particleManager) {
+    if ((currentMode_ == AppMode::Title || currentMode_ == AppMode::StageSelect) && particleManager) {
         // 継続型の嵐は寿命の長い雨・風を持つため、停止だけでなく残存粒子も破棄する。
         weatherRuntimeController_.StopStorm(*particleManager);
         particleManager->GetWeatherEmitter().active = false;
@@ -190,10 +196,14 @@ void GameRuntime::UpdateHitEffectShortcut() {
 }
 
 void GameRuntime::UpdateSharedCameraControls(bool isGuiCaptured) {
-    if (currentMode_ != AppMode::GamePlay && currentMode_ != AppMode::DebugView) {
-        const bool invertEditorOrbit =
-            currentMode_ == AppMode::StageEditor ||
-            currentMode_ == AppMode::GamePlay_BlockPlace;
+    // 通常プレイとブロック配置中は同じ追従カメラを使用する。
+    // 配置モードへ入った瞬間に Blender 形式の編集カメラへ切り替えると、
+    // インベントリを開く前の視点が失われるため、ここでは更新しない。
+    if (currentMode_ != AppMode::GamePlay &&
+        currentMode_ != AppMode::GamePlay_BlockPlace &&
+        currentMode_ != AppMode::GameClear &&
+        currentMode_ != AppMode::DebugView) {
+        const bool invertEditorOrbit = currentMode_ == AppMode::StageEditor;
         camera->UpdateBlenderStyle(
             input.get(), isGuiCaptured, winApp->GetHwnd(), invertEditorOrbit);
     }
@@ -260,6 +270,16 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
         EnsureSkinningEditorInitialized();
         skinningEditor_.UpdateDebugViewAttachments(
             player_->GetSkinnedObject(), dxCommon.get(), camera.get(), lightVP, particleManager.get());
+    } else if (currentMode_ == AppMode::GamePlay_BlockPlace) {
+        // 配置中もプレイ時の追従カメラを継続し、切り替え前の距離と角度を保持する。
+        // 右スティックの上下入力とトリガーによるズームもこの経路で処理する。
+        player_->SetStageCollisionEnabled(true);
+        player_->UpdateTransform(lightVP);
+        camera->SetFov(gameplayCameraController_.GetFov());
+        gameplayCameraController_.SetFollowPlayerMode(true);
+        gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
+        camera->Update();
+        player_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
     } else if (currentMode_ != AppMode::GamePlay) {
         player_->SetStageCollisionEnabled(true);
         player_->UpdateTransform(lightVP);
@@ -466,6 +486,11 @@ void GameRuntime::UpdateGameplayUserInterface() {
             player_.get(), camera.get(), lightCamera_.get());
     }
 
+    if (isGamePaused_) {
+        DrawPauseMenu();
+        return;
+    }
+
     if (blockInventoryUI_) {
         bool isPlayOrPlace = (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace);
         blockInventoryUI_->Update(input.get(), winApp.get(), isPlayOrPlace, &stageMap_);
@@ -482,6 +507,32 @@ void GameRuntime::UpdateGameplayUserInterface() {
             blockPlacementController_.SetPlaceCustomId(blockInventoryUI_->GetSelectedCustomId());
         }
     }
+}
+
+void GameRuntime::DrawPauseMenu() {
+    const ImVec2 windowSize{ 420.0f, 220.0f };
+    const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos(
+        { (displaySize.x - windowSize.x) * 0.5f, (displaySize.y - windowSize.y) * 0.5f },
+        ImGuiCond_Always);
+    ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);
+
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("Pause", nullptr, flags);
+    ImGui::SetWindowFontScale(1.35f);
+    ImGui::TextUnformatted("PAUSED");
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::Separator();
+
+    if (ImGui::Button("Resume", { -1.0f, 42.0f })) {
+        isGamePaused_ = false;
+    }
+    if (ImGui::Button("Return to Stage Select", { -1.0f, 42.0f })) {
+        ReturnToStageSelect();
+    }
+    ImGui::TextUnformatted("START / ESC / B : Resume");
+    ImGui::End();
 }
 
 

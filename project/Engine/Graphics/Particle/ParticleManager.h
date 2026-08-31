@@ -19,6 +19,7 @@ struct Particle {
         Ring,
         Cylinder,
         Lightning,
+        Firework,
         StormCloud,
         StormRain,
         StormWind
@@ -268,6 +269,9 @@ public: // メンバ関数
     // 評価課題用: ヒット時のフラッシュ・スパーク・衝撃波をまとめて生成する
     void EmitHitEffect(const Vector3& pos);
     void EmitHitEffect(const Vector3& pos, const HitEffectSettings& settings);
+
+    // クリア演出用: 色付きの火花が球状に広がり、重力で垂れる花火。
+    void EmitFireworkBurst(const Vector3& pos);
 
     void SetStormActive(bool active, const Vector3& center = { 0.0f, 0.0f, 0.0f });
     void SetStormCenter(const Vector3& center) { stormCenter_ = center; }

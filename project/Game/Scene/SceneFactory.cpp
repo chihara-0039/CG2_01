@@ -2,6 +2,8 @@
 
 #include "BaseScene.h"
 #include "GameRuntime.h"
+#include "GameClearScene.h"
+#include "TitleScene.h"
 
 #include <cassert>
 
@@ -81,8 +83,12 @@ public:
 
 std::unique_ptr<BaseScene> SceneFactory::CreateScene(SceneType type) const {
     switch (type) {
+    case SceneType::Title:
+        return std::make_unique<TitleScene>();
     case SceneType::StageSelect:
         return std::make_unique<StageSelectScene>();
+    case SceneType::GameClear:
+        return std::make_unique<GameClearScene>();
     case SceneType::DebugView:
         return std::make_unique<DebugViewScene>();
     case SceneType::StageEditor:

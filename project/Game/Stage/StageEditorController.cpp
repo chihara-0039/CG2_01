@@ -139,10 +139,56 @@ void StageEditorController::HandleCursorInput(Input* input, StageMap& stageMap, 
 	int inputX = 0;
 	int inputZ = 0;
 
-	if (RepeatKey(input, DIK_A)) { inputX -= 1; }
-	if (RepeatKey(input, DIK_D)) { inputX += 1; }
-	if (RepeatKey(input, DIK_W)) { inputZ += 1; }
-	if (RepeatKey(input, DIK_S)) { inputZ -= 1; }
+	if (RepeatKey(input, DIK_A)) {
+		inputX -= 1;
+	}
+	if (RepeatKey(input, DIK_D)) {
+		inputX += 1;
+	}
+	if (RepeatKey(input, DIK_W)) {
+		inputZ += 1;
+	}
+	if (RepeatKey(input, DIK_S)) {
+		inputZ -= 1;
+	}
+
+	// コントローラーでも配置カーソルを移動できるようにする。
+	// 左スティックと方向パッドを水平移動、LB/RBを上下移動に割り当てる。
+	const auto& gamePad = input->GetGamePadState();
+	auto repeatControllerInput = [](bool isHeld, int& holdFrame) {
+		if (!isHeld) {
+			holdFrame = 0;
+			return false;
+		}
+
+		const bool shouldMove =
+			holdFrame == 0 ||
+			(holdFrame >= 20 && ((holdFrame - 20) % 5 == 0));
+		++holdFrame;
+		return shouldMove;
+	};
+
+	int controllerX = 0;
+	int controllerZ = 0;
+	if (gamePad.connected) {
+		if ((gamePad.buttons & XINPUT_GAMEPAD_DPAD_LEFT) != 0 || gamePad.leftStickX < -0.55f) {
+			controllerX -= 1;
+		}
+		if ((gamePad.buttons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0 || gamePad.leftStickX > 0.55f) {
+			controllerX += 1;
+		}
+		if ((gamePad.buttons & XINPUT_GAMEPAD_DPAD_UP) != 0 || gamePad.leftStickY > 0.55f) {
+			controllerZ += 1;
+		}
+		if ((gamePad.buttons & XINPUT_GAMEPAD_DPAD_DOWN) != 0 || gamePad.leftStickY < -0.55f) {
+			controllerZ -= 1;
+		}
+	}
+
+	if (repeatControllerInput(controllerX != 0 || controllerZ != 0, controllerMoveHoldFrame_)) {
+		inputX += controllerX;
+		inputZ += controllerZ;
+	}
 
 	if (inputX != 0 || inputZ != 0) {
 		// カメラの回転に基づいて移動ベクトルを計算
@@ -167,6 +213,19 @@ void StageEditorController::HandleCursorInput(Input* input, StageMap& stageMap, 
 	}
 	if (RepeatKey(input, DIK_E)) {
 		mapCursor->Move(0, -1, 0, stageMap);
+	}
+
+	int controllerY = 0;
+	if (gamePad.connected) {
+		if ((gamePad.buttons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0) {
+			controllerY += 1;
+		}
+		if ((gamePad.buttons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0) {
+			controllerY -= 1;
+		}
+	}
+	if (repeatControllerInput(controllerY != 0, controllerVerticalHoldFrame_)) {
+		mapCursor->Move(0, controllerY, 0, stageMap);
 	}
 	// 移動後のカーソル位置や描画用行列を更新
 	mapCursor->Update(lightCamera->GetViewProjectionMatrix());

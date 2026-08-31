@@ -51,3 +51,13 @@ CG2_01_Project_Submission.zip
 CG2_01_Project_Submission/
 # Local Release packages generated for evaluation/submission checks.
 artifacts/
+
+# --- Local authoring/review tools and generated submission previews ---
+.codex_video_tools/
+.video_review/
+.tl1_submission_work/
+review_video.html
+project/monthly_submission_output/
+project/monthly_submission_ready_*/
+project/monthly_submission_docs/pdf_check_*/
+project/monthly_submission_docs/assets_current/
