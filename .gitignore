@@ -58,5 +58,6 @@ artifacts/
 .tl1_submission_work/
 review_video.html
 project/monthly_submission_output/
+project/monthly_submission_ready_*/
 project/monthly_submission_docs/pdf_check_*/
 project/monthly_submission_docs/assets_current/
