@@ -1,7 +1,7 @@
 ﻿param(
     [string]$ProjectRoot = $PSScriptRoot,
     [string]$OutputRoot = "",
-    [string]$VideoPath = "C:\Users\shigo\Videos\Captures\自作エンジン 2026-08-01 17-18-55.mp4"
+    [string]$VideoPath = "C:\Users\shigo\Videos\Captures\自作エンジン 2026-08-31 21-03-18.mp4"
 )
 
 $ErrorActionPreference = "Stop"
@@ -86,7 +86,7 @@ $readMe = @"
 - Xboxコントローラー操作
 - ステージ探索とスター取得判定
 - タイトル、ステージセレクト、ゲーム、クリアのシーン遷移
-- スター取得演出、CONGRATULATION表示、継続する花火演出
+- スター取得演出、COURSE CLEAR表示、継続する花火演出
 - 地形、ライト、スカイボックスの描画
 - ステージエディタと外部レベルJSON読込
 - Blender編集データの変更検知と再読込
