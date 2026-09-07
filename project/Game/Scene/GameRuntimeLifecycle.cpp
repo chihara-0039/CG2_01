@@ -174,14 +174,38 @@ void GameRuntime::Initialize() {
     tutorialSprite_->Initialize(spriteCommon.get(),
         textureManager->LoadTexture("Resources/UI/tutorial/tutorial.png"));
     tutorialSprite_->SetPosition({ 20, 20 });
-    tutorialSprite_->SetSize({ 554, 128 });
+    tutorialSprite_->SetSize({ 1000, 155 });
 
 
     placementTutorialSprite_ = std::make_unique<Sprite>();
     placementTutorialSprite_->Initialize(spriteCommon.get(),
         textureManager->LoadTexture("Resources/UI/tutorial/placement_tutorial.png"));
     placementTutorialSprite_->SetPosition({ 20, 20 });
-    placementTutorialSprite_->SetSize({ 682, 185 });
+    placementTutorialSprite_->SetSize({ 1000, 120 });
+
+    inventoryTutorialSprite_ = std::make_unique<Sprite>();
+    inventoryTutorialSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/tutorial/inventory_tutorial.png"));
+    inventoryTutorialSprite_->SetPosition({ 20, 20 });
+    inventoryTutorialSprite_->SetSize({ 1000, 120 });
+
+    controllerTutorialSprite_ = std::make_unique<Sprite>();
+    controllerTutorialSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/tutorial/tutorial_xbox.png"));
+    controllerTutorialSprite_->SetPosition({ 20, 20 });
+    controllerTutorialSprite_->SetSize({ 1000, 155 });
+
+    controllerPlacementTutorialSprite_ = std::make_unique<Sprite>();
+    controllerPlacementTutorialSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/tutorial/placement_tutorial_xbox.png"));
+    controllerPlacementTutorialSprite_->SetPosition({ 20, 20 });
+    controllerPlacementTutorialSprite_->SetSize({ 1000, 120 });
+
+    controllerInventoryTutorialSprite_ = std::make_unique<Sprite>();
+    controllerInventoryTutorialSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/tutorial/inventory_tutorial_xbox.png"));
+    controllerInventoryTutorialSprite_->SetPosition({ 20, 20 });
+    controllerInventoryTutorialSprite_->SetSize({ 1000, 120 });
 
     // ゴール到達後にステージ選択へ戻る操作を案内する。
     clearGuideTexture_ = textureManager->LoadTexture("Resources/UI/clear_guide.png");
@@ -189,6 +213,42 @@ void GameRuntime::Initialize() {
     clearGuideSprite_->Initialize(spriteCommon.get(), clearGuideTexture_);
     clearGuideSprite_->SetPosition({ 288.0f, 620.0f });
     clearGuideSprite_->SetSize({ 704.0f, 64.0f });
+
+    clearGuideXboxTexture_ = textureManager->LoadTexture("Resources/UI/clear_guide_xbox.png");
+    clearGuideXboxSprite_ = std::make_unique<Sprite>();
+    clearGuideXboxSprite_->Initialize(spriteCommon.get(), clearGuideXboxTexture_);
+    clearGuideXboxSprite_->SetPosition({ 288.0f, 620.0f });
+    clearGuideXboxSprite_->SetSize({ 704.0f, 64.0f });
+
+    pauseKeyboardSprite_ = std::make_unique<Sprite>();
+    pauseKeyboardSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/pause_keyboard.png"));
+    pauseKeyboardSprite_->SetPosition({ 0.0f, 0.0f });
+    pauseKeyboardSprite_->SetSize({ 1280.0f, 720.0f });
+
+    pauseXboxSprite_ = std::make_unique<Sprite>();
+    pauseXboxSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/pause_xbox.png"));
+    pauseXboxSprite_->SetPosition({ 0.0f, 0.0f });
+    pauseXboxSprite_->SetSize({ 1280.0f, 720.0f });
+
+    starGetSprite_ = std::make_unique<Sprite>();
+    starGetSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/star_get.png"));
+    starGetSprite_->SetPosition({ 380.0f, 70.0f });
+    starGetSprite_->SetSize({ 520.0f, 110.0f });
+
+    menuExitKeyboardSprite_ = std::make_unique<Sprite>();
+    menuExitKeyboardSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/menu_exit_keyboard.png"));
+    menuExitKeyboardSprite_->SetPosition({ 20.0f, 642.0f });
+    menuExitKeyboardSprite_->SetSize({ 430.0f, 62.0f });
+
+    menuExitXboxSprite_ = std::make_unique<Sprite>();
+    menuExitXboxSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/menu_exit_xbox.png"));
+    menuExitXboxSprite_->SetPosition({ 20.0f, 642.0f });
+    menuExitXboxSprite_->SetSize({ 430.0f, 62.0f });
 
 
     gameplayCameraController_.Initialize();

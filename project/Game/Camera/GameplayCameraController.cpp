@@ -70,6 +70,21 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
         hasCameraParameterChanged = true;
     }
 
+    // マウスを使わない操作向けに、Q/Eでも段階的にズームできるようにする。
+    if (input->PushKey(DIK_Q) || input->PushKey(DIK_E)) {
+        float minFov = minFov_;
+        float maxFov = maxFov_;
+        if (currentStageIndex_ == 3) {
+            minFov = 0.25f;
+            maxFov = 0.80f;
+        }
+        const float keyboardZoomSpeed = 0.008f;
+        cameraFov_ += input->PushKey(DIK_Q) ? keyboardZoomSpeed : -keyboardZoomSpeed;
+        cameraFov_ = std::clamp(cameraFov_, minFov, maxFov);
+        camera->SetFov(cameraFov_);
+        hasCameraParameterChanged = true;
+    }
+
     // 画面端のガイド領域を左クリックした時だけ、カメラを段階的に回転させる。
     if (mouse.buttons[0] && !isGuiCaptured) {
         RECT clientRect;

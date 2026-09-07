@@ -612,6 +612,10 @@ void DirectXCommon::EndImGui() {
     if (ImGui::GetCurrentContext() == nullptr) return;
 
     ImGui::Render();
+#ifdef NDEBUG
+    // Releaseではエディタ用ImGuiの描画コマンドを一切GPUへ送らない。
+    return;
+#endif
     ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data == nullptr) return;
 

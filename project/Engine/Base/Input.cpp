@@ -114,6 +114,31 @@ void Input::Update() {
         gamePadState_.leftTrigger = 0.0f;
         gamePadState_.rightTrigger = 0.0f;
     }
+
+    bool keyboardMouseActive =
+        mouseState_.x != 0 || mouseState_.y != 0 || mouseState_.wheel != 0 ||
+        mouseState_.buttons[0] || mouseState_.buttons[1] || mouseState_.buttons[2];
+    for (const BYTE keyState : key_) {
+        if ((keyState & 0x80) != 0) {
+            keyboardMouseActive = true;
+            break;
+        }
+    }
+
+    const bool gamePadActive = gamePadState_.connected &&
+        (gamePadState_.buttons != 0 ||
+         std::abs(gamePadState_.leftStickX) > 0.15f ||
+         std::abs(gamePadState_.leftStickY) > 0.15f ||
+         std::abs(gamePadState_.rightStickX) > 0.15f ||
+         std::abs(gamePadState_.rightStickY) > 0.15f ||
+         gamePadState_.leftTrigger > 0.05f ||
+         gamePadState_.rightTrigger > 0.05f);
+
+    if (gamePadActive) {
+        activeInputDevice_ = ActiveInputDevice::GamePad;
+    } else if (keyboardMouseActive) {
+        activeInputDevice_ = ActiveInputDevice::KeyboardMouse;
+    }
 }
 
 bool Input::PushKey(BYTE keyNumber) const {

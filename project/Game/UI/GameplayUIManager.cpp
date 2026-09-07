@@ -344,11 +344,6 @@ void GameplayUIManager::DrawSprites(bool isGamePlayMode, bool isFollowPlayerMode
     // 2D UIはSprite用パイプラインに切り替えてまとめて描画する。
     spriteCommon_->PreDraw();
 
-    cameraGuideLeftSprite_->Draw();
-    cameraGuideRightSprite_->Draw();
-    cameraGuideUpSprite_->Draw();
-    cameraGuideDownSprite_->Draw();
-
     if (isFollowPlayerMode) {
         if (cameraModePlayerSprite_) {
             cameraModePlayerSprite_->Draw();

@@ -443,15 +443,57 @@ void GameRuntime::RenderScene() {
     }
 
     const bool isInventoryOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-    if (currentMode_ == AppMode::GamePlay && !isInventoryOpen && stageSelect_) {
-        if (stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_) {
-            spriteCommon->PreDraw();
+    const bool isUsingGamePad = input && input->IsUsingGamePad();
+    if (currentMode_ == AppMode::GamePlay && !isInventoryOpen) {
+        spriteCommon->PreDraw();
+        if (isUsingGamePad && controllerTutorialSprite_) {
+            controllerTutorialSprite_->Draw();
+        } else if (tutorialSprite_) {
             tutorialSprite_->Draw();
         }
     }
-    if ((currentMode_ == AppMode::GamePlay_BlockPlace || isInventoryOpen) && placementTutorialSprite_) {
+    if (isInventoryOpen) {
         spriteCommon->PreDraw();
-        placementTutorialSprite_->Draw();
+        if (isUsingGamePad && controllerInventoryTutorialSprite_) {
+            controllerInventoryTutorialSprite_->Draw();
+        } else if (inventoryTutorialSprite_) {
+            inventoryTutorialSprite_->Draw();
+        }
+    } else if (currentMode_ == AppMode::GamePlay_BlockPlace) {
+        spriteCommon->PreDraw();
+        if (isUsingGamePad && controllerPlacementTutorialSprite_) {
+            controllerPlacementTutorialSprite_->Draw();
+        } else if (placementTutorialSprite_) {
+            placementTutorialSprite_->Draw();
+        }
+    }
+    if (currentMode_ == AppMode::GameClear && gameClearCelebrationStarted_) {
+        spriteCommon->PreDraw();
+        if (isUsingGamePad && clearGuideXboxSprite_) {
+            clearGuideXboxSprite_->Draw();
+        } else if (clearGuideSprite_) {
+            clearGuideSprite_->Draw();
+        }
+    }
+    if (isGoalReached_ && starGetSprite_) {
+        spriteCommon->PreDraw();
+        starGetSprite_->Draw();
+    }
+    if (isGamePaused_) {
+        spriteCommon->PreDraw();
+        if (isUsingGamePad && pauseXboxSprite_) {
+            pauseXboxSprite_->Draw();
+        } else if (pauseKeyboardSprite_) {
+            pauseKeyboardSprite_->Draw();
+        }
+    }
+    if (currentMode_ == AppMode::Title || currentMode_ == AppMode::StageSelect) {
+        spriteCommon->PreDraw();
+        if (isUsingGamePad && menuExitXboxSprite_) {
+            menuExitXboxSprite_->Draw();
+        } else if (menuExitKeyboardSprite_) {
+            menuExitKeyboardSprite_->Draw();
+        }
     }
 }
 
