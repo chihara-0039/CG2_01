@@ -207,6 +207,25 @@ void GameRuntime::Initialize() {
     controllerInventoryTutorialSprite_->SetPosition({ 20, 20 });
     controllerInventoryTutorialSprite_->SetSize({ 1000, 120 });
 
+    // ゲーム開始時の目的と、ステージ選択時の操作をSpriteで案内する。
+    objectiveGuideTexture_ = textureManager->LoadTexture("Resources/UI/objective_guide.png");
+    objectiveGuideSprite_ = std::make_unique<Sprite>();
+    objectiveGuideSprite_->Initialize(spriteCommon.get(), objectiveGuideTexture_);
+    objectiveGuideSprite_->SetPosition({ 320.0f, 165.0f });
+    objectiveGuideSprite_->SetSize({ 640.0f, 72.0f });
+
+    stageSelectGuideTexture_ = textureManager->LoadTexture("Resources/UI/stage_select_guide.png");
+    stageSelectGuideSprite_ = std::make_unique<Sprite>();
+    stageSelectGuideSprite_->Initialize(spriteCommon.get(), stageSelectGuideTexture_);
+    stageSelectGuideSprite_->SetPosition({ 65.0f, 28.0f });
+    stageSelectGuideSprite_->SetSize({ 1150.0f, 64.0f });
+
+    stageSelectGuideXboxTexture_ = textureManager->LoadTexture("Resources/UI/stage_select_guide_xbox.png");
+    stageSelectGuideXboxSprite_ = std::make_unique<Sprite>();
+    stageSelectGuideXboxSprite_->Initialize(spriteCommon.get(), stageSelectGuideXboxTexture_);
+    stageSelectGuideXboxSprite_->SetPosition({ 65.0f, 28.0f });
+    stageSelectGuideXboxSprite_->SetSize({ 1150.0f, 64.0f });
+
     // ゴール到達後にステージ選択へ戻る操作を案内する。
     clearGuideTexture_ = textureManager->LoadTexture("Resources/UI/clear_guide.png");
     clearGuideSprite_ = std::make_unique<Sprite>();
@@ -237,6 +256,13 @@ void GameRuntime::Initialize() {
         textureManager->LoadTexture("Resources/UI/star_get.png"));
     starGetSprite_->SetPosition({ 380.0f, 70.0f });
     starGetSprite_->SetSize({ 520.0f, 110.0f });
+
+    goalDirectionSprite_ = std::make_unique<Sprite>();
+    goalDirectionSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/arrow/arrow_up.png"));
+    goalDirectionSprite_->SetAnchorPoint({ 0.5f, 0.5f });
+    goalDirectionSprite_->SetPosition({ 640.0f, 650.0f });
+    goalDirectionSprite_->SetSize({ 64.0f, 64.0f });
 
     menuExitKeyboardSprite_ = std::make_unique<Sprite>();
     menuExitKeyboardSprite_->Initialize(spriteCommon.get(),
@@ -293,6 +319,7 @@ bool GameRuntime::LoadBlenderStage(bool beginPlay) {
         blenderStageActive_ = true;
 
         stageMap_.Clear();
+        hasGoalGuideTarget_ = false;
         backupMap_ = stageMap_;
         if (stageRenderer_) {
             stageRenderer_->BuildFromStageMap(stageMap_);
@@ -300,6 +327,8 @@ bool GameRuntime::LoadBlenderStage(bool beginPlay) {
 
         player_->SetExternalCollisionBoxes(&blenderRuntimeLevel_.GetCollisionBoxes());
         ApplyRuntimePlayerSpawn();
+        objectiveGuideStartedAt_ = std::chrono::steady_clock::now();
+        objectiveGuideActive_ = true;
         RequestSceneChange(SceneType::GamePlay);
     } else if (currentMode_ == AppMode::StageEditor) {
         // 外部ツールで作成したレベルを、シーン遷移せずステージエディター内へ表示する。

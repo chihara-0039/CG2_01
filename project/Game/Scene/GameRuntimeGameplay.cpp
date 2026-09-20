@@ -354,6 +354,7 @@ void GameRuntime::UpdateStageSelect() {
                 player_->SetExternalCollisionBoxes(nullptr);
             }
             stageMap_.LoadFromFile(path);
+            RefreshGoalGuideTarget();
             backupMap_ = stageMap_;
             stageRenderer_->BuildFromStageMap(stageMap_);
 
@@ -367,8 +368,30 @@ void GameRuntime::UpdateStageSelect() {
             blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
             isGoalReached_ = false;
             isGoalBlocked_ = false;
+            objectiveGuideStartedAt_ = std::chrono::steady_clock::now();
+            objectiveGuideActive_ = true;
         }
         RequestSceneChange(SceneType::GamePlay);
+    }
+}
+
+void GameRuntime::RefreshGoalGuideTarget() {
+    hasGoalGuideTarget_ = false;
+    for (int y = 0; y < stageMap_.GetHeight(); ++y) {
+        for (int z = 0; z < stageMap_.GetDepth(); ++z) {
+            for (int x = 0; x < stageMap_.GetWidth(); ++x) {
+                const MapCell* cell = stageMap_.GetCell(x, y, z);
+                if (cell && cell->type == BlockType::Goal) {
+                    goalGuideTarget_ = {
+                        static_cast<float>(x),
+                        static_cast<float>(y),
+                        static_cast<float>(z)
+                    };
+                    hasGoalGuideTarget_ = true;
+                    return;
+                }
+            }
+        }
     }
 }
 

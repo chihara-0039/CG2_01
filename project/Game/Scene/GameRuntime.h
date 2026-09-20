@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <array>
 #include <string>
+#include <chrono>
 #include "SceneType.h"
 #include "SceneFactory.h"
 #include "SceneManager.h"
@@ -171,15 +172,18 @@ private:
 
     uint32_t objectiveGuideTexture_ = 0;
     uint32_t stageSelectGuideTexture_ = 0;
+    uint32_t stageSelectGuideXboxTexture_ = 0;
     uint32_t clearGuideTexture_ = 0;
     uint32_t clearGuideXboxTexture_ = 0;
     std::unique_ptr<Sprite> objectiveGuideSprite_;
     std::unique_ptr<Sprite> stageSelectGuideSprite_;
+    std::unique_ptr<Sprite> stageSelectGuideXboxSprite_;
     std::unique_ptr<Sprite> clearGuideSprite_;
     std::unique_ptr<Sprite> clearGuideXboxSprite_;
     std::unique_ptr<Sprite> pauseKeyboardSprite_;
     std::unique_ptr<Sprite> pauseXboxSprite_;
     std::unique_ptr<Sprite> starGetSprite_;
+    std::unique_ptr<Sprite> goalDirectionSprite_;
     std::unique_ptr<Sprite> menuExitKeyboardSprite_;
     std::unique_ptr<Sprite> menuExitXboxSprite_;
 
@@ -217,6 +221,10 @@ private:
     float          gameClearFireworkTimer_ = 0.0f;
     bool           gameClearCelebrationStarted_ = false;
     float          titleTimer_ = 0.0f;
+    std::chrono::steady_clock::time_point objectiveGuideStartedAt_{};
+    bool           objectiveGuideActive_ = false;
+    Vector3        goalGuideTarget_ = { 0.0f, 0.0f, 0.0f };
+    bool           hasGoalGuideTarget_ = false;
     bool           isGamePaused_ = false;
     bool           isGoalBlocked_ = false;
     int            placeableBlockCount_ = 0;
@@ -272,6 +280,7 @@ private:
     void EmitEffectPreviewBurst();
     void UpdateGamePlay();
     void UpdateGoalCelebration();
+    void RefreshGoalGuideTarget();
     void UpdateGameClear(bool celebrationReady);
     void UpdateGamePlayBlockPlace();
     void UpdateTitle();

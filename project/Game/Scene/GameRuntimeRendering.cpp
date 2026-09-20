@@ -444,6 +444,14 @@ void GameRuntime::RenderScene() {
 
     const bool isInventoryOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
     const bool isUsingGamePad = input && input->IsUsingGamePad();
+    if (currentMode_ == AppMode::StageSelect) {
+        spriteCommon->PreDraw();
+        if (isUsingGamePad && stageSelectGuideXboxSprite_) {
+            stageSelectGuideXboxSprite_->Draw();
+        } else if (stageSelectGuideSprite_) {
+            stageSelectGuideSprite_->Draw();
+        }
+    }
     if (currentMode_ == AppMode::GamePlay && !isInventoryOpen) {
         spriteCommon->PreDraw();
         if (isUsingGamePad && controllerTutorialSprite_) {
@@ -466,6 +474,19 @@ void GameRuntime::RenderScene() {
         } else if (placementTutorialSprite_) {
             placementTutorialSprite_->Draw();
         }
+    }
+    const bool showObjectiveGuide = objectiveGuideActive_ &&
+        std::chrono::duration<float>(
+            std::chrono::steady_clock::now() - objectiveGuideStartedAt_).count() < 5.0f;
+    if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) &&
+        !isInventoryOpen && showObjectiveGuide && objectiveGuideSprite_) {
+        spriteCommon->PreDraw();
+        objectiveGuideSprite_->Draw();
+    }
+    if (currentMode_ == AppMode::GamePlay && !isInventoryOpen && !isGamePaused_ &&
+        !isGoalReached_ && hasGoalGuideTarget_ && goalDirectionSprite_) {
+        spriteCommon->PreDraw();
+        goalDirectionSprite_->Draw();
     }
     if (currentMode_ == AppMode::GameClear && gameClearCelebrationStarted_) {
         spriteCommon->PreDraw();

@@ -480,6 +480,30 @@ void GameRuntime::UpdateClearColorForFrame() {
 }
 
 void GameRuntime::UpdateGameplayUserInterface() {
+    if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
+        if (objectiveGuideSprite_) {
+            objectiveGuideSprite_->Update();
+        }
+    }
+    if (currentMode_ == AppMode::GamePlay && player_ && hasGoalGuideTarget_ &&
+        !isGoalReached_ && goalDirectionSprite_) {
+        const Vector3 playerPosition = player_->GetPosition();
+        const float directionX = goalGuideTarget_.x - playerPosition.x;
+        const float directionZ = goalGuideTarget_.z - playerPosition.z;
+        const float worldAngle = std::atan2(directionX, directionZ);
+        const float cameraYaw = camera ? camera->GetRotation().y : 0.0f;
+        goalDirectionSprite_->SetRotation(worldAngle - cameraYaw);
+        goalDirectionSprite_->Update();
+    }
+    if (currentMode_ == AppMode::StageSelect) {
+        if (stageSelectGuideSprite_) {
+            stageSelectGuideSprite_->Update();
+        }
+        if (stageSelectGuideXboxSprite_) {
+            stageSelectGuideXboxSprite_->Update();
+        }
+    }
+
     if (gameplayUIManager_) {
         gameplayUIManager_->Update(
             currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace,
