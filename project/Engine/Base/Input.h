@@ -31,6 +31,11 @@ struct GamePadState {
     float rightTrigger = 0.0f;
 };
 
+enum class ActiveInputDevice {
+    KeyboardMouse,
+    GamePad
+};
+
 class Input {
 public:
     // COM オブジェクトを安全に扱うための別名。
@@ -65,6 +70,10 @@ public:
     // 指定コントローラーボタンがこのフレームで押された瞬間かを返す。
     bool TriggerControllerButton(WORD button) const;
 
+    // 最後に実際の操作があった入力機器を返す。接続状態だけでは切り替えない。
+    ActiveInputDevice GetActiveInputDevice() const { return activeInputDevice_; }
+    bool IsUsingGamePad() const { return activeInputDevice_ == ActiveInputDevice::GamePad; }
+
 private:
     float NormalizeStickAxis(SHORT value, SHORT deadZone) const;
     float NormalizeTrigger(BYTE value) const;
@@ -77,6 +86,7 @@ private:
     ComPtr<IDirectInputDevice8> mouse_; // マウス用 DirectInput デバイス
     MouseState mouseState_ = {};        // 毎フレーム更新されるマウス入力状態
     GamePadState gamePadState_ = {};    // 毎フレーム更新されるゲームパッド入力状態
+    ActiveInputDevice activeInputDevice_ = ActiveInputDevice::KeyboardMouse;
 
     // キーボード入力状態。DirectInput の全キー 256 個を保持する。
     BYTE key_[256] = {};

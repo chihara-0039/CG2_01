@@ -8,6 +8,19 @@
 void GameRuntime::UpdateTitle() {
     titleTimer_ += 1.0f / 60.0f;
 
+    if (menuExitKeyboardSprite_) {
+        menuExitKeyboardSprite_->Update();
+    }
+    if (menuExitXboxSprite_) {
+        menuExitXboxSprite_->Update();
+    }
+
+    if (input->TriggerKey(DIK_ESCAPE) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+        PostQuitMessage(0);
+        return;
+    }
+
     if (input->TriggerKey(DIK_SPACE) ||
         input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
         stageSelect_->Initialize(object3dCommon.get(), input.get());
@@ -19,7 +32,6 @@ void GameRuntime::UpdateGamePlay() {
     const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
     EnsurePostProcessInitialized();
     postEffectShowcaseController_.UpdateGameplay(*input, postProcess_);
-    postEffectShowcaseController_.DrawGameplayImGui(postProcess_);
 
     if (isGoalReached_) {
         UpdateGoalCelebration();
@@ -126,16 +138,6 @@ void GameRuntime::UpdateGamePlay() {
         gameplayUIManager_->UpdateCameraGuide(currentMode_ == AppMode::GamePlay, input.get(), winApp.get());
     }
 
-    bool isInventoryOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
-
-    if (stageSelect_ && stageSelect_->GetSelectedFileName() == "tutorial.txt" && tutorialSprite_ && !isInventoryOpen) {
-        tutorialSprite_->Update();
-    }
-
-    if ((currentMode_ == AppMode::GamePlay_BlockPlace || isInventoryOpen) && placementTutorialSprite_) {
-        placementTutorialSprite_->Update();
-    }
-
     float fixedDeltaTime = 1.0f / 60.0f;
     totalTime_ += fixedDeltaTime;
     stageMap_.Update(fixedDeltaTime, player_ ? player_->GetPosition() : Vector3{ 0, 0, 0 });
@@ -187,7 +189,6 @@ void GameRuntime::UpdateGamePlay() {
 
     if ((input->TriggerKey(DIK_B) ||
          input->TriggerControllerButton(XINPUT_GAMEPAD_LEFT_SHOULDER)) &&
-        blockInventory_.HasBlock() &&
         player_ && player_->IsGrounded()) {
         if (blockInventoryUI_) {
             blockInventoryUI_->ToggleOpen();
@@ -216,7 +217,9 @@ void GameRuntime::UpdateGoalCelebration() {
         camera->Update();
     }
 
-    DrawGoalCelebrationOverlay();
+    if (starGetSprite_) {
+        starGetSprite_->Update();
+    }
     if (goalCelebrationTimer_ >= kCelebrationDuration) {
         RequestSceneChange(SceneType::GameClear);
     }
@@ -243,44 +246,24 @@ void GameRuntime::UpdateGameClear(bool celebrationReady) {
     }
     gameClearCelebrationStarted_ = true;
 
-    DrawGameClearOverlay();
+    if (clearGuideSprite_) {
+        clearGuideSprite_->Update();
+    }
+    if (clearGuideXboxSprite_) {
+        clearGuideXboxSprite_->Update();
+    }
     if (input->TriggerKey(DIK_SPACE) ||
         input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
         ReturnToStageSelect();
     }
 }
 
-void GameRuntime::DrawGoalCelebrationOverlay() {
-    const float progress = std::clamp(goalCelebrationTimer_ / 2.5f, 0.0f, 1.0f);
-    ImGui::SetNextWindowPos(ImVec2(640.0f, 105.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowBgAlpha(0.0f);
-    ImGui::Begin("Goal Celebration", nullptr,
-        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
-    ImGui::SetWindowFontScale(1.4f + std::sin(progress * 3.1415926f) * 0.35f);
-    ImGui::TextColored(ImVec4(1.0f, 0.88f, 0.2f, 1.0f), "STAR GET!");
-    ImGui::End();
-}
-
-void GameRuntime::DrawGameClearOverlay() {
-    if (!gameClearCelebrationStarted_) {
-        return;
-    }
-    ImGui::SetNextWindowPos(ImVec2(640.0f, 620.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowBgAlpha(0.45f);
-    ImGui::Begin("Game Clear", nullptr,
-        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-    ImGui::TextUnformatted("Press SPACE / Xbox A to Stage Select");
-    ImGui::End();
-}
-
 void GameRuntime::UpdateGamePlayBlockPlace() {
     EnsurePostProcessInitialized();
     postEffectShowcaseController_.UpdateGameplay(*input, postProcess_);
-    postEffectShowcaseController_.DrawGameplayImGui(postProcess_);
 
-    if (input->TriggerKey(DIK_R)) {
+    if (input->TriggerKey(DIK_R) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_X)) {
         placeRotationY_ += 1.5707963f;
         if (placeRotationY_ >= 6.0f) {
             placeRotationY_ = 0.0f;
@@ -349,6 +332,18 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
 }
 
 void GameRuntime::UpdateStageSelect() {
+    if (menuExitKeyboardSprite_) {
+        menuExitKeyboardSprite_->Update();
+    }
+    if (menuExitXboxSprite_) {
+        menuExitXboxSprite_->Update();
+    }
+    if (input->TriggerKey(DIK_ESCAPE) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+        PostQuitMessage(0);
+        return;
+    }
+
     stageSelect_->Update();
     if (stageSelect_->IsFnished()) {
         std::string path = "Resources/Stages/" + stageSelect_->GetSelectedFileName();
@@ -359,6 +354,7 @@ void GameRuntime::UpdateStageSelect() {
                 player_->SetExternalCollisionBoxes(nullptr);
             }
             stageMap_.LoadFromFile(path);
+            RefreshGoalGuideTarget();
             backupMap_ = stageMap_;
             stageRenderer_->BuildFromStageMap(stageMap_);
 
@@ -372,8 +368,30 @@ void GameRuntime::UpdateStageSelect() {
             blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
             isGoalReached_ = false;
             isGoalBlocked_ = false;
+            objectiveGuideStartedAt_ = std::chrono::steady_clock::now();
+            objectiveGuideActive_ = true;
         }
         RequestSceneChange(SceneType::GamePlay);
+    }
+}
+
+void GameRuntime::RefreshGoalGuideTarget() {
+    hasGoalGuideTarget_ = false;
+    for (int y = 0; y < stageMap_.GetHeight(); ++y) {
+        for (int z = 0; z < stageMap_.GetDepth(); ++z) {
+            for (int x = 0; x < stageMap_.GetWidth(); ++x) {
+                const MapCell* cell = stageMap_.GetCell(x, y, z);
+                if (cell && cell->type == BlockType::Goal) {
+                    goalGuideTarget_ = {
+                        static_cast<float>(x),
+                        static_cast<float>(y),
+                        static_cast<float>(z)
+                    };
+                    hasGoalGuideTarget_ = true;
+                    return;
+                }
+            }
+        }
     }
 }
 
@@ -402,8 +420,22 @@ void GameRuntime::UpdateSceneTransition() {
         return;
     }
 
-    if (isGamePaused_ && input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
-        isGamePaused_ = false;
+    if (isGamePaused_) {
+        if (input->TriggerKey(DIK_T) ||
+            input->TriggerControllerButton(XINPUT_GAMEPAD_X)) {
+            isGamePaused_ = false;
+            RequestSceneChange(SceneType::Title);
+            return;
+        }
+        if (input->TriggerKey(DIK_RETURN) ||
+            input->TriggerControllerButton(XINPUT_GAMEPAD_Y)) {
+            ReturnToStageSelect();
+            return;
+        }
+        if (input->TriggerControllerButton(XINPUT_GAMEPAD_A) ||
+            input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+            isGamePaused_ = false;
+        }
     }
 }
 

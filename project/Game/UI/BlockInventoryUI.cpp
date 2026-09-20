@@ -338,7 +338,7 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
         }
     }
 
-    // コントローラーでは十字キーで選択し、Aで決定、Bで閉じる。
+    // 十字キー／矢印キーで選択し、A／Enterで決定、B／Escで閉じる。
     // 開閉アニメーション中の誤入力を避けるため、完全に開いた状態だけ受け付ける。
     if (state_ == State::Opened) {
         int selectedIndex = -1;
@@ -352,10 +352,14 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
 
         const bool movePrevious =
             input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_LEFT) ||
-            input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_UP);
+            input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_UP) ||
+            input->TriggerKey(DIK_LEFT) ||
+            input->TriggerKey(DIK_UP);
         const bool moveNext =
             input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_RIGHT) ||
-            input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_DOWN);
+            input->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_DOWN) ||
+            input->TriggerKey(DIK_RIGHT) ||
+            input->TriggerKey(DIK_DOWN);
         if ((movePrevious || moveNext) && !buttons_.empty()) {
             const int direction = movePrevious ? -1 : 1;
             int candidate = selectedIndex >= 0 ? selectedIndex : 0;
@@ -370,11 +374,15 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
             }
         }
 
-        if (input->TriggerControllerButton(XINPUT_GAMEPAD_A) &&
+        if ((input->TriggerControllerButton(XINPUT_GAMEPAD_A) ||
+             input->TriggerKey(DIK_RETURN)) &&
             selectedBlockType_ != BlockType::None) {
             useRequested_ = true;
             ToggleOpen();
-        } else if (input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+        } else if (input->TriggerControllerButton(XINPUT_GAMEPAD_B) ||
+                   input->TriggerControllerButton(XINPUT_GAMEPAD_LEFT_SHOULDER) ||
+                   input->TriggerKey(DIK_B) ||
+                   input->TriggerKey(DIK_ESCAPE)) {
             ToggleOpen();
         }
     }

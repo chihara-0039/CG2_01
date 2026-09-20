@@ -480,6 +480,30 @@ void GameRuntime::UpdateClearColorForFrame() {
 }
 
 void GameRuntime::UpdateGameplayUserInterface() {
+    if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
+        if (objectiveGuideSprite_) {
+            objectiveGuideSprite_->Update();
+        }
+    }
+    if (currentMode_ == AppMode::GamePlay && player_ && hasGoalGuideTarget_ &&
+        !isGoalReached_ && goalDirectionSprite_) {
+        const Vector3 playerPosition = player_->GetPosition();
+        const float directionX = goalGuideTarget_.x - playerPosition.x;
+        const float directionZ = goalGuideTarget_.z - playerPosition.z;
+        const float worldAngle = std::atan2(directionX, directionZ);
+        const float cameraYaw = camera ? camera->GetRotation().y : 0.0f;
+        goalDirectionSprite_->SetRotation(worldAngle - cameraYaw);
+        goalDirectionSprite_->Update();
+    }
+    if (currentMode_ == AppMode::StageSelect) {
+        if (stageSelectGuideSprite_) {
+            stageSelectGuideSprite_->Update();
+        }
+        if (stageSelectGuideXboxSprite_) {
+            stageSelectGuideXboxSprite_->Update();
+        }
+    }
+
     if (gameplayUIManager_) {
         gameplayUIManager_->Update(
             currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace,
@@ -487,7 +511,12 @@ void GameRuntime::UpdateGameplayUserInterface() {
     }
 
     if (isGamePaused_) {
-        DrawPauseMenu();
+        if (pauseKeyboardSprite_) {
+            pauseKeyboardSprite_->Update();
+        }
+        if (pauseXboxSprite_) {
+            pauseXboxSprite_->Update();
+        }
         return;
     }
 
@@ -507,35 +536,34 @@ void GameRuntime::UpdateGameplayUserInterface() {
             blockPlacementController_.SetPlaceCustomId(blockInventoryUI_->GetSelectedCustomId());
         }
     }
-}
 
-void GameRuntime::DrawPauseMenu() {
-    const ImVec2 windowSize{ 420.0f, 220.0f };
-    const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-    ImGui::SetNextWindowPos(
-        { (displaySize.x - windowSize.x) * 0.5f, (displaySize.y - windowSize.y) * 0.5f },
-        ImGuiCond_Always);
-    ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);
-
-    constexpr ImGuiWindowFlags flags =
-        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
-    ImGui::Begin("Pause", nullptr, flags);
-    ImGui::SetWindowFontScale(1.35f);
-    ImGui::TextUnformatted("PAUSED");
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::Separator();
-
-    if (ImGui::Button("Resume", { -1.0f, 42.0f })) {
-        isGamePaused_ = false;
+    // 通常プレイ、インベントリ、配置モードのどの更新経路でも
+    // 対応する操作ガイドのSprite定数バッファを更新する。
+    const bool isInventoryOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+    if (currentMode_ == AppMode::GamePlay && !isInventoryOpen) {
+        if (tutorialSprite_) {
+            tutorialSprite_->Update();
+        }
+        if (controllerTutorialSprite_) {
+            controllerTutorialSprite_->Update();
+        }
     }
-    if (ImGui::Button("Return to Stage Select", { -1.0f, 42.0f })) {
-        ReturnToStageSelect();
+    if (isInventoryOpen) {
+        if (inventoryTutorialSprite_) {
+            inventoryTutorialSprite_->Update();
+        }
+        if (controllerInventoryTutorialSprite_) {
+            controllerInventoryTutorialSprite_->Update();
+        }
+    } else if (currentMode_ == AppMode::GamePlay_BlockPlace) {
+        if (placementTutorialSprite_) {
+            placementTutorialSprite_->Update();
+        }
+        if (controllerPlacementTutorialSprite_) {
+            controllerPlacementTutorialSprite_->Update();
+        }
     }
-    ImGui::TextUnformatted("START / ESC / B : Resume");
-    ImGui::End();
 }
-
-
 
 void GameRuntime::UpdateDebugView() {
     if (input->TriggerKey(DIK_SPACE)) {
