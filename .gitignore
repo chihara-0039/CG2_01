@@ -54,10 +54,16 @@ artifacts/
 
 # --- Local authoring/review tools and generated submission previews ---
 .codex_video_tools/
+.codex-work/
 .video_review/
 .tl1_submission_work/
+outputs/
+tmp/
 review_video.html
+LE3C_*_週間報告*.txt
+project/monthly_submission_docs/
 project/monthly_submission_output/
 project/monthly_submission_ready_*/
+project/video_check/
 project/monthly_submission_docs/pdf_check_*/
 project/monthly_submission_docs/assets_current/
