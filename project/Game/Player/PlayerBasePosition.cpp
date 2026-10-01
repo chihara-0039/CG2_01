@@ -17,7 +17,9 @@ bool PlayerBasePosition::ApplyFromStageMap(const StageMap& stageMap, Player* pla
 
                     position_ = {
                         static_cast<float>(x),
-                        static_cast<float>(y) + 1.1f,
+                        // PlayerStart は「プレイヤーが占有するセル」の中心に置かれる。
+                        // プレイヤー座標は足元基準なので、セル下面に合わせる。
+                        static_cast<float>(y) - 0.5f,
                         static_cast<float>(z)
                     };
 

@@ -189,9 +189,9 @@ void WeatherPresetManager::CreateDefaultPresetsIfEmpty() {
         {
             WeatherPreset sunny;
             sunny.name = "Sunny (Default)";
-            sunny.clearColor = {0.1f, 0.4f, 0.8f, 1.0f}; // 青空
-            sunny.lightIntensity = 1.0f;
-            sunny.lightColor = {1.0f, 1.0f, 0.9f};
+            sunny.clearColor = {0.26f, 0.61f, 0.94f, 1.0f}; // 明るい幻想的な青空
+            sunny.lightIntensity = 1.08f;
+            sunny.lightColor = {1.0f, 0.98f, 0.92f};
             sunny.lightDirection = {0.5f, -1.0f, 0.5f};
             sunny.particleEnabled = false;
             presets_.push_back(sunny);

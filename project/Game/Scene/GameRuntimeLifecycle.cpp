@@ -276,6 +276,15 @@ void GameRuntime::Initialize() {
     menuExitXboxSprite_->SetPosition({ 20.0f, 642.0f });
     menuExitXboxSprite_->SetSize({ 430.0f, 62.0f });
 
+    // 共通シーン遷移用の全画面暗転。白テクスチャへ黒色を乗算して使用する。
+    sceneFadeSprite_ = std::make_unique<Sprite>();
+    sceneFadeSprite_->Initialize(spriteCommon.get(),
+        textureManager->LoadTexture("Resources/UI/inventory/white.png"));
+    sceneFadeSprite_->SetPosition({ 0.0f, 0.0f });
+    sceneFadeSprite_->SetSize({ 1280.0f, 720.0f });
+    sceneFadeSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+    sceneFadeSprite_->Update();
+
 
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
@@ -539,6 +548,7 @@ void GameRuntime::Finalize() {
     skydomeObject_.reset();
     skydomeModel_.reset();
     sprite.reset();
+    sceneFadeSprite_.reset();
     stageRenderer_.reset();
     mapCursor_.reset();
     camera.reset();

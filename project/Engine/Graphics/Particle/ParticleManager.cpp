@@ -241,14 +241,33 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             ambientCloudEmitter_.emitTimer -= cloudInterval;
             const float baseX = ambientCloudEmitter_.center.x + unit(engine) * ambientCloudEmitter_.areaX;
             const float baseZ = ambientCloudEmitter_.center.z + unit(engine) * ambientCloudEmitter_.areaZ;
+            const float normalizedDepth = ambientCloudEmitter_.areaZ > 0.001f
+                ? (baseZ - ambientCloudEmitter_.center.z) / ambientCloudEmitter_.areaZ
+                : 0.0f;
+            // カメラ側(-Z)ほど大きく、濃く、速くして雲の視差を作る。
+            const float nearFactor = ambientCloudEmitter_.depthParallax
+                ? std::clamp((1.0f - normalizedDepth) * 0.5f, 0.0f, 1.0f)
+                : 0.5f;
+            const float depthScale = ambientCloudEmitter_.depthParallax
+                ? 0.62f + nearFactor * 0.92f
+                : 1.0f;
+            const float depthSpeed = ambientCloudEmitter_.depthParallax
+                ? 0.48f + nearFactor * 1.18f
+                : 1.0f;
+            const float depthAlpha = ambientCloudEmitter_.depthParallax
+                ? 0.58f + nearFactor * 0.42f
+                : 1.0f;
             constexpr int kWispsPerCloud = 3;
             for (int i = 0; i < kWispsPerCloud && Particles().size() < kMaxParticles; ++i) {
-                const float scale = ambientCloudEmitter_.size * (0.72f + zeroOne(engine) * 0.72f);
+                const float scale = ambientCloudEmitter_.size *
+                    (0.72f + zeroOne(engine) * 0.72f) * depthScale;
                 Particle cloud;
                 cloud.type = Particle::Type::StormCloud;
                 cloud.transform.translate = {
                     baseX + unit(engine) * 2.4f * ambientCloudEmitter_.size,
-                    ambientCloudEmitter_.minimumHeight + zeroOne(engine) * 3.5f + unit(engine) * 0.45f,
+                    ambientCloudEmitter_.minimumHeight +
+                        zeroOne(engine) * ambientCloudEmitter_.heightRange +
+                        unit(engine) * 0.45f,
                     baseZ + unit(engine) * 1.8f * ambientCloudEmitter_.size
                 };
                 cloud.transform.scale = {
@@ -257,8 +276,12 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                     1.0f
                 };
                 cloud.transform.rotate = { 0.0f, 0.0f, unit(engine) * 0.08f };
-                cloud.velocity = { ambientCloudEmitter_.speed * (0.72f + zeroOne(engine) * 0.55f), 0.0f, 0.0f };
+                cloud.velocity = {
+                    ambientCloudEmitter_.speed * (0.72f + zeroOne(engine) * 0.55f) * depthSpeed,
+                    0.0f,
+                    0.0f };
                 cloud.color = ambientCloudEmitter_.color;
+                cloud.color.w *= depthAlpha;
                 cloud.initialAlpha = cloud.color.w;
                 cloud.lifeTime = 0.0f;
                 cloud.maxTime = ambientCloudEmitter_.life * (0.82f + zeroOne(engine) * 0.42f);

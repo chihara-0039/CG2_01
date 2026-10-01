@@ -115,7 +115,7 @@ public:
     int GetPostEffectMode() const { return postEffectMode_; }
 
     /// <summary>Sets the active post effect. Values outside the supported range fall back to Normal.</summary>
-    void SetPostEffectMode(int mode) { postEffectMode_ = (mode >= 0 && mode <= 11) ? mode : 0; }
+    void SetPostEffectMode(int mode) { postEffectMode_ = (mode >= 0 && mode <= 12) ? mode : 0; }
 
     /// <summary>Sets the dissolve cut amount used by the Release showcase and ImGui.</summary>
     void SetDissolveThreshold(float threshold) {
@@ -191,6 +191,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  radialBlurPipelineState_; ///< RadialBlur PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  dissolvePipelineState_; ///< Dissolve PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState>  randomPipelineState_; ///< Random PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>  bloomPipelineState_; ///< Bloom PSO
     Microsoft::WRL::ComPtr<ID3D12Resource>       vignetteConstantBuffer_; ///< ヴィネット用定数バッファ (Upload ヒープ)
     Microsoft::WRL::ComPtr<ID3D12Resource>       outlineConstantBuffer_; ///< Outline用定数バッファ (Upload ヒープ)
     Microsoft::WRL::ComPtr<ID3D12Resource>       radialBlurConstantBuffer_; ///< RadialBlur用定数バッファ

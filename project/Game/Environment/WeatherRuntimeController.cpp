@@ -23,11 +23,13 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
         cloudEmitter.active = preset->cloudEnabled && !usesStormPreset && !context.suppressPresetStorm;
         cloudEmitter.center = { context.focusPosition.x, 0.0f, context.focusPosition.z };
         cloudEmitter.minimumHeight = minimumCloudHeight;
+        cloudEmitter.heightRange = 3.5f;
         cloudEmitter.areaX = (std::max)(18.0f, preset->emitSize.x * 0.5f);
         cloudEmitter.areaZ = (std::max)(18.0f, preset->emitSize.z * 0.5f);
         cloudEmitter.emitRate = preset->cloudDensity;
         cloudEmitter.size = preset->cloudSize;
         cloudEmitter.color = preset->cloudColor;
+        cloudEmitter.depthParallax = false;
 
         emitter.active = preset->particleEnabled && !usesStormPreset;
         if (usesStormPreset) {

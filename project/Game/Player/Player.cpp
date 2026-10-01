@@ -737,17 +737,19 @@ bool Player::CheckCollision(const Vector3& pos, StageMap& map) {
 		return CheckExternalCollision(pos);
 	}
 
-	// プレイヤーの当たり判定ボックス（四隅など）が StageMap の solid なセルに重なっているか
-	// 足元、腰、頭の3段階で高さをチェック
-	float checkOffsetsY[] = { 0.1f, 0.8f, 1.5f };
+	// 描画と同じく整数座標をセル中心として扱い、プレイヤーAABBが重なる
+	// 全セルを調べる。旧処理だけY座標に+0.5がなく、床から約半マス浮いていた。
+	constexpr float kBoundaryEpsilon = 0.0001f;
+	const int minX = static_cast<int>(std::floor(pos.x - radius_.x + 0.5f));
+	const int maxX = static_cast<int>(std::floor(pos.x + radius_.x + 0.5f - kBoundaryEpsilon));
+	const int minY = static_cast<int>(std::floor(pos.y + 0.5f));
+	const int maxY = static_cast<int>(std::floor(pos.y + radius_.y * 2.0f + 0.5f - kBoundaryEpsilon));
+	const int minZ = static_cast<int>(std::floor(pos.z - radius_.z + 0.5f));
+	const int maxZ = static_cast<int>(std::floor(pos.z + radius_.z + 0.5f - kBoundaryEpsilon));
 
-	for (float dy : checkOffsetsY) {
-		for (float dx : { -radius_.x, radius_.x }) {
-			for (float dz : { -radius_.z, radius_.z }) {
-				// ワールド座標からマップのインデックス（整数）に変換
-				int gx = static_cast<int>(std::floor(pos.x + dx + 0.5f));
-				int gy = static_cast<int>(std::floor(pos.y + dy));
-				int gz = static_cast<int>(std::floor(pos.z + dz + 0.5f));
+	for (int gy = minY; gy <= maxY; ++gy) {
+		for (int gz = minZ; gz <= maxZ; ++gz) {
+			for (int gx = minX; gx <= maxX; ++gx) {
 
 				// 指定した座標のセル情報を取得
 				MapCell* cell = map.GetCell(gx, gy, gz);

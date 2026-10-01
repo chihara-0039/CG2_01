@@ -107,6 +107,7 @@ public: // サブクラスなど
         bool active = true;
         Vector3 center = { 0.0f, 0.0f, 0.0f };
         float minimumHeight = 10.0f;
+        float heightRange = 3.5f;
         float areaX = 35.0f;
         float areaZ = 35.0f;
         float emitRate = 0.45f;
@@ -114,6 +115,7 @@ public: // サブクラスなど
         float size = 1.4f;
         float speed = 0.012f;
         Vector4 color = { 0.72f, 0.78f, 0.90f, 0.22f };
+        bool depthParallax = false;
         float emitTimer = 0.0f;
     };
 

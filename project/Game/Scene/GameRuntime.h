@@ -71,10 +71,15 @@ public:
     void OnSceneEntered(SceneType sceneType);
     void OnSceneExited(SceneType sceneType);
     void RequestSceneChange(SceneType sceneType);
+    void EnterStageSelectFromTitle();
+    void SetTitleCloudsEnabled(bool enabled);
+    void UpdateTitleDayNightCycle(float elapsedSeconds);
+    void SyncTitleCamera(const Vector3& position, const Vector3& rotation);
     SceneType GetCurrentSceneType() const;
 
     Object3dCommon* GetObject3dCommon() const { return object3dCommon.get(); }
     Input* GetInput() const { return input.get(); }
+    float GetEnvironmentTimeScale() const { return environmentTimeScale_; }
 
     void RunTitleScene();
     void RunStageSelectScene();
@@ -102,6 +107,13 @@ private:
         EffectPreview,
         EffectShowcase,
         PostEffectShowcase,
+    };
+
+    enum class SceneFadePhase {
+        None,
+        FadingOut,
+        HoldingBlack,
+        FadingIn,
     };
 
     struct DebugDrawFlags {
@@ -186,6 +198,7 @@ private:
     std::unique_ptr<Sprite> goalDirectionSprite_;
     std::unique_ptr<Sprite> menuExitKeyboardSprite_;
     std::unique_ptr<Sprite> menuExitXboxSprite_;
+    std::unique_ptr<Sprite> sceneFadeSprite_;
 
     // 長期的な状態を持つ機能は専用Controllerへ委譲する。
     GameplayCameraController  gameplayCameraController_;
@@ -221,6 +234,12 @@ private:
     float          gameClearFireworkTimer_ = 0.0f;
     bool           gameClearCelebrationStarted_ = false;
     float          titleTimer_ = 0.0f;
+    float          gameplayDayNightTimer_ = 0.0f;
+    float          environmentTimeScale_ = 1.0f;
+    int            environmentTimeScaleIndex_ = 0;
+    bool           gameplayDayNightActive_ = false;
+    bool           titleDayNightActive_ = false;
+    Vector4        gameplaySkyTint_ = { 1.0f, 1.0f, 1.0f, 1.0f };
     std::chrono::steady_clock::time_point objectiveGuideStartedAt_{};
     bool           objectiveGuideActive_ = false;
     Vector3        goalGuideTarget_ = { 0.0f, 0.0f, 0.0f };
@@ -229,6 +248,11 @@ private:
     bool           isGoalBlocked_ = false;
     int            placeableBlockCount_ = 0;
     float          totalTime_ = 0.0f;
+    SceneFadePhase sceneFadePhase_ = SceneFadePhase::None;
+    SceneType      pendingSceneType_ = SceneType::DebugView;
+    float          sceneFadeAlpha_ = 0.0f;
+    float          sceneFadeHoldRemaining_ = 0.0f;
+    std::chrono::steady_clock::time_point sceneFadeLastUpdate_{};
 
     bool  useFirstPersonCamera_ = false;
     float fpsCameraYaw_ = 0.0f;
@@ -286,6 +310,8 @@ private:
     void UpdateTitle();
     void UpdateStageSelect();
     void UpdateSceneTransition();
+    void UpdateSceneFade();
+    void ApplySceneTypeToMode(SceneType sceneType);
     void ReturnToStageSelect();
     void HandleModeChange();
     void EnsureSkinningEditorInitialized();

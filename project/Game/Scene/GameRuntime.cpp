@@ -22,6 +22,7 @@ void GameRuntime::Update() {
     if (input->TriggerKey(DIK_F3)) {
         debugFlags_.showCollisionBoxes = !debugFlags_.showCollisionBoxes;
     }
+    UpdateSceneFade();
     UpdateSceneTransition();
 
 
@@ -235,6 +236,12 @@ void GameRuntime::UpdateCurrentMode(const Matrix4x4& lightVP, bool isGuiCaptured
         return;
     }
 
+    // 暗転中に遷移先を一度更新して、Spriteやカメラの初期値が露出するのを防ぐ。
+    // 遷移元は更新せず、遷移先は黒画面の裏とフェードイン中に更新する。
+    if (sceneFadePhase_ == SceneFadePhase::FadingOut) {
+        return;
+    }
+
     const SceneType requestedScene = GetCurrentSceneType();
     if (sceneManager_->GetCurrentSceneType() != requestedScene) {
         sceneManager_->ChangeScene(requestedScene, *this);
@@ -382,10 +389,71 @@ void GameRuntime::UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4&
             [this](const std::string& name) { return LoadStormPreset(name); }
         };
         lightningFlashed = weatherRuntimeController_.Update(context);
+
+        // スカイドームを使う実ゲーム中だけ、天候プリセットの環境要素を
+        // 昼 -> 夕方 -> 夜 -> 朝へゆっくり連続補間する。
+        const WeatherPreset* activePreset =
+            WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName());
+        const bool isGameplayScene =
+            currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace;
+        gameplayDayNightActive_ = isGameplayScene && activePreset && activePreset->stormPreset.empty();
+        if (gameplayDayNightActive_) {
+            if (!isGamePaused_) {
+                gameplayDayNightTimer_ += (1.0f / 60.0f) * environmentTimeScale_;
+            }
+            constexpr float kCycleSeconds = 300.0f;
+            const float cycle = std::fmod(gameplayDayNightTimer_, kCycleSeconds) / kCycleSeconds;
+            const float scaledCycle = cycle * 4.0f;
+            const size_t keyIndex = (std::min)(static_cast<size_t>(scaledCycle), size_t{ 3 });
+            float blend = scaledCycle - static_cast<float>(keyIndex);
+            blend = blend * blend * (3.0f - 2.0f * blend);
+
+            struct EnvironmentKey {
+                Vector4 clear;
+                Vector4 sky;
+                Vector4 cloud;
+                Vector3 lightColor;
+                Vector3 lightDirection;
+                float lightIntensity;
+            };
+            const EnvironmentKey keys[] = {
+                { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.90f, 0.95f, 1.0f, 0.20f }, { 1.0f, 0.98f, 0.92f }, { 0.5f, -1.0f, 0.5f }, 1.08f },
+                { { 0.88f, 0.30f, 0.14f, 1.0f }, { 1.10f, 0.48f, 0.24f, 1.0f }, { 1.0f, 0.58f, 0.40f, 0.24f }, { 1.0f, 0.48f, 0.20f }, { -0.8f, -0.22f, 0.3f }, 0.68f },
+                { { 0.012f, 0.022f, 0.085f, 1.0f }, { 0.10f, 0.16f, 0.34f, 1.0f }, { 0.16f, 0.24f, 0.46f, 0.17f }, { 0.30f, 0.46f, 0.88f }, { 0.2f, -0.72f, -0.4f }, 0.24f },
+                { { 0.44f, 0.18f, 0.32f, 1.0f }, { 0.66f, 0.34f, 0.56f, 1.0f }, { 0.72f, 0.52f, 0.76f, 0.21f }, { 1.0f, 0.62f, 0.54f }, { 0.75f, -0.30f, 0.2f }, 0.58f },
+                { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.90f, 0.95f, 1.0f, 0.20f }, { 1.0f, 0.98f, 0.92f }, { 0.5f, -1.0f, 0.5f }, 1.08f }
+            };
+            const auto lerp3 = [blend](const Vector3& a, const Vector3& b) {
+                return Vector3{
+                    a.x + (b.x - a.x) * blend,
+                    a.y + (b.y - a.y) * blend,
+                    a.z + (b.z - a.z) * blend };
+            };
+            const auto lerp4 = [blend](const Vector4& a, const Vector4& b) {
+                return Vector4{
+                    a.x + (b.x - a.x) * blend,
+                    a.y + (b.y - a.y) * blend,
+                    a.z + (b.z - a.z) * blend,
+                    a.w + (b.w - a.w) * blend };
+            };
+            const EnvironmentKey& from = keys[keyIndex];
+            const EnvironmentKey& to = keys[keyIndex + 1];
+            stageMap_.SetClearColor(lerp4(from.clear, to.clear));
+            stageMap_.SetLightColor(lerp3(from.lightColor, to.lightColor));
+            stageMap_.SetLightDirection(lerp3(from.lightDirection, to.lightDirection));
+            stageMap_.SetLightIntensity(
+                from.lightIntensity + (to.lightIntensity - from.lightIntensity) * blend);
+            gameplaySkyTint_ = lerp4(from.sky, to.sky);
+            particleManager->GetAmbientCloudEmitter().color = lerp4(from.cloud, to.cloud);
+        }
     } else {
+        gameplayDayNightActive_ = false;
         // エフェクト編集系ではステージ天候を上書きせず、発生済みエフェクトだけ更新する。
         particleManager->GetWeatherEmitter().active = false;
-        particleManager->GetAmbientCloudEmitter().active = false;
+        // タイトルだけは専用の明るい雲パーティクルを継続する。
+        if (currentMode_ != AppMode::Title) {
+            particleManager->GetAmbientCloudEmitter().active = false;
+        }
         particleManager->Update(
             1.0f / 60.0f, view, proj,
             player_ ? player_->GetPosition() : Vector3{0.0f, 0.0f, 0.0f},
