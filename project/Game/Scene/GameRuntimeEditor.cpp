@@ -125,6 +125,18 @@ void GameRuntime::UpdateImGui() {
     }
     ImGui::Separator();
 
+    const char* environmentSpeedNames[] = { "1x", "2x", "4x", "8x", "16x" };
+    constexpr float environmentSpeedValues[] = { 1.0f, 2.0f, 4.0f, 8.0f, 16.0f };
+    if (ImGui::Combo(
+            "Environment Speed",
+            &environmentTimeScaleIndex_,
+            environmentSpeedNames,
+            IM_ARRAYSIZE(environmentSpeedNames))) {
+        environmentTimeScale_ = environmentSpeedValues[environmentTimeScaleIndex_];
+    }
+    ImGui::TextDisabled("Day/night and weather preview only");
+    ImGui::Separator();
+
     const bool isStageToolMode = (currentMode_ == AppMode::StageEditor ||
                                   currentMode_ == AppMode::GamePlay_BlockPlace);
 

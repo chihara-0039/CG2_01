@@ -212,8 +212,12 @@ void GameRuntime::Draw() {
         currentMode_ == AppMode::GamePlay ||
         currentMode_ == AppMode::GameClear ||
         currentMode_ == AppMode::GamePlay_BlockPlace;
-    if (usesStageWeather) {
-        if (const WeatherPreset* preset =
+    if (currentMode_ == AppMode::Title && titleDayNightActive_) {
+        skyTint = gameplaySkyTint_;
+    } else if (usesStageWeather) {
+        if (gameplayDayNightActive_) {
+            skyTint = gameplaySkyTint_;
+        } else if (const WeatherPreset* preset =
             WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName())) {
             skyTint = {
                 std::clamp(preset->skyColor.x * preset->skyBrightness, 0.0f, 2.0f),
@@ -291,6 +295,12 @@ void GameRuntime::Draw() {
         commandList->RSSetScissorRects(1, &scissor);
         dxCommon->PreDraw();
         RenderScene();
+    }
+
+    // すべての3D描画・HUDより後に描き、シーン全体を自然に暗転させる。
+    if (sceneFadeSprite_ && sceneFadeAlpha_ > 0.0f) {
+        spriteCommon->PreDraw();
+        sceneFadeSprite_->Draw();
     }
 
     DrawCollisionDebugBoxes();

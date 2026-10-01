@@ -21,11 +21,13 @@ void GameRuntime::UpdateTitle() {
         return;
     }
 
-    if (input->TriggerKey(DIK_SPACE) ||
-        input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
+}
+
+void GameRuntime::EnterStageSelectFromTitle() {
+    if (stageSelect_) {
         stageSelect_->Initialize(object3dCommon.get(), input.get());
-        RequestSceneChange(SceneType::StageSelect);
     }
+    RequestSceneChange(SceneType::StageSelect);
 }
 
 void GameRuntime::UpdateGamePlay() {
@@ -397,6 +399,10 @@ void GameRuntime::RefreshGoalGuideTarget() {
 
 
 void GameRuntime::UpdateSceneTransition() {
+    if (sceneFadePhase_ != SceneFadePhase::None) {
+        return;
+    }
+
     const bool isGameplayMode =
         currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace;
     if (!isGameplayMode) {

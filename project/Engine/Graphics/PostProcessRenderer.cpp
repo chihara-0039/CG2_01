@@ -173,6 +173,7 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     Microsoft::WRL::ComPtr<IDxcBlob> psRadialBlurBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/RadialBlur.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psDissolveBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Dissolve.PS.hlsl", L"ps_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> psRandomBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Random.PS.hlsl", L"ps_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> psBloomBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Bloom.PS.hlsl", L"ps_6_0");
 
     // PSO の共通設定 (入力レイアウトなし・深度テストなし・三角形リスト)
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -251,6 +252,11 @@ void PostProcessRenderer::Initialize(DirectXCommon* dxCommon, const Vector4& cle
     // L. Random
     psoDesc.PS = { psRandomBlob->GetBufferPointer(), psRandomBlob->GetBufferSize() };
     hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&randomPipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // M. Bloom
+    psoDesc.PS = { psBloomBlob->GetBufferPointer(), psBloomBlob->GetBufferSize() };
+    hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&bloomPipelineState_));
     assert(SUCCEEDED(hr));
 
     // ----------------------------------------------------------
@@ -461,6 +467,9 @@ void PostProcessRenderer::DrawToBackBuffer(ID3D12GraphicsCommandList* cmdList, c
                 5, randomConstantBuffer_->GetGPUVirtualAddress());
         }
         break;
+    case 12: // Bloom
+        cmdList->SetPipelineState(bloomPipelineState_.Get());
+        break;
     default: // 通常コピー (エフェクトなし)
         cmdList->SetPipelineState(copyPipelineState_.Get());
         break;
@@ -500,7 +509,7 @@ void PostProcessRenderer::DrawImGui() {
         const char* skyboxModes[] = { "Ignore", "Link (Multiply)" };
         ImGui::Combo("Skybox Color Link", &skyboxLinkMode_, skyboxModes, IM_ARRAYSIZE(skyboxModes));
 
-        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter", "Luminance Outline", "Depth Outline", "RadialBlur", "Dissolve", "Random" };
+        const char* effectNames[] = { "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter 3x3", "BoxFilter 5x5", "GaussianFilter", "Luminance Outline", "Depth Outline", "RadialBlur", "Dissolve", "Random", "Bloom" };
         ImGui::Combo("Post Effect", &postEffectMode_, effectNames, IM_ARRAYSIZE(effectNames));
 
         // ヴィネット選択時のみパラメータスライダーを表示
