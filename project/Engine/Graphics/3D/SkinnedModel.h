@@ -115,8 +115,9 @@ public:
     // 描画
     void Draw(ID3D12GraphicsCommandList* commandList);
 
-    // ボーンの取得・設定
-    std::vector<Joint>& GetJoints() { return joints_; }
+    // ボーンの編集は検証付きの専用操作を経由し、内部配列自体は公開しない。
+    bool SetJointLocalTransform(size_t jointIndex, const Vector3& translation,
+        const Vector3& rotation, const Vector3& scale);
     
     // 描画用のModelポインタを取得
     Model* GetModel() const { return model_.get(); }
@@ -153,10 +154,10 @@ public:
     // アニメーションを評価し、時間 time におけるポーズを joints_ に適用する
     void EvaluateAnimation(float time);
 
-    MotionData& GetMotionData();
     const MotionData& GetMotionData() const;
 
 private:
+    MotionData& MutableMotionData();
     void CreateHumanoidSkeleton();
     void BuildJointMetadata();
     void CaptureRestPose();

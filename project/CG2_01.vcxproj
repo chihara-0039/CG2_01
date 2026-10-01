@@ -217,7 +217,6 @@
     <ClCompile Include="Sound\Sound.cpp" />
     <ClCompile Include="src\app\main.cpp" />
     <ClCompile Include="Game\Stage\StageMap.cpp" />
-    <ClCompile Include="Game\Stage\StageMapGimmickSystem.cpp" />
     <ClCompile Include="Game\Stage\StageCrumblingFloorEffectUpdater.cpp" />
     <ClCompile Include="Game\Stage\StageOnOffVisualController.cpp" />
     <ClCompile Include="Game\Stage\StagePlacementPreviewBuilder.cpp" />
@@ -364,7 +363,6 @@
     <ClInclude Include="Engine\Graphics\2D\SpriteCommon.h" />
     <ClInclude Include="Game\Scene\StageSelect.h" />
     <ClInclude Include="Game\Stage\StageMap.h" />
-    <ClInclude Include="Game\Stage\StageMapGimmickSystem.h" />
     <ClInclude Include="Game\Stage\StageCrumblingFloorEffectUpdater.h" />
     <ClInclude Include="Game\Stage\StageOnOffVisualController.h" />
     <ClInclude Include="Game\Stage\StagePlacementPreviewBuilder.h" />

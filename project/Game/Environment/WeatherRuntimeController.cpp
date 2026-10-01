@@ -8,10 +8,10 @@
 #include "TextureManager.h"
 
 bool WeatherRuntimeController::Update(const UpdateContext& context) {
-    WeatherPreset* preset = WeatherPresetManager::GetInstance().GetPresetByName(context.presetName);
+    const WeatherPreset* preset = WeatherPresetManager::GetInstance().GetPresetByName(context.presetName);
     if (preset) {
-        auto& emitter = context.particles.GetWeatherEmitter();
-        auto& cloudEmitter = context.particles.GetAmbientCloudEmitter();
+        auto emitter = context.particles.GetWeatherEmitter();
+        auto cloudEmitter = context.particles.GetAmbientCloudEmitter();
         const bool usesStormPreset = !preset->stormPreset.empty() && !context.suppressPresetStorm;
 
         if (--cloudHeightRefreshFrames_ <= 0) {
@@ -70,6 +70,9 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
                 : ParticleManager::WeatherImpactEffect::None;
             emitter.center = { 0.0f, 15.0f, 0.0f };
         }
+
+        context.particles.SetWeatherEmitter(emitter);
+        context.particles.SetAmbientCloudEmitter(cloudEmitter);
     }
 
     context.particles.Update(

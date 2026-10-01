@@ -71,7 +71,7 @@ bool GameRuntime::LoadStormPreset(const std::string& name) {
         return false;
     }
 
-    particleManager->GetStormSettings() = preset.settings;
+    particleManager->SetStormSettings(preset.settings);
     stormPresetIncludeInShowcase_ = preset.includeInShowcase;
     CopyPresetName(stormPresetNameBuffer_, name);
     return true;

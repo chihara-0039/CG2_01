@@ -4,8 +4,6 @@
 #include <string>
 #include "MyMath.h"
 
-class StageMapGimmickSystem;
-
 // ブロック種類
 enum class BlockType : uint32_t {
     None = 0,
@@ -166,7 +164,6 @@ struct CustomBlockPart {
 };
 
 class StageMap {
-    friend class StageMapGimmickSystem;
 public:
     StageMap() = default;
     ~StageMap() = default;
@@ -239,7 +236,6 @@ public:
 
     // --- カスタムブロックパーツ関連 ---
     const std::vector<CustomBlockPart>& GetCustomParts() const { return customParts_; }
-    std::vector<CustomBlockPart>& GetCustomParts() { return customParts_; }
     const CustomBlockPart* GetCustomPart(int id) const {
         if (id >= 1 && id <= (int)customParts_.size()) {
             return &customParts_[id - 1];

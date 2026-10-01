@@ -53,10 +53,11 @@ public:
     void SavePresets();
 
     const std::vector<WeatherPreset>& GetPresets() const { return presets_; }
-    std::vector<WeatherPreset>& GetPresets() { return presets_; }
-    
+
     // プリセットを名前で検索
-    WeatherPreset* GetPresetByName(const std::string& name);
+    const WeatherPreset* GetPresetByName(const std::string& name) const;
+    bool UpdatePreset(const WeatherPreset& preset);
+    void AddPreset(const WeatherPreset& preset);
 
     // デフォルトプリセットをいくつか追加する
     void CreateDefaultPresetsIfEmpty();

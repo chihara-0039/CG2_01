@@ -363,6 +363,20 @@ void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string
     CaptureRestPose();
 }
 
+bool SkinnedModel::SetJointLocalTransform(size_t jointIndex, const Vector3& translation,
+    const Vector3& rotation, const Vector3& scale) {
+    if (jointIndex >= joints_.size()) {
+        return false;
+    }
+
+    Joint& joint = joints_[jointIndex];
+    joint.translation = translation;
+    joint.rotation = rotation;
+    joint.scale = scale;
+    joint.isQuaternion = false;
+    return true;
+}
+
 void SkinnedModel::ResetPose() {
     if (restPoseCaptured_) {
         for (auto& joint : joints_) {
@@ -1038,7 +1052,7 @@ void SkinnedModel::ApplyTestAnimation(float time, float speed) {
     joints_[7].rotation.x = (-std::sin(t - 1.0f) - 1.0f) * 0.2f;
 }
 void SkinnedModel::ApplyMotion(float time) {
-    const auto& activeMotion = GetMotionData();
+    const auto& activeMotion = MutableMotionData();
     if (activeMotion.jointAnimations.empty()) {
         return;
     }
@@ -1183,7 +1197,7 @@ void SkinnedModel::GenerateWalkPreset() {
     ClearKeyframes();
 
     // 2.0秒のアニメーションを0.1秒刻み(計21キーフレーム)で生成
-    GetMotionData().duration = 2.0f;
+    MutableMotionData().duration = 2.0f;
     float step = 0.1f;
 
     // 一時的にポーズを退避
@@ -1218,7 +1232,7 @@ void SkinnedModel::GenerateRunPreset() {
     ClearKeyframes();
 
     // 小走り。1サイクル1.0秒の素早いループが綺麗
-    GetMotionData().duration = 1.0f;
+    MutableMotionData().duration = 1.0f;
     float step = 0.05f; // 1.0秒間を0.05秒刻み(合計21キーフレーム)で生成
 
     // 一時的にポーズを退避
@@ -1344,7 +1358,7 @@ void SkinnedModel::GenerateJumpPreset() {
     AddEulerOffset(jumpMotion, leftLeg, 3, { -0.25f, 0.0f, 0.0f });
     AddEulerOffset(jumpMotion, rightLeg, 3, { -0.25f, 0.0f, 0.0f });
 
-    GetMotionData() = jumpMotion;
+    MutableMotionData() = jumpMotion;
 }
 
 void SkinnedModel::EnsureDefaultPlayerMotions() {
@@ -1408,15 +1422,15 @@ float SkinnedModel::GetMotionDuration() const {
 }
 
 void SkinnedModel::SetMotionDuration(float duration) {
-    GetMotionData().duration = duration;
+    MutableMotionData().duration = duration;
 }
 
 void SkinnedModel::ClearKeyframes() {
-    GetMotionData().jointAnimations.clear();
+    MutableMotionData().jointAnimations.clear();
 }
 
 void SkinnedModel::AddKeyframe(float time) {
-    auto& motionData = GetMotionData();
+    auto& motionData = MutableMotionData();
     
     if (motionData.jointAnimations.empty()) {
         motionData.jointAnimations.resize(joints_.size());
@@ -1455,7 +1469,7 @@ void SkinnedModel::AddKeyframe(float time) {
 
 bool SkinnedModel::SaveMotion(const std::string& filePath) {
     try {
-        const MotionData& motionData = GetMotionData();
+        const MotionData& motionData = MutableMotionData();
 
         std::filesystem::path outputPath(filePath);
         if (outputPath.has_parent_path()) {
@@ -1587,7 +1601,7 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
     }
 }
 
-MotionData& SkinnedModel::GetMotionData() {
+MotionData& SkinnedModel::MutableMotionData() {
     if (motions_.empty()) {
         motions_.push_back(MotionData{"Motion_0", 2.0f, {}});
         activeMotionIndex_ = 0;
@@ -1616,7 +1630,7 @@ void SkinnedModel::SetActiveMotionIndex(int index) {
 }
 
 void SkinnedModel::SetActiveMotionName(const std::string& name) {
-    GetMotionData().name = name.empty() ? "CustomMotion" : name;
+    MutableMotionData().name = name.empty() ? "CustomMotion" : name;
 }
 
 void SkinnedModel::PlayAnimation(const std::string& animationName) {

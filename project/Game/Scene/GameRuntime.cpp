@@ -101,8 +101,8 @@ void GameRuntime::HandleModeChange() {
     if ((currentMode_ == AppMode::Title || currentMode_ == AppMode::StageSelect) && particleManager) {
         // 継続型の嵐は寿命の長い雨・風を持つため、停止だけでなく残存粒子も破棄する。
         weatherRuntimeController_.StopStorm(*particleManager);
-        particleManager->GetWeatherEmitter().active = false;
-        particleManager->GetAmbientCloudEmitter().active = false;
+        particleManager->SetWeatherEmitterActive(false);
+        particleManager->SetAmbientCloudEmitterActive(false);
         particleManager->ClearParticles();
     }
 
@@ -368,7 +368,7 @@ void GameRuntime::UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4&
 
     bool lightningFlashed = false;
     if (usesStageWeather) {
-        if (WeatherPreset* preset =
+        if (const WeatherPreset* preset =
             WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName())) {
             // プリセット編集内容をゲーム内の環境光と背景色へ即時反映する。
             stageMap_.SetClearColor(preset->clearColor);
@@ -444,15 +444,15 @@ void GameRuntime::UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4&
             stageMap_.SetLightIntensity(
                 from.lightIntensity + (to.lightIntensity - from.lightIntensity) * blend);
             gameplaySkyTint_ = lerp4(from.sky, to.sky);
-            particleManager->GetAmbientCloudEmitter().color = lerp4(from.cloud, to.cloud);
+            particleManager->SetAmbientCloudColor(lerp4(from.cloud, to.cloud));
         }
     } else {
         gameplayDayNightActive_ = false;
         // エフェクト編集系ではステージ天候を上書きせず、発生済みエフェクトだけ更新する。
-        particleManager->GetWeatherEmitter().active = false;
+        particleManager->SetWeatherEmitterActive(false);
         // タイトルだけは専用の明るい雲パーティクルを継続する。
         if (currentMode_ != AppMode::Title) {
-            particleManager->GetAmbientCloudEmitter().active = false;
+            particleManager->SetAmbientCloudEmitterActive(false);
         }
         particleManager->Update(
             1.0f / 60.0f, view, proj,

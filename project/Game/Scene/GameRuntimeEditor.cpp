@@ -300,7 +300,7 @@ void GameRuntime::UpdateImGui() {
         camera->DrawImGui();
 
         if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
-            gameplayCameraController_.SetFov(*camera->GetFovPtr());
+            gameplayCameraController_.SetFov(camera->GetFov());
         }
     }
 

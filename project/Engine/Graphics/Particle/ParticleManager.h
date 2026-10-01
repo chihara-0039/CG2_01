@@ -282,8 +282,8 @@ public: // メンバ関数
     bool ConsumeStormLightningFlash();
     const Vector3& GetStormLightningPosition() const { return stormLightningPosition_; }
     float GetStormLightningPowerScale() const { return stormLightningPowerScale_; }
-    StormEffectSettings& GetStormSettings() { return stormSettings_; }
     const StormEffectSettings& GetStormSettings() const { return stormSettings_; }
+    void SetStormSettings(const StormEffectSettings& settings) { stormSettings_ = settings; }
 
     // テクスチャ設定
     void SetTexture(uint32_t textureHandle) {
@@ -312,8 +312,13 @@ public: // メンバ関数
     }
 
     // 天候エミッターの取得・設定
-    WeatherEmitter& GetWeatherEmitter() { return weatherEmitter_; }
-    AmbientCloudEmitter& GetAmbientCloudEmitter() { return ambientCloudEmitter_; }
+    const WeatherEmitter& GetWeatherEmitter() const { return weatherEmitter_; }
+    const AmbientCloudEmitter& GetAmbientCloudEmitter() const { return ambientCloudEmitter_; }
+    void SetWeatherEmitter(const WeatherEmitter& emitter) { weatherEmitter_ = emitter; }
+    void SetAmbientCloudEmitter(const AmbientCloudEmitter& emitter) { ambientCloudEmitter_ = emitter; }
+    void SetWeatherEmitterActive(bool active) { weatherEmitter_.active = active; }
+    void SetAmbientCloudEmitterActive(bool active) { ambientCloudEmitter_.active = active; }
+    void SetAmbientCloudColor(const Vector4& color) { ambientCloudEmitter_.color = color; }
 
     void ClearParticles() {
         for (auto& [name, group] : particleGroups_) {

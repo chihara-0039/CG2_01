@@ -49,6 +49,5 @@ void SceneManager::ChangeScene(SceneType nextScene, GameRuntime& game) {
     currentSceneType_ = nextScene;
     currentScene_ = sceneFactory_->CreateScene(nextScene);
     assert(currentScene_);
-    currentScene_->SetSceneManager(this);
     currentScene_->Initialize(game);
 }

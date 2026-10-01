@@ -8,7 +8,7 @@ void GameRuntime::SetTitleCloudsEnabled(bool enabled) {
         return;
     }
 
-    auto& clouds = particleManager->GetAmbientCloudEmitter();
+    auto clouds = particleManager->GetAmbientCloudEmitter();
     clouds.active = enabled;
     if (enabled) {
         // タイトルのカメラ前方かつ文字より上へ、明るい積雲の層を作る。
@@ -31,6 +31,7 @@ void GameRuntime::SetTitleCloudsEnabled(bool enabled) {
         clouds.depthParallax = false;
         particleManager->ClearParticles();
     }
+    particleManager->SetAmbientCloudEmitter(clouds);
 }
 
 void GameRuntime::UpdateTitleDayNightCycle(float elapsedSeconds) {
@@ -71,7 +72,7 @@ void GameRuntime::UpdateTitleDayNightCycle(float elapsedSeconds) {
     stageMap_.SetLightIntensity(from.lightIntensity + (to.lightIntensity - from.lightIntensity) * blend);
     gameplaySkyTint_ = lerp4(from.sky, to.sky);
     if (particleManager) {
-        particleManager->GetAmbientCloudEmitter().color = lerp4(from.cloud, to.cloud);
+        particleManager->SetAmbientCloudColor(lerp4(from.cloud, to.cloud));
     }
     titleDayNightActive_ = true;
 }
@@ -156,8 +157,8 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
         sceneType == SceneType::EffectShowcase;
     if (!usesStageWeather && !ownsEffectParticles && particleManager) {
         weatherRuntimeController_.StopStorm(*particleManager);
-        particleManager->GetWeatherEmitter().active = false;
-        particleManager->GetAmbientCloudEmitter().active = false;
+        particleManager->SetWeatherEmitterActive(false);
+        particleManager->SetAmbientCloudEmitterActive(false);
         particleManager->ClearParticles();
     }
 }

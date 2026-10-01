@@ -1370,7 +1370,7 @@ void SkinningEditorController::DrawImGuiTimeline() {
 	ImGui::Separator();
 
 	// ジョイントごとの行
-	auto& joints = model->GetJoints();
+	const auto& joints = model->GetJoints();
 	for (size_t i = 0; i < motionData.jointAnimations.size(); ++i) {
 		const auto& anim = motionData.jointAnimations[i];
 
@@ -2275,7 +2275,8 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "[ Bone Transformations ]");
 
-	auto& joints = skinnedObject_->GetModel()->GetJoints();
+	SkinnedModel* editableModel = skinnedObject_->GetModel();
+	const auto& joints = editableModel->GetJoints();
 	int   selectedJoint = skinnedObject_->GetSelectedJointIndex();
 
 	// ジョイント名のドロップダウンリスト
@@ -2289,7 +2290,11 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 	}
 
 	if (selectedJoint >= 0 && selectedJoint < static_cast<int>(joints.size())) {
-		auto& joint = joints[selectedJoint];
+		const auto& joint = joints[selectedJoint];
+		Vector3 editedTranslation = joint.translation;
+		Vector3 editedRotation = joint.rotation;
+		Vector3 editedScale = joint.scale;
+		bool transformChanged = false;
 
 		ImGui::Text("Index: %d | Parent: %d | Children: %d",
 					selectedJoint,
@@ -2308,21 +2313,28 @@ void SkinningEditorController::DrawImGuiSidePanel(Camera* camera, Player* player
 
 		ImGui::Text("Rotation (Degrees):");
 		if (ImGui::SliderFloat("Rot X", &rotDeg.x, -180.0f, 180.0f, "%.1f")) {
-			joint.rotation.x = rotDeg.x * deg2rad;
+			editedRotation.x = rotDeg.x * deg2rad;
+			transformChanged = true;
 		}
 		if (ImGui::SliderFloat("Rot Y", &rotDeg.y, -180.0f, 180.0f, "%.1f")) {
-			joint.rotation.y = rotDeg.y * deg2rad;
+			editedRotation.y = rotDeg.y * deg2rad;
+			transformChanged = true;
 		}
 		if (ImGui::SliderFloat("Rot Z", &rotDeg.z, -180.0f, 180.0f, "%.1f")) {
-			joint.rotation.z = rotDeg.z * deg2rad;
+			editedRotation.z = rotDeg.z * deg2rad;
+			transformChanged = true;
 		}
 
 		ImGui::Separator();
 		ImGui::Text("Translation Offset:");
-		ImGui::DragFloat3("Translate", &joint.translation.x, 0.01f, -2.0f, 2.0f, "%.3f");
+		transformChanged |= ImGui::DragFloat3("Translate", &editedTranslation.x, 0.01f, -2.0f, 2.0f, "%.3f");
 
 		ImGui::Text("Scale:");
-		ImGui::DragFloat3("Scale", &joint.scale.x, 0.01f, 0.1f, 5.0f, "%.3f");
+		transformChanged |= ImGui::DragFloat3("Scale", &editedScale.x, 0.01f, 0.1f, 5.0f, "%.3f");
+		if (transformChanged) {
+			editableModel->SetJointLocalTransform(
+				static_cast<size_t>(selectedJoint), editedTranslation, editedRotation, editedScale);
+		}
 	} else {
 		ImGui::Text("No bone selected.");
 	}

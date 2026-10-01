@@ -17,7 +17,7 @@ void StormEffectEditorController::Initialize() {
 }
 
 void StormEffectEditorController::Draw(ParticleManager& particles, const Vector3& previewPosition) {
-    auto& s = particles.GetStormSettings();
+    auto s = particles.GetStormSettings();
     ImGui::TextColored(ImVec4(0.48f, 0.70f, 1.0f, 1.0f), "[ Storm Editor ]");
     if (ImGui::Button("Restart Storm", ImVec2(-1, 26))) {
         particles.SetStormActive(false); particles.ClearParticles();
@@ -58,18 +58,22 @@ void StormEffectEditorController::Draw(ParticleManager& particles, const Vector3
     }
     if (ImGui::CollapsingHeader("Storm Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Include in Showcase", &includeInShowcase_); ImGui::InputText("Storm Preset Name", nameBuffer_.data(), nameBuffer_.size());
-        if (ImGui::Button("Save Storm Preset", ImVec2(-1, 24))) Save(nameBuffer_.data(), particles);
+        if (ImGui::Button("Save Storm Preset", ImVec2(-1, 24))) {
+            particles.SetStormSettings(s);
+            Save(nameBuffer_.data(), particles);
+        }
         const char* selected = selectedIndex_ >= 0 ? presetNames_[selectedIndex_].c_str() : "Select storm preset";
         if (ImGui::BeginCombo("Saved Storms", selected)) {
             for (int i = 0; i < static_cast<int>(presetNames_.size()); ++i) { const bool active = i == selectedIndex_; if (ImGui::Selectable(presetNames_[i].c_str(), active)) Select(i); if (active) ImGui::SetItemDefaultFocus(); }
             ImGui::EndCombo();
         }
         if (ImGui::Button("Load Storm Preset", ImVec2(-1, 24)) && selectedIndex_ >= 0) {
-            Load(presetNames_[selectedIndex_], particles); particles.SetStormActive(false); particles.ClearParticles(); particles.SetStormActive(true, { previewPosition.x, 0.0f, previewPosition.z });
+            Load(presetNames_[selectedIndex_], particles); s = particles.GetStormSettings(); particles.SetStormActive(false); particles.ClearParticles(); particles.SetStormActive(true, { previewPosition.x, 0.0f, previewPosition.z });
         }
         if (ImGui::Button("Reset Storm Defaults", ImVec2(-1, 24))) s = ParticleManager::StormEffectSettings{};
         ImGui::TextWrapped("%s", status_.c_str());
     }
+    particles.SetStormSettings(s);
 }
 
 bool StormEffectEditorController::Save(const std::string& name, const ParticleManager& particles) {
@@ -102,7 +106,7 @@ bool StormEffectEditorController::Load(const std::string& name, ParticleManager&
         return false;
     }
 
-    particles.GetStormSettings() = preset.settings;
+    particles.SetStormSettings(preset.settings);
     includeInShowcase_ = preset.includeInShowcase;
     SetNameBuffer(name);
     return true;
