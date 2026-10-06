@@ -18,6 +18,7 @@ public:
     void Initialize(const SceneFactory* sceneFactory, SceneType initialScene, GameRuntime& game);
     void Update(GameRuntime& game, const SceneUpdateContext& context);
     void Draw(GameRuntime& game);
+    void DrawBackground(GameRuntime& game);
     void Finalize(GameRuntime& game);
     void ChangeScene(SceneType nextScene, GameRuntime& game);
 

@@ -8,32 +8,41 @@ void GameRuntime::SetTitleCloudsEnabled(bool enabled) {
         return;
     }
 
+	// タイトルの昼夜サイクルが有効な場合、雲の色はそちらに任せる。
     auto clouds = particleManager->GetAmbientCloudEmitter();
     clouds.active = enabled;
     if (enabled) {
-        // タイトルのカメラ前方かつ文字より上へ、明るい積雲の層を作る。
-        clouds.center = { -20.0f, 0.0f, 24.0f };
-        clouds.minimumHeight = -8.0f;
-        clouds.heightRange = 13.1f;
-        clouds.areaX = 18.0f;
-        clouds.areaZ = 11.0f;
-        clouds.emitRate = 1.35f;
-        clouds.life = 34.0f;
-        clouds.size = 1.28f;
-        clouds.speed = 0.02f;
+        // タイトル文字と操作表示より下へ、奥行きのある雲海の層を作る。
+        clouds.center = { 0.0f, 0.0f, 26.0f };
+        // 上端は約-6のまま、天体が消える高さまで下へ雲を積む。
+        clouds.minimumHeight = -20.0f;
+        clouds.heightRange = 14.0f;
+        clouds.areaX = 30.0f;
+        clouds.areaZ = 32.0f;
+        clouds.emitRate = 7.0f;
+        clouds.life = 48.0f;
+        clouds.size = 2.15f;
+        clouds.speed = 0.014f;
         clouds.depthParallax = true;
+        clouds.wispsPerEmission = 8;
+        clouds.verticalScale = 1.05f;
         // 青空との差が消えない白さと濃度。通常アルファ合成なので発光しすぎない。
-        clouds.color = { 0.96f, 0.975f, 1.0f, 0.56f };
+        clouds.color = { 0.58f, 0.62f, 0.68f, 0.95f };
         // 起動直後から十分な雲が見えるように初回更新をプリウォームする。
-        clouds.emitTimer = 12.0f;
+        clouds.emitTimer = 0.0f;
+        clouds.prewarmSeconds = 48.0f;
     } else {
         clouds.emitTimer = 0.0f;
+        clouds.prewarmSeconds = 0.0f;
         clouds.depthParallax = false;
+        clouds.wispsPerEmission = 3;
+        clouds.verticalScale = 1.0f;
         particleManager->ClearParticles();
     }
     particleManager->SetAmbientCloudEmitter(clouds);
 }
 
+// タイトルの昼夜サイクルを、雲の色や光源の方向・色・強さを変化させることで表現する。
 void GameRuntime::UpdateTitleDayNightCycle(float elapsedSeconds) {
     constexpr float kCycleSeconds = 300.0f;
     const float cycle = std::fmod(elapsedSeconds, kCycleSeconds) / kCycleSeconds;
@@ -50,12 +59,14 @@ void GameRuntime::UpdateTitleDayNightCycle(float elapsedSeconds) {
         Vector3 lightDirection;
         float lightIntensity;
     };
+
+	// タイトルの昼夜サイクルは、雲の色や光源の方向・色・強さを変化させる。
     const EnvironmentKey keys[] = {
-        { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.96f, 0.975f, 1.0f, 0.56f }, { 1.0f, 0.91f, 0.72f }, { -0.32f, -0.58f, -0.75f }, 1.18f },
-        { { 0.88f, 0.30f, 0.14f, 1.0f }, { 1.10f, 0.48f, 0.24f, 1.0f }, { 1.0f, 0.58f, 0.40f, 0.48f }, { 1.0f, 0.48f, 0.20f }, { -0.8f, -0.22f, 0.3f }, 0.68f },
-        { { 0.012f, 0.022f, 0.085f, 1.0f }, { 0.10f, 0.16f, 0.34f, 1.0f }, { 0.20f, 0.30f, 0.52f, 0.30f }, { 0.28f, 0.45f, 0.92f }, { 0.16f, -0.72f, 0.48f }, 0.26f },
-        { { 0.44f, 0.18f, 0.32f, 1.0f }, { 0.66f, 0.34f, 0.56f, 1.0f }, { 0.72f, 0.52f, 0.75f, 0.40f }, { 1.0f, 0.62f, 0.54f }, { 0.72f, -0.30f, 0.24f }, 0.62f },
-        { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.96f, 0.975f, 1.0f, 0.56f }, { 1.0f, 0.91f, 0.72f }, { -0.32f, -0.58f, -0.75f }, 1.18f }
+        { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.58f, 0.62f, 0.68f, 0.44f }, { 1.0f, 0.91f, 0.72f }, { -0.32f, -0.58f, -0.75f }, 1.18f },
+        { { 0.88f, 0.30f, 0.14f, 1.0f }, { 1.10f, 0.48f, 0.24f, 1.0f }, { 0.62f, 0.38f, 0.28f, 0.40f }, { 1.0f, 0.48f, 0.20f }, { -0.8f, -0.22f, 0.3f }, 0.68f },
+        { { 0.012f, 0.022f, 0.085f, 1.0f }, { 0.10f, 0.16f, 0.34f, 1.0f }, { 0.12f, 0.18f, 0.30f, 0.28f }, { 0.28f, 0.45f, 0.92f }, { 0.16f, -0.72f, 0.48f }, 0.26f },
+        { { 0.44f, 0.18f, 0.32f, 1.0f }, { 0.66f, 0.34f, 0.56f, 1.0f }, { 0.46f, 0.34f, 0.48f, 0.34f }, { 1.0f, 0.62f, 0.54f }, { 0.72f, -0.30f, 0.24f }, 0.62f },
+        { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.58f, 0.62f, 0.68f, 0.44f }, { 1.0f, 0.91f, 0.72f }, { -0.32f, -0.58f, -0.75f }, 1.18f }
     };
     const auto lerp3 = [blend](const Vector3& a, const Vector3& b) {
         return Vector3{ a.x + (b.x - a.x) * blend, a.y + (b.y - a.y) * blend, a.z + (b.z - a.z) * blend };
@@ -64,19 +75,52 @@ void GameRuntime::UpdateTitleDayNightCycle(float elapsedSeconds) {
         return Vector4{ a.x + (b.x - a.x) * blend, a.y + (b.y - a.y) * blend,
             a.z + (b.z - a.z) * blend, a.w + (b.w - a.w) * blend };
     };
+	// 4つのキーの間で補間する。最後のキーは最初のキーと同じ値なので、ループが途切れない。
     const EnvironmentKey& from = keys[keyIndex];
     const EnvironmentKey& to = keys[keyIndex + 1];
+    constexpr float kPi = 3.14159265f;
+    const float sunAngle = kPi * 0.5f + cycle * kPi * 2.0f;
+    const float sunAltitude = std::sin(sunAngle);
+    const float moonAngle = sunAngle + kPi;
+    const float moonAltitude = std::sin(moonAngle);
+    const float sunWeight = std::clamp((sunAltitude + 0.10f) / 0.20f, 0.0f, 1.0f);
+    const Vector3 sunDirection = {
+        -std::cos(sunAngle) * 0.78f,
+        -(std::max)(sunAltitude, 0.12f),
+        -0.42f
+    };
+    const Vector3 moonDirection = {
+        -std::cos(moonAngle) * 0.68f,
+        -(std::max)(moonAltitude, 0.18f),
+        0.32f
+    };
     stageMap_.SetClearColor(lerp4(from.clear, to.clear));
-    stageMap_.SetLightColor(lerp3(from.lightColor, to.lightColor));
-    stageMap_.SetLightDirection(lerp3(from.lightDirection, to.lightDirection));
-    stageMap_.SetLightIntensity(from.lightIntensity + (to.lightIntensity - from.lightIntensity) * blend);
+    const Vector3 celestialColor = lerp3(from.lightColor, to.lightColor);
+    const Vector3 celestialDirection = {
+        moonDirection.x + (sunDirection.x - moonDirection.x) * sunWeight,
+        moonDirection.y + (sunDirection.y - moonDirection.y) * sunWeight,
+        moonDirection.z + (sunDirection.z - moonDirection.z) * sunWeight
+    };
+    const float celestialIntensity =
+        from.lightIntensity + (to.lightIntensity - from.lightIntensity) * blend;
+    stageMap_.SetLightColor(celestialColor);
+    stageMap_.SetLightDirection(celestialDirection);
+    stageMap_.SetLightIntensity(celestialIntensity);
     gameplaySkyTint_ = lerp4(from.sky, to.sky);
+
+	// 雲の色は、タイトルの昼夜サイクルが有効な場合のみ反映する。シーン遷移時に
     if (particleManager) {
-        particleManager->SetAmbientCloudColor(lerp4(from.cloud, to.cloud));
+        Vector4 cloudColor = lerp4(from.cloud, to.cloud);
+        cloudColor.w = (std::min)(cloudColor.w * 1.65f, 0.80f);
+        particleManager->SetAmbientCloudColor(cloudColor);
+        particleManager->SetAmbientCloudLighting(
+            celestialDirection, celestialColor, celestialIntensity,
+            0.28f + sunWeight * 0.14f);
     }
     titleDayNightActive_ = true;
 }
 
+// タイトルのカメラ位置と回転を、ランタイム側でも保持する。これにより、タイトルの
 void GameRuntime::SyncTitleCamera(const Vector3& position, const Vector3& rotation) {
     if (!camera) {
         return;
@@ -212,6 +256,7 @@ void GameRuntime::ApplySceneTypeToMode(SceneType sceneType) {
     }
 }
 
+// シーン切り替え時のフェード処理を更新する。フェード中は、シーンの更新・描画も
 void GameRuntime::UpdateSceneFade() {
     if (sceneFadePhase_ == SceneFadePhase::None || !sceneFadeSprite_) {
         return;
@@ -255,6 +300,7 @@ void GameRuntime::UpdateSceneFade() {
     sceneFadeSprite_->Update();
 }
 
+// 現在のAppModeをSceneTypeに変換して返す。SceneManagerが使われていない場合に
 SceneType GameRuntime::GetCurrentSceneType() const {
     if (currentMode_ == AppMode::Title) {
         return SceneType::Title;
@@ -293,6 +339,7 @@ SceneType GameRuntime::GetCurrentSceneType() const {
     return SceneType::DebugView;
 }
 
+// 各シーンの更新関数を呼び出す。SceneManagerが使われている場合は、そちらで
 void GameRuntime::RunTitleScene() {
     UpdateTitle();
 }

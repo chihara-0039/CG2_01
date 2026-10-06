@@ -43,6 +43,27 @@ void TitleScene::Initialize(GameRuntime& game) {
     decorationStarModel_ = Model::CreateFromOBJ(
         object3dCommon->GetDxCommon(), "Resources/Models/star", "star.obj",
         object3dCommon->GetTextureManager());
+
+    // タイトル背景を横切る太陽と月。専用OBJと表面テクスチャを使用する。
+    sunModel_ = Model::CreateFromOBJ(
+        object3dCommon->GetDxCommon(), "Resources/Models/sun", "sun.obj",
+        object3dCommon->GetTextureManager());
+    moonModel_ = Model::CreateFromOBJ(
+        object3dCommon->GetDxCommon(), "Resources/Models/moon", "moon.obj",
+        object3dCommon->GetTextureManager());
+    sunObject_ = std::make_unique<Object3d>();
+    sunObject_->Initialize(object3dCommon);
+    sunObject_->SetModel(sunModel_.get());
+    sunObject_->SetEnableLighting(false);
+    sunObject_->SetColor({ 1.0f, 0.62f, 0.08f, 1.0f });
+    sunObject_->SetEmissive(8.5f);
+
+    moonObject_ = std::make_unique<Object3d>();
+    moonObject_->Initialize(object3dCommon);
+    moonObject_->SetModel(moonModel_.get());
+    moonObject_->SetEnableLighting(false);
+    moonObject_->SetColor({ 0.42f, 0.66f, 1.0f, 1.0f });
+    moonObject_->SetEmissive(3.6f);
     for (size_t i = 0; i < decorationStars_.size(); ++i) {
         decorationStars_[i] = std::make_unique<Object3d>();
         decorationStars_[i]->Initialize(object3dCommon);
@@ -112,8 +133,8 @@ void TitleScene::Initialize(GameRuntime& game) {
     titleArrivalFlareStarted_ = false;
     titleNightAmount_ = 0.0f;
     lastUpdateTime_ = std::chrono::steady_clock::now();
-    camera_.SetPosition({ 0.0f, 2.0f, -20.0f });
-    camera_.SetRotation({ 0.25f, 0.0f, 0.0f });
+    camera_.SetPosition({ 0.0f, -2.0f, -20.0f });
+    camera_.SetRotation({ 0.0f, 0.0f, 0.0f });
     camera_.Update();
 }
 
@@ -138,6 +159,35 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
     titleNightAmount_ = kNightKeys[titleCycleIndex] +
         (kNightKeys[titleCycleIndex + 1] - kNightKeys[titleCycleIndex]) * titleCycleBlend;
 
+    // cycle=0 を昼の頂点とし、太陽と月を半周ずらして同じ空の軌道へ載せる。
+    constexpr float kPi = 3.14159265f;
+    constexpr float kTwoPi = kPi * 2.0f;
+    const float dayProgress = std::fmod(environmentTimer_, kTitleDayNightCycleSeconds) /
+        kTitleDayNightCycleSeconds;
+    const float sunAngle = kPi * 0.5f + dayProgress * kTwoPi;
+    const float moonAngle = sunAngle + kPi;
+    const auto updateCelestial = [&](Object3d* object, float angle, float baseScale) {
+        if (!object) {
+            return;
+        }
+        const float altitude = std::sin(angle);
+        // 表示開始の縮小区間を雲海の下に隠し、地平線では実寸で昇らせる。
+        // 縮小は雲海の底より下で行い、昇降中は天体の大きさを維持する。
+        const float visibility = std::clamp((altitude + 0.95f) / 0.15f, 0.0f, 1.0f);
+        const float easedVisibility = visibility * visibility * (3.0f - 2.0f * visibility);
+        const Vector3 position = {
+            std::cos(angle) * 22.0f,
+            -8.5f + altitude * 19.0f,
+            64.0f
+        };
+        const float scale = baseScale * easedVisibility;
+        object->SetPosition(position);
+        object->SetRotation({ 0.0f, -angle * 0.18f, angle * 0.08f });
+        object->SetScale({ scale, scale, scale });
+        object->SetCamera(camera_.GetViewMatrix(), camera_.GetProjectionMatrix());
+        object->Update(Math::MakeIdentity4x4());
+    };
+
     if (titleArrivalFlareStarted_) {
         titleFlareTimer_ += deltaTime;
     }
@@ -157,8 +207,10 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
         titlePosition_.z = 10.0f + std::sin(spiralAngle_) * radius;
     }
     if (!startRequested_) {
-        titleRotation_.y += 0.7f * deltaTime;
         showPressSpace_ = titlePosition_.y >= -2.0f;
+        // 上昇中だけ回転し、到着時には正面へ滑らかに戻して固定する。
+        const float arrivalProgress = std::clamp((titlePosition_.y + 10.0f) / 8.0f, 0.0f, 1.0f);
+        titleRotation_.y = showPressSpace_ ? 0.0f : std::sin(arrivalProgress * 3.14159265f) * 0.7f;
         if (showPressSpace_ && !titleArrivalFlareStarted_) {
             titleArrivalFlareStarted_ = true;
             titleFlareTimer_ = 0.0f;
@@ -183,24 +235,32 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
         }
     }
 
-    // 画面が静止して見えない程度に、カメラもゆっくり呼吸させる。
+    // 雲海を真横から眺める水平視点。上下の揺れと俯角は付けない。
     camera_.SetPosition({
         std::sin(idleTimer_ * 0.32f) * 0.28f,
-        2.0f + std::sin(idleTimer_ * 0.46f) * 0.12f,
+        -2.0f,
         -20.0f
     });
-    camera_.SetRotation({ 0.25f, std::sin(idleTimer_ * 0.25f) * 0.012f, 0.0f });
+    camera_.SetRotation({ 0.0f, 0.0f, 0.0f });
     camera_.Update();
     // 雲パーティクルとタイトルモデルが同じ視点から見えるよう、ランタイム側も同期する。
     game.SyncTitleCamera(camera_.GetPosition(), camera_.GetRotation());
 
     const Matrix4x4& view = camera_.GetViewMatrix();
     const Matrix4x4& projection = camera_.GetProjectionMatrix();
+    updateCelestial(sunObject_.get(), sunAngle, 4.3f);
+    updateCelestial(moonObject_.get(), moonAngle, 3.44f);
+    if (sunObject_) {
+        sunObject_->SetEmissive(7.4f + std::sin(idleTimer_ * 1.7f) * 1.1f);
+    }
+    if (moonObject_) {
+        moonObject_->SetEmissive(3.2f + std::sin(idleTimer_ * 0.8f) * 0.4f);
+    }
     Vector3 animatedTitlePosition = titlePosition_;
     Vector3 titleScale = { 1.5f, 1.5f, 1.5f };
     if (!startRequested_ && showPressSpace_) {
         animatedTitlePosition.y += std::sin(idleTimer_ * 1.8f) * 0.12f;
-        titleRotation_.z = std::sin(idleTimer_ * 1.25f) * 0.025f;
+        titleRotation_.z = 0.0f;
         // 大きく見た目を変えず、静止画に見えない程度の呼吸を加える。
         const float breathingScale = 1.5f * (1.0f + std::sin(idleTimer_ * 1.35f) * 0.018f);
         titleScale = { breathingScale, breathingScale, breathingScale };
@@ -409,6 +469,16 @@ void TitleScene::Draw(GameRuntime& game) {
     }
 }
 
+void TitleScene::DrawBackground(GameRuntime& game) {
+    (void)game;
+    if (sunObject_) {
+        sunObject_->Draw();
+    }
+    if (moonObject_) {
+        moonObject_->Draw();
+    }
+}
+
 void TitleScene::Finalize(GameRuntime& game) {
     game.SetTitleCloudsEnabled(false);
     game.OnSceneExited(SceneType::Title);
@@ -427,6 +497,10 @@ void TitleScene::Finalize(GameRuntime& game) {
         flare.reset();
     }
     decorationStarModel_.reset();
+    moonObject_.reset();
+    sunObject_.reset();
+    moonModel_.reset();
+    sunModel_.reset();
     pressSpaceObject_.reset();
     pressSpaceModel_.reset();
     titleShadowObject_.reset();

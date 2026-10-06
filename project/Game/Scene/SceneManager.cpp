@@ -27,6 +27,12 @@ void SceneManager::Draw(GameRuntime& game) {
     }
 }
 
+void SceneManager::DrawBackground(GameRuntime& game) {
+    if (currentScene_) {
+        currentScene_->DrawBackground(game);
+    }
+}
+
 void SceneManager::Finalize(GameRuntime& game) {
     if (currentScene_) {
         currentScene_->Finalize(game);

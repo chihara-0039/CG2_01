@@ -235,6 +235,9 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
     if (ambientCloudEmitter_.active && ambientCloudEmitter_.emitRate > 0.0f) {
         ambientCloudEmitter_.emitTimer += deltaTime;
         const float cloudInterval = 1.0f / (std::max)(ambientCloudEmitter_.emitRate, 0.01f);
+        const float prewarmSeconds = (std::max)(ambientCloudEmitter_.prewarmSeconds, 0.0f);
+        ambientCloudEmitter_.emitTimer += prewarmSeconds;
+        ambientCloudEmitter_.prewarmSeconds = 0.0f;
         std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
         std::uniform_real_distribution<float> zeroOne(0.0f, 1.0f);
         while (ambientCloudEmitter_.emitTimer >= cloudInterval) {
@@ -257,12 +260,13 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             const float depthAlpha = ambientCloudEmitter_.depthParallax
                 ? 0.58f + nearFactor * 0.42f
                 : 1.0f;
-            constexpr int kWispsPerCloud = 3;
-            for (int i = 0; i < kWispsPerCloud && Particles().size() < kMaxParticles; ++i) {
+            const int wispsPerCloud = std::clamp(ambientCloudEmitter_.wispsPerEmission, 1, 8);
+            for (int i = 0; i < wispsPerCloud && Particles().size() < kMaxParticles; ++i) {
                 const float scale = ambientCloudEmitter_.size *
                     (0.72f + zeroOne(engine) * 0.72f) * depthScale;
                 Particle cloud;
                 cloud.type = Particle::Type::StormCloud;
+                cloud.ambientCloud = true;
                 cloud.transform.translate = {
                     baseX + unit(engine) * 2.4f * ambientCloudEmitter_.size,
                     ambientCloudEmitter_.minimumHeight +
@@ -272,7 +276,8 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 };
                 cloud.transform.scale = {
                     (3.0f + zeroOne(engine) * 2.6f) * scale,
-                    (0.85f + zeroOne(engine) * 0.65f) * scale,
+                    (0.85f + zeroOne(engine) * 0.65f) * scale *
+                        (std::max)(ambientCloudEmitter_.verticalScale, 0.05f),
                     1.0f
                 };
                 cloud.transform.rotate = { 0.0f, 0.0f, unit(engine) * 0.08f };
@@ -285,6 +290,11 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 cloud.initialAlpha = cloud.color.w;
                 cloud.lifeTime = 0.0f;
                 cloud.maxTime = ambientCloudEmitter_.life * (0.82f + zeroOne(engine) * 0.42f);
+                // 初回だけ年齢を分散し、雲海全体が同時に出現・消滅しないようにする。
+                if (prewarmSeconds > 0.0f) {
+                    cloud.lifeTime = zeroOne(engine) * (std::min)(prewarmSeconds, cloud.maxTime * 0.90f);
+                    cloud.transform.translate.x += cloud.velocity.x * cloud.lifeTime * 60.0f;
+                }
                 Particles().push_back(cloud);
             }
         }
@@ -494,6 +504,13 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             it->transform.translate.x += it->velocity.x * deltaTime * 60.0f;
             it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
             it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
+            if (it->ambientCloud && ambientCloudEmitter_.areaX > 0.0f) {
+                // 風で雲海が片側へ流れ切らないよう、画面外の端で循環させる。
+                const float left = ambientCloudEmitter_.center.x - ambientCloudEmitter_.areaX;
+                const float width = ambientCloudEmitter_.areaX * 2.0f;
+                float& x = it->transform.translate.x;
+                x -= std::floor((x - left) / width) * width;
+            }
 
             if (it->type == Particle::Type::Firework) {
                 // 炸裂後の火花を徐々に落下させ、花火らしい放物線を作る。
@@ -588,6 +605,12 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             float alpha = it->type == Particle::Type::StormCloud
                 ? std::sin(normalizedLife * 3.14159265f)
                 : 1.0f - normalizedLife;
+            if (it->ambientCloud) {
+                const float fadeIn = std::clamp(normalizedLife / 0.08f, 0.0f, 1.0f);
+                const float fadeOut = std::clamp((1.0f - normalizedLife) / 0.16f, 0.0f, 1.0f);
+                alpha = fadeIn * fadeIn * (3.0f - 2.0f * fadeIn) *
+                    fadeOut * fadeOut * (3.0f - 2.0f * fadeOut);
+            }
             it->color.w = it->initialAlpha * alpha;
 
             ++it;
@@ -621,7 +644,22 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         group.ringInstanceCount = 0;
         group.cylinderInstanceCount = 0;
 
+        // 半透明の雲は奥から手前へ合成し、重なりの不自然な縁を防ぐ。
+        std::vector<const Particle*> drawOrder;
+        drawOrder.reserve(group.particles.size());
         for (const auto& particle : group.particles) {
+            drawOrder.push_back(&particle);
+        }
+        std::stable_sort(drawOrder.begin(), drawOrder.end(), [&](const Particle* a, const Particle* b) {
+            const auto viewDepth = [&](const Particle* p) {
+                const auto& pos = p->transform.translate;
+                return pos.x * viewMatrix.m[0][2] + pos.y * viewMatrix.m[1][2] +
+                    pos.z * viewMatrix.m[2][2] + viewMatrix.m[3][2];
+            };
+            return viewDepth(a) > viewDepth(b);
+        });
+        for (const Particle* particlePtr : drawOrder) {
+            const auto& particle = *particlePtr;
             uint32_t* indexPtr = &planeInstanceCount_;
             uint32_t* groupCountPtr = &group.planeInstanceCount;
             InstanceData* instancingData = instancingDataMapped_;
@@ -656,6 +694,36 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
 
             instancingData[index].WVP = wvp;
             instancingData[index].color = particle.color;
+            if (particle.ambientCloud) {
+                // 発生済みの雲も現在時刻の空色・光源に追従させる。
+                instancingData[index].color.x = ambientCloudEmitter_.color.x;
+                instancingData[index].color.y = ambientCloudEmitter_.color.y;
+                instancingData[index].color.z = ambientCloudEmitter_.color.z;
+            }
+            if (particle.type == Particle::Type::StormCloud) {
+                const Vector3& direction = ambientCloudEmitter_.lightDirection;
+                instancingData[index].lightColor = {
+                    ambientCloudEmitter_.lightColor.x * ambientCloudEmitter_.lightIntensity,
+                    ambientCloudEmitter_.lightColor.y * ambientCloudEmitter_.lightIntensity,
+                    ambientCloudEmitter_.lightColor.z * ambientCloudEmitter_.lightIntensity,
+                    1.0f
+                };
+                // 光源方向をビルボードの座標系へ変換。カメラや雲の回転にも追従する。
+                const float viewX = direction.x * viewMatrix.m[0][0] +
+                    direction.y * viewMatrix.m[1][0] + direction.z * viewMatrix.m[2][0];
+                const float viewY = direction.x * viewMatrix.m[0][1] +
+                    direction.y * viewMatrix.m[1][1] + direction.z * viewMatrix.m[2][1];
+                const float cosRotation = std::cos(particle.transform.rotate.z);
+                const float sinRotation = std::sin(particle.transform.rotate.z);
+                instancingData[index].lightDirection = {
+                    viewX * cosRotation + viewY * sinRotation,
+                    -viewX * sinRotation + viewY * cosRotation };
+                instancingData[index].ambientLight = ambientCloudEmitter_.ambientLight;
+            } else {
+                instancingData[index].lightColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+                instancingData[index].lightDirection = { 0.0f, -1.0f };
+                instancingData[index].ambientLight = 1.0f;
+            }
             instancingData[index].shape = particle.type == Particle::Type::StormCloud
                 ? 2.0f
                 : particle.type == Particle::Type::Lightning ? 1.0f : 0.0f;
@@ -791,7 +859,10 @@ void ParticleManager::CreatePipelineState() {
 
         // Color
         { "INSTANCE_COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 64, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
-        { "INSTANCE_SHAPE", 0, DXGI_FORMAT_R32_FLOAT, 1, 80, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INSTANCE_LIGHT_COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 80, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INSTANCE_LIGHT_DIRECTION", 0, DXGI_FORMAT_R32G32_FLOAT, 1, 96, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INSTANCE_AMBIENT_LIGHT", 0, DXGI_FORMAT_R32_FLOAT, 1, 104, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        { "INSTANCE_SHAPE", 0, DXGI_FORMAT_R32_FLOAT, 1, 108, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
     };
 
     // シェーダーコンパイル (パスにhlsl/を追加済み)

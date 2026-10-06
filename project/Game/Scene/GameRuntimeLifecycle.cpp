@@ -96,15 +96,14 @@ void GameRuntime::Initialize() {
     camera->SetAspectRatio(1280.0f / 720.0f);
 #endif
 
-
     stageMap_.Initialize(100, 100, 100);
 
 #ifdef DEVELOPMENT
     currentMode_           = AppMode::Title;
-    // 評価確認用の DebugView では、従来のデバッグオブジェクトと地形を最初から表示する。
+    // 確認用の DebugView では、従来のデバッグオブジェクトと地形を最初から表示する。
     debugFlags_.show3DObjects = true;
     debugFlags_.showTerrain = true;
-    debugFlags_.showSkybox = false;
+    debugFlags_.showSkybox = true;
     postProcess_.SetEnabled(false);
     if (std::filesystem::exists("Resources/Stages/stage1.txt")) {
         stageMap_.LoadFromFile("Resources/Stages/stage1.txt");

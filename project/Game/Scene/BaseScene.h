@@ -11,5 +11,7 @@ public:
     virtual void Initialize(GameRuntime& game) = 0;
     virtual void Update(GameRuntime& game, const SceneUpdateContext& context) = 0;
     virtual void Draw(GameRuntime& game) = 0;
+    // 雲などの半透明エフェクトより奥に配置するシーン固有モデル。
+    virtual void DrawBackground(GameRuntime& game) { (void)game; }
     virtual void Finalize(GameRuntime& game) = 0;
 };

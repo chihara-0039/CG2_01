@@ -29,6 +29,7 @@ struct Particle {
     Vector3 velocity;    // 速度
     Vector4 color;       // 色
     float initialAlpha = 1.0f;
+    bool ambientCloud = false;
     float lifeTime;      // 時間(現在)
     float maxTime;       // (最大)
 };
@@ -43,6 +44,9 @@ public: // サブクラスなど
     struct InstanceData {
         Matrix4x4 WVP;
         Vector4 color;
+        Vector4 lightColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        Vector2 lightDirection = { 0.0f, -1.0f };
+        float ambientLight = 1.0f;
         float shape = 0.0f;
     };
 
@@ -116,7 +120,14 @@ public: // サブクラスなど
         float speed = 0.012f;
         Vector4 color = { 0.72f, 0.78f, 0.90f, 0.22f };
         bool depthParallax = false;
+        int wispsPerEmission = 3;
+        float verticalScale = 1.0f;
+        Vector3 lightDirection = { 0.0f, -1.0f, 0.0f };
+        Vector3 lightColor = { 1.0f, 1.0f, 1.0f };
+        float lightIntensity = 1.0f;
+        float ambientLight = 0.38f;
         float emitTimer = 0.0f;
+        float prewarmSeconds = 0.0f;
     };
 
     struct ParticleGroup {
@@ -319,6 +330,13 @@ public: // メンバ関数
     void SetWeatherEmitterActive(bool active) { weatherEmitter_.active = active; }
     void SetAmbientCloudEmitterActive(bool active) { ambientCloudEmitter_.active = active; }
     void SetAmbientCloudColor(const Vector4& color) { ambientCloudEmitter_.color = color; }
+    void SetAmbientCloudLighting(const Vector3& direction, const Vector3& color,
+        float intensity, float ambient) {
+        ambientCloudEmitter_.lightDirection = direction;
+        ambientCloudEmitter_.lightColor = color;
+        ambientCloudEmitter_.lightIntensity = intensity;
+        ambientCloudEmitter_.ambientLight = ambient;
+    }
 
     void ClearParticles() {
         for (auto& [name, group] : particleGroups_) {

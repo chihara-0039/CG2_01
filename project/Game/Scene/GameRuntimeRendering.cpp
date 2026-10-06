@@ -421,6 +421,13 @@ void GameRuntime::RenderScene() {
         }
     }
 
+    // 天体を雲の奥へ描き、半透明雲による遮蔽を反映する。
+    if (sceneManager_) {
+        object3dCommon->PreDraw();
+        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+        sceneManager_->DrawBackground(*this);
+    }
+
     if (debugFlags_.showParticles && !IsWindowInactive()) {
         ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
         commandList->SetDescriptorHeaps(1, particleHeaps);
