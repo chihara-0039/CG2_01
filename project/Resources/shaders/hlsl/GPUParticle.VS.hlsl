@@ -10,6 +10,9 @@ struct VertexShaderOutput
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
     float4 color : COLOR0;
+    nointerpolation float4 lightColor : COLOR1;
+    nointerpolation float2 lightDirection : TEXCOORD2;
+    nointerpolation float ambientLight : TEXCOORD3;
     nointerpolation float shape : TEXCOORD1;
 };
 
@@ -48,6 +51,10 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
     output.position = mul(worldPosition, gPerView.viewProjection);
     output.texcoord = input.texcoord;
     output.color = particle.color;
+    // GPUパーティクルは雲ライティングの対象外なので等倍値を渡す。
+    output.lightColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+    output.lightDirection = float2(0.0f, -1.0f);
+    output.ambientLight = 1.0f;
     output.shape = 0.0f;
     return output;
 }

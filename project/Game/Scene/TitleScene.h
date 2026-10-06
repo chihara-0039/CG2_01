@@ -15,6 +15,7 @@ public:
     void Initialize(GameRuntime& game) override;
     void Update(GameRuntime& game, const SceneUpdateContext& context) override;
     void Draw(GameRuntime& game) override;
+    void DrawBackground(GameRuntime& game) override;
     void Finalize(GameRuntime& game) override;
 
 private:
@@ -24,6 +25,10 @@ private:
     std::unique_ptr<Model> pressSpaceModel_;
     std::unique_ptr<Object3d> pressSpaceObject_;
     std::unique_ptr<Model> decorationStarModel_;
+    std::unique_ptr<Model> sunModel_;
+    std::unique_ptr<Model> moonModel_;
+    std::unique_ptr<Object3d> sunObject_;
+    std::unique_ptr<Object3d> moonObject_;
     std::array<std::unique_ptr<Object3d>, 7> decorationStars_;
     static constexpr size_t kBackgroundStarCount = 64;
     std::array<std::unique_ptr<Object3d>, kBackgroundStarCount> backgroundStars_;

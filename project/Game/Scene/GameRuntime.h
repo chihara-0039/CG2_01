@@ -235,8 +235,8 @@ private:
     bool           gameClearCelebrationStarted_ = false;
     float          titleTimer_ = 0.0f;
     float          gameplayDayNightTimer_ = 0.0f;
-    float          environmentTimeScale_ = 1.0f;
-    int            environmentTimeScaleIndex_ = 0;
+    float          environmentTimeScale_ = 4.0f;
+    int            environmentTimeScaleIndex_ = 2;
     bool           gameplayDayNightActive_ = false;
     bool           titleDayNightActive_ = false;
     Vector4        gameplaySkyTint_ = { 1.0f, 1.0f, 1.0f, 1.0f };

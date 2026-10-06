@@ -67,6 +67,9 @@ public:
     /// <summary>カメラのオイラー角回転 (ラジアン)</summary>
     const Vector3& GetRotation() const { return transform_.rotate; }
 
+    /// <summary>現在の垂直視野角を取得する</summary>
+    float GetFov() const { return fov_; }
+
     // ── セッター ─────────────────────────────────────────
 
     /// <summary>カメラのワールド位置を直接セット</summary>
@@ -112,15 +115,6 @@ public:
         bool isGuiCaptured,
         HWND hwnd,
         bool invertOrbit = false);
-
-    // -------------------------------------------------------
-    //  GetTransform : Transform 構造体への参照を返す。
-    //  ImGui から直接 position / rotation を操作するために公開している。
-    // -------------------------------------------------------
-    Transform& GetTransform() { return transform_; }
-
-    /// <summary>ImGui の SliderFloat などに直接渡せる FOV のポインタ</summary>
-    float* GetFovPtr() { return &fov_; }
 
     /// <summary>ImGui にカメラパラメータを表示・編集するウィジェットを描画する</summary>
     void DrawImGui();

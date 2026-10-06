@@ -133,7 +133,7 @@ void StageEditorController::HandleCursorInput(Input* input, StageMap& stageMap, 
 		return;
 	}
 
-	float cameraRotY = camera->GetTransform().rotate.y;
+	const float cameraRotY = camera->GetRotation().y;
 
 	// 入力方向ベクトル
 	int inputX = 0;
@@ -236,27 +236,31 @@ void StageEditorController::HandleCameraInput(Input* input, Camera* camera) {
 	if (!input || !camera) {
 		return;
 	}
-	Transform& camTf = camera->GetTransform();
+	Vector3 rotation = camera->GetRotation();
+	Vector3 position = camera->GetPosition();
 
 	// IJKL / UO キーによるエディタカメラの平行移動・回転
 	if (input->PushKey(DIK_J)) {
-		camTf.rotate.y += 0.02f;
+		rotation.y += 0.02f;
 	}
 	if (input->PushKey(DIK_L)) {
-		camTf.rotate.y -= 0.02f;
+		rotation.y -= 0.02f;
 	}
 	if (input->PushKey(DIK_I)) {
-		camTf.translate.z += 0.2f;
+		position.z += 0.2f;
 	}
 	if (input->PushKey(DIK_K)) {
-		camTf.translate.z -= 0.2f;
+		position.z -= 0.2f;
 	}
 	if (input->PushKey(DIK_U)) {
-		camTf.translate.y += 0.2f;
+		position.y += 0.2f;
 	}
 	if (input->PushKey(DIK_O)) {
-		camTf.translate.y -= 0.2f;
+		position.y -= 0.2f;
 	}
+
+	camera->SetRotation(rotation);
+	camera->SetPosition(position);
 }
 
 // エディタモードにおける毎フレームの更新処理（キー入力、配置・削除判定など）を行います。
@@ -331,7 +335,7 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
 	// --- 天候・環境設定 UI ---
 	if (ImGui::CollapsingHeader("Weather / Environment")) {
 		auto& wpMgr = WeatherPresetManager::GetInstance();
-		auto& presets = wpMgr.GetPresets();
+		const auto& presets = wpMgr.GetPresets();
 
 		// プリセットが存在しない場合のメッセージ表示
 		if (presets.empty()) {
@@ -365,7 +369,9 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
 			}
 
 			// 現在のプリセットを編集する
-			WeatherPreset* currentPreset = wpMgr.GetPresetByName(currentPresetName);
+			const WeatherPreset* storedPreset = wpMgr.GetPresetByName(currentPresetName);
+			WeatherPreset editedPreset = storedPreset ? *storedPreset : WeatherPreset{};
+			WeatherPreset* currentPreset = storedPreset ? &editedPreset : nullptr;
 			if (currentPreset) {
 				ImGui::Separator();
 				ImGui::Text("Lighting Settings");
@@ -416,13 +422,14 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
 				}
 
 				if (ImGui::Button("Save Preset Changes")) {
+					wpMgr.UpdatePreset(*currentPreset);
 					wpMgr.SavePresets();
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("Save as New Preset")) {
 					WeatherPreset newPreset = *currentPreset;
 					newPreset.name = currentPreset->name + " (Copy)";
-					presets.push_back(newPreset);
+					wpMgr.AddPreset(newPreset);
 					wpMgr.SavePresets();
 					stageMap.SetWeatherPresetName(newPreset.name);
 				}
@@ -432,6 +439,7 @@ void StageEditorController::DrawImGui(StageMap& stageMap, StageRenderer* stageRe
 				stageMap.SetLightIntensity(currentPreset->lightIntensity);
 				stageMap.SetLightColor(currentPreset->lightColor);
 				stageMap.SetLightDirection(currentPreset->lightDirection);
+				wpMgr.UpdatePreset(*currentPreset);
 			}
 		}
 	}

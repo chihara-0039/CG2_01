@@ -175,13 +175,27 @@ void WeatherPresetManager::SavePresets() {
     }
 }
 
-WeatherPreset* WeatherPresetManager::GetPresetByName(const std::string& name) {
-    for (auto& preset : presets_) {
+const WeatherPreset* WeatherPresetManager::GetPresetByName(const std::string& name) const {
+    for (const auto& preset : presets_) {
         if (preset.name == name) {
             return &preset;
         }
     }
     return nullptr;
+}
+
+bool WeatherPresetManager::UpdatePreset(const WeatherPreset& updatedPreset) {
+    for (auto& preset : presets_) {
+        if (preset.name == updatedPreset.name) {
+            preset = updatedPreset;
+            return true;
+        }
+    }
+    return false;
+}
+
+void WeatherPresetManager::AddPreset(const WeatherPreset& preset) {
+    presets_.push_back(preset);
 }
 
 void WeatherPresetManager::CreateDefaultPresetsIfEmpty() {

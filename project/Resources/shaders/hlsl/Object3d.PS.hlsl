@@ -199,6 +199,7 @@ PixelShaderOutput main(VertexShaderOutput input)
     else
     {
         output.color = gMaterial.color * textureColor;
+        output.color.rgb += gMaterial.color.rgb * gMaterial.emissive;
     }
     
     return output;

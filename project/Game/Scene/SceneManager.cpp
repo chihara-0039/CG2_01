@@ -27,6 +27,12 @@ void SceneManager::Draw(GameRuntime& game) {
     }
 }
 
+void SceneManager::DrawBackground(GameRuntime& game) {
+    if (currentScene_) {
+        currentScene_->DrawBackground(game);
+    }
+}
+
 void SceneManager::Finalize(GameRuntime& game) {
     if (currentScene_) {
         currentScene_->Finalize(game);
@@ -49,6 +55,5 @@ void SceneManager::ChangeScene(SceneType nextScene, GameRuntime& game) {
     currentSceneType_ = nextScene;
     currentScene_ = sceneFactory_->CreateScene(nextScene);
     assert(currentScene_);
-    currentScene_->SetSceneManager(this);
     currentScene_->Initialize(game);
 }

@@ -1,5 +1,4 @@
 ﻿#include "StageMap.h"
-#include "StageMapGimmickSystem.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -633,17 +632,48 @@ bool StageMap::RemoveBlock(const Int3& index) {
 
 // PSwitch の状態を切り替える
 void StageMap::SetPSwitchActive(int switchId) {
-    StageMapGimmickSystem::SetPSwitchActive(*this, switchId);
+    isPSwitchActive_ = true;
+    needsRebuild_ = true;
+    for (auto& cell : cells_) {
+        if ((cell.type == BlockType::PSwitch || cell.type == BlockType::PBlock) &&
+            cell.variant == switchId) {
+            cell.isSolid = false;
+            cell.isHidden = true;
+        }
+        if (cell.type == BlockType::PBlockAppears && cell.variant == switchId) {
+            cell.isSolid = true;
+        }
+    }
 }
 
 // PSwitch の状態をリセットする（再構築なし）
 void StageMap::ResetPSwitchStateNoRebuild() {
-    StageMapGimmickSystem::ResetPSwitchStateNoRebuild(*this);
+    isPSwitchActive_ = false;
+    for (auto& cell : cells_) {
+        if (cell.type == BlockType::PSwitch) {
+            cell.isSolid = false;
+            cell.isHidden = false;
+        } else if (cell.type == BlockType::PBlock) {
+            cell.isSolid = true;
+            cell.isHidden = false;
+        } else if (cell.type == BlockType::PBlockAppears) {
+            cell.isSolid = false;
+        }
+    }
+    needsRebuild_ = false;
 }
 
 // ステージ全体の ON/OFF 状態を切り替える
 void StageMap::ToggleOnState() {
-    StageMapGimmickSystem::ToggleOnState(*this);
+    isOnState_ = !isOnState_;
+    for (auto& cell : cells_) {
+        if (cell.type == BlockType::OnBlock) {
+            cell.isSolid = isOnState_;
+        } else if (cell.type == BlockType::OffBlock) {
+            cell.isSolid = !isOnState_;
+        }
+    }
+    needsRebuild_ = true;
 }
 
 void StageMap::DrawImGui() {
@@ -829,7 +859,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
 // PSwitch の状態をリセットする（再構築あり）
 void StageMap::ResetPSwitchState()
 {
-    StageMapGimmickSystem::ResetPSwitchState(*this);
+    isPSwitchActive_ = false;
 }
 
 // 動く足場のリストを再構築する
