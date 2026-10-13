@@ -2,11 +2,13 @@
 #include "GameRuntime.h"
 #include <algorithm>
 #include <cmath>
+#ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
+#endif
 #include "../Environment/WeatherPresetManager.h"
 
 namespace {
-#ifndef NDEBUG
+#if defined(USE_IMGUI) && !defined(NDEBUG)
 // ImGuiのワークスペースと一致する、左上シーンビューの描画領域を求める。
 struct EditorViewportRect {
     float x;
@@ -53,6 +55,7 @@ void SetEditorSceneViewport(ID3D12GraphicsCommandList* commandList) {
 } // namespace
 
 void GameRuntime::DrawCollisionDebugBoxes() {
+#ifdef USE_IMGUI
     if (!debugFlags_.showCollisionBoxes || !camera || !player_ ||
         (currentMode_ != AppMode::GamePlay &&
          currentMode_ != AppMode::GamePlay_BlockPlace &&
@@ -201,6 +204,7 @@ void GameRuntime::DrawCollisionDebugBoxes() {
         }
     }
     drawList->PopClipRect();
+#endif
 }
 
 void GameRuntime::Draw() {
@@ -270,12 +274,12 @@ void GameRuntime::Draw() {
         RenderScene();
         postProcess_.EndRender(commandList);
         dxCommon->PreDraw(false);
-#ifndef NDEBUG
+#if defined(USE_IMGUI) && !defined(NDEBUG)
         SetEditorSceneViewport(commandList);
 #endif
         postProcess_.DrawToBackBuffer(commandList, camera->GetProjectionMatrix());
     } else {
-#ifdef NDEBUG
+#if defined(NDEBUG) || !defined(USE_IMGUI)
         D3D12_VIEWPORT viewport = { 0.0f, 0.0f, (float)WinApp::kWindowWidth, (float)WinApp::kWindowHeight, 0.0f, 1.0f };
         D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
 #else
@@ -304,7 +308,9 @@ void GameRuntime::Draw() {
     }
 
     DrawCollisionDebugBoxes();
+#ifdef USE_IMGUI
     dxCommon->EndImGui();
+#endif
     dxCommon->PostDraw();
 }
 
@@ -525,7 +531,8 @@ void GameRuntime::RenderScene() {
             pauseKeyboardSprite_->Draw();
         }
     }
-    if (currentMode_ == AppMode::Title || currentMode_ == AppMode::StageSelect) {
+    // 選択画面は3DのBACK案内を使う。終了案内はタイトルにだけ表示する。
+    if (currentMode_ == AppMode::Title) {
         spriteCommon->PreDraw();
         if (isUsingGamePad && menuExitXboxSprite_) {
             menuExitXboxSprite_->Draw();

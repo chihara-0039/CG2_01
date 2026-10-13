@@ -4,6 +4,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
+#include <filesystem>
 
 using namespace Microsoft::WRL;
 
@@ -27,18 +28,21 @@ void Model::Initialize(DirectXCommon* dxCommon, const std::string& directoryPath
     CreateBuffers(dxCommon);
 
     // MTLから見つかったテクスチャをTextureManagerへ登録する。
-    if (textureManager) {
+    if (textureManager && !textureFilePath_.empty()) {
         textureHandle_ = textureManager->LoadTexture(textureFilePath_);
     }
 }
 
 void Model::LoadObjFile(const std::string& directoryPath, const std::string& filename) {
+    textureFilePath_.clear();
+    textureHandle_ = 0;
     const std::string fullPath = directoryPath + "/" + filename;
     std::ifstream file(fullPath);
     if (!file.is_open()) {
-        const std::string message = "Failed to open OBJ file: " + fullPath;
+        const std::string message = "[Recovery] Missing OBJ; using unit box: " + fullPath;
         OutputDebugStringA((message + "\n").c_str());
-        throw std::runtime_error(message);
+        CreateRecoveryBox();
+        return;
     }
 
     OutputDebugStringA(("---- Loading: " + fullPath + " ----\n").c_str());
@@ -142,6 +146,39 @@ void Model::LoadObjFile(const std::string& directoryPath, const std::string& fil
     }
 }
 
+void Model::CreateRecoveryBox() {
+    // 左手座標系の頂点を直接作るため、OBJ用のZ反転は不要。
+    // 素材が失われても衝突やシーン更新の処理はそのまま動作する。
+    vertices_.clear();
+    indices_.clear();
+    textureFilePath_.clear();
+    textureHandle_ = 0; // TextureManagerの白テクスチャ
+    const Vector3 normals[6] = {
+        {0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, -1, 0}
+    };
+    const Vector4 faces[6][4] = {
+        {{-.5f,-.5f,-.5f,1},{-.5f,.5f,-.5f,1},{.5f,.5f,-.5f,1},{.5f,-.5f,-.5f,1}},
+        {{.5f,-.5f,.5f,1},{.5f,.5f,.5f,1},{-.5f,.5f,.5f,1},{-.5f,-.5f,.5f,1}},
+        {{-.5f,-.5f,.5f,1},{-.5f,.5f,.5f,1},{-.5f,.5f,-.5f,1},{-.5f,-.5f,-.5f,1}},
+        {{.5f,-.5f,-.5f,1},{.5f,.5f,-.5f,1},{.5f,.5f,.5f,1},{.5f,-.5f,.5f,1}},
+        {{-.5f,.5f,-.5f,1},{-.5f,.5f,.5f,1},{.5f,.5f,.5f,1},{.5f,.5f,-.5f,1}},
+        {{-.5f,-.5f,.5f,1},{-.5f,-.5f,-.5f,1},{.5f,-.5f,-.5f,1},{.5f,-.5f,.5f,1}}
+    };
+    const Vector2 uv[4] = {{0,1}, {0,0}, {1,0}, {1,1}};
+    for (int face = 0; face < 6; ++face) {
+        const uint32_t base = static_cast<uint32_t>(vertices_.size());
+        for (int corner = 0; corner < 4; ++corner) {
+            ModelVertexData vertex{};
+            vertex.position = faces[face][corner];
+            vertex.texcoord = uv[corner];
+            vertex.normal = normals[face];
+            vertices_.push_back(vertex);
+        }
+        // OBJのZ反転後と同じ巻き順にし、既存PSOのFrontCounterClockwiseに合わせる。
+        indices_.insert(indices_.end(), {base, base+2, base+1, base, base+3, base+2});
+    }
+}
+
 void Model::CreateBuffers(DirectXCommon* dxCommon) {
     auto device = dxCommon->GetDevice();
     const UINT vertexBufferSize = static_cast<UINT>(sizeof(ModelVertexData) * vertices_.size());
@@ -220,9 +257,22 @@ void Model::LoadMaterialFile(const std::string& directoryPath, const std::string
         if (identifier == "map_Kd") {
             // map_Kd は拡散反射テクスチャ。現在のModelはこの1枚を描画テクスチャとして使う。
             std::string textureFilename;
-            lineStream >> textureFilename;
 
-            textureFilePath_ = directoryPath + "/" + textureFilename;
+            // 元PCの絶対パスがMTLに残っている場合は、同梱画像のbasenameを使う。
+            // バックスラッシュも正規化し、空白を含む日本語パスを途中で切らない。
+            std::getline(lineStream >> std::ws, textureFilename);
+            for (char& character : textureFilename) {
+                if (character == '\\') character = '/';
+            }
+            if (textureFilename.size() >= 2 && textureFilename.front() == '"' && textureFilename.back() == '"') {
+                textureFilename = textureFilename.substr(1, textureFilename.size() - 2);
+            }
+            const std::filesystem::path directory(directoryPath);
+            std::filesystem::path candidate = directory / textureFilename;
+            if (!std::filesystem::is_regular_file(candidate)) {
+                candidate = directory / std::filesystem::path(textureFilename).filename();
+            }
+            textureFilePath_ = candidate.string();
             OutputDebugStringA(("Texture from MTL: " + textureFilePath_ + "\n").c_str());
             return;
         }

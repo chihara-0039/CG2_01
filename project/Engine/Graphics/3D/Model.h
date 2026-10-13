@@ -122,6 +122,9 @@ private:
     /// <summary>OBJ ファイルを解析して vertices_ に頂点データを格納する</summary>
     void LoadObjFile(const std::string& directoryPath, const std::string& filename);
 
+    // 未回収のOBJでも起動を継続するため、白い単位立方体を生成する。
+    void CreateRecoveryBox();
+
     /// <summary>MTL ファイルを解析してテクスチャパスを取得する</summary>
     void LoadMaterialFile(const std::string& directoryPath, const std::string& filename);
 
@@ -129,7 +132,8 @@ private:
     void CreateBuffers(DirectXCommon* dxCommon);
 
     // ── デフォルトテクスチャパス ─────────────────────────
-    std::string textureFilePath_ = "Resources/uvChecker.png";
+    // MTLがない仮の文字モデルは白テクスチャで読みやすく描く。
+    std::string textureFilePath_;
 
 private:
     // ── メッシュデータ (CPU 側) ────────────────────────────

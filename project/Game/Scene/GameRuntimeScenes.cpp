@@ -145,6 +145,11 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
     case SceneType::Title:
         currentMode_ = AppMode::Title;
         titleTimer_ = 0.0f;
+        // クリアから戻った際にスター取得HUDやポーズ状態を持ち越さない。
+        isGoalReached_ = false;
+        isGoalBlocked_ = false;
+        isGamePaused_ = false;
+        goalCelebrationTimer_ = 0.0f;
         stageMap_.SetClearColor({ 0.26f, 0.61f, 0.94f, 1.0f });
         break;
     case SceneType::StageSelect:
