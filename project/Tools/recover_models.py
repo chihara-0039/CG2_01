@@ -7,6 +7,7 @@ The lettering is geometry, since the old title/clear textures are solid colors.
 from pathlib import Path
 import argparse
 import math
+import json
 
 ROOT = Path(__file__).resolve().parents[1] / "Resources"
 MARKER = "# Recovery placeholder OBJ; not the original artwork."
@@ -74,6 +75,29 @@ class Mesh:
                         self.box(((index*6+column+.5)*pixel-width/2,
                                   (3-row)*pixel, 0), (pixel*.94,pixel*.94,.12))
 
+    def japanese_title(self, height=1.5):
+        # 日本語の字形を保存済みのマスクから立体化する。再生成にフォントの
+        # インストールは不要。横の連続画素をまとめて三角形数を抑える。
+        data = json.loads(Path(__file__).with_name("recovery_title_glyphs.json").read_text(encoding="utf-8"))
+        size = data["size"]
+        advance = data["advance"]
+        pixel = height / size
+        width = len(data["title"]) * advance * pixel
+        self.lines.append("# Game title: " + data["title"])
+        for index, character in enumerate(data["title"]):
+            for row, mask in enumerate(data["glyphs"][character]):
+                column = 0
+                while column < size:
+                    if not mask & (1 << (size - 1 - column)):
+                        column += 1
+                        continue
+                    start = column
+                    while column < size and mask & (1 << (size - 1 - column)):
+                        column += 1
+                    self.box(((index * advance + (start + column) / 2) * pixel - width / 2,
+                              (size / 2 - row - .5) * pixel, 0),
+                             ((column - start) * pixel, pixel, .12))
+
     def sphere(self, radius=.5, rings=8, sectors=16):
         def point(row,col):
             latitude = math.pi*row/rings
@@ -100,7 +124,7 @@ class Mesh:
 
 def make_model(name):
     mesh = Mesh()
-    if name == "title": mesh.text("CG2_01", 1.8)
+    if name == "title": mesh.japanese_title()
     elif name == "pressSpace": mesh.text("SPACE / A : START", .65)
     elif len(name) == 1 and name in "COURSECLEAR": mesh.text(name, 1.4)
     elif name.startswith("stageLabel"):
