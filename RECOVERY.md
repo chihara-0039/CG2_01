@@ -64,6 +64,13 @@ MTLに残った元PCの絶対画像パスは、同じフォルダの画像名で
 
 ## この環境での検証
 
+デスクトップへ提出物をまとめる場合は、Windowsのリポジトリ直下で
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\project\Tools\PackageSubmission.ps1` を実行します。
+学校PCの設定を使ってRelease/x64をビルドし、実行ファイル・出力先のDLL・Resources・起動用bat・説明書・フォントライセンスを
+`LE3B_20_チハラ_シゴウ_回転の国の探検隊` フォルダへコピーします。
+コピー内容のハッシュを確認し、同名の既存提出フォルダは日時付きで保全します。
+このPowerShellスクリプトはLinux環境では実行していません。作成後は配布フォルダから実際に起動して検証してください。
+
 リポジトリのルートで `python3 project/Tests/validate_recovery.py` を実行できます。
 Python標準ライブラリとC++20コンパイラのみを使い、生成物は一時ディレクトリへ置きます。
 
