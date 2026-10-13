@@ -4,6 +4,8 @@
 #include "SceneManager.h"
 #include "SceneFactory.h"
 #include "BaseScene.h"
+#include "RecoveryTransitionMotion.h"
+#include <cmath>
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -32,6 +34,33 @@ std::unique_ptr<BaseScene> SceneFactory::CreateScene(SceneType type) const {
 }
 
 int main() {
+    // 閉幕時の画面被覆と、黒画面の裏で装飾光が消えることを数値で確認する。
+    for (SceneType target : {SceneType::Title, SceneType::StageSelect, SceneType::GamePlay, SceneType::GameClear}) {
+        assert(RecoveryTransitionMotion::IsContestScene(target));
+        float previousSize = 0.0f;
+        for (int step = 0; step <= 100; ++step) {
+            const auto frame = RecoveryTransitionMotion::Evaluate(step / 100.0f, false, target);
+            assert(frame.size >= previousSize);
+            assert(frame.accentAlpha >= 0.0f && frame.accentAlpha <= 1.0f);
+            previousSize = frame.size;
+        }
+        const auto closed = RecoveryTransitionMotion::Evaluate(1.0f, false, target);
+        const auto opening = RecoveryTransitionMotion::Evaluate(1.0f, true, target);
+        assert(closed.rotation == opening.rotation);
+        assert(closed.accentAlpha == 0.0f);
+        for (float x : {-640.0f, 640.0f}) {
+            for (float y : {-360.0f, 360.0f}) {
+                const float localX = x * std::cos(closed.rotation) + y * std::sin(closed.rotation);
+                const float localY = -x * std::sin(closed.rotation) + y * std::cos(closed.rotation);
+                assert(std::abs(localX) < closed.size / 2 && std::abs(localY) < closed.size / 2);
+            }
+        }
+        assert(RecoveryTransitionMotion::Evaluate(-1.0f, true, target).size == 0.0f);
+        assert(RecoveryTransitionMotion::Evaluate(2.0f, false, target).size == closed.size);
+    }
+    assert(!RecoveryTransitionMotion::IsContestScene(SceneType::StageEditor));
+    assert(!RecoveryTransitionMotion::IsContestScene(SceneType::GamePlayBlockPlace));
+    std::cout << "Recovery wipe: four routes, coverage, continuity and 404 motion samples passed\n";
     using StageSelection::Direction;
     assert(StageSelection::Move(0, Direction::Up, 6) == 4);
     assert(StageSelection::Move(0, Direction::Down, 6) == 5);

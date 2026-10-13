@@ -301,13 +301,14 @@ void GameRuntime::Draw() {
         RenderScene();
     }
 
+    DrawCollisionDebugBoxes();
     // すべての3D描画・HUDより後に描き、シーン全体を自然に暗転させる。
     if (sceneFadeSprite_ && sceneFadeAlpha_ > 0.0f) {
         spriteCommon->PreDraw();
         sceneFadeSprite_->Draw();
+        if (useRecoveryTransition_ && recoveryTransition_) recoveryTransition_->Draw();
     }
 
-    DrawCollisionDebugBoxes();
 #ifdef USE_IMGUI
     dxCommon->EndImGui();
 #endif

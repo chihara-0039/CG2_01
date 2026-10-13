@@ -239,6 +239,9 @@ void GameRuntime::RequestSceneChange(SceneType sceneType) {
     }
 
     pendingSceneType_ = sceneType;
+    // コンテストの四画面だけに適用。エディタとプレイ内サブモードは従来通り。
+    useRecoveryTransition_ = RecoveryTransitionMotion::IsContestScene(currentScene) &&
+        RecoveryTransitionMotion::IsContestScene(sceneType);
     sceneFadePhase_ = SceneFadePhase::FadingOut;
     sceneFadeAlpha_ = 0.0f;
     sceneFadeHoldRemaining_ = 0.0f;
@@ -274,7 +277,10 @@ void GameRuntime::UpdateSceneFade() {
         0.1f);
     sceneFadeLastUpdate_ = now;
 
-    constexpr float kFadeSpeed = 3.0f;
+    // 幕を閉じる約0.55秒、開く約0.65秒。戻る操作も待たせすぎない長さ。
+    const float kFadeSpeed = useRecoveryTransition_
+        ? (sceneFadePhase_ == SceneFadePhase::FadingIn ? 1.0f / 0.65f : 1.0f / 0.55f)
+        : 3.0f;
     if (sceneFadePhase_ == SceneFadePhase::FadingOut) {
         sceneFadeAlpha_ = (std::min)(1.0f, sceneFadeAlpha_ + kFadeSpeed * deltaTime);
         if (sceneFadeAlpha_ >= 1.0f) {
@@ -301,7 +307,14 @@ void GameRuntime::UpdateSceneFade() {
         }
     }
 
-    sceneFadeSprite_->SetColor({ 0.0f, 0.0f, 0.0f, sceneFadeAlpha_ });
+    if (useRecoveryTransition_ && recoveryTransition_) {
+        recoveryTransition_->Update(sceneFadeAlpha_,
+            sceneFadePhase_ == SceneFadePhase::FadingIn, pendingSceneType_);
+    }
+    // 回転幕の外側は軽く暗くするだけ。切替時と保持中は全画面を完全に隠す。
+    const float opacity = useRecoveryTransition_ && sceneFadeAlpha_ < 1.0f
+        ? sceneFadeAlpha_ * 0.22f : sceneFadeAlpha_;
+    sceneFadeSprite_->SetColor({ 0.0f, 0.0f, 0.0f, opacity });
     sceneFadeSprite_->Update();
 }
 

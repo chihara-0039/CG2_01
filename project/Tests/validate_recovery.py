@@ -67,6 +67,7 @@ def main():
         subprocess.run([os.environ.get("CXX", "g++"), "-std=c++20", "-Wall", "-Wextra", "-Werror",
                         "-I"+str(PROJECT/"Game/Scene"), "-I"+str(PROJECT/"Engine/Math"),
                         str(PROJECT/"Tests/RecoveryTests.cpp"), str(PROJECT/"Game/Scene/StageSelection.cpp"),
+                        str(PROJECT/"Game/Scene/RecoveryTransitionMotion.cpp"),
                         str(PROJECT/"Game/Scene/SceneManager.cpp"), "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)
     print(f"Assets: {len(before)} OBJ, {triangles} triangles; {len(references)} literal load calls resolved")
