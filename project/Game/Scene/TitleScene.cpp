@@ -5,6 +5,11 @@
 #include <algorithm>
 #include <cmath>
 
+float TitleScene::GetOrbitStarVisibility() const {
+    const float t = std::clamp((titleNightAmount_ - 0.25f) / 0.50f, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 void TitleScene::Initialize(GameRuntime& game) {
     game.OnSceneEntered(SceneType::Title);
     game.SetTitleCloudsEnabled(true);
@@ -307,6 +312,7 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
     const float transitionProgress = startRequested_
         ? (std::min)(startAnimationTimer_ / 0.72f, 1.0f)
         : 0.0f;
+    const float orbitStarVisibility = GetOrbitStarVisibility();
     for (size_t i = 0; i < decorationStars_.size(); ++i) {
         const float orbitSpeed = 0.24f + static_cast<float>(i) * 0.012f;
         const float phase = idleTimer_ * orbitSpeed +
@@ -318,7 +324,7 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
             11.8f + std::sin(phase) * 1.4f + transitionProgress * 8.0f
         };
         const float baseScale = 0.28f + static_cast<float>(i % 3) * 0.09f;
-        const float starScale = baseScale * (1.0f - transitionProgress * 0.72f) *
+        const float starScale = baseScale * orbitStarVisibility * (1.0f - transitionProgress * 0.72f) *
             (1.0f + std::sin(idleTimer_ * 2.0f + static_cast<float>(i)) * 0.10f);
         decorationStars_[i]->SetPosition(starPosition);
         decorationStars_[i]->SetRotation({
@@ -328,7 +334,7 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
         });
         decorationStars_[i]->SetScale({ starScale, starScale, starScale });
         decorationStars_[i]->SetEmissive(
-            1.8f + (std::sin(idleTimer_ * 2.8f + static_cast<float>(i) * 0.9f) * 0.5f + 0.5f) * 1.8f);
+            (1.8f + (std::sin(idleTimer_ * 2.8f + static_cast<float>(i) * 0.9f) * 0.5f + 0.5f) * 1.8f) * orbitStarVisibility);
         decorationStars_[i]->SetCamera(view, projection);
         decorationStars_[i]->Update(Math::MakeIdentity4x4());
 
@@ -348,6 +354,7 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
             trail->SetPosition(trailPosition);
             trail->SetRotation({ trailPhase * 0.55f, -trailPhase * 0.8f, trailPhase * 0.35f });
             trail->SetScale({ trailScale, trailScale, trailScale });
+            trail->SetEmissive((1.7f - static_cast<float>(trailIndex) * 0.24f) * orbitStarVisibility);
             trail->SetCamera(view, projection);
             trail->Update(Math::MakeIdentity4x4());
         }
@@ -402,6 +409,7 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
 }
 
 void TitleScene::Draw(GameRuntime& game) {
+    const float orbitStarVisibility = GetOrbitStarVisibility();
     // タイトル専用の暖かなキーライト。文字の前面と側面へ明確な差を作る。
     if (Object3dCommon* common = game.GetObject3dCommon()) {
         common->SetCameraPosition(camera_.GetPosition());
@@ -409,7 +417,7 @@ void TitleScene::Draw(GameRuntime& game) {
         // 漂う星そのものを光源にして、タイトル表面へ色付きの光を落とす。
         // 星6灯・前面キーライト・走査光で、8灯制限内に収める。
         for (size_t i = 0; i < (std::min)(decorationStars_.size(), size_t{6}); ++i) {
-            if (!decorationStars_[i]) {
+            if (!decorationStars_[i] || orbitStarVisibility <= 0.0f) {
                 continue;
             }
             const float pulse =
@@ -419,7 +427,7 @@ void TitleScene::Draw(GameRuntime& game) {
                 : Vector4{ 0.12f, 0.55f, 1.0f, 1.0f };
             common->AddPointLight(
                 decorationStars_[i]->GetPosition(),
-                3.4f + pulse * 3.2f,
+                (3.4f + pulse * 3.2f) * orbitStarVisibility,
                 lightColor,
                 7.0f + pulse * 3.0f);
         }
@@ -451,7 +459,7 @@ void TitleScene::Draw(GameRuntime& game) {
     }
     for (auto& trails : starTrails_) {
         for (auto& trail : trails) {
-            if (trail) {
+            if (trail && orbitStarVisibility > 0.0f) {
                 trail->Draw();
             }
         }
@@ -464,7 +472,7 @@ void TitleScene::Draw(GameRuntime& game) {
         }
     }
     for (auto& star : decorationStars_) {
-        if (star) {
+        if (star && orbitStarVisibility > 0.0f) {
             star->Draw();
         }
     }

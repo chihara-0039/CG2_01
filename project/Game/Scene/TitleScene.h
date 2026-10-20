@@ -19,6 +19,8 @@ public:
     void Finalize(GameRuntime& game) override;
 
 private:
+    // 昼は0、夕暮れから増え、夜は1。星本体・軌跡・光源で同じ値を使う。
+    float GetOrbitStarVisibility() const;
     std::unique_ptr<Model> titleModel_;
     std::unique_ptr<Object3d> titleShadowObject_;
     std::unique_ptr<Object3d> titleObject_;
