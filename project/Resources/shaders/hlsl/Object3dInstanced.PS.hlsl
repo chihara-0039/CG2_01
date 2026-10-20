@@ -49,9 +49,10 @@ struct PixelShaderOutput
 float3 ApplyFantasyAtmosphere(float3 color, float3 worldPosition)
 {
     float distanceFromCamera = distance(gDirectionalLight.cameraPosition, worldPosition);
-    float distanceFog = smoothstep(18.0f, 58.0f, distanceFromCamera);
-    float heightHaze = saturate((worldPosition.y + 4.0f) / 42.0f) * 0.12f;
-    float fogAmount = saturate(distanceFog * 0.72f + heightHaze * distanceFog);
+    // 通常モデルと同じ距離・濃度にし、ブロックだけ霧が濃くなる差を作らない。
+    float distanceFog = smoothstep(48.0f, 180.0f, distanceFromCamera);
+    float heightHaze = saturate((worldPosition.y + 4.0f) / 42.0f) * 0.04f;
+    float fogAmount = saturate(distanceFog * (0.36f + heightHaze));
     float3 fogColor = lerp(float3(0.48f, 0.70f, 0.96f), gDirectionalLight.color.rgb, 0.18f);
     color = lerp(color, fogColor, fogAmount);
     float luminance = dot(color, float3(0.2126f, 0.7152f, 0.0722f));

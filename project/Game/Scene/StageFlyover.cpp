@@ -21,8 +21,10 @@ StageFlyover::Pose StageFlyover::Evaluate(float seconds, const Vector3& center,
     const float sweep = Smooth(seconds/1.8f);
     const float yaw = destination.rotation.y - .60f + .85f*sweep;
     constexpr float pitch = .65f;
-    constexpr float tourFov = .90f;
-    const float distance = radius/std::sin(tourFov*.5f)*1.10f;
+    // 大ステージを球ごと収めようとして引き続けず、画角を広げて距離を抑える。
+    const float tourFov = .90f + .15f*std::clamp((radius-18.0f)/12.0f,0.0f,1.0f);
+    const float framedRadius = (std::min)(radius,22.0f);
+    const float distance = (std::min)(framedRadius/std::sin(tourFov*.5f)*1.10f,50.0f);
     const Vector3 orbit = {center.x-std::sin(yaw)*std::cos(pitch)*distance,
         center.y+std::sin(pitch)*distance, center.z-std::cos(yaw)*std::cos(pitch)*distance};
     // 後半で俯瞰から実際のプレイ開始姿勢へ滑らかに寄せる。

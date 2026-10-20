@@ -248,9 +248,11 @@ void GameplayCameraController::ApplyCamera(Camera* camera) {
     Vector3 targetPosition = cameraPivot_;
 
     Vector3 cameraPosition;
-    cameraPosition.x = targetPosition.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * cameraDistance_;
-    cameraPosition.y = targetPosition.y + std::sin(cameraPitch_) * cameraHeight_;
-    cameraPosition.z = targetPosition.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * cameraDistance_;
+    // 画角だけの拡大では距離フォグが晴れないため、実カメラも緩やかに寄せる。
+    const float dolly = std::clamp(cameraFov_/(std::max)(referenceFov_,.1f),.75f,1.3f);
+    cameraPosition.x = targetPosition.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * cameraDistance_*dolly;
+    cameraPosition.y = targetPosition.y + std::sin(cameraPitch_) * cameraHeight_*dolly;
+    cameraPosition.z = targetPosition.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * cameraDistance_*dolly;
 
     camera->SetPosition(cameraPosition);
 
@@ -353,9 +355,11 @@ void GameplayCameraController::ResetCamera(
 
     cameraAngle_ = preset.angle;
     cameraPitch_ = preset.pitch;
-    cameraDistance_ = maxStageSize * preset.distanceRate;
-    cameraHeight_ = maxStageSize * preset.heightRate;
+    // 見回しは開始演出が担当し、プレイ開始カメラはプレイヤーを見失わない距離に収める。
+    cameraDistance_ = std::clamp(maxStageSize * preset.distanceRate,8.0f,36.0f);
+    cameraHeight_ = std::clamp(maxStageSize * preset.heightRate,6.0f,24.0f);
     cameraFov_ = preset.fov;
+    referenceFov_ = preset.fov;
 
     enableWallTransparency_ = preset.enableWallTransparency;
     wallTransparencyAlpha_ = preset.wallTransparencyAlpha;

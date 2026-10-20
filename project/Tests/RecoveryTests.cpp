@@ -42,7 +42,9 @@ int main() {
         const auto beginning = StageFlyover::Evaluate(0,stageCenter,radius,destination);
         const Vector3 direction{stageCenter.x-beginning.position.x,stageCenter.y-beginning.position.y,stageCenter.z-beginning.position.z};
         const float distance = std::sqrt(direction.x*direction.x+direction.y*direction.y+direction.z*direction.z);
-        assert(distance*std::sin(beginning.fov/2) > radius);
+        // 巨大ステージは全体を無理に収めず、見せる範囲と距離に上限を設ける。
+        assert(distance*std::sin(beginning.fov/2) > (std::min)(radius,22.0f));
+        assert(distance <= 50.001f);
         const Vector3 forward{std::sin(beginning.rotation.y)*std::cos(beginning.rotation.x),
             -std::sin(beginning.rotation.x),std::cos(beginning.rotation.y)*std::cos(beginning.rotation.x)};
         assert((direction.x*forward.x+direction.y*forward.y+direction.z*forward.z)/distance > .999f);
@@ -50,7 +52,7 @@ int main() {
             const auto pose = StageFlyover::Evaluate(i*.01f,stageCenter,radius,destination);
             assert(std::isfinite(pose.position.x) && std::isfinite(pose.position.y) && std::isfinite(pose.position.z));
             assert(std::isfinite(pose.rotation.x) && std::isfinite(pose.rotation.y));
-            assert(pose.fov >= .6f && pose.fov <= 1.0f);
+            assert(pose.fov >= .6f && pose.fov <= 1.10f);
         }
         const auto landing = StageFlyover::Evaluate(StageFlyover::kDuration,stageCenter,radius,destination);
         const auto approach = StageFlyover::Evaluate(StageFlyover::kDuration-.001f,stageCenter,radius,destination);
