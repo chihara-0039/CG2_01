@@ -724,8 +724,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 instancingData[index].lightDirection = { 0.0f, -1.0f };
                 instancingData[index].ambientLight = 1.0f;
             }
-            instancingData[index].shape = particle.ambientCloud && ambientCloudEmitter_.softLighting
-                ? 3.0f : particle.type == Particle::Type::StormCloud
+            instancingData[index].shape = particle.type == Particle::Type::StormCloud
                 ? 2.0f
                 : particle.type == Particle::Type::Lightning ? 1.0f : 0.0f;
             index++;

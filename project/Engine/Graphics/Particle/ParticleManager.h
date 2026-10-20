@@ -120,7 +120,6 @@ public: // サブクラスなど
         float speed = 0.012f;
         Vector4 color = { 0.72f, 0.78f, 0.90f, 0.22f };
         bool depthParallax = false;
-        bool softLighting = false; // タイトル用の薄い雲。通常の嵐の雲とは描き分ける。
         int wispsPerEmission = 3;
         float verticalScale = 1.0f;
         Vector3 lightDirection = { 0.0f, -1.0f, 0.0f };
