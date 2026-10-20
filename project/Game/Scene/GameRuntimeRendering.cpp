@@ -458,6 +458,10 @@ void GameRuntime::RenderScene() {
         if (sprite) { sprite->Draw(); }
     }
 
+    // ステージ紹介中はチュートリアルや目標矢印で景色を遮らない。
+    // 黒帯と回転幕はDraw側で別途描くため、この早期returnでも表示される。
+    if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsTouring()) return;
+
     if (gameplayUIManager_) {
         gameplayUIManager_->DrawSprites(
             currentMode_ == AppMode::GamePlay ||

@@ -6,6 +6,7 @@
 #include "BaseScene.h"
 #include "RecoveryTransitionMotion.h"
 #include "StartIntroTimeline.h"
+#include "StageFlyover.h"
 #include <cmath>
 #include <cassert>
 #include <iostream>
@@ -35,6 +36,31 @@ std::unique_ptr<BaseScene> SceneFactory::CreateScene(SceneType type) const {
 }
 
 int main() {
+    const StageFlyover::Pose destination{{4,8,-12},{.45f,3.1f,0},.67f};
+    const Vector3 stageCenter{16,6,16};
+    for (float radius : {1.0f,8.0f,30.0f,80.0f}) {
+        const auto beginning = StageFlyover::Evaluate(0,stageCenter,radius,destination);
+        const Vector3 direction{stageCenter.x-beginning.position.x,stageCenter.y-beginning.position.y,stageCenter.z-beginning.position.z};
+        const float distance = std::sqrt(direction.x*direction.x+direction.y*direction.y+direction.z*direction.z);
+        assert(distance*std::sin(beginning.fov/2) > radius);
+        const Vector3 forward{std::sin(beginning.rotation.y)*std::cos(beginning.rotation.x),
+            -std::sin(beginning.rotation.x),std::cos(beginning.rotation.y)*std::cos(beginning.rotation.x)};
+        assert((direction.x*forward.x+direction.y*forward.y+direction.z*forward.z)/distance > .999f);
+        for (int i=0;i<=320;++i) {
+            const auto pose = StageFlyover::Evaluate(i*.01f,stageCenter,radius,destination);
+            assert(std::isfinite(pose.position.x) && std::isfinite(pose.position.y) && std::isfinite(pose.position.z));
+            assert(std::isfinite(pose.rotation.x) && std::isfinite(pose.rotation.y));
+            assert(pose.fov >= .6f && pose.fov <= 1.0f);
+        }
+        const auto landing = StageFlyover::Evaluate(StageFlyover::kDuration,stageCenter,radius,destination);
+        const auto approach = StageFlyover::Evaluate(StageFlyover::kDuration-.001f,stageCenter,radius,destination);
+        assert(landing.position.x == destination.position.x && landing.position.y == destination.position.y && landing.position.z == destination.position.z);
+        assert(landing.rotation.y == destination.rotation.y && landing.fov == destination.fov);
+        assert(std::abs(approach.position.x-landing.position.x) < .002f);
+        assert(std::abs(approach.position.y-landing.position.y) < .002f);
+        assert(std::abs(approach.position.z-landing.position.z) < .002f);
+    }
+    std::cout << "Stage flyover: four stage sizes, framing, 1284 samples and exact landing passed\n";
     const float cueTimes[] = {0, 1, 2, 3, 4};
     for (int cue = 0; cue < 5; ++cue) {
         const auto frame = StartIntroTimeline::Evaluate(cueTimes[cue]);

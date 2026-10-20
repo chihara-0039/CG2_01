@@ -3,6 +3,7 @@
 #include "Sound.h"
 #include "Camera.h"
 #include "StartIntroTimeline.h"
+#include "StageFlyover.h"
 #include <array>
 #include <memory>
 #include <chrono>
@@ -11,12 +12,13 @@
 class StartIntro {
 public:
     void Initialize(SpriteCommon* common);
-    void Begin(Camera* camera);
+    void Begin(Camera* camera, const Vector3& stageCenter, float stageRadius);
     void Update(Camera* camera, bool visible);
     void Cancel(Camera* camera);
     void Finalize();
     void Draw();
     bool IsActive() const { return active_; }
+    bool IsTouring() const { return active_ && touring_; }
     bool BlocksInput() const { return active_ && frame_.blocksInput; }
     bool ConsumeGo();
 private:
@@ -34,6 +36,11 @@ private:
     std::chrono::steady_clock::time_point lastUpdate_{};
     float elapsed_ = 0;
     float cameraFov_ = .55f;
+    float cameraFarClip_ = 100.0f;
+    Vector3 stageCenter_{};
+    float stageRadius_ = 3;
+    StageFlyover::Pose gameCamera_{};
+    bool touring_ = false;
     int lastCue_ = -1;
     bool active_ = false;
     bool goPending_ = false;

@@ -196,7 +196,22 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
     HandleModeChange();
 
     if (sceneType == SceneType::GamePlay && startIntroPending_ && startIntro_) {
-        startIntro_->Begin(camera.get());
+        // 空の余白を含むグリッドサイズではなく、実際の配置範囲へ俯瞰を合わせる。
+        Vector3 minimum{static_cast<float>(stageMap_.GetWidth()),static_cast<float>(stageMap_.GetHeight()),static_cast<float>(stageMap_.GetDepth())};
+        Vector3 maximum{};
+        bool found = false;
+        for (int y=0; y<stageMap_.GetHeight(); ++y) for (int z=0; z<stageMap_.GetDepth(); ++z) for (int x=0; x<stageMap_.GetWidth(); ++x) {
+            const MapCell* cell = stageMap_.GetCell(x,y,z);
+            if (!cell || cell->type == BlockType::None) continue;
+            found = true;
+            minimum.x = (std::min)(minimum.x,x-.5f); minimum.y = (std::min)(minimum.y,y-.5f); minimum.z = (std::min)(minimum.z,z-.5f);
+            maximum.x = (std::max)(maximum.x,x+.5f); maximum.y = (std::max)(maximum.y,y+.5f); maximum.z = (std::max)(maximum.z,z+.5f);
+        }
+        const Vector3 center = found ? Vector3{(minimum.x+maximum.x)*.5f,(minimum.y+maximum.y)*.5f,(minimum.z+maximum.z)*.5f}
+            : player_ ? player_->GetPosition() : Vector3{};
+        const float dx=maximum.x-minimum.x,dy=maximum.y-minimum.y,dz=maximum.z-minimum.z;
+        const float radius = found ? .5f*std::sqrt(dx*dx+dy*dy+dz*dz) : 3.0f;
+        startIntro_->Begin(camera.get(),center,radius);
         startIntroPending_ = false;
     }
 

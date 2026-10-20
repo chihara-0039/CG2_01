@@ -62,12 +62,21 @@ Sound::SoundData StartIntro::MakeTone(bool go) {
     return data;
 }
 
-void StartIntro::Begin(Camera* camera) {
+void StartIntro::Begin(Camera* camera, const Vector3& stageCenter, float stageRadius) {
     elapsed_ = 0;
     lastCue_ = -1;
     active_ = true;
     goPending_ = false;
     cameraFov_ = camera->GetFov();
+    cameraFarClip_ = camera->GetFarClip();
+    stageCenter_ = stageCenter;
+    stageRadius_ = stageRadius;
+    gameCamera_ = {camera->GetPosition(),camera->GetRotation(),cameraFov_+.12f};
+    touring_ = true;
+    camera->SetFarClip((std::max)(cameraFarClip_,stageRadius_*6+20));
+    const auto pose = StageFlyover::Evaluate(0, stageCenter_, stageRadius_, gameCamera_);
+    camera->SetPosition(pose.position); camera->SetRotation(pose.rotation);
+    camera->SetFov(pose.fov); camera->Update();
     frame_ = StartIntroTimeline::Evaluate(0);
     lastUpdate_ = std::chrono::steady_clock::now();
     UpdateSprites();
@@ -82,18 +91,24 @@ void StartIntro::Update(Camera* camera, bool visible) {
     // 黒い幕の裏と非アクティブ中は進めず、カウントを見逃させない。
     if (!visible) return;
     elapsed_ += delta;
-    frame_ = StartIntroTimeline::Evaluate(elapsed_);
-    if (frame_.cue != lastCue_) {
+    touring_ = elapsed_ < StageFlyover::kDuration;
+    // 俯瞰中は数字も音も始めない。着地後に既存のカウントをそのまま再生する。
+    frame_ = StartIntroTimeline::Evaluate((std::max)(0.0f,elapsed_-StageFlyover::kDuration));
+    if (!touring_ && frame_.cue != lastCue_) {
         if (frame_.cue >= 1) sound_.SoundPlay(frame_.cue == 4 ? go_ : tick_, .55f);
         if (frame_.cue == 4) goPending_ = true;
         lastCue_ = frame_.cue;
     }
     sound_.CleanupFinishedSoundEffects();
     if (frame_.blocksInput) {
-        camera->SetFov(cameraFov_+.12f*(1-frame_.cameraBlend));
+        const auto pose = StageFlyover::Evaluate(elapsed_,stageCenter_,stageRadius_,gameCamera_);
+        camera->SetPosition(pose.position); camera->SetRotation(pose.rotation);
+        camera->SetFov(touring_ ? pose.fov : cameraFov_+.12f*(1-frame_.cameraBlend));
+        if (!touring_) camera->SetFarClip(cameraFarClip_);
         camera->Update();
     } else if (goPending_) {
         camera->SetFov(cameraFov_);
+        camera->SetFarClip(cameraFarClip_);
         camera->Update();
     }
     UpdateSprites();
@@ -101,7 +116,10 @@ void StartIntro::Update(Camera* camera, bool visible) {
 }
 
 void StartIntro::Cancel(Camera* camera) {
-    if (active_ && frame_.blocksInput && camera) { camera->SetFov(cameraFov_); camera->Update(); }
+    if (active_ && frame_.blocksInput && camera) {
+        camera->SetPosition(gameCamera_.position); camera->SetRotation(gameCamera_.rotation);
+        camera->SetFov(cameraFov_); camera->SetFarClip(cameraFarClip_); camera->Update();
+    }
     active_ = false;
     goPending_ = false;
     sound_.StopAllSoundEffects();
@@ -160,6 +178,7 @@ void StartIntro::UpdateSprites() {
 void StartIntro::Draw() {
     if (!active_) return;
     for (auto& bar : bars_) bar->Draw();
+    if (touring_) return; // ステージを見せる間は黒帯だけ。中央の文字や帯で遮らない。
     backdrop_->Draw();
     for (auto& line : frameLines_) line->Draw();
     for (size_t i = 0; i < pixelCount_; ++i) pixels_[i]->Draw();
