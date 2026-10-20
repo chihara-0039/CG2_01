@@ -41,6 +41,11 @@ PixelShaderOutput main(VertexShaderOutput input)
     float solidLineAlpha = lineSideAlpha * lineEndAlpha;
     float density = CloudDensity(centeredUv);
     float cloudAlpha = smoothstep(0.035f, 0.90f, density) * 0.72f;
+    if (input.shape > 2.5f)
+    {
+        // タイトルの薄雲は濃い中心を作らず、広い柔らかな縁で空へなじませる。
+        cloudAlpha = smoothstep(0.015f, 1.25f, density) * 0.46f;
+    }
     cloudAlpha *= 1.0f - smoothstep(0.78f, 1.0f, max(abs(centeredUv.x), abs(centeredUv.y)));
     float shapeAlpha = input.shape > 1.5f
         ? cloudAlpha
@@ -52,7 +57,15 @@ PixelShaderOutput main(VertexShaderOutput input)
 
     // 雲は発光物ではないため、ブルーム抽出閾値より十分低い明度に抑える。
     // 雷や通常パーティクルには適用せず、太陽・月など他の発光表現を維持する。
-    if (input.shape > 1.5f)
+    if (input.shape > 2.5f)
+    {
+        // 煙のような強い凹凸陰影を避け、空色を透かすパール色にする。
+        float volume = smoothstep(0.08f, 1.4f, density);
+        float3 lighting = float3(0.86f, 0.90f, 0.96f) + input.lightColor.rgb * 0.10f;
+        output.color.rgb *= lighting * lerp(0.94f, 1.0f, volume);
+        output.color.rgb = min(output.color.rgb, float3(0.76f, 0.76f, 0.76f));
+    }
+    else if (input.shape > 1.5f)
     {
         const float epsilon = 0.025f;
         const float gradientX = (CloudDensity(centeredUv + float2(epsilon, 0.0f)) -

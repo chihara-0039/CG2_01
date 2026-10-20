@@ -19,22 +19,24 @@ void GameRuntime::SetTitleCloudsEnabled(bool enabled) {
         clouds.heightRange = 14.0f;
         clouds.areaX = 30.0f;
         clouds.areaZ = 32.0f;
-        clouds.emitRate = 7.0f;
-        clouds.life = 48.0f;
-        clouds.size = 2.15f;
+        clouds.emitRate = 3.0f;
+        clouds.life = 36.0f;
+        clouds.size = 2.6f;
         clouds.speed = 0.014f;
         clouds.depthParallax = true;
-        clouds.wispsPerEmission = 8;
-        clouds.verticalScale = 1.05f;
-        // 青空との差が消えない白さと濃度。通常アルファ合成なので発光しすぎない。
-        clouds.color = { 0.58f, 0.62f, 0.68f, 0.95f };
+        clouds.softLighting = true;
+        clouds.wispsPerEmission = 4;
+        clouds.verticalScale = 0.65f;
+        // 重なりを減らし、空の青が透ける薄い雲をゆっくり流す。
+        clouds.color = { 0.88f, 0.93f, 1.0f, 0.18f };
         // 起動直後から十分な雲が見えるように初回更新をプリウォームする。
         clouds.emitTimer = 0.0f;
-        clouds.prewarmSeconds = 48.0f;
+        clouds.prewarmSeconds = 36.0f;
     } else {
         clouds.emitTimer = 0.0f;
         clouds.prewarmSeconds = 0.0f;
         clouds.depthParallax = false;
+        clouds.softLighting = false;
         clouds.wispsPerEmission = 3;
         clouds.verticalScale = 1.0f;
         particleManager->ClearParticles();
@@ -62,11 +64,11 @@ void GameRuntime::UpdateTitleDayNightCycle(float elapsedSeconds) {
 
 	// タイトルの昼夜サイクルは、雲の色や光源の方向・色・強さを変化させる。
     const EnvironmentKey keys[] = {
-        { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.58f, 0.62f, 0.68f, 0.44f }, { 1.0f, 0.91f, 0.72f }, { -0.32f, -0.58f, -0.75f }, 1.18f },
-        { { 0.88f, 0.30f, 0.14f, 1.0f }, { 1.10f, 0.48f, 0.24f, 1.0f }, { 0.62f, 0.38f, 0.28f, 0.40f }, { 1.0f, 0.48f, 0.20f }, { -0.8f, -0.22f, 0.3f }, 0.68f },
-        { { 0.012f, 0.022f, 0.085f, 1.0f }, { 0.10f, 0.16f, 0.34f, 1.0f }, { 0.12f, 0.18f, 0.30f, 0.28f }, { 0.28f, 0.45f, 0.92f }, { 0.16f, -0.72f, 0.48f }, 0.26f },
-        { { 0.44f, 0.18f, 0.32f, 1.0f }, { 0.66f, 0.34f, 0.56f, 1.0f }, { 0.46f, 0.34f, 0.48f, 0.34f }, { 1.0f, 0.62f, 0.54f }, { 0.72f, -0.30f, 0.24f }, 0.62f },
-        { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.58f, 0.62f, 0.68f, 0.44f }, { 1.0f, 0.91f, 0.72f }, { -0.32f, -0.58f, -0.75f }, 1.18f }
+        { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.88f, 0.93f, 1.0f, 0.18f }, { 1.0f, 0.91f, 0.72f }, { -0.32f, -0.58f, -0.75f }, 1.18f },
+        { { 0.88f, 0.30f, 0.14f, 1.0f }, { 1.10f, 0.48f, 0.24f, 1.0f }, { 0.92f, 0.68f, 0.56f, 0.18f }, { 1.0f, 0.48f, 0.20f }, { -0.8f, -0.22f, 0.3f }, 0.68f },
+        { { 0.012f, 0.022f, 0.085f, 1.0f }, { 0.10f, 0.16f, 0.34f, 1.0f }, { 0.30f, 0.40f, 0.62f, 0.14f }, { 0.28f, 0.45f, 0.92f }, { 0.16f, -0.72f, 0.48f }, 0.26f },
+        { { 0.44f, 0.18f, 0.32f, 1.0f }, { 0.66f, 0.34f, 0.56f, 1.0f }, { 0.76f, 0.67f, 0.84f, 0.16f }, { 1.0f, 0.62f, 0.54f }, { 0.72f, -0.30f, 0.24f }, 0.62f },
+        { { 0.26f, 0.61f, 0.94f, 1.0f }, { 0.94f, 0.98f, 1.08f, 1.0f }, { 0.88f, 0.93f, 1.0f, 0.18f }, { 1.0f, 0.91f, 0.72f }, { -0.32f, -0.58f, -0.75f }, 1.18f }
     };
     const auto lerp3 = [blend](const Vector3& a, const Vector3& b) {
         return Vector3{ a.x + (b.x - a.x) * blend, a.y + (b.y - a.y) * blend, a.z + (b.z - a.z) * blend };
@@ -111,7 +113,7 @@ void GameRuntime::UpdateTitleDayNightCycle(float elapsedSeconds) {
 	// 雲の色は、タイトルの昼夜サイクルが有効な場合のみ反映する。シーン遷移時に
     if (particleManager) {
         Vector4 cloudColor = lerp4(from.cloud, to.cloud);
-        cloudColor.w = (std::min)(cloudColor.w * 1.65f, 0.80f);
+        cloudColor.w = std::clamp(cloudColor.w, 0.0f, 0.20f);
         particleManager->SetAmbientCloudColor(cloudColor);
         particleManager->SetAmbientCloudLighting(
             celestialDirection, celestialColor, celestialIntensity,

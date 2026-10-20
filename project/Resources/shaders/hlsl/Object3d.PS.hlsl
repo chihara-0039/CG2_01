@@ -63,11 +63,10 @@ float3 ApplyFantasyAtmosphere(float3 color, float3 worldPosition)
 {
     // 遠景を明るい空色へなじませ、空中世界らしい奥行きを作る。
     float distanceFromCamera = distance(gDirectionalLight.cameraPosition, worldPosition);
-    // 近景48ユニットは晴れた状態を保ち、遠景も最大40%までに留める。
-    // 通常の俯瞰カメラからプレイ地点を見ても白く潰さない。
-    float distanceFog = smoothstep(48.0f, 180.0f, distanceFromCamera);
+    // 近景22ユニットは晴らし、中景から遠景には視認できる霞を残す。
+    float distanceFog = smoothstep(22.0f, 100.0f, distanceFromCamera);
     float heightHaze = saturate((worldPosition.y + 4.0f) / 42.0f) * 0.04f;
-    float fogAmount = saturate(distanceFog * (0.36f + heightHaze));
+    float fogAmount = saturate(distanceFog * (0.48f + heightHaze));
     float3 fogColor = lerp(float3(0.48f, 0.70f, 0.96f), gDirectionalLight.color.rgb, 0.18f);
     color = lerp(color, fogColor, fogAmount);
 
