@@ -76,7 +76,8 @@ void StartIntro::Begin(Camera* camera) {
 void StartIntro::Update(Camera* camera, bool visible) {
     if (!active_) return;
     const auto now = std::chrono::steady_clock::now();
-    const float delta = std::clamp(std::chrono::duration<float>(now-lastUpdate_).count(), 0.0f, .1f);
+    // 演出時計は実経過時間を使う。0.1秒で打ち切ると低FPS時だけ拍が伸びる。
+    const float delta = (std::max)(std::chrono::duration<float>(now-lastUpdate_).count(), 0.0f);
     lastUpdate_ = now;
     // 黒い幕の裏と非アクティブ中は進めず、カウントを見逃させない。
     if (!visible) return;

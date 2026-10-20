@@ -3,9 +3,11 @@
 
 StartIntroTimeline::Frame StartIntroTimeline::Evaluate(float seconds) {
     seconds = (std::max)(seconds, 0.0f);
-    const int cue = seconds < .75f ? 0 : seconds < 1.4f ? 1 :
-        seconds < 2.05f ? 2 : seconds < kGoTime ? 3 : 4;
-    constexpr float starts[] = {0, .75f, 1.4f, 2.05f, kGoTime};
+    // 表示・効果音・操作解禁が、すべて同じ1秒の拍を参照する。
+    constexpr float starts[] = {0, kReadyDuration, kReadyDuration+kCountInterval,
+        kReadyDuration+2*kCountInterval, kGoTime};
+    const int cue = seconds < starts[1] ? 0 : seconds < starts[2] ? 1 :
+        seconds < starts[3] ? 2 : seconds < starts[4] ? 3 : 4;
     const float local = seconds - starts[cue];
     const float settle = std::clamp(local / .22f, 0.0f, 1.0f);
     const float pop = (1.0f-settle)*(1.0f-settle);

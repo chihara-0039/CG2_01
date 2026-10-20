@@ -35,12 +35,16 @@ std::unique_ptr<BaseScene> SceneFactory::CreateScene(SceneType type) const {
 }
 
 int main() {
-    const float cueTimes[] = {0, .75f, 1.4f, 2.05f, StartIntroTimeline::kGoTime};
+    const float cueTimes[] = {0, 1, 2, 3, 4};
     for (int cue = 0; cue < 5; ++cue) {
         const auto frame = StartIntroTimeline::Evaluate(cueTimes[cue]);
         assert(frame.cue == cue);
         assert(frame.blocksInput == (cue < 4));
         assert(!frame.finished);
+        if (cue > 0) {
+            assert(cueTimes[cue]-cueTimes[cue-1] == 1.0f);
+            assert(StartIntroTimeline::Evaluate(cueTimes[cue]-.001f).cue == cue-1);
+        }
     }
     assert(StartIntroTimeline::Evaluate(-5).cue == 0);
     assert(StartIntroTimeline::Evaluate(StartIntroTimeline::kGoTime-.001f).blocksInput);
@@ -48,6 +52,20 @@ int main() {
     const auto finalIntro = StartIntroTimeline::Evaluate(StartIntroTimeline::kDuration);
     assert(finalIntro.finished && finalIntro.alpha == 0 && finalIntro.letterbox == 0);
     assert(finalIntro.cameraBlend == 1);
+    // 30/60/144fpsのサンプルでも切替は同じ実時間の拍で決まる。
+    for (float step : {1.0f/30, 1.0f/60, 1.0f/144, .15f}) {
+        int previousCue = 0;
+        for (float time = 0; time < StartIntroTimeline::kDuration; time += step) {
+            const auto frame = StartIntroTimeline::Evaluate(time);
+            if (frame.cue != previousCue) {
+                assert(frame.cue == previousCue+1);
+                assert(time >= cueTimes[frame.cue]);
+                assert(time < cueTimes[frame.cue]+step+.0001f);
+                previousCue = frame.cue;
+            }
+        }
+        assert(previousCue == 4);
+    }
     for (int sample = 0; sample <= 500; ++sample) {
         const auto frame = StartIntroTimeline::Evaluate(sample*.01f);
         assert(frame.cue >= 0 && frame.cue <= 4);
