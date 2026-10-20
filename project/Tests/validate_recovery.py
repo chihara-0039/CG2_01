@@ -16,6 +16,8 @@ import recover_models
 
 
 def main():
+    material_count, restored = recover_models.restore_missing_textures()
+    assert not restored, "Validation must not create or overwrite textures"
     triangles = sum(recover_models.validate(p) for p in recover_models.targets())
     references = []
     for directory in ("Game", "Engine"):
@@ -59,8 +61,12 @@ def main():
 
     # --write is repeatable and must not alter a recovered asset's bytes.
     before = {p:hashlib.sha256(p.read_bytes()).hexdigest() for p in recover_models.targets()}
+    texture_before = {p:hashlib.sha256(p.read_bytes()).hexdigest()
+                      for p in (PROJECT/"Resources").rglob("*.png")}
     subprocess.run([sys.executable, str(PROJECT/"Tools/recover_models.py"), "--write"], check=True)
     assert before == {p:hashlib.sha256(p.read_bytes()).hexdigest() for p in recover_models.targets()}
+    assert texture_before == {p:hashlib.sha256(p.read_bytes()).hexdigest()
+                              for p in (PROJECT/"Resources").rglob("*.png")}
 
     with tempfile.TemporaryDirectory(prefix="cg2-recovery-") as tmp:
         binary = Path(tmp)/"recovery_tests"
@@ -71,6 +77,7 @@ def main():
                         str(PROJECT/"Game/Scene/SceneManager.cpp"), "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)
     print(f"Assets: {len(before)} OBJ, {triangles} triangles; {len(references)} literal load calls resolved")
+    print(f"Material diffuse texture references: {material_count} resolved; PNG files preserved")
     print(f"Stages: {len(sequence)} files with spawn/goal; glTF dependencies and XML checked")
     print("Gitignore and generator repeatability passed. Windows build/render/input/fade remain unverified.")
 

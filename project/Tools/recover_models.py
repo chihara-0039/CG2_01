@@ -8,6 +8,7 @@ from pathlib import Path
 import argparse
 import math
 import json
+import shutil
 
 ROOT = Path(__file__).resolve().parents[1] / "Resources"
 MARKER = "# Recovery placeholder OBJ; not the original artwork."
@@ -169,6 +170,37 @@ def targets():
     return sorted(result)
 
 
+def restore_missing_textures(write=False):
+    """Reuse surviving source textures without replacing any existing artwork.
+
+    Check every material, including the second material in multiMaterial.mtl.
+    Windows absolute paths are resolved by their local basename, like Model.cpp.
+    Unknown missing images are errors rather than silently generated white maps.
+    """
+    sources = {
+        "uvChecker.png": ROOT / "Models/axis/uvChecker.png",
+        "monsterBall.png": ROOT / "Models/Work/monsterBall.png",
+    }
+    checked = 0
+    restored = []
+    for material in sorted(ROOT.rglob("*.mtl")):
+        for line in material.read_text(encoding="utf-8-sig").splitlines():
+            words = line.strip().split(None, 1)
+            if len(words) != 2 or words[0] != "map_Kd":
+                continue
+            name = words[1].strip().strip('"').replace("\\", "/")
+            local = material.parent / Path(name).name
+            relative = material.parent / name
+            if not relative.is_file() and not local.is_file():
+                source = sources.get(local.name)
+                if not write or source is None or not source.is_file():
+                    raise FileNotFoundError(f"Material texture missing: {material}: {name}")
+                shutil.copyfile(source, local)
+                restored.append(local)
+            checked += 1
+    return checked, restored
+
+
 def validate(path):
     counts = {"v":0,"vt":0,"vn":0,"f":0}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -195,6 +227,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write",action="store_true",help="Generate only missing or marked recovery models")
     args = parser.parse_args()
+    checked, restored = restore_missing_textures(write=args.write)
     triangles = 0
     for path in targets():
         if args.write and (not path.exists() or path.read_text(encoding="utf-8").startswith(MARKER)):
@@ -205,6 +238,7 @@ def main():
             path.write_text("\n".join(mesh.lines)+"\n",encoding="utf-8")
         triangles += validate(path)
     print(f"Validated {len(targets())} recovery/model OBJ files, {triangles} triangles")
+    print(f"Material texture references checked: {checked}; restored missing images: {len(restored)}")
 
 
 if __name__ == "__main__": main()

@@ -88,6 +88,15 @@ Windowsのアプリ全体のビルド、見た目、効果音、実入力、ク�
 
 ## 元モデルを回収できた場合
 
+### 不足テクスチャの補完
+
+MTL全体の再検査で、06_02、multiMaterial、multiMesh、planeの素材フォルダに
+`uvChecker.png` / `monsterBall.png` の不足が見つかったため、計6ファイルを補完しました。
+元画像は `Resources/Models/axis/uvChecker.png` と `Resources/Models/Work/monsterBall.png` に残っていたものを再利用しています。
+MTL内の第2マテリアルも含めた47件の拡散テクスチャ参照を検査しています。
+`recover_models.py --write` は、これらの既知の画像が不足した場合だけコピーし、既存画像は上書きしません。
+この補完は元モデルの形状の復元ではなく、仮モデル49個は引き続き復旧版の形状です。
+
 仮OBJの先頭には `# Recovery placeholder OBJ; not the original artwork.` を付けています。
 同じパスへ回収した元OBJを置けば読み込み箇所は変わりません。実物の形状・向きに合わせた調整は別途必要です。
 `python3 project/Tools/recover_models.py --write` は欠けたファイルと上記マーカー付き仮モデルだけを生成し、
