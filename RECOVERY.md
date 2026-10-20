@@ -90,6 +90,12 @@ Windowsのアプリ全体のビルド、見た目、効果音、実入力、ク�
 
 ### 不足テクスチャの補完
 
+Gitが使えないPC向けに、モデルを含むオフライン復旧パックを生成できます。
+`python3 project/Tools/BuildModelRepairPack.py --output /tmp/CG2_01_model_repair_pack.zip`
+全49 OBJ・40 MTL・参照画像・フォントライセンスと、不足ファイルだけ追加するPowerShellを収録します。
+ZIPを展開後、付属READMEに従って実行してください。既存ファイルとSDK設定は上書きしません。
+PowerShellによるWindowsでの配置動作は、このLinux環境では未実行です。
+
 MTL全体の再検査で、06_02、multiMaterial、multiMesh、planeの素材フォルダに
 `uvChecker.png` / `monsterBall.png` の不足が見つかったため、計6ファイルを補完しました。
 元画像は `Resources/Models/axis/uvChecker.png` と `Resources/Models/Work/monsterBall.png` に残っていたものを再利用しています。
