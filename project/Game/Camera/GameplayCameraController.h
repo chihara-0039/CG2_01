@@ -88,6 +88,7 @@ private:
     float heightRate_ = 0.55f;
 
     float cameraFov_ = 0.55f;
+    float referenceFov_ = 0.55f; // ステージ初期画角。ズーム時の実移動の基準。
     float minFov_ = 0.25f;
     float maxFov_ = 1.0f;
 

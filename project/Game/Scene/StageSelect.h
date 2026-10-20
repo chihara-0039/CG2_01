@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <array>
 
 // ステージ選択画面の入力、選択中ステージ表示、決定状態を管理する。
 class StageSelect
@@ -39,6 +40,12 @@ private:
 	// ステージ選択画面で回転表示するプレビュー用モデル。
 	std::unique_ptr<Model> stageModel_;
 	std::unique_ptr<Object3d> stageObject_;
+
+	// 回転する仮キューブとは別に、選択内容と戻る操作を正面の文字で表示する。
+	std::array<std::unique_ptr<Model>, 6> labelModels_;
+	std::unique_ptr<Object3d> labelObject_;
+	std::unique_ptr<Model> backGuideModel_;
+	std::unique_ptr<Object3d> backGuideObject_;
 
 	Vector3 rotation_ = { 0.0f, 0.0f, 0.0f };
 

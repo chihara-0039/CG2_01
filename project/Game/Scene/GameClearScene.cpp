@@ -19,12 +19,21 @@ void GameClearScene::Initialize(GameRuntime& game) {
         letter.object = std::make_unique<Object3d>();
         letter.object->Initialize(object3dCommon);
         letter.object->SetModel(letter.model.get());
-        letter.object->SetRotation({ 0.0f, 3.1415926f, 0.0f });
-        letter.position = { -6.0f + static_cast<float>(i) * 1.2f, -10.0f, 0.0f };
+        // 復旧用文字メッシュは正面向き。COURSEとCLEARの間に読みやすい空白を置く。
+        letter.object->SetRotation({ 0.0f, 0.0f, 0.0f });
+        letter.object->SetEnableLighting(false);
+        letter.position = { -6.4f + static_cast<float>(i) * 1.2f + (i >= 6 ? 0.8f : 0.0f), -10.0f, 0.0f };
         letters_.push_back(std::move(letter));
     }
 
     timer_ = 0.0f;
+    backGuideModel_ = Model::CreateFromOBJ(object3dCommon->GetDxCommon(),
+        "Resources/Models/Recovery", "backGuide.obj", object3dCommon->GetTextureManager());
+    backGuideObject_ = std::make_unique<Object3d>();
+    backGuideObject_->Initialize(object3dCommon);
+    backGuideObject_->SetModel(backGuideModel_.get());
+    backGuideObject_->SetEnableLighting(false);
+    backGuideObject_->SetPosition({0.0f, -5.2f, 0.0f});
     finishTimer_ = 0.0f;
     animationFinished_ = false;
     camera_.SetPosition({ 0.0f, 2.0f, -20.0f });
@@ -62,6 +71,8 @@ void GameClearScene::Update(GameRuntime& game, const SceneUpdateContext& context
     }
 
     animationFinished_ = allFinished;
+    backGuideObject_->SetCamera(camera_.GetViewMatrix(), camera_.GetProjectionMatrix());
+    backGuideObject_->Update(Math::MakeIdentity4x4());
     if (animationFinished_) {
         finishTimer_ += 1.0f;
         const float pulse = finishTimer_ < 10.0f
@@ -81,9 +92,12 @@ void GameClearScene::Draw(GameRuntime& game) {
             letter.object->Draw();
         }
     }
+    if (animationFinished_ && backGuideObject_) backGuideObject_->Draw();
 }
 
 void GameClearScene::Finalize(GameRuntime& game) {
     game.OnSceneExited(SceneType::GameClear);
     letters_.clear();
+    backGuideObject_.reset();
+    backGuideModel_.reset();
 }

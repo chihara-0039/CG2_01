@@ -49,6 +49,8 @@
 #include "../Block/BlockPlacementController.h"
 
 #include "GameBgmController.h"
+#include "RecoveryTransition.h"
+#include "StartIntro.h"
 
 #include "PostProcessRenderer.h"
 #include "PostEffectShowcaseController.h"
@@ -199,6 +201,10 @@ private:
     std::unique_ptr<Sprite> menuExitKeyboardSprite_;
     std::unique_ptr<Sprite> menuExitXboxSprite_;
     std::unique_ptr<Sprite> sceneFadeSprite_;
+    std::unique_ptr<RecoveryTransition> recoveryTransition_;
+    std::unique_ptr<StartIntro> startIntro_;
+    bool startIntroPending_ = false;
+    bool useRecoveryTransition_ = false;
 
     // 長期的な状態を持つ機能は専用Controllerへ委譲する。
     GameplayCameraController  gameplayCameraController_;
@@ -345,6 +351,8 @@ private:
     void DrawCollisionDebugBoxes();
     void DrawSkyboxForFrame();
     bool IsPlayerHiddenByWall() const;
+    // READY/数字表示中は本体・影・強調描画をまとめて隠し、GOで表示する。
+    bool IsStartIntroHidingPlayer() const;
 
     void LoadEffectPresetNames();
     bool SaveEffectPreset(const std::string& name);

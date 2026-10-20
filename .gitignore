@@ -17,6 +17,8 @@ Release/
 
 # --- Build Results & Intermediate Files ---
 *.obj
+# Resources以下のOBJはモデル素材。ビルド中間OBJは上の規則で除外する。
+!project/Resources/**/*.obj
 *.iobj
 *.tlog
 *.log

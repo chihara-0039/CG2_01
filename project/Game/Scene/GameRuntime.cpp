@@ -42,7 +42,8 @@ void GameRuntime::Update() {
     // インベントリやポーズを開いている間は、カメラの距離・角度を変更しない。
     const bool gameplayUiBlocksCamera =
         (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) &&
-        (isGamePaused_ || (blockInventoryUI_ && blockInventoryUI_->IsActive()));
+        (isGamePaused_ || (startIntro_ && startIntro_->BlocksInput()) ||
+         (blockInventoryUI_ && blockInventoryUI_->IsActive()));
     if (!gameplayUiBlocksCamera) {
         UpdateSharedCameraControls(isGuiCaptured);
     }
@@ -548,6 +549,7 @@ void GameRuntime::UpdateClearColorForFrame() {
 }
 
 void GameRuntime::UpdateGameplayUserInterface() {
+    if (startIntro_ && startIntro_->BlocksInput()) return;
     if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) {
         if (objectiveGuideSprite_) {
             objectiveGuideSprite_->Update();

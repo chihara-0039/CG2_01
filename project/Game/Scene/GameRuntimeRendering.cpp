@@ -2,11 +2,13 @@
 #include "GameRuntime.h"
 #include <algorithm>
 #include <cmath>
+#ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
+#endif
 #include "../Environment/WeatherPresetManager.h"
 
 namespace {
-#ifndef NDEBUG
+#if defined(USE_IMGUI) && !defined(NDEBUG)
 // ImGuiのワークスペースと一致する、左上シーンビューの描画領域を求める。
 struct EditorViewportRect {
     float x;
@@ -53,6 +55,8 @@ void SetEditorSceneViewport(ID3D12GraphicsCommandList* commandList) {
 } // namespace
 
 void GameRuntime::DrawCollisionDebugBoxes() {
+#ifdef USE_IMGUI
+    if (IsStartIntroHidingPlayer()) return;
     if (!debugFlags_.showCollisionBoxes || !camera || !player_ ||
         (currentMode_ != AppMode::GamePlay &&
          currentMode_ != AppMode::GamePlay_BlockPlace &&
@@ -201,6 +205,7 @@ void GameRuntime::DrawCollisionDebugBoxes() {
         }
     }
     drawList->PopClipRect();
+#endif
 }
 
 void GameRuntime::Draw() {
@@ -250,8 +255,8 @@ void GameRuntime::Draw() {
             obj->DrawShadow(lightVP);
         }
     }
-    if (player_) {
-        player_->DrawShadow(lightVP); 
+    if (player_ && !IsStartIntroHidingPlayer()) {
+        player_->DrawShadow(lightVP);
     }
     if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
         skinningEditor_.DrawShadow(lightVP); 
@@ -270,12 +275,12 @@ void GameRuntime::Draw() {
         RenderScene();
         postProcess_.EndRender(commandList);
         dxCommon->PreDraw(false);
-#ifndef NDEBUG
+#if defined(USE_IMGUI) && !defined(NDEBUG)
         SetEditorSceneViewport(commandList);
 #endif
         postProcess_.DrawToBackBuffer(commandList, camera->GetProjectionMatrix());
     } else {
-#ifdef NDEBUG
+#if defined(NDEBUG) || !defined(USE_IMGUI)
         D3D12_VIEWPORT viewport = { 0.0f, 0.0f, (float)WinApp::kWindowWidth, (float)WinApp::kWindowHeight, 0.0f, 1.0f };
         D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
 #else
@@ -297,14 +302,21 @@ void GameRuntime::Draw() {
         RenderScene();
     }
 
+    DrawCollisionDebugBoxes();
+    if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsActive()) {
+        spriteCommon->PreDraw();
+        startIntro_->Draw();
+    }
     // すべての3D描画・HUDより後に描き、シーン全体を自然に暗転させる。
     if (sceneFadeSprite_ && sceneFadeAlpha_ > 0.0f) {
         spriteCommon->PreDraw();
         sceneFadeSprite_->Draw();
+        if (useRecoveryTransition_ && recoveryTransition_) recoveryTransition_->Draw();
     }
 
-    DrawCollisionDebugBoxes();
+#ifdef USE_IMGUI
     dxCommon->EndImGui();
+#endif
     dxCommon->PostDraw();
 }
 
@@ -378,7 +390,7 @@ void GameRuntime::RenderScene() {
 
         if (currentMode_ == AppMode::GamePlay ||
             currentMode_ == AppMode::EffectPreview) {
-            if (player_ && !useFirstPersonCamera_) {
+            if (player_ && !useFirstPersonCamera_ && !IsStartIntroHidingPlayer()) {
                 player_->Draw();
                 if (IsPlayerHiddenByWall()) {
                     object3dCommon->PreDrawPlayerHighlight();
@@ -388,7 +400,7 @@ void GameRuntime::RenderScene() {
                 }
             }
 
-            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_) {
+            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_ && !IsStartIntroHidingPlayer()) {
                 gameplayUIManager_->Draw3DPrompts(
                     true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
             }
@@ -445,6 +457,10 @@ void GameRuntime::RenderScene() {
         spriteCommon->PreDraw();
         if (sprite) { sprite->Draw(); }
     }
+
+    // ステージ紹介中はチュートリアルや目標矢印で景色を遮らない。
+    // 黒帯と回転幕はDraw側で別途描くため、この早期returnでも表示される。
+    if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsTouring()) return;
 
     if (gameplayUIManager_) {
         gameplayUIManager_->DrawSprites(
@@ -525,7 +541,8 @@ void GameRuntime::RenderScene() {
             pauseKeyboardSprite_->Draw();
         }
     }
-    if (currentMode_ == AppMode::Title || currentMode_ == AppMode::StageSelect) {
+    // 選択画面は3DのBACK案内を使う。終了案内はタイトルにだけ表示する。
+    if (currentMode_ == AppMode::Title) {
         spriteCommon->PreDraw();
         if (isUsingGamePad && menuExitXboxSprite_) {
             menuExitXboxSprite_->Draw();
@@ -545,6 +562,11 @@ void GameRuntime::DrawSkyboxForFrame() {
         skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         skydomeObject_->Draw();
     }
+}
+
+bool GameRuntime::IsStartIntroHidingPlayer() const {
+    // 演出の表示終了ではなく、操作解禁と同じ判定にする。GOの最初のフレームから映る。
+    return currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->BlocksInput();
 }
 
 bool GameRuntime::IsPlayerHiddenByWall() const {

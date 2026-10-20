@@ -3,7 +3,9 @@
 #include "Goal.h"
 #include <algorithm>
 #include <cmath>
+#ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
+#endif
 
 void GameRuntime::UpdateTitle() {
     titleTimer_ += 1.0f / 60.0f;
@@ -78,7 +80,7 @@ void GameRuntime::UpdateGamePlay() {
         camera->SetFov(0.9f);
 
         bool isGuiCaptured = false;
-#ifndef NDEBUG
+#if defined(USE_IMGUI) && !defined(NDEBUG)
 
         isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
 #endif
@@ -256,6 +258,10 @@ void GameRuntime::UpdateGameClear(bool celebrationReady) {
     }
     if (input->TriggerKey(DIK_SPACE) ||
         input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
+        // 既存の「最初の画面に戻る」画像と動作を一致させる。
+        RequestSceneChange(SceneType::Title);
+    } else if (input->TriggerKey(DIK_ESCAPE) ||
+        input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
         ReturnToStageSelect();
     }
 }
@@ -342,7 +348,8 @@ void GameRuntime::UpdateStageSelect() {
     }
     if (input->TriggerKey(DIK_ESCAPE) ||
         input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
-        PostQuitMessage(0);
+        // 選択画面の戻る操作はタイトルへ。ゲーム終了はタイトル側だけで行う。
+        RequestSceneChange(SceneType::Title);
         return;
     }
 
@@ -372,6 +379,7 @@ void GameRuntime::UpdateStageSelect() {
             isGoalBlocked_ = false;
             objectiveGuideStartedAt_ = std::chrono::steady_clock::now();
             objectiveGuideActive_ = true;
+            startIntroPending_ = true;
         }
         RequestSceneChange(SceneType::GamePlay);
     }
@@ -400,6 +408,15 @@ void GameRuntime::RefreshGoalGuideTarget() {
 
 void GameRuntime::UpdateSceneTransition() {
     if (sceneFadePhase_ != SceneFadePhase::None) {
+        return;
+    }
+
+    if (startIntro_ && startIntro_->BlocksInput()) {
+        // 演出中のESC/Bはポーズへ入れず、ステージ選択へ戻す。
+        if (input->TriggerKey(DIK_ESCAPE) || input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+            startIntro_->Cancel(camera.get());
+            ReturnToStageSelect();
+        }
         return;
     }
 

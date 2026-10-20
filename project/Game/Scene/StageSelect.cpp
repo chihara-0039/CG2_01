@@ -1,6 +1,8 @@
 ﻿#include "StageSelect.h"
 #include <filesystem>
 #include <fstream>
+#include "StageSelection.h"
+#include <algorithm>
 
 void StageSelect::Initialize(Object3dCommon* objCommon, Input* input, int startIndex)
 {
@@ -15,6 +17,8 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input, int startI
 		std::ifstream ifs(sequencePath);
 		std::string line;
 		while (std::getline(ifs, line)) {
+			// WindowsのCRLFをLinuxで検査しても末尾CRをファイル名に含めない。
+			if (!line.empty() && line.back() == '\r') line.pop_back();
 			if (!line.empty()) {
 				stageFiles_.push_back(line);
 			}
@@ -36,14 +40,14 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input, int startI
 		stageFiles_.push_back("tutorial.txt");
 	}
 
-		selectedStageIndex_ = startIndex;
-	if (selectedStageIndex_ >= stageFiles_.size()) {
-		selectedStageIndex_ = (std::max)(0, (int)stageFiles_.size() - 1);
-	}
+	selectedStageIndex_ = std::clamp(startIndex, 0, static_cast<int>(stageFiles_.size()) - 1);
 	isFinished_ = false;
+	currentRotationX_ = currentRotationY_ = 0.0f;
+	targetRotationX_ = targetRotationY_ = 0.0f;
 
-	camera_.SetPosition({ 8.0f, 5.0f, -11.0f });
+	camera_.SetPosition({ 0.0f, 1.0f, -11.0f });
 	camera_.SetRotation({ 0.0f, 0.0f, 0.0f });
+	camera_.Update();
 
 	// モデル読み込み（好きなモデルに変更OK）
 	stageModel_ = Model::CreateFromOBJ(
@@ -59,10 +63,31 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input, int startI
 
 	// 読み込んだモデルをセットする
 	stageObject_->SetModel(stageModel_.get());
+	// 展開図から復元した文字面を暗いライティングで潰さない。
+	stageObject_->SetEnableLighting(false);
 
 	// 位置やサイズを設定（とりあえず原点に置きます）
 	stageObject_->SetPosition({ 0.0f, 0.0f, 5.0f });
 	stageObject_->SetScale({ 3.0f, 3.0f, 3.0f });
+
+	for (size_t i = 0; i < labelModels_.size(); ++i) {
+		labelModels_[i] = Model::CreateFromOBJ(object3dCommon_->GetDxCommon(),
+			"Resources/Models/Recovery", "stageLabel" + std::to_string(i) + ".obj",
+			object3dCommon_->GetTextureManager());
+	}
+	labelObject_ = std::make_unique<Object3d>();
+	labelObject_->Initialize(object3dCommon_);
+	labelObject_->SetPosition({0.0f, 3.2f, 5.0f});
+	labelObject_->SetEnableLighting(false);
+	labelObject_->SetColor({0.62f, 0.72f, 0.86f, 1.0f});
+	backGuideModel_ = Model::CreateFromOBJ(object3dCommon_->GetDxCommon(),
+		"Resources/Models/Recovery", "backGuide.obj", object3dCommon_->GetTextureManager());
+	backGuideObject_ = std::make_unique<Object3d>();
+	backGuideObject_->Initialize(object3dCommon_);
+	backGuideObject_->SetModel(backGuideModel_.get());
+	backGuideObject_->SetPosition({0.0f, -2.0f, 5.0f});
+	backGuideObject_->SetEnableLighting(false);
+	backGuideObject_->SetColor({0.62f, 0.72f, 0.86f, 1.0f});
 }
 
 void StageSelect::Update()
@@ -72,33 +97,26 @@ void StageSelect::Update()
 		return;
 	}
 
-	// 0:正面 1:右 2:裏 3:左 4:上 5:下
-	//WSADの順番に書いている{ W(上), S(下), A(左), D(右)
-	int moveTable[6][4] = {
-		{ 4, 5, 3, 1 },//0:正面
-		{ 4, 5, 0, 2 },//1:右
-		{ 4, 5, 1, 3 },//2:裏
-		{ 4, 5, 2, 0 },//3:左
-		{ 2, 0, 3, 1 },//4:上
-		{ 0, 2, 3, 1 } //5:下
+	// キーボードとパッドで同じ六面選択規則を使い、範囲外の面を選ばない。
+	const auto move = [&](StageSelection::Direction direction) {
+		selectedStageIndex_ = StageSelection::Move(selectedStageIndex_, direction,
+			static_cast<int>(stageFiles_.size()));
 	};
-
-	// 入力検知 (0:W, 1:S, 2:A, 3:D)
-	if (input_->TriggerKey(DIK_W)) { selectedStageIndex_ = moveTable[selectedStageIndex_][0]; }
-	if (input_->TriggerKey(DIK_S)) { selectedStageIndex_ = moveTable[selectedStageIndex_][1]; }
-	if (input_->TriggerKey(DIK_A)) { selectedStageIndex_ = moveTable[selectedStageIndex_][2]; }
-	if (input_->TriggerKey(DIK_D)) { selectedStageIndex_ = moveTable[selectedStageIndex_][3]; }
+	if (input_->TriggerKey(DIK_W)) move(StageSelection::Direction::Up);
+	if (input_->TriggerKey(DIK_S)) move(StageSelection::Direction::Down);
+	if (input_->TriggerKey(DIK_A)) move(StageSelection::Direction::Left);
+	if (input_->TriggerKey(DIK_D)) move(StageSelection::Direction::Right);
 	if (input_->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_UP)) {
-		selectedStageIndex_ = moveTable[selectedStageIndex_][0];
+		move(StageSelection::Direction::Up);
 	}
 	if (input_->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_DOWN)) {
-		selectedStageIndex_ = moveTable[selectedStageIndex_][1];
+		move(StageSelection::Direction::Down);
 	}
 	if (input_->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_LEFT)) {
-		selectedStageIndex_ = moveTable[selectedStageIndex_][2];
+		move(StageSelection::Direction::Left);
 	}
 	if (input_->TriggerControllerButton(XINPUT_GAMEPAD_DPAD_RIGHT)) {
-		selectedStageIndex_ = moveTable[selectedStageIndex_][3];
+		move(StageSelection::Direction::Right);
 	}
 
 	// --- 目標角度の設定 ---
@@ -150,6 +168,13 @@ void StageSelect::Update()
 
 	// 最後にワールド行列を更新
 	stageObject_->Update(Math::MakeIdentity4x4());
+	if (selectedStageIndex_ < static_cast<int>(labelModels_.size())) {
+		labelObject_->SetModel(labelModels_[selectedStageIndex_].get());
+		labelObject_->SetCamera(view, proj);
+		labelObject_->Update(Math::MakeIdentity4x4());
+	}
+	backGuideObject_->SetCamera(view, proj);
+	backGuideObject_->Update(Math::MakeIdentity4x4());
 }
 void StageSelect::Draw()
 {
@@ -157,4 +182,6 @@ void StageSelect::Draw()
 	{
 		stageObject_->Draw(); // 3Dモデルを描画！
 	}
+	if (labelObject_ && selectedStageIndex_ < static_cast<int>(labelModels_.size())) labelObject_->Draw();
+	if (backGuideObject_) backGuideObject_->Draw();
 }

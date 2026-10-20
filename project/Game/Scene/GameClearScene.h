@@ -29,6 +29,9 @@ private:
     };
 
     std::vector<Letter> letters_;
+    // SPACE/Aの既存2D案内とは別に、ステージ選択へ戻る操作を表示する。
+    std::unique_ptr<Model> backGuideModel_;
+    std::unique_ptr<Object3d> backGuideObject_;
     Camera camera_;
     float timer_ = 0.0f;
     float finishTimer_ = 0.0f;

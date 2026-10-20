@@ -69,6 +69,8 @@ public:
 
     /// <summary>現在の垂直視野角を取得する</summary>
     float GetFov() const { return fov_; }
+    float GetFarClip() const { return farClip_; }
+    void SetFarClip(float distance) { farClip_ = distance; }
 
     // ── セッター ─────────────────────────────────────────
 

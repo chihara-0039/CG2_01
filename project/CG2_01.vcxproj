@@ -146,6 +146,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Game\Environment\WeatherPresetManager.cpp" />
+    <ClCompile Include="Game\Scene\StageSelection.cpp" />
+    <ClCompile Include="Game\Scene\RecoveryTransition.cpp" />
+    <ClCompile Include="Game\Scene\RecoveryTransitionMotion.cpp" />
+    <ClCompile Include="Game\Scene\StartIntro.cpp" />
+    <ClCompile Include="Game\Scene\StartIntroTimeline.cpp" />
+    <ClCompile Include="Game\Scene\StageFlyover.cpp" />
     <ClCompile Include="Game\Environment\WeatherRuntimeController.cpp" />
     <ClCompile Include="Game\Block\BlockPlacementController.cpp" />
     <ClCompile Include="Game\Block\BubblePickupController.cpp" />
@@ -330,6 +336,12 @@
     <ClInclude Include="Engine\Graphics\3D\SrvManager.h" />
     <ClInclude Include="Game\Player\PlayerBasePosition.h" />
     <ClInclude Include="Game\Scene\EffectPresetStore.h" />
+    <ClInclude Include="Game\Scene\StageSelection.h" />
+    <ClInclude Include="Game\Scene\RecoveryTransition.h" />
+    <ClInclude Include="Game\Scene\RecoveryTransitionMotion.h" />
+    <ClInclude Include="Game\Scene\StartIntro.h" />
+    <ClInclude Include="Game\Scene\StartIntroTimeline.h" />
+    <ClInclude Include="Game\Scene\StageFlyover.h" />
     <ClInclude Include="Game\Scene\StormEffectEditorController.h" />
     <ClInclude Include="Game\Scene\HitEffectEditorView.h" />
     <ClInclude Include="Game\Scene\BaseScene.h" />

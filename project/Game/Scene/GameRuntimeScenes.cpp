@@ -145,6 +145,11 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
     case SceneType::Title:
         currentMode_ = AppMode::Title;
         titleTimer_ = 0.0f;
+        // クリアから戻った際にスター取得HUDやポーズ状態を持ち越さない。
+        isGoalReached_ = false;
+        isGoalBlocked_ = false;
+        isGamePaused_ = false;
+        goalCelebrationTimer_ = 0.0f;
         stageMap_.SetClearColor({ 0.26f, 0.61f, 0.94f, 1.0f });
         break;
     case SceneType::StageSelect:
@@ -190,6 +195,26 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
 
     HandleModeChange();
 
+    if (sceneType == SceneType::GamePlay && startIntroPending_ && startIntro_) {
+        // 空の余白を含むグリッドサイズではなく、実際の配置範囲へ俯瞰を合わせる。
+        Vector3 minimum{static_cast<float>(stageMap_.GetWidth()),static_cast<float>(stageMap_.GetHeight()),static_cast<float>(stageMap_.GetDepth())};
+        Vector3 maximum{};
+        bool found = false;
+        for (int y=0; y<stageMap_.GetHeight(); ++y) for (int z=0; z<stageMap_.GetDepth(); ++z) for (int x=0; x<stageMap_.GetWidth(); ++x) {
+            const MapCell* cell = stageMap_.GetCell(x,y,z);
+            if (!cell || cell->type == BlockType::None) continue;
+            found = true;
+            minimum.x = (std::min)(minimum.x,x-.5f); minimum.y = (std::min)(minimum.y,y-.5f); minimum.z = (std::min)(minimum.z,z-.5f);
+            maximum.x = (std::max)(maximum.x,x+.5f); maximum.y = (std::max)(maximum.y,y+.5f); maximum.z = (std::max)(maximum.z,z+.5f);
+        }
+        const Vector3 center = found ? Vector3{(minimum.x+maximum.x)*.5f,(minimum.y+maximum.y)*.5f,(minimum.z+maximum.z)*.5f}
+            : player_ ? player_->GetPosition() : Vector3{};
+        const float dx=maximum.x-minimum.x,dy=maximum.y-minimum.y,dz=maximum.z-minimum.z;
+        const float radius = found ? .5f*std::sqrt(dx*dx+dy*dy+dz*dz) : 3.0f;
+        startIntro_->Begin(camera.get(),center,radius);
+        startIntroPending_ = false;
+    }
+
     // 天候を使わないシーンでは、Emitterを止めるだけでなく既に生成済みの
     // 雨・雪・雲も破棄する。これにより遷移タイミングに依存した残留を防ぐ。
     const bool usesStageWeather =
@@ -208,6 +233,8 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
 }
 
 void GameRuntime::OnSceneExited(SceneType sceneType) {
+    if (sceneType == SceneType::GamePlay && startIntro_) startIntro_->Cancel(camera.get());
+    if (sceneType != SceneType::StageSelect) startIntroPending_ = false;
     if (sceneType == SceneType::Title) {
         titleDayNightActive_ = false;
     }
@@ -234,6 +261,9 @@ void GameRuntime::RequestSceneChange(SceneType sceneType) {
     }
 
     pendingSceneType_ = sceneType;
+    // コンテストの四画面だけに適用。エディタとプレイ内サブモードは従来通り。
+    useRecoveryTransition_ = RecoveryTransitionMotion::IsContestScene(currentScene) &&
+        RecoveryTransitionMotion::IsContestScene(sceneType);
     sceneFadePhase_ = SceneFadePhase::FadingOut;
     sceneFadeAlpha_ = 0.0f;
     sceneFadeHoldRemaining_ = 0.0f;
@@ -269,7 +299,10 @@ void GameRuntime::UpdateSceneFade() {
         0.1f);
     sceneFadeLastUpdate_ = now;
 
-    constexpr float kFadeSpeed = 3.0f;
+    // 幕を閉じる約0.55秒、開く約0.65秒。戻る操作も待たせすぎない長さ。
+    const float kFadeSpeed = useRecoveryTransition_
+        ? (sceneFadePhase_ == SceneFadePhase::FadingIn ? 1.0f / 0.65f : 1.0f / 0.55f)
+        : 3.0f;
     if (sceneFadePhase_ == SceneFadePhase::FadingOut) {
         sceneFadeAlpha_ = (std::min)(1.0f, sceneFadeAlpha_ + kFadeSpeed * deltaTime);
         if (sceneFadeAlpha_ >= 1.0f) {
@@ -296,7 +329,14 @@ void GameRuntime::UpdateSceneFade() {
         }
     }
 
-    sceneFadeSprite_->SetColor({ 0.0f, 0.0f, 0.0f, sceneFadeAlpha_ });
+    if (useRecoveryTransition_ && recoveryTransition_) {
+        recoveryTransition_->Update(sceneFadeAlpha_,
+            sceneFadePhase_ == SceneFadePhase::FadingIn, pendingSceneType_);
+    }
+    // 回転幕の外側は軽く暗くするだけ。切替時と保持中は全画面を完全に隠す。
+    const float opacity = useRecoveryTransition_ && sceneFadeAlpha_ < 1.0f
+        ? sceneFadeAlpha_ * 0.22f : sceneFadeAlpha_;
+    sceneFadeSprite_->SetColor({ 0.0f, 0.0f, 0.0f, opacity });
     sceneFadeSprite_->Update();
 }
 
@@ -363,6 +403,21 @@ void GameRuntime::RunStageEditorScene() {
 }
 
 void GameRuntime::RunGamePlayScene() {
+    if (startIntro_ && startIntro_->IsActive()) {
+        startIntro_->Update(camera.get(), sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive());
+        if (startIntro_->ConsumeGo()) {
+            objectiveGuideStartedAt_ = std::chrono::steady_clock::now();
+            if (particleManager && player_) {
+                Vector3 position = player_->GetPosition();
+                position.y += .8f;
+                particleManager->EmitHitEffect(position);
+            }
+        }
+        if (startIntro_->BlocksInput()) {
+            if (player_) player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix());
+            return;
+        }
+    }
     UpdateGamePlay();
 }
 

@@ -284,6 +284,11 @@ void GameRuntime::Initialize() {
     sceneFadeSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
     sceneFadeSprite_->Update();
 
+    recoveryTransition_ = std::make_unique<RecoveryTransition>();
+    recoveryTransition_->Initialize(spriteCommon.get());
+    startIntro_ = std::make_unique<StartIntro>();
+    startIntro_->Initialize(spriteCommon.get());
+
 
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
@@ -548,6 +553,9 @@ void GameRuntime::Finalize() {
     skydomeModel_.reset();
     sprite.reset();
     sceneFadeSprite_.reset();
+    recoveryTransition_.reset();
+    if (startIntro_) startIntro_->Finalize();
+    startIntro_.reset();
     stageRenderer_.reset();
     mapCursor_.reset();
     camera.reset();

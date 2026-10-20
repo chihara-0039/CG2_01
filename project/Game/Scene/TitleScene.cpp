@@ -5,6 +5,11 @@
 #include <algorithm>
 #include <cmath>
 
+float TitleScene::GetOrbitStarVisibility() const {
+    const float t = std::clamp((titleNightAmount_ - 0.25f) / 0.50f, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 void TitleScene::Initialize(GameRuntime& game) {
     game.OnSceneEntered(SceneType::Title);
     game.SetTitleCloudsEnabled(true);
@@ -260,6 +265,9 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
     Vector3 titleScale = { 1.5f, 1.5f, 1.5f };
     if (!startRequested_ && showPressSpace_) {
         animatedTitlePosition.y += std::sin(idleTimer_ * 1.8f) * 0.12f;
+        // 正面に固定しすぎず、厚みとベベルへ光が入る小さな角度を保つ。
+        titleRotation_.x = -0.055f;
+        titleRotation_.y = -0.16f + std::sin(idleTimer_ * 0.65f) * 0.045f;
         titleRotation_.z = 0.0f;
         // 大きく見た目を変えず、静止画に見えない程度の呼吸を加える。
         const float breathingScale = 1.5f * (1.0f + std::sin(idleTimer_ * 1.35f) * 0.018f);
@@ -282,14 +290,15 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
     titleObject_->SetRotation(titleRotation_);
     titleObject_->SetScale(titleScale);
     titleObject_->SetEmissive(
-        0.045f + (std::sin(idleTimer_ * 1.35f) * 0.5f + 0.5f) * 0.035f);
+        0.14f + (std::sin(idleTimer_ * 1.35f) * 0.5f + 0.5f) * 0.025f);
     titleObject_->SetCamera(view, projection);
     titleObject_->Update(Math::MakeIdentity4x4());
 
     Vector3 shadowPosition = animatedTitlePosition;
     shadowPosition.x += 0.20f;
     shadowPosition.y -= 0.18f;
-    shadowPosition.z += 0.34f;
+    // 厚くした立体文字へ影モデルが交差しないよう、厚みより奥へ置く。
+    shadowPosition.z += 1.25f;
     titleShadowObject_->SetPosition(shadowPosition);
     titleShadowObject_->SetRotation(titleRotation_);
     titleShadowObject_->SetScale({
@@ -303,6 +312,7 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
     const float transitionProgress = startRequested_
         ? (std::min)(startAnimationTimer_ / 0.72f, 1.0f)
         : 0.0f;
+    const float orbitStarVisibility = GetOrbitStarVisibility();
     for (size_t i = 0; i < decorationStars_.size(); ++i) {
         const float orbitSpeed = 0.24f + static_cast<float>(i) * 0.012f;
         const float phase = idleTimer_ * orbitSpeed +
@@ -314,7 +324,7 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
             11.8f + std::sin(phase) * 1.4f + transitionProgress * 8.0f
         };
         const float baseScale = 0.28f + static_cast<float>(i % 3) * 0.09f;
-        const float starScale = baseScale * (1.0f - transitionProgress * 0.72f) *
+        const float starScale = baseScale * orbitStarVisibility * (1.0f - transitionProgress * 0.72f) *
             (1.0f + std::sin(idleTimer_ * 2.0f + static_cast<float>(i)) * 0.10f);
         decorationStars_[i]->SetPosition(starPosition);
         decorationStars_[i]->SetRotation({
@@ -324,7 +334,7 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
         });
         decorationStars_[i]->SetScale({ starScale, starScale, starScale });
         decorationStars_[i]->SetEmissive(
-            1.8f + (std::sin(idleTimer_ * 2.8f + static_cast<float>(i) * 0.9f) * 0.5f + 0.5f) * 1.8f);
+            (1.8f + (std::sin(idleTimer_ * 2.8f + static_cast<float>(i) * 0.9f) * 0.5f + 0.5f) * 1.8f) * orbitStarVisibility);
         decorationStars_[i]->SetCamera(view, projection);
         decorationStars_[i]->Update(Math::MakeIdentity4x4());
 
@@ -344,6 +354,7 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
             trail->SetPosition(trailPosition);
             trail->SetRotation({ trailPhase * 0.55f, -trailPhase * 0.8f, trailPhase * 0.35f });
             trail->SetScale({ trailScale, trailScale, trailScale });
+            trail->SetEmissive((1.7f - static_cast<float>(trailIndex) * 0.24f) * orbitStarVisibility);
             trail->SetCamera(view, projection);
             trail->Update(Math::MakeIdentity4x4());
         }
@@ -398,14 +409,15 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
 }
 
 void TitleScene::Draw(GameRuntime& game) {
+    const float orbitStarVisibility = GetOrbitStarVisibility();
     // タイトル専用の暖かなキーライト。文字の前面と側面へ明確な差を作る。
     if (Object3dCommon* common = game.GetObject3dCommon()) {
         common->SetCameraPosition(camera_.GetPosition());
         common->ClearPointLights();
         // 漂う星そのものを光源にして、タイトル表面へ色付きの光を落とす。
-        // 星7灯とロゴの走査光1灯で、Object3dCommonの8灯制限内に収める。
-        for (size_t i = 0; i < decorationStars_.size(); ++i) {
-            if (!decorationStars_[i]) {
+        // 星6灯・前面キーライト・走査光で、8灯制限内に収める。
+        for (size_t i = 0; i < (std::min)(decorationStars_.size(), size_t{6}); ++i) {
+            if (!decorationStars_[i] || orbitStarVisibility <= 0.0f) {
                 continue;
             }
             const float pulse =
@@ -415,9 +427,15 @@ void TitleScene::Draw(GameRuntime& game) {
                 : Vector4{ 0.12f, 0.55f, 1.0f, 1.0f };
             common->AddPointLight(
                 decorationStars_[i]->GetPosition(),
-                3.4f + pulse * 3.2f,
+                (3.4f + pulse * 3.2f) * orbitStarVisibility,
                 lightColor,
                 7.0f + pulse * 3.0f);
+        }
+        if (titleObject_) {
+            Vector3 keyPosition = titleObject_->GetPosition();
+            keyPosition.y += 2.6f;
+            keyPosition.z -= 5.0f;
+            common->AddPointLight(keyPosition, 1.6f, {1.0f, 0.90f, 0.72f, 1.0f}, 12.0f);
         }
         if (!startRequested_ && showPressSpace_ && titleObject_) {
             // 左端で現れ、文字面を横切って右端で消える柔らかなハイライト。
@@ -441,7 +459,7 @@ void TitleScene::Draw(GameRuntime& game) {
     }
     for (auto& trails : starTrails_) {
         for (auto& trail : trails) {
-            if (trail) {
+            if (trail && orbitStarVisibility > 0.0f) {
                 trail->Draw();
             }
         }
@@ -454,7 +472,7 @@ void TitleScene::Draw(GameRuntime& game) {
         }
     }
     for (auto& star : decorationStars_) {
-        if (star) {
+        if (star && orbitStarVisibility > 0.0f) {
             star->Draw();
         }
     }

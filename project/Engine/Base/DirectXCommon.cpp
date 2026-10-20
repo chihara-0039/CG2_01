@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
+#include <iterator>
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
@@ -17,7 +19,21 @@ using namespace Microsoft::WRL;
 namespace {
 std::filesystem::path MakeShaderCachePath(const std::filesystem::path& absolutePath, const wchar_t* profile) {
     const std::wstring profileName = profile ? profile : L"unknown";
-    const size_t hash = std::hash<std::wstring>{}(absolutePath.wstring() + L"|" + profileName);
+    // stashから戻した古いcsoは更新日時だけ新しくなる場合がある。
+    // 本体と同じフォルダの共通ヘッダーの内容もキーへ含め、誤再利用を防ぐ。
+    std::vector<std::filesystem::path> sources{absolutePath};
+    for (const auto& entry : std::filesystem::directory_iterator(absolutePath.parent_path())) {
+        if (entry.is_regular_file() && entry.path().extension() == L".hlsli") sources.push_back(entry.path());
+    }
+    std::sort(sources.begin(), sources.end());
+    std::wstring contentKey;
+    for (const auto& source : sources) {
+        std::ifstream input(source, std::ios::binary);
+        if (!input) throw std::runtime_error("Cannot read shader source for cache validation");
+        const std::string content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        contentKey += L"|" + source.filename().wstring() + L":" + std::to_wstring(std::hash<std::string>{}(content));
+    }
+    const size_t hash = std::hash<std::wstring>{}(absolutePath.wstring() + L"|" + profileName + contentKey);
     const std::wstring cacheName =
         absolutePath.stem().wstring() + L"_" + profileName + L"_" + std::format(L"{:016x}", hash) + L".cso";
     return absolutePath.parent_path() / L"Compiled" / cacheName;
