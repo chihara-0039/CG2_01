@@ -5,6 +5,7 @@
 #include "SceneFactory.h"
 #include "BaseScene.h"
 #include "RecoveryTransitionMotion.h"
+#include "StartIntroTimeline.h"
 #include <cmath>
 #include <cassert>
 #include <iostream>
@@ -34,6 +35,27 @@ std::unique_ptr<BaseScene> SceneFactory::CreateScene(SceneType type) const {
 }
 
 int main() {
+    const float cueTimes[] = {0, .75f, 1.4f, 2.05f, StartIntroTimeline::kGoTime};
+    for (int cue = 0; cue < 5; ++cue) {
+        const auto frame = StartIntroTimeline::Evaluate(cueTimes[cue]);
+        assert(frame.cue == cue);
+        assert(frame.blocksInput == (cue < 4));
+        assert(!frame.finished);
+    }
+    assert(StartIntroTimeline::Evaluate(-5).cue == 0);
+    assert(StartIntroTimeline::Evaluate(StartIntroTimeline::kGoTime-.001f).blocksInput);
+    assert(!StartIntroTimeline::Evaluate(StartIntroTimeline::kGoTime).blocksInput);
+    const auto finalIntro = StartIntroTimeline::Evaluate(StartIntroTimeline::kDuration);
+    assert(finalIntro.finished && finalIntro.alpha == 0 && finalIntro.letterbox == 0);
+    assert(finalIntro.cameraBlend == 1);
+    for (int sample = 0; sample <= 500; ++sample) {
+        const auto frame = StartIntroTimeline::Evaluate(sample*.01f);
+        assert(frame.cue >= 0 && frame.cue <= 4);
+        assert(frame.alpha >= 0 && frame.alpha <= 1);
+        assert(frame.cameraBlend >= 0 && frame.cameraBlend <= 1);
+        assert(frame.scale >= 1 && frame.scale < 1.6f);
+    }
+    std::cout << "Start intro: cue boundaries, input release, 501 timing samples passed\n";
     // 閉幕時の画面被覆と、黒画面の裏で装飾光が消えることを数値で確認する。
     for (SceneType target : {SceneType::Title, SceneType::StageSelect, SceneType::GamePlay, SceneType::GameClear}) {
         assert(RecoveryTransitionMotion::IsContestScene(target));

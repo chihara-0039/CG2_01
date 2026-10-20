@@ -302,6 +302,10 @@ void GameRuntime::Draw() {
     }
 
     DrawCollisionDebugBoxes();
+    if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsActive()) {
+        spriteCommon->PreDraw();
+        startIntro_->Draw();
+    }
     // すべての3D描画・HUDより後に描き、シーン全体を自然に暗転させる。
     if (sceneFadeSprite_ && sceneFadeAlpha_ > 0.0f) {
         spriteCommon->PreDraw();

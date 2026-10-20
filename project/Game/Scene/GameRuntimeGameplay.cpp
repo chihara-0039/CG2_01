@@ -379,6 +379,7 @@ void GameRuntime::UpdateStageSelect() {
             isGoalBlocked_ = false;
             objectiveGuideStartedAt_ = std::chrono::steady_clock::now();
             objectiveGuideActive_ = true;
+            startIntroPending_ = true;
         }
         RequestSceneChange(SceneType::GamePlay);
     }
@@ -407,6 +408,15 @@ void GameRuntime::RefreshGoalGuideTarget() {
 
 void GameRuntime::UpdateSceneTransition() {
     if (sceneFadePhase_ != SceneFadePhase::None) {
+        return;
+    }
+
+    if (startIntro_ && startIntro_->BlocksInput()) {
+        // 演出中のESC/Bはポーズへ入れず、ステージ選択へ戻す。
+        if (input->TriggerKey(DIK_ESCAPE) || input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+            startIntro_->Cancel(camera.get());
+            ReturnToStageSelect();
+        }
         return;
     }
 

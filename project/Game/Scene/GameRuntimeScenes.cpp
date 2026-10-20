@@ -195,6 +195,11 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
 
     HandleModeChange();
 
+    if (sceneType == SceneType::GamePlay && startIntroPending_ && startIntro_) {
+        startIntro_->Begin(camera.get());
+        startIntroPending_ = false;
+    }
+
     // 天候を使わないシーンでは、Emitterを止めるだけでなく既に生成済みの
     // 雨・雪・雲も破棄する。これにより遷移タイミングに依存した残留を防ぐ。
     const bool usesStageWeather =
@@ -213,6 +218,8 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
 }
 
 void GameRuntime::OnSceneExited(SceneType sceneType) {
+    if (sceneType == SceneType::GamePlay && startIntro_) startIntro_->Cancel(camera.get());
+    if (sceneType != SceneType::StageSelect) startIntroPending_ = false;
     if (sceneType == SceneType::Title) {
         titleDayNightActive_ = false;
     }
@@ -381,6 +388,21 @@ void GameRuntime::RunStageEditorScene() {
 }
 
 void GameRuntime::RunGamePlayScene() {
+    if (startIntro_ && startIntro_->IsActive()) {
+        startIntro_->Update(camera.get(), sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive());
+        if (startIntro_->ConsumeGo()) {
+            objectiveGuideStartedAt_ = std::chrono::steady_clock::now();
+            if (particleManager && player_) {
+                Vector3 position = player_->GetPosition();
+                position.y += .8f;
+                particleManager->EmitHitEffect(position);
+            }
+        }
+        if (startIntro_->BlocksInput()) {
+            if (player_) player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix());
+            return;
+        }
+    }
     UpdateGamePlay();
 }
 

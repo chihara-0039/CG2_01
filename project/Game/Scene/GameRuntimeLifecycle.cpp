@@ -286,6 +286,8 @@ void GameRuntime::Initialize() {
 
     recoveryTransition_ = std::make_unique<RecoveryTransition>();
     recoveryTransition_->Initialize(spriteCommon.get());
+    startIntro_ = std::make_unique<StartIntro>();
+    startIntro_->Initialize(spriteCommon.get());
 
 
     gameplayCameraController_.Initialize();
@@ -552,6 +554,8 @@ void GameRuntime::Finalize() {
     sprite.reset();
     sceneFadeSprite_.reset();
     recoveryTransition_.reset();
+    if (startIntro_) startIntro_->Finalize();
+    startIntro_.reset();
     stageRenderer_.reset();
     mapCursor_.reset();
     camera.reset();
