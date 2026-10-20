@@ -56,15 +56,45 @@ class Mesh:
         self.lines.append("f " + " ".join(f"{i}/{i}/{i}" for i in indices))
         self.vertex_count += 3
 
-    def box(self, center=(0,0,0), size=(1,1,1)):
+    def box(self, center=(0,0,0), size=(1,1,1), texture=None):
         x,y,z = center
-        w,h,d = (v/2 for v in size)
-        points = [(x-w,y-h,z-d),(x+w,y-h,z-d),(x+w,y+h,z-d),(x-w,y+h,z-d),
-                  (x-w,y-h,z+d),(x+w,y-h,z+d),(x+w,y+h,z+d),(x-w,y+h,z+d)]
-        for corners in ((0,3,2,1),(4,5,6,7),(0,4,7,3),(1,2,6,5),(3,7,6,2),(0,1,5,4)):
+        w,h,depth = (v/2 for v in size)
+        points = [(x-w,y-h,z-depth),(x+w,y-h,z-depth),(x+w,y+h,z-depth),(x-w,y+h,z-depth),
+                  (x-w,y-h,z+depth),(x+w,y-h,z+depth),(x+w,y+h,z+depth),(x-w,y+h,z+depth)]
+        for face, corners in enumerate(((0,3,2,1),(4,5,6,7),(0,4,7,3),(1,2,6,5),(3,7,6,2),(0,1,5,4))):
             a,b,c,d = (points[i] for i in corners)
-            self.triangle(a,b,c)
-            self.triangle(a,c,d,((0,0),(1,1),(0,1)))
+            uv = ((0,0),(1,0),(1,1),(0,1))
+            if texture == "wall":
+                # 元画像はキューブ展開図。白い余白を含まないレンガの面を使う。
+                uv = ((.26,.51),(.49,.51),(.49,.74),(.26,.74))
+            elif texture == "grass":
+                if face >= 4:
+                    lo, hi = (.72,.98) if face == 4 else (.02,.40)
+                    uv = ((lo,.04),(hi,.04),(hi,.96),(lo,.96))
+                else:
+                    # 元画像は右が草・左が土。高さをUへ割り当て草が上になるようにする。
+                    uv = tuple((.10 + .80*(p[1]-(y-h))/size[1],
+                                .04 + .92*((p[0]-(x-w))/size[0] if face < 2 else (p[2]-(z-depth))/size[2]))
+                               for p in (a,b,c,d))
+            elif texture == "stageSelect":
+                # OBJのZ反転後の前・右・裏・左・上・下に対応する六面を個別に割り当てる。
+                rectangles = ((.625,.25,.875,.50),(.125,.25,.375,.50),
+                              (.375,.75,.625,1.0),(.375,.25,.625,.50),
+                              (.375,0,.625,.25),(.375,.50,.625,.75))
+                left,top,right,bottom = rectangles[face]
+                # 各面が選択回転で正面に来た時の、画面上の四頂点位置。
+                screen = (((1,1),(1,0),(0,0),(0,1)), ((0,1),(1,1),(1,0),(0,0)),
+                          ((0,1),(1,1),(1,0),(0,0)), ((1,1),(1,0),(0,0),(0,1)),
+                          ((0,0),(0,1),(1,1),(1,0)), ((0,1),(1,1),(1,0),(0,0)))
+                coordinates = []
+                for s,t in screen[face]:
+                    if face == 2: s,t = 1-s,1-t
+                    elif face == 4: s,t = 1-t,s
+                    elif face == 5: s,t = t,1-s
+                    coordinates.append((left+(right-left)*s, 1-(top+(bottom-top)*t)))
+                uv = tuple(coordinates)
+            self.triangle(a,b,c,uv[:3])
+            self.triangle(a,c,d,(uv[0],uv[2],uv[3]))
 
     def text(self, text, height=1.4):
         pixel = height/7
@@ -77,27 +107,12 @@ class Mesh:
                                   (3-row)*pixel, 0), (pixel*.94,pixel*.94,.12))
 
     def japanese_title(self, height=1.5):
-        # 日本語の字形を保存済みのマスクから立体化する。再生成にフォントの
-        # インストールは不要。横の連続画素をまとめて三角形数を抑える。
-        data = json.loads(Path(__file__).with_name("recovery_title_glyphs.json").read_text(encoding="utf-8"))
-        size = data["size"]
-        advance = data["advance"]
-        pixel = height / size
-        width = len(data["title"]) * advance * pixel
+        # 輪郭から作ったベベル・側面・裏面を持つ一体の立体文字。
+        # 生成済み三角形を保存し、通常の再生成にはフォントや外部ライブラリを不要にする。
+        data = json.loads(Path(__file__).with_name("title_mesh.json").read_text(encoding="utf-8"))
         self.lines.append("# Game title: " + data["title"])
-        for index, character in enumerate(data["title"]):
-            for row, mask in enumerate(data["glyphs"][character]):
-                column = 0
-                while column < size:
-                    if not mask & (1 << (size - 1 - column)):
-                        column += 1
-                        continue
-                    start = column
-                    while column < size and mask & (1 << (size - 1 - column)):
-                        column += 1
-                    self.box(((index * advance + (start + column) / 2) * pixel - width / 2,
-                              (size / 2 - row - .5) * pixel, 0),
-                             ((column - start) * pixel, pixel, .12))
+        for triangle in data["triangles"]:
+            self.triangle(*triangle)
 
     def sphere(self, radius=.5, rings=8, sectors=16):
         def point(row,col):
@@ -147,6 +162,8 @@ def make_model(name):
     elif name == "key":
         mesh.box((0,.15,0),(.35,.35,.12)); mesh.box((0,-.2,0),(.1,.4,.12)); mesh.box((.12,-.35,0),(.25,.1,.12))
     elif name == "switch": mesh.box((0,-.3,0),(.8,.25,.8))
+    elif name in ("block", "wall", "stageSelect"):
+        mesh.box(texture="grass" if name == "block" else name)
     elif name == "midpoint":
         mesh.box((0,0,0),(.1,1,.1)); mesh.box((.2,.3,0),(.4,.3,.06))
     elif name == "spike":

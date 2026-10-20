@@ -260,6 +260,9 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
     Vector3 titleScale = { 1.5f, 1.5f, 1.5f };
     if (!startRequested_ && showPressSpace_) {
         animatedTitlePosition.y += std::sin(idleTimer_ * 1.8f) * 0.12f;
+        // 正面に固定しすぎず、厚みとベベルへ光が入る小さな角度を保つ。
+        titleRotation_.x = -0.055f;
+        titleRotation_.y = -0.16f + std::sin(idleTimer_ * 0.65f) * 0.045f;
         titleRotation_.z = 0.0f;
         // 大きく見た目を変えず、静止画に見えない程度の呼吸を加える。
         const float breathingScale = 1.5f * (1.0f + std::sin(idleTimer_ * 1.35f) * 0.018f);
@@ -282,14 +285,15 @@ void TitleScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
     titleObject_->SetRotation(titleRotation_);
     titleObject_->SetScale(titleScale);
     titleObject_->SetEmissive(
-        0.045f + (std::sin(idleTimer_ * 1.35f) * 0.5f + 0.5f) * 0.035f);
+        0.14f + (std::sin(idleTimer_ * 1.35f) * 0.5f + 0.5f) * 0.025f);
     titleObject_->SetCamera(view, projection);
     titleObject_->Update(Math::MakeIdentity4x4());
 
     Vector3 shadowPosition = animatedTitlePosition;
     shadowPosition.x += 0.20f;
     shadowPosition.y -= 0.18f;
-    shadowPosition.z += 0.34f;
+    // 厚くした立体文字へ影モデルが交差しないよう、厚みより奥へ置く。
+    shadowPosition.z += 1.25f;
     titleShadowObject_->SetPosition(shadowPosition);
     titleShadowObject_->SetRotation(titleRotation_);
     titleShadowObject_->SetScale({
@@ -403,8 +407,8 @@ void TitleScene::Draw(GameRuntime& game) {
         common->SetCameraPosition(camera_.GetPosition());
         common->ClearPointLights();
         // 漂う星そのものを光源にして、タイトル表面へ色付きの光を落とす。
-        // 星7灯とロゴの走査光1灯で、Object3dCommonの8灯制限内に収める。
-        for (size_t i = 0; i < decorationStars_.size(); ++i) {
+        // 星6灯・前面キーライト・走査光で、8灯制限内に収める。
+        for (size_t i = 0; i < (std::min)(decorationStars_.size(), size_t{6}); ++i) {
             if (!decorationStars_[i]) {
                 continue;
             }
@@ -418,6 +422,12 @@ void TitleScene::Draw(GameRuntime& game) {
                 3.4f + pulse * 3.2f,
                 lightColor,
                 7.0f + pulse * 3.0f);
+        }
+        if (titleObject_) {
+            Vector3 keyPosition = titleObject_->GetPosition();
+            keyPosition.y += 2.6f;
+            keyPosition.z -= 5.0f;
+            common->AddPointLight(keyPosition, 1.6f, {1.0f, 0.90f, 0.72f, 1.0f}, 12.0f);
         }
         if (!startRequested_ && showPressSpace_ && titleObject_) {
             // 左端で現れ、文字面を横切って右端で消える柔らかなハイライト。

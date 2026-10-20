@@ -63,6 +63,8 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input, int startI
 
 	// 読み込んだモデルをセットする
 	stageObject_->SetModel(stageModel_.get());
+	// 展開図から復元した文字面を暗いライティングで潰さない。
+	stageObject_->SetEnableLighting(false);
 
 	// 位置やサイズを設定（とりあえず原点に置きます）
 	stageObject_->SetPosition({ 0.0f, 0.0f, 5.0f });
@@ -77,7 +79,7 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input, int startI
 	labelObject_->Initialize(object3dCommon_);
 	labelObject_->SetPosition({0.0f, 3.2f, 5.0f});
 	labelObject_->SetEnableLighting(false);
-	labelObject_->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+	labelObject_->SetColor({0.62f, 0.72f, 0.86f, 1.0f});
 	backGuideModel_ = Model::CreateFromOBJ(object3dCommon_->GetDxCommon(),
 		"Resources/Models/Recovery", "backGuide.obj", object3dCommon_->GetTextureManager());
 	backGuideObject_ = std::make_unique<Object3d>();
@@ -85,6 +87,7 @@ void StageSelect::Initialize(Object3dCommon* objCommon, Input* input, int startI
 	backGuideObject_->SetModel(backGuideModel_.get());
 	backGuideObject_->SetPosition({0.0f, -2.0f, 5.0f});
 	backGuideObject_->SetEnableLighting(false);
+	backGuideObject_->SetColor({0.62f, 0.72f, 0.86f, 1.0f});
 }
 
 void StageSelect::Update()

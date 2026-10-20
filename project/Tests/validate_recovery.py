@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+from collections import Counter
 
 PROJECT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
@@ -16,6 +17,31 @@ import recover_models
 
 
 def main():
+    # タイトルの穴を保った閉じた表面を検査。帯状の内部面が残る退行を防ぐ。
+    title = json.loads((PROJECT/"Tools/title_mesh.json").read_text(encoding="utf-8"))
+    edges = Counter()
+    front_area = 0.0
+    for triangle in title["triangles"]:
+        points = [tuple(round(v,6) for v in point) for point in triangle]
+        for a,b in zip(points, points[1:]+points[:1]):
+            edges[tuple(sorted((a,b)))] += 1
+        a,b,c = points
+        projected = ((b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]))/2
+        if projected > 0: front_area += projected
+    assert all(count == 2 for count in edges.values()), "Title must be a closed manifold"
+    assert abs(front_area-title["front_area"]) < .0001, "Title caps must cover the glyphs without overlapping strips"
+    assert title["depth"] >= .6
+    # UVが元画像の白い余白・全展開図へ戻らないことを実OBJから検査する。
+    for name in ("wall", "stageSelect"):
+        path = PROJECT/f"Resources/Models/{name}/{name}.obj"
+        uv = [tuple(map(float,line.split()[1:])) for line in path.read_text().splitlines() if line.startswith("vt ")]
+        if name == "wall":
+            assert all(.26 <= u <= .49 and .51 <= v <= .74 for u,v in uv)
+        else:
+            for offset in range(0,36,6):
+                face = uv[offset:offset+6]
+                assert max(p[0] for p in face)-min(p[0] for p in face) <= .251
+                assert max(p[1] for p in face)-min(p[1] for p in face) <= .251
     material_count, restored = recover_models.restore_missing_textures()
     assert not restored, "Validation must not create or overwrite textures"
     triangles = sum(recover_models.validate(p) for p in recover_models.targets())
@@ -78,6 +104,7 @@ def main():
         subprocess.run([str(binary)], check=True)
     print(f"Assets: {len(before)} OBJ, {triangles} triangles; {len(references)} literal load calls resolved")
     print(f"Material diffuse texture references: {material_count} resolved; PNG files preserved")
+    print("Title: closed bevelled .64-depth mesh with preserved glyph area; wall/stage atlas UV checks passed")
     print(f"Stages: {len(sequence)} files with spawn/goal; glTF dependencies and XML checked")
     print("Gitignore and generator repeatability passed. Windows build/render/input/fade remain unverified.")
 
