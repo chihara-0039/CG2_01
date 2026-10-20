@@ -351,6 +351,8 @@ private:
     void DrawCollisionDebugBoxes();
     void DrawSkyboxForFrame();
     bool IsPlayerHiddenByWall() const;
+    // READY/数字表示中は本体・影・強調描画をまとめて隠し、GOで表示する。
+    bool IsStartIntroHidingPlayer() const;
 
     void LoadEffectPresetNames();
     bool SaveEffectPreset(const std::string& name);

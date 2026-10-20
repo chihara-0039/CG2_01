@@ -56,6 +56,7 @@ void SetEditorSceneViewport(ID3D12GraphicsCommandList* commandList) {
 
 void GameRuntime::DrawCollisionDebugBoxes() {
 #ifdef USE_IMGUI
+    if (IsStartIntroHidingPlayer()) return;
     if (!debugFlags_.showCollisionBoxes || !camera || !player_ ||
         (currentMode_ != AppMode::GamePlay &&
          currentMode_ != AppMode::GamePlay_BlockPlace &&
@@ -254,8 +255,8 @@ void GameRuntime::Draw() {
             obj->DrawShadow(lightVP);
         }
     }
-    if (player_) {
-        player_->DrawShadow(lightVP); 
+    if (player_ && !IsStartIntroHidingPlayer()) {
+        player_->DrawShadow(lightVP);
     }
     if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
         skinningEditor_.DrawShadow(lightVP); 
@@ -389,7 +390,7 @@ void GameRuntime::RenderScene() {
 
         if (currentMode_ == AppMode::GamePlay ||
             currentMode_ == AppMode::EffectPreview) {
-            if (player_ && !useFirstPersonCamera_) {
+            if (player_ && !useFirstPersonCamera_ && !IsStartIntroHidingPlayer()) {
                 player_->Draw();
                 if (IsPlayerHiddenByWall()) {
                     object3dCommon->PreDrawPlayerHighlight();
@@ -399,7 +400,7 @@ void GameRuntime::RenderScene() {
                 }
             }
 
-            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_) {
+            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_ && !IsStartIntroHidingPlayer()) {
                 gameplayUIManager_->Draw3DPrompts(
                     true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
             }
@@ -557,6 +558,11 @@ void GameRuntime::DrawSkyboxForFrame() {
         skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         skydomeObject_->Draw();
     }
+}
+
+bool GameRuntime::IsStartIntroHidingPlayer() const {
+    // 演出の表示終了ではなく、操作解禁と同じ判定にする。GOの最初のフレームから映る。
+    return currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->BlocksInput();
 }
 
 bool GameRuntime::IsPlayerHiddenByWall() const {
