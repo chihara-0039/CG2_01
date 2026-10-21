@@ -77,11 +77,11 @@ int main() {
         assert(std::abs(approach.position.z-landing.position.z) < .002f);
     }
     std::cout << "Stage flyover: four stage sizes, full 360-degree orbit, framing and exact landing passed\n";
-    const float cueTimes[] = {0, 1, 2, 3, 4};
-    for (int cue = 0; cue < 5; ++cue) {
+    const float cueTimes[] = {0, 1, 2, 3};
+    for (int cue = 0; cue < 4; ++cue) {
         const auto frame = StartIntroTimeline::Evaluate(cueTimes[cue]);
         assert(frame.cue == cue);
-        assert(frame.blocksInput == (cue < 4));
+        assert(frame.blocksInput == (cue < 3));
         assert(!frame.finished);
         if (cue > 0) {
             assert(cueTimes[cue]-cueTimes[cue-1] == 1.0f);
@@ -106,11 +106,11 @@ int main() {
                 previousCue = frame.cue;
             }
         }
-        assert(previousCue == 4);
+        assert(previousCue == 3);
     }
     for (int sample = 0; sample <= 500; ++sample) {
         const auto frame = StartIntroTimeline::Evaluate(sample*.01f);
-        assert(frame.cue >= 0 && frame.cue <= 4);
+        assert(frame.cue >= 0 && frame.cue <= 3);
         assert(frame.alpha >= 0 && frame.alpha <= 1);
         assert(frame.cameraBlend >= 0 && frame.cameraBlend <= 1);
         assert(frame.scale >= 1 && frame.scale < 1.6f);

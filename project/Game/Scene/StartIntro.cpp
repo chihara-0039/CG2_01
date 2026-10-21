@@ -102,8 +102,8 @@ void StartIntro::Update(Camera* camera, bool visible) {
     // 俯瞰中は数字も音も始めない。着地後に既存のカウントをそのまま再生する。
     frame_ = StartIntroTimeline::Evaluate((std::max)(0.0f,elapsed_-StageFlyover::kDuration));
     if (!touring_ && frame_.cue != lastCue_) {
-        if (frame_.cue >= 1) sound_.SoundPlay(frame_.cue == 4 ? go_ : tick_, .55f);
-        if (frame_.cue == 4) goPending_ = true;
+        sound_.SoundPlay(frame_.cue == 3 ? go_ : tick_, .55f);
+        if (frame_.cue == 3) goPending_ = true;
         lastCue_ = frame_.cue;
     }
     sound_.CleanupFinishedSoundEffects();
@@ -145,12 +145,12 @@ void StartIntro::Finalize() {
 }
 
 void StartIntro::UpdateSprites() {
-    constexpr std::string_view words[] = {"READY", "3", "2", "1", "GO!"};
+    constexpr std::string_view words[] = {"3", "2", "1", "GO!"};
     const auto word = words[frame_.cue];
-    const float pixel = (frame_.cue == 0 ? 10.0f : 17.0f)*frame_.scale;
+    const float pixel = 17.0f*frame_.scale;
     const float width = (static_cast<float>(word.size())*6-1)*pixel;
     const float left = 640-width*.5f;
-    const Vector4 color = frame_.cue == 4 ? Vector4{1.0f,.80f,.28f,frame_.alpha} : Vector4{.56f,.90f,1.0f,frame_.alpha};
+    const Vector4 color = frame_.cue == 3 ? Vector4{1.0f,.80f,.28f,frame_.alpha} : Vector4{.56f,.90f,1.0f,frame_.alpha};
     pixelCount_ = 0;
     for (size_t c = 0; c < word.size(); ++c) {
         const auto glyph = Glyph(word[c]);
@@ -172,12 +172,12 @@ void StartIntro::UpdateSprites() {
     backdrop_->SetPosition({0,250}); backdrop_->SetSize({1280,220});
     backdrop_->SetColor({.015f,.025f,.05f,.40f*frame_.alpha}); backdrop_->Update();
     const float angle = elapsed_*.7f;
-    const float radius = (frame_.cue == 0 || frame_.cue == 4 ? 195.0f : 120.0f)
+    const float radius = (frame_.cue == 3 ? 195.0f : 120.0f)
         -20.0f*frame_.cameraBlend;
     for (size_t i = 0; i < frameLines_.size(); ++i) {
         const float rotation = angle+static_cast<float>(i)*1.57079632679f;
         frameLines_[i]->SetPosition({640+std::cos(rotation)*radius,360+std::sin(rotation)*radius});
-        frameLines_[i]->SetSize({frame_.cue == 0 ? 20.0f : 44.0f,3});
+        frameLines_[i]->SetSize({44.0f,3});
         frameLines_[i]->SetRotation(rotation+1.57079632679f);
         frameLines_[i]->SetColor(color); frameLines_[i]->Update();
     }
