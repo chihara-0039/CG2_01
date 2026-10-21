@@ -62,7 +62,7 @@ Sound::SoundData StartIntro::MakeTone(bool go) {
     return data;
 }
 
-void StartIntro::Begin(Camera* camera, const Vector3& stageCenter, float stageRadius) {
+void StartIntro::Begin(Camera* camera, const Vector3& stageCenter, float stageRadius, const Vector3& spawnPosition) {
     elapsed_ = 0;
     lastCue_ = -1;
     active_ = true;
@@ -71,7 +71,14 @@ void StartIntro::Begin(Camera* camera, const Vector3& stageCenter, float stageRa
     cameraFarClip_ = camera->GetFarClip();
     stageCenter_ = stageCenter;
     stageRadius_ = stageRadius;
-    gameCamera_ = {camera->GetPosition(),camera->GetRotation(),cameraFov_+.12f};
+    gameCamera_ = {camera->GetPosition(),camera->GetRotation(),cameraFov_};
+    // カウント中の注視点をスポーン地点の上半身へ明示的に固定する。
+    const Vector3 direction{spawnPosition.x-gameCamera_.position.x,
+        spawnPosition.y+.8f-gameCamera_.position.y,spawnPosition.z-gameCamera_.position.z};
+    const float horizontal = std::sqrt(direction.x*direction.x+direction.z*direction.z);
+    if (horizontal > .001f) {
+        gameCamera_.rotation = {-std::atan2(direction.y,horizontal),std::atan2(direction.x,direction.z),0};
+    }
     touring_ = true;
     camera->SetFarClip((std::max)(cameraFarClip_,stageRadius_*6+20));
     const auto pose = StageFlyover::Evaluate(0, stageCenter_, stageRadius_, gameCamera_);
@@ -103,7 +110,8 @@ void StartIntro::Update(Camera* camera, bool visible) {
     if (frame_.blocksInput) {
         const auto pose = StageFlyover::Evaluate(elapsed_,stageCenter_,stageRadius_,gameCamera_);
         camera->SetPosition(pose.position); camera->SetRotation(pose.rotation);
-        camera->SetFov(touring_ ? pose.fov : cameraFov_+.12f*(1-frame_.cameraBlend));
+        // 着地後はカウント中にズームや再旋回を行わない。
+        camera->SetFov(pose.fov);
         if (!touring_) camera->SetFarClip(cameraFarClip_);
         camera->Update();
     } else if (goPending_) {

@@ -48,7 +48,21 @@ int main() {
         const Vector3 forward{std::sin(beginning.rotation.y)*std::cos(beginning.rotation.x),
             -std::sin(beginning.rotation.x),std::cos(beginning.rotation.y)*std::cos(beginning.rotation.x)};
         assert((direction.x*forward.x+direction.y*forward.y+direction.z*forward.z)/distance > .999f);
-        for (int i=0;i<=320;++i) {
+        float previousAngle = std::atan2(stageCenter.x-beginning.position.x,stageCenter.z-beginning.position.z);
+        float accumulatedAngle = 0;
+        const float height = beginning.position.y;
+        // 着地を始める前に360度を回り切り、周回中は半径と高さを保つ。
+        for (int i=1;i<=480;++i) {
+            const auto pose = StageFlyover::Evaluate(StageFlyover::kOrbitDuration*i/480,stageCenter,radius,destination);
+            const float angle = std::atan2(stageCenter.x-pose.position.x,stageCenter.z-pose.position.z);
+            accumulatedAngle += std::remainder(angle-previousAngle,6.28318530718f);
+            previousAngle = angle;
+            assert(std::abs(pose.position.y-height) < .001f);
+            const float dx=stageCenter.x-pose.position.x,dy=stageCenter.y-pose.position.y,dz=stageCenter.z-pose.position.z;
+            assert(std::abs(std::sqrt(dx*dx+dy*dy+dz*dz)-distance) < .002f);
+        }
+        assert(std::abs(accumulatedAngle-6.28318530718f) < .001f);
+        for (int i=0;i<=600;++i) {
             const auto pose = StageFlyover::Evaluate(i*.01f,stageCenter,radius,destination);
             assert(std::isfinite(pose.position.x) && std::isfinite(pose.position.y) && std::isfinite(pose.position.z));
             assert(std::isfinite(pose.rotation.x) && std::isfinite(pose.rotation.y));
@@ -62,7 +76,7 @@ int main() {
         assert(std::abs(approach.position.y-landing.position.y) < .002f);
         assert(std::abs(approach.position.z-landing.position.z) < .002f);
     }
-    std::cout << "Stage flyover: four stage sizes, framing, 1284 samples and exact landing passed\n";
+    std::cout << "Stage flyover: four stage sizes, full 360-degree orbit, framing and exact landing passed\n";
     const float cueTimes[] = {0, 1, 2, 3, 4};
     for (int cue = 0; cue < 5; ++cue) {
         const auto frame = StartIntroTimeline::Evaluate(cueTimes[cue]);
