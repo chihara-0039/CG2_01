@@ -5,17 +5,19 @@ import {pathToFileURL} from 'node:url';
 const [mediaDir,buildDir,modulePath]=process.argv.slice(2);
 const {Presentation,PresentationFile}=await import(pathToFileURL(modulePath).href);
 await fs.mkdir(buildDir,{recursive:true});
-const C={bg:'#101C2B',text:'#F1F5F9',muted:'#B5C5D6',accent:'#77E5E0'};
+const C={bg:'#202020',text:'#F1F1F1',muted:'#BBBBBB',accent:'#8BB6D8'};
 const spec=[];
 function slide(title,notes){const s={title,notes,nodes:[]};spec.push(s);return s;}
 function text(s,value,x,y,w,h,size=28,color=C.text,bold=false){s.nodes.push({kind:'text',value,x,y,w,h,size,color,bold});}
 function image(s,file,x,y,w,h){s.nodes.push({kind:'image',file,x,y,w,h});}
 function table(s,values,x,y,w,h,widths,grid=false){s.nodes.push({kind:'table',values,x,y,w,h,widths,grid});}
 const capture='映像は同じ箱庭・同じカメラ条件の再現撮影。位置・操作時刻を撮影用に自動化している。実入力の連続プレイや人による操作性評価ではない。';
-let s=slide('足場づくりを、安心して試せる操作へ','発表の軸は回収したブロックを使って道を作る操作の改善。録画機能・フォグ・モデル変更は独立した発表項目に含めない。'+capture);
-text(s,'回収したブロックで\n道を作る操作の改善',56,178,430,134,36,C.accent,true);
-text(s,'回転の国の探検隊\n技術進捗 / PR1_01\n2026.10.26',56,411,410,124,26,C.muted);
-image(s,'hero.png',506,172,720,405);
+let s=slide('足場づくりの操作を改善する','発表の軸は回収したブロックを使って道を作る操作の改善。録画機能・フォグ・モデル変更は独立した発表項目に含めない。'+capture);
+s.cover=true;
+text(s,'足場づくりの操作を改善する',172,264,936,86,48,C.text,false);
+s.nodes.at(-1).align='center';
+text(s,'LE3B_20_チハラ_シゴウ',240,390,800,64,30,C.text,false);
+s.nodes.at(-1).align='center';
 
 s=slide('課題：持ち出した足場が、一部だけ置かれる','変更前のBlockPlacementController.cppと実行ファイルをgenerated/PR1_01/build/baselineに保存してから撮影。3セルの複合パーツの1セルが既存のIceBlockと重なる条件。既存処理では空いている2セルだけ置かれ、パーツ在庫が1から0に減った。before-collision.jsonに実体セル数2、在庫0を記録。'+capture);
 image(s,'problem.png',56,160,760,428);
@@ -75,13 +77,14 @@ text(s,'B：持ち出す　WASD／Q・E：位置と高さ　R：回転　Enter�
 const deck=Presentation.create({slideSize:{width:1280,height:720}});
 for(let i=0;i<spec.length;i++){
  const src=spec[i],dst=deck.slides.add();dst.background.fill=C.bg;dst.speakerNotes.text=src.notes;
- const texts=[{kind:'text',value:src.title,x:56,y:42,w:1168,h:90,size:40,color:C.text,bold:true},...src.nodes,{kind:'text',value:String(i+1).padStart(2,'0'),x:1180,y:678,w:48,h:28,size:18,color:C.muted}];
+ const texts=src.cover?src.nodes:[{kind:'text',value:src.title,x:56,y:42,w:1168,h:90,size:40,color:C.text,bold:false},...src.nodes,{kind:'text',value:String(i+1).padStart(2,'0'),x:1180,y:678,w:48,h:28,size:18,color:C.muted}];
+ if(!src.cover)dst.shapes.add({geometry:'rect',position:{left:56,top:124,width:1168,height:1},fill:'#68717A',line:{fill:'none',width:0}});
  for(const n of texts){
-  if(n.kind==='text'){const sh=dst.shapes.add({geometry:'textbox',position:{left:n.x,top:n.y,width:n.w,height:n.h},fill:'none',line:{fill:'none',width:0}});sh.text=n.value;sh.text.style={typeface:'Yu Gothic',fontSize:n.size,color:n.color,bold:n.bold||false,verticalAlignment:'top',insets:0,autoFit:'none'};}
+  if(n.kind==='text'){const sh=dst.shapes.add({geometry:'textbox',position:{left:n.x,top:n.y,width:n.w,height:n.h},fill:'none',line:{fill:'none',width:0}});sh.text=n.value;sh.text.style={typeface:'Yu Gothic',fontSize:n.size,color:n.color,bold:n.bold||false,alignment:n.align||'left',verticalAlignment:'top',insets:0,autoFit:'none'};}
   if(n.kind==='image')dst.images.add({blob:new Uint8Array(await fs.readFile(path.join(mediaDir,n.file))),contentType:n.file.endsWith('.gif')?'image/gif':'image/png',fit:'contain',position:{left:n.x,top:n.y,width:n.w,height:n.h}});
   if(n.kind==='table'){
    const t=dst.tables.add({rows:n.values.length,columns:n.values[0].length,left:n.x,top:n.y,width:n.w,height:n.h,columnWidths:n.widths,values:n.values});
-   for(let r=0;r<n.values.length;r++)for(let c=0;c<n.values[0].length;c++){const cell=t.getCell(r,c);cell.fill=n.grid?(n.values[r][c]?'#256E71':'#23394D'):(r===0?'#23394D':r%2?'#15283A':'#102234');cell.text.style={typeface:'Yu Gothic',fontSize:n.grid?23:23,color:r===0&&!n.grid?C.accent:C.text,bold:r===0&&!n.grid};}
+   for(let r=0;r<n.values.length;r++)for(let c=0;c<n.values[0].length;c++){const cell=t.getCell(r,c);cell.fill=n.grid?(n.values[r][c]?'#365B77':'#353535'):(r===0?'#353535':r%2?'#292929':'#252525');cell.text.style={typeface:'Yu Gothic',fontSize:n.grid?23:23,color:r===0&&!n.grid?C.accent:C.text,bold:r===0&&!n.grid};}
   }
  }
 }
