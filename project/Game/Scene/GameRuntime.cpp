@@ -95,6 +95,9 @@ void GameRuntime::HandleModeChange() {
     if (currentMode_ == prevMode_) {
         return;
     }
+    if(buildTrial_ && (currentMode_==AppMode::Title || currentMode_==AppMode::StageSelect)) {
+        buildTrial_=false;fogTrial_=false;
+    }
 
     // PostEffect表示で無効化したパーティクル表示を、天候を使うシーンへ持ち越さない。
     if (currentMode_ == AppMode::StageEditor ||

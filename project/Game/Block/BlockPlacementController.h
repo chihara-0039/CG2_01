@@ -3,6 +3,7 @@
 #include "StageMap.h"
 #include "StageRenderer.h"
 #include "BlockInventory.h"
+#include "PlacementPlan.h"
 
 // 所持ブロックをステージ上へ配置するための制御クラス。
 class BlockPlacementController {
@@ -16,6 +17,11 @@ public:
 
     // 指定セルに現在選択中のブロックを配置する。成功時はインベントリも消費する。
     bool TryPlace(const Int3& index, float rotationY = 0.0f);
+    Placement::Plan Evaluate(const Int3& index,float rotationY=0) const;
+    bool TryUndo();
+    bool HasUndo() const { return !lastPlacement_.empty(); }
+    Placement::Reason LastReason() const { return lastReason_; }
+    void SetPlayerPosition(const Vector3& p) {playerPosition_=p;checkPlayer_=true;}
 
     // UI側で選択された配置ブロック種別とカスタムIDを保持する。
     void SetPlaceBlockType(BlockType type) { placeBlockType_ = type; }
@@ -24,7 +30,13 @@ public:
 
 private:
     // 配置先セルが空で、ステージ範囲内かを判定する。
-    bool CanPlaceAt(const Int3& index) const;
+    struct SavedCell { Int3 index; MapCell before; MapCell placed; };
+    std::vector<SavedCell> lastPlacement_;
+    BlockType undoType_=BlockType::None;
+    int undoCustomId_=0;
+    bool undoConsumed_=false,checkPlayer_=false;
+    Vector3 playerPosition_{};
+    Placement::Reason lastReason_=Placement::Reason::Ready;
 
 private:
     StageMap* stageMap_ = nullptr;

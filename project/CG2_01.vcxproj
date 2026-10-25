@@ -314,6 +314,7 @@
     <ClInclude Include="Game\Environment\WeatherPresetManager.h" />
     <ClInclude Include="Game\Environment\WeatherRuntimeController.h" />
     <ClInclude Include="Game\Block\BlockPlacementController.h" />
+    <ClInclude Include="Game\Block\PlacementPlan.h" />
     <ClInclude Include="Game\Block\BubblePickupController.h" />
     <ClInclude Include="Game\Block\BlockInventory.h" />
     <ClInclude Include="Engine\Utility\Camera.h" />

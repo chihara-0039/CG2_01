@@ -60,6 +60,7 @@ public:
 
     // インベントリの開閉状態を切り替える。
     void ToggleOpen();
+    bool ConfirmSelection();
 
 private:
     // マウス座標が指定矩形内に入っているかを判定する。

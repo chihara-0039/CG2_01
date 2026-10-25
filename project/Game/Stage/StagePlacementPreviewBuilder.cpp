@@ -1,6 +1,7 @@
-#include "StagePlacementPreviewBuilder.h"
+﻿#include "StagePlacementPreviewBuilder.h"
 
 #include <cmath>
+#include "../Block/PlacementPlan.h"
 #include "Model.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
@@ -102,7 +103,7 @@ void StagePlacementPreviewBuilder::Build(
     const Int3& cursorIndex,
     BlockType type,
     int customId,
-    float rotationY) {
+    float rotationY,int validity) {
 
     // プレビューはカーソル移動や選択変更のたびに作り直すため、前回分を先に消す。
     previewObjects.clear();
@@ -113,84 +114,16 @@ void StagePlacementPreviewBuilder::Build(
         return;
     }
 
-	// カスタムパーツは3x3x3の形状を回転させて表示する。
-    if (customId >= 1 && customId <= 5) {
-        const auto* part = stageMap.GetCustomPart(customId);
-        if (part && !part->IsEmpty()) {
-            // カスタムパーツは3x3x3のローカルセルを、90度単位の回転後座標へ変換して表示する。
-            int rotationQuarterTurns = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
-            if (rotationQuarterTurns < 0) {
-                rotationQuarterTurns += 4;
-            }
-
-			// 3x3x3の各セルを回転後の座標に変換して、半透明プレビューを作る。
-            for (int localY = 0; localY < 3; ++localY) {
-                for (int localZ = 0; localZ < 3; ++localZ) {
-                    for (int localX = 0; localX < 3; ++localX) {
-                        const auto& cell = part->cells[localY][localZ][localX];
-                        if (cell.type == BlockType::None) {
-                            continue;
-                        }
-
-                        // パーツセルごとに回転後の表示位置と向きを決定する。
-                        int rotatedX = localX;
-                        int rotatedZ = localZ;
-                        float cellRotationY = 0.0f;
-                        if (rotationQuarterTurns == 1) {
-                            rotatedX = 2 - localZ;
-                            rotatedZ = localX;
-                            cellRotationY = 1.5707963f;
-                        } else if (rotationQuarterTurns == 2) {
-                            rotatedX = 2 - localX;
-                            rotatedZ = 2 - localZ;
-                            cellRotationY = 3.1415927f;
-                        } else if (rotationQuarterTurns == 3) {
-                            rotatedX = localZ;
-                            rotatedZ = 2 - localX;
-                            cellRotationY = 4.712389f;
-                        }
-
-						// カスタムパーツのセルを回転後の座標に配置する。
-                        Vector3 previewPosition = {
-                            static_cast<float>(cursorIndex.x + rotatedX),
-                            static_cast<float>(cursorIndex.y + localY),
-                            static_cast<float>(cursorIndex.z + rotatedZ)
-                        };
-
-						// セルの種類に応じて、壁かハシゴのモデルを選択する。
-                        Model* cellModel = (cell.type == BlockType::Ladder) ? models.ladder : models.wall;
-                        if (!cellModel) {
-                            continue;
-                        }
-
-						// プレビュー用の半透明オブジェクトを作成してリストに追加する。
-                        previewObjects.push_back(CreatePreviewObject(
-                            object3dCommon,
-                            cellModel,
-                            previewPosition,
-                            { 1.57f, cellRotationY, 0.0f },
-                            blockScale,
-                            style.color));
-                    }
-                }
-            }
-            return;
-        }
+    const auto plan=Placement::Make(stageMap,cursorIndex,type,customId,rotationY);
+    if(validity==1)style.color={.15f,1.0f,.55f,.60f};
+    if(validity==2)style.color={1.0f,.12f,.18f,.68f};
+    for(const auto& cell:plan.cells) {
+        Model* model=style.model;
+        if(customId>=1 && customId<=5)model=cell.type==BlockType::Ladder?models.ladder:models.wall;
+        if(!model)continue;
+        previewObjects.push_back(CreatePreviewObject(object3dCommon,model,
+            {static_cast<float>(cell.index.x),static_cast<float>(cell.index.y),static_cast<float>(cell.index.z)},
+            {1.57f,cell.rotationY,0},blockScale,style.color));
+        if(validity!=0)previewObjects.back()->SetEmissive(1.15f);
     }
-
-    // 通常ブロックはカーソル位置に1つだけ半透明プレビューを出す。
-    Vector3 previewPosition = {
-        static_cast<float>(cursorIndex.x),
-        static_cast<float>(cursorIndex.y),
-        static_cast<float>(cursorIndex.z)
-    };
-
-	// プレビュー用の半透明オブジェクトを作成してリストに追加する。
-    previewObjects.push_back(CreatePreviewObject(
-        object3dCommon,
-        style.model,
-        previewPosition,
-        { 1.57f, rotationY, 0.0f },
-        blockScale,
-        style.color));
 }

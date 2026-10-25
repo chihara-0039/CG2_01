@@ -360,6 +360,17 @@ private:
     void UpdateExplorationFog();
     void DrawCaptureOverlay();
     void BeginFogTrial();
+    void BeginBuildTrial();
+    void UpdateBuildTrial();
+    void VerifyBuilding();
+    bool buildTrial_=false, buildCapture_=false, buildAction_=false;
+    int buildStep_=0;
+    bool buildReached_=false;
+    int buildStatus_=0;
+    std::array<std::unique_ptr<Sprite>,12> buildLabels_;
+    std::chrono::steady_clock::time_point placementFeedbackUntil_{};
+    int PlacementStatus(Placement::Reason reason) const;
+    std::array<std::unique_ptr<Sprite>,2> buildCounts_;
     FogExplorer fogExplorer_;
     bool fogTrial_=false, showRecorder_=false;
     bool comparisonActive_=false, comparisonRecordingStarted_=false, comparisonScanned_=false;

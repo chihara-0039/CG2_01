@@ -158,6 +158,7 @@
     <ClInclude Include="Engine\Utility\LightCamera.h" />
     <ClInclude Include="Game\Scene\GameClearScene.h" />
     <ClInclude Include="Game\Block\BlockPlacementController.h" />
+    <ClInclude Include="Game\Block\PlacementPlan.h" />
     <ClInclude Include="Game\Block\BubblePickupController.h" />
     <ClInclude Include="Game\Block\BlockInventory.h" />
     <ClInclude Include="Game\Scene\StageSelect.h" />

@@ -377,8 +377,7 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
         if ((input->TriggerControllerButton(XINPUT_GAMEPAD_A) ||
              input->TriggerKey(DIK_RETURN)) &&
             selectedBlockType_ != BlockType::None) {
-            useRequested_ = true;
-            ToggleOpen();
+            ConfirmSelection();
         } else if (input->TriggerControllerButton(XINPUT_GAMEPAD_B) ||
                    input->TriggerControllerButton(XINPUT_GAMEPAD_LEFT_SHOULDER) ||
                    input->TriggerKey(DIK_B) ||
@@ -397,6 +396,12 @@ void BlockInventoryUI::Update(Input* input, WinApp* winApp, bool isGamePlayMode,
             break;
         }
     }
+}
+
+bool BlockInventoryUI::ConfirmSelection() {
+    if(state_!=State::Opened || selectedBlockType_==BlockType::None ||
+       (selectedBlockType_!=BlockType::Ground && !inventory_->HasBlock(selectedBlockType_,selectedCustomId_)))return false;
+    useRequested_=true;ToggleOpen();return true;
 }
 
 void BlockInventoryUI::Draw() {

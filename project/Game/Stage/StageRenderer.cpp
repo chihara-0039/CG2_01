@@ -1177,7 +1177,8 @@ void StageRenderer::SetPlacementPreview(
 	const Int3& cursorIndex,
 	BlockType type,
 	int customId,
-	float rotationY
+	float rotationY,
+    int validity
 ) {
 	StagePlacementPreviewBuilder::Build(
 		previewObjects_,
@@ -1195,7 +1196,7 @@ void StageRenderer::SetPlacementPreview(
 		cursorIndex,
 		type,
 		customId,
-		rotationY);
+		rotationY,validity);
 	BuildPreviewRenderGroups();
 }
 

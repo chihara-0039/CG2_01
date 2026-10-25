@@ -405,7 +405,8 @@ void GameRuntime::RunStageEditorScene() {
 void GameRuntime::RunGamePlayScene() {
     // route撮影は配置だけを自動化し、回収・ゴール判定は通常のゲーム処理を通す。
     char captureShot[32]{}; GetEnvironmentVariableA("CG2_SHOT",captureShot,sizeof(captureShot));
-    if (comparisonActive_ && std::string(captureShot)!="route") return;
+    char buildingShot[32]{};GetEnvironmentVariableA("CG2_BUILD_SHOT",buildingShot,sizeof(buildingShot));
+    if (comparisonActive_ && std::string(captureShot)!="route" && std::string(buildingShot)!="route") return;
     if (startIntro_ && startIntro_->IsActive()) {
         startIntro_->Update(camera.get(), sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive());
         if (startIntro_->ConsumeGo()) {

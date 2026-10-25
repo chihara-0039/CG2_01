@@ -287,6 +287,7 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
 
     // 入力処理後の最新カーソル座標を配置プレビューと確定処理に使用する。
     const Int3 cursor = mapCursor_->GetIndex();
+    if(player_)blockPlacementController_.SetPlayerPosition(player_->GetPosition());
 
     BlockType selectedType = BlockType::Ground;
     int selectedCustomId = 0;
@@ -298,7 +299,9 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
     }
 
     if (stageRenderer_) {
-        stageRenderer_->SetPlacementPreview(stageMap_, cursor, selectedType, selectedCustomId, placeRotationY_);
+        const auto plan=blockPlacementController_.Evaluate(cursor,placeRotationY_);
+        if(std::chrono::steady_clock::now()>=placementFeedbackUntil_)buildStatus_=PlacementStatus(plan.reason);
+        stageRenderer_->SetPlacementPreview(stageMap_, cursor, selectedType, selectedCustomId, placeRotationY_,plan.Ready()?1:2);
     }
 
     static bool prevMouse0 = false;

@@ -40,7 +40,8 @@ public:
         const Int3& cursorIndex,
         BlockType type,
         int customId,
-        float rotationY
+        float rotationY,
+        int validity = 0
     );
     void ClearPlacementPreview();
 
