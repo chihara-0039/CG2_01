@@ -120,33 +120,49 @@ void GameRuntime::UpdateCaptureTools() {
 void GameRuntime::UpdateExplorationFog() {
     const auto now=std::chrono::steady_clock::now();
     const float dt=std::chrono::duration<float>(now-fogUpdatedAt_).count(); fogUpdatedAt_=now;
+    const float captureDuration=CaptureEnvironment("CG2_SHOT")=="route" ? 12.0f : 10.0f;
+    // クリア画面へ遷移しても撮影の終了処理を止めない。
+    if (comparisonActive_ && comparisonRecordingStarted_ && std::chrono::duration<float>(now-comparisonStarted_).count()>=captureDuration+1.5f) {
+        if (dxCommon->Recorder().IsRecording()) dxCommon->Recorder().Stop();
+        if (!dxCommon->Recorder().IsBusy()) PostQuitMessage(0);
+    }
     const bool active=fogTrial_ && (currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace);
     if (!active) { object3dCommon->SetExplorationFog({0,0,0,0},{},{},{}); return; }
     if (comparisonActive_) {
         // 実入力の録画とは別の再現撮影。カメラ・位置・時刻は全方式で同一。
         const float elapsed=std::chrono::duration<float>(now-comparisonStarted_).count();
         const float t=(std::max)(0.0f,elapsed-1.5f);
-        const float yaw=-.8f*std::sin(t*.7f);
-        const Vector3 p{22,.5f,10+std::clamp(t,0.0f,8.0f)*1.4f};
+        const auto shot=CaptureEnvironment("CG2_SHOT");
+        float yaw=-.8f*std::sin(t*.7f),distance=20,height=14,pitch=.55f;
+        Vector3 p{22,.5f,10+std::clamp(t,0.0f,8.0f)*1.4f};
+        if(shot=="footpath") { p={22,.5f,14+std::clamp(t,0.0f,8.0f)*1.5f}; yaw=.25f; distance=9; height=6; pitch=.56f; }
+        if(shot=="branch") { p={22,.5f,27}; yaw=-.8f*std::sin(t*.65f); distance=15; height=10; pitch=.56f; }
+        if(shot=="character") { p={22,.5f,10}; yaw=t*.63f; distance=3.8f; height=1.65f; pitch=.22f; player_->SetRotation({0,3.14159265f,0}); }
+        if(shot=="route") {
+            // 未回収の星、分岐の回収アイテム、回収後の星を順に確認する再現配置。
+            p=t<3 ? Vector3{22,.5f,54} : t<6 ? Vector3{8,.5f,27} : Vector3{22,.5f,54};
+            yaw=.25f; distance=12; height=8; pitch=.54f;
+        }
         player_->SetPosition(p);
-        camera->SetPosition({p.x-std::sin(yaw)*20,p.y+14,p.z-std::cos(yaw)*20});
-        camera->SetRotation({.55f,yaw,0}); camera->SetFov(.9f); camera->Update();
+        camera->SetPosition({p.x-std::sin(yaw)*distance,p.y+height,p.z-std::cos(yaw)*distance});
+        camera->SetRotation({pitch,yaw,0}); camera->SetFov(.9f); camera->Update();
         if (elapsed>=1.5f && !comparisonRecordingStarted_) {
             FrameRecorder::Options options; options.name=comparisonMode_==0 ? "baseline" : comparisonMode_==1 ? "bubble" : "scan";
+            if(!shot.empty()) options.name=shot+"-"+options.name;
             const auto output=CaptureEnvironment("CG2_CAPTURE_DIR"); if(!output.empty()) options.directory=output;
-            options.gifSeconds=10;
+            options.gifSeconds=static_cast<int>(captureDuration);
             if (!dxCommon->Recorder().Start(options)) { PostQuitMessage(2); return; }
             comparisonRecordingStarted_=true;
         }
-        if (t>=1.2f && !comparisonScanned_) { fogExplorer_.TryScan(); comparisonScanned_=true; }
-        if (elapsed>=11.5f && comparisonRecordingStarted_ && dxCommon->Recorder().IsRecording()) dxCommon->Recorder().Stop();
-        if (elapsed>=11.5f && comparisonRecordingStarted_ && !dxCommon->Recorder().IsBusy()) PostQuitMessage(0);
+        if (t>=1.2f && !comparisonScanned_ && shot!="character") { fogExplorer_.TryScan(); comparisonScanned_=true; }
+        if (elapsed>=captureDuration+1.5f && comparisonRecordingStarted_ && dxCommon->Recorder().IsRecording()) dxCommon->Recorder().Stop();
+        if (elapsed>=captureDuration+1.5f && comparisonRecordingStarted_ && !dxCommon->Recorder().IsBusy()) PostQuitMessage(0);
     }
     const bool paused=isGamePaused_ || (blockInventoryUI_ && blockInventoryUI_->IsActive()) || sceneFadePhase_!=SceneFadePhase::None || isGoalReached_ || (!comparisonActive_ && IsWindowInactive());
     if (!paused && input->TriggerKey(DIK_G)) fogExplorer_.TryScan();
     fogExplorer_.Update(dt,player_->GetPosition(),camera->GetRotation().y,paused);
     const auto p=fogExplorer_.Origin(), d=fogExplorer_.Direction();
-    object3dCommon->SetExplorationFog({1,8,55,.94f}, {p.x,p.y,p.z,static_cast<float>(fogExplorer_.Mode())},
+    object3dCommon->SetExplorationFog({1,4,28,.94f}, {p.x,p.y,p.z,static_cast<float>(fogExplorer_.Mode())},
         {d.x,0,d.z,28}, {fogExplorer_.Strength(),fogExplorer_.Radius(),0,0});
     scanMeter_->SetSize({280*(1-fogExplorer_.Cooldown()/6),7}); scanMeter_->Update();
 }
@@ -154,7 +170,8 @@ void GameRuntime::UpdateExplorationFog() {
 void GameRuntime::DrawCaptureOverlay() {
     spriteCommon->PreDraw();
     if (currentMode_==AppMode::Title && fogLabels_[3]) fogLabels_[3]->Draw();
-    if (fogTrial_ && currentMode_==AppMode::GamePlay) {
+    const auto shot=CaptureEnvironment("CG2_SHOT");
+    if (fogTrial_ && currentMode_==AppMode::GamePlay && shot!="character" && shot!="route") {
         fogLabels_[fogExplorer_.Mode()]->Draw(); scanMeter_->Draw();
     }
     if (dxCommon->Recorder().IsRecording()) fogLabels_[4]->Draw();

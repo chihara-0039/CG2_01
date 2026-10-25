@@ -87,7 +87,8 @@ public:
     void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager);
 
     // glTFファイルから初期化
-    void InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager);
+    void InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager, bool explorerOutfit = false);
+    void AddExplorerOutfit();
     void CreateBuffers(DirectXCommon* dxCommon);
 
     // ゲッター群

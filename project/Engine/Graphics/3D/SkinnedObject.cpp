@@ -348,13 +348,13 @@ void SkinnedObject::Initialize(Object3dCommon* object3dCommon, DirectXCommon* dx
     CreateSkeletonDebugModels(dxCommon, textureManager);
 }
 
-void SkinnedObject::InitializeFromGltf(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager) {
+void SkinnedObject::InitializeFromGltf(Object3dCommon* object3dCommon, DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager, bool explorerOutfit) {
     // 再初期化では、旧Modelへの生ポインタを持つObject3dを先に破棄する。
     ResetModelDependentResources();
 
     // 1. スキニングモデルをglTFから生成
     skinnedModel_ = std::make_unique<SkinnedModel>();
-    skinnedModel_->InitializeFromGltf(dxCommon, filePath, textureManager);
+    skinnedModel_->InitializeFromGltf(dxCommon, filePath, textureManager, explorerOutfit);
 
     // 2. 表示用のObject3dを初期化して、SkinnedModel内部のModelを登録
     object3d_ = std::make_unique<Object3d>();

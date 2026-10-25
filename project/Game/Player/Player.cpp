@@ -57,7 +57,10 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 
 void Player::InitializeWithSkinnedGltf(Object3dCommon* common, DirectXCommon* dxCommon, const std::string& gltfPath, TextureManager* textureManager) {
 	skinnedObject_ = std::make_unique<SkinnedObject>();
-	skinnedObject_->InitializeFromGltf(common, dxCommon, gltfPath, textureManager);
+	char legacy[8]{};
+	GetEnvironmentVariableA("CG2_LEGACY_MODEL", legacy, sizeof(legacy));
+	const bool isPlayerMesh = gltfPath.ends_with("/human/walk.gltf") || gltfPath.ends_with("\\human\\walk.gltf");
+	skinnedObject_->InitializeFromGltf(common, dxCommon, gltfPath, textureManager, isPlayerMesh && legacy[0] != '1');
 	if (auto* model = skinnedObject_->GetModel()) {
 		model->EnsureDefaultPlayerMotions();
 	}

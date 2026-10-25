@@ -54,7 +54,7 @@ public:
     //  glTF は右手座標系なので内部で左手座標系に変換している。
     // -------------------------------------------------------
     void InitializeFromGltf(Object3dCommon* object3dCommon, DirectXCommon* dxCommon,
-                            const std::string& filePath, TextureManager* textureManager);
+                            const std::string& filePath, TextureManager* textureManager, bool explorerOutfit = false);
 
     // -------------------------------------------------------
     //  Update : 毎フレーム呼ぶ。以下の処理を順番に行う:

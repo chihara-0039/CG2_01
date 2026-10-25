@@ -1,7 +1,9 @@
 param(
     [string]$Ffmpeg = '',
     [string]$OutputDirectory = '',
-    [ValidateSet('all','baseline','bubble','scan')][string]$Mode = 'all'
+    [ValidateSet('all','baseline','bubble','scan')][string]$Mode = 'all',
+    [ValidateSet('','footpath','branch','character','route')][string]$Shot = '',
+    [switch]$LegacyModel
 )
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
@@ -11,7 +13,9 @@ if (!(Test-Path -LiteralPath $executable)) { throw '先にRelease/x64をビル�
 if (!$OutputDirectory) { $OutputDirectory=Join-Path $repositoryRoot 'generated\PR1_01\media' }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $oldCompare=$env:CG2_COMPARE; $oldOutput=$env:CG2_CAPTURE_DIR; $oldFfmpeg=$env:CG2_FFMPEG
+$oldShot=$env:CG2_SHOT; $oldLegacy=$env:CG2_LEGACY_MODEL
 try {
+    $env:CG2_SHOT=$Shot; $env:CG2_LEGACY_MODEL=if($LegacyModel){'1'}else{'0'}
     $env:CG2_CAPTURE_DIR=[IO.Path]::GetFullPath($OutputDirectory)
     if ($Ffmpeg) { $env:CG2_FFMPEG=[IO.Path]::GetFullPath($Ffmpeg) }
     $modes=if($Mode -eq 'all') { @('baseline','bubble','scan') } else { @($Mode) }
@@ -24,5 +28,6 @@ try {
     }
 } finally {
     $env:CG2_COMPARE=$oldCompare; $env:CG2_CAPTURE_DIR=$oldOutput; $env:CG2_FFMPEG=$oldFfmpeg
+    $env:CG2_SHOT=$oldShot; $env:CG2_LEGACY_MODEL=$oldLegacy
 }
 Write-Output $OutputDirectory
