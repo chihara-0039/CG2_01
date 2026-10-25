@@ -403,6 +403,7 @@ void GameRuntime::RunStageEditorScene() {
 }
 
 void GameRuntime::RunGamePlayScene() {
+    if (comparisonActive_) return; // 再現撮影は物理と実入力を混ぜない。
     if (startIntro_ && startIntro_->IsActive()) {
         startIntro_->Update(camera.get(), sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive());
         if (startIntro_->ConsumeGo()) {

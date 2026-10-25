@@ -1,4 +1,4 @@
-﻿struct VertexShaderOutput
+struct VertexShaderOutput
 {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
@@ -40,6 +40,10 @@ struct DirectionalLight
     PointLight pointLights[MAX_POINT_LIGHTS];
     uint pointLightCount;
     float3 pointLightPadding;
+    float4 fogSettings;
+    float4 fogOrigin;
+    float4 fogDirection;
+    float4 fogScan;
 };
 
 ConstantBuffer<Material> gMaterial : register(b0);
@@ -68,6 +72,31 @@ float3 ApplyFantasyAtmosphere(float3 color, float3 worldPosition)
     float heightHaze = saturate((worldPosition.y + 4.0f) / 42.0f) * 0.04f;
     float fogAmount = saturate(distanceFog * (0.48f + heightHaze));
     float3 fogColor = lerp(float3(0.48f, 0.70f, 0.96f), gDirectionalLight.color.rgb, 0.18f);
+    if (gDirectionalLight.fogSettings.x > .5f) {
+        // 専用探索ステージのみ。通常のタイトルや他ステージの霧は従来どおり。
+        float4 setting = gDirectionalLight.fogSettings;
+        fogAmount = smoothstep(setting.y, setting.z, distanceFromCamera) * setting.w;
+        fogColor = float3(.48f,.64f,.76f);
+        float2 offset = worldPosition.xz - gDirectionalLight.fogOrigin.xz;
+        float radial = length(offset);
+        float mode = gDirectionalLight.fogOrigin.w;
+        float reveal = mode >= .5f ? 1-smoothstep(4,8,radial) : 0;
+        float scanMask = 0;
+        if (mode >= 1.5f) {
+            float2 direction = gDirectionalLight.fogDirection.xz;
+            float along = clamp(dot(offset,direction),0,gDirectionalLight.fogDirection.w);
+            float corridor = 1-smoothstep(4,8,length(offset-direction*along));
+            float wave = 1-smoothstep(gDirectionalLight.fogScan.y-2,gDirectionalLight.fogScan.y+2,radial);
+            scanMask = corridor * wave * gDirectionalLight.fogScan.x;
+            reveal = max(reveal,scanMask);
+        }
+        // 高さの違う遠景まで一括で消さず、足場と同じ高さ付近に作用する。
+        float heightMask = 1-smoothstep(4,9,abs(worldPosition.y-gDirectionalLight.fogOrigin.y));
+        fogAmount *= 1-saturate(reveal*heightMask)*.94f;
+        // スキャン境界を淡く発光させ、何が起きたかを画面でも伝える。
+        float rim = (1-smoothstep(0,.8f,abs(radial-gDirectionalLight.fogScan.y))) * scanMask;
+        color += float3(.08f,.26f,.30f)*rim;
+    }
     color = lerp(color, fogColor, fogAmount);
 
     // 彩度を少し持ち上げつつ、強い光を緩やかに圧縮して白飛びを防ぐ。

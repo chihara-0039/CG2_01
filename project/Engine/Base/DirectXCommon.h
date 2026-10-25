@@ -8,6 +8,7 @@
 #include <chrono>
 #include <unordered_map>
 #include "SrvManager.h"
+#include "FrameRecorder.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -47,6 +48,8 @@ public:
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 public:
+    FrameRecorder& Recorder() { return recorder_; }
+
     DirectXCommon() = default;
     ~DirectXCommon() = default;
 
@@ -172,6 +175,8 @@ private:
     // 深度テスト用。手前にあるオブジェクトが奥のものを隠すために使う。
     ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;    // DSV を格納するヒープ
     ComPtr<ID3D12Resource>       depthStencilResource_; // 深度バッファリソース本体
+
+    FrameRecorder recorder_;
 
     // ── SRV (Shader Resource View) ── ImGui 専用 ─────────
     // ImGui のフォントテクスチャを GPU シェーダーから参照するためのヒープ

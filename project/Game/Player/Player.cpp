@@ -443,13 +443,15 @@ collision_end:
 }
 
 // Object3d の行列を更新する（ライトカメラの行列も渡す）
-void Player::UpdateTransform(const Matrix4x4& lightVP) 
+void Player::UpdateTransform(const Matrix4x4& lightVP, DirectXCommon* dxCommon)
 {
 	if (isSkinned_ && skinnedObject_) {
 		skinnedObject_->SetPosition(position_);
 		skinnedObject_->SetRotation(rotation_);
-		skinnedObject_->Update(nullptr, lightVP);
+		skinnedObject_->Update(dxCommon, lightVP);
 	} else if (object_) {
+		object_->SetPosition(position_);
+		object_->SetRotation(rotation_);
 		object_->Update(lightVP);
 	}
 }

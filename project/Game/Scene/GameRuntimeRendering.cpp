@@ -303,6 +303,7 @@ void GameRuntime::Draw() {
     }
 
     DrawCollisionDebugBoxes();
+    DrawCaptureOverlay();
     if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsActive()) {
         spriteCommon->PreDraw();
         startIntro_->Draw();
@@ -462,7 +463,7 @@ void GameRuntime::RenderScene() {
     // 黒帯と回転幕はDraw側で別途描くため、この早期returnでも表示される。
     if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsTouring()) return;
 
-    if (gameplayUIManager_) {
+    if (gameplayUIManager_ && !fogTrial_) {
         gameplayUIManager_->DrawSprites(
             currentMode_ == AppMode::GamePlay ||
             currentMode_ == AppMode::GamePlay_BlockPlace,
@@ -485,7 +486,7 @@ void GameRuntime::RenderScene() {
             stageSelectGuideSprite_->Draw();
         }
     }
-    if (currentMode_ == AppMode::GamePlay && !isInventoryOpen) {
+    if (currentMode_ == AppMode::GamePlay && !isInventoryOpen && !fogTrial_) {
         spriteCommon->PreDraw();
         if (isUsingGamePad && controllerTutorialSprite_) {
             controllerTutorialSprite_->Draw();
@@ -517,7 +518,7 @@ void GameRuntime::RenderScene() {
         objectiveGuideSprite_->Draw();
     }
     if (currentMode_ == AppMode::GamePlay && !isInventoryOpen && !isGamePaused_ &&
-        !isGoalReached_ && hasGoalGuideTarget_ && goalDirectionSprite_) {
+        !isGoalReached_ && hasGoalGuideTarget_ && goalDirectionSprite_ && !fogTrial_) {
         spriteCommon->PreDraw();
         goalDirectionSprite_->Draw();
     }
@@ -553,6 +554,7 @@ void GameRuntime::RenderScene() {
 }
 
 void GameRuntime::DrawSkyboxForFrame() {
+    if (fogTrial_ && currentMode_==AppMode::GamePlay) return;
     auto commandList = dxCommon->GetCommandList();
     if (debugFlags_.showSkybox && showSkyboxCubemap_ && skybox_) {
         skybox_->Draw();

@@ -362,6 +362,7 @@ void GameRuntime::UpdateStageSelect() {
             if (player_) {
                 player_->SetExternalCollisionBoxes(nullptr);
             }
+            fogTrial_ = false;
             stageMap_.LoadFromFile(path);
             RefreshGoalGuideTarget();
             backupMap_ = stageMap_;

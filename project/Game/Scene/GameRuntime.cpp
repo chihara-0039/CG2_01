@@ -18,6 +18,7 @@ void GameRuntime::Update() {
 
 
     input->Update();
+    UpdateCaptureTools();
     UpdateBlenderLevelFileWatch();
     if (input->TriggerKey(DIK_F3)) {
         debugFlags_.showCollisionBoxes = !debugFlags_.showCollisionBoxes;
@@ -56,6 +57,8 @@ void GameRuntime::Update() {
     UpdateParticleDebugVisibility();
 
     UpdateCurrentMode(lightVP, isGuiCaptured);
+
+    UpdateExplorationFog();
 
     const Matrix4x4& view = camera->GetViewMatrix();
     const Matrix4x4& proj = camera->GetProjectionMatrix();
@@ -262,6 +265,8 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
     }
 
     player_->SetCamera(view, proj);
+    // 再現撮影でもGPUスキニングを更新する。nullptr更新だけでは頂点が生成されない。
+    if (comparisonActive_) player_->UpdateTransform(lightVP, dxCommon.get());
     if (currentMode_ == AppMode::DebugView) {
         // DebugView の見た目は StageMap と一致しないため、不可視のステージ壁を無効化する。
         player_->SetStageCollisionEnabled(false);
@@ -295,6 +300,8 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
 }
 
 bool GameRuntime::IsWindowInactive() {
+    // 明示的な再現撮影中は、ツールへフォーカスが移っても描画更新を継続する。
+    if (comparisonActive_ || trialVerification_) return false;
     return GetActiveWindow() != winApp->GetHwnd();
 }
 

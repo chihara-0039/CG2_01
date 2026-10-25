@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Input.h"
 #include "Camera.h"
 #include "WinApp.h"
@@ -16,6 +16,9 @@ public:
     /// カメラの角度とピッチの初期化を行います。
     /// </summary>
     void Initialize();
+    // 探索ステージ用の近い追従視点。既存ステージのプリセットは変更しない。
+    void ConfigureExploration() { cameraDistance_=24; cameraHeight_=22; cameraPitch_=.62f; cameraAngle_=0;
+        cameraFov_=.9f; referenceFov_=.9f; followPlayerMode_=true; currentStageIndex_=1; cameraDirty_=true; }
 
     /// <summary>
     /// 毎フレームの入力情報からカメラ位置を計算・更新します。

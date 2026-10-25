@@ -26,6 +26,11 @@ struct DirectionalLight {
     PointLightData pointLights[kMaxPointLights];
     uint32_t pointLightCount;
     float pointLightPadding[3];
+    Vector4 fogSettings{}; // enabled / near / far / density
+    Vector4 fogOrigin{};   // xyz / comparison mode
+    Vector4 fogDirection{}; // xyz / corridor length
+    Vector4 fogScan{}; // strength / wave radius / reserved
+
 };
 
 // 3D オブジェクト描画で共有する RootSignature / PSO / ライトバッファを管理する。
@@ -55,6 +60,11 @@ public:
 
     // ライトを標準値に戻す。
     void SetDefaultLight();
+    void SetExplorationFog(const Vector4& settings, const Vector4& origin, const Vector4& direction, const Vector4& scan) {
+        if (!lightData_) return;
+        lightData_->fogSettings=settings; lightData_->fogOrigin=origin;
+        lightData_->fogDirection=direction; lightData_->fogScan=scan;
+    }
 
     void SetLightDirection(const Vector3& direction) {
         if (lightData_) {

@@ -61,6 +61,8 @@ artifacts/
 .tl1_submission_work/
 outputs/
 tmp/
+# Runtime shader cache. Source shaders are versioned; machine-generated CSO files are not.
+project/Resources/shaders/hlsl/Compiled/
 review_video.html
 LE3C_*_週間報告*.txt
 project/monthly_submission_docs/
