@@ -57,12 +57,6 @@ callout(s,'回収とゴール条件','未回収の星に接触\n分岐で回収�
 callout(s,'既存ルールと接続','未回収：ゴールはロック\n回収後：奥の星でクリア',390);
 text(s,'撮影用に位置を切替。回収・ゴール判定は通常のゲーム処理を使用',56,611,1060,40,22,C.muted);
 
-s=slide('探検家らしい外見へ更新する', '元のwalk.gltfの人体、骨格、モーションを残し、頂点カラーによる衣服と、Headに追従するサファリハット、Spine2に追従するリュック・肩紐・寝袋を追加した。左右は同じカメラ周回。比較用環境変数CG2_LEGACY_MODEL=1で変更前の外見を再現し、通常起動では新しい外見を使う。当たり判定と移動速度は変更しない。');
-text(s,'変更前：素体モデル',56,161,560,45,29,C.muted);
-text(s,'変更後：帽子と探索装備',665,161,560,45,29,C.accent,true);
-await image(s,'explorer-compare.gif',56,218,1168,329);
-text(s,'帽子は頭、リュックは背骨に追従。歩行アニメーションを引き継ぐ',56,579,1168,74,29);
-
 s=slide('比較映像を残すエンジン録画機能', 'FrameRecorder.cppはDX12のCopyTextureRegionでRGBA8バックバッファをreadback heapへコピーします。既存フレームフェンスを待った後にMapし、RowPitchの余白を除去して密なRGBAへ変換します。最大8フレームのキューを通じてワーカーのFFmpegへ送り、H.264 MP4へ圧縮します。停止後にパレット生成付きGIFへ変換。既存エンジンが毎フレームGPUを待つ設計なので、この実装はGPUを完全非同期化したものではありません。参考: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-copytextureregion と https://ffmpeg.org/ffmpeg-filters.html#palettegen-1');
 text(s,'描画結果 → GPUコピー → CPU回収 → 圧縮ワーカー',56,164,1168,70,34,C.accent,true);
 text(s,'描画側',56,298,300,54,31,C.accent,true);
