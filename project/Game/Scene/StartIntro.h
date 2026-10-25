@@ -12,7 +12,7 @@
 class StartIntro {
 public:
     void Initialize(SpriteCommon* common);
-    void Begin(Camera* camera, const Vector3& stageCenter, float stageRadius);
+    void Begin(Camera* camera, const Vector3& stageCenter, float stageRadius, const Vector3& spawnPosition);
     void Update(Camera* camera, bool visible);
     void Cancel(Camera* camera);
     void Finalize();

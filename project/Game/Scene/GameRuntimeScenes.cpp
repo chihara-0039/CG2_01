@@ -211,7 +211,7 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
             : player_ ? player_->GetPosition() : Vector3{};
         const float dx=maximum.x-minimum.x,dy=maximum.y-minimum.y,dz=maximum.z-minimum.z;
         const float radius = found ? .5f*std::sqrt(dx*dx+dy*dy+dz*dz) : 3.0f;
-        startIntro_->Begin(camera.get(),center,radius);
+        startIntro_->Begin(camera.get(),center,radius,player_ ? player_->GetPosition() : center);
         startIntroPending_ = false;
     }
 

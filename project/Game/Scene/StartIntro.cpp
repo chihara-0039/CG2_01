@@ -62,7 +62,7 @@ Sound::SoundData StartIntro::MakeTone(bool go) {
     return data;
 }
 
-void StartIntro::Begin(Camera* camera, const Vector3& stageCenter, float stageRadius) {
+void StartIntro::Begin(Camera* camera, const Vector3& stageCenter, float stageRadius, const Vector3& spawnPosition) {
     elapsed_ = 0;
     lastCue_ = -1;
     active_ = true;
@@ -71,7 +71,14 @@ void StartIntro::Begin(Camera* camera, const Vector3& stageCenter, float stageRa
     cameraFarClip_ = camera->GetFarClip();
     stageCenter_ = stageCenter;
     stageRadius_ = stageRadius;
-    gameCamera_ = {camera->GetPosition(),camera->GetRotation(),cameraFov_+.12f};
+    gameCamera_ = {camera->GetPosition(),camera->GetRotation(),cameraFov_};
+    // カウント中の注視点をスポーン地点の上半身へ明示的に固定する。
+    const Vector3 direction{spawnPosition.x-gameCamera_.position.x,
+        spawnPosition.y+.8f-gameCamera_.position.y,spawnPosition.z-gameCamera_.position.z};
+    const float horizontal = std::sqrt(direction.x*direction.x+direction.z*direction.z);
+    if (horizontal > .001f) {
+        gameCamera_.rotation = {-std::atan2(direction.y,horizontal),std::atan2(direction.x,direction.z),0};
+    }
     touring_ = true;
     camera->SetFarClip((std::max)(cameraFarClip_,stageRadius_*6+20));
     const auto pose = StageFlyover::Evaluate(0, stageCenter_, stageRadius_, gameCamera_);
@@ -95,15 +102,16 @@ void StartIntro::Update(Camera* camera, bool visible) {
     // 俯瞰中は数字も音も始めない。着地後に既存のカウントをそのまま再生する。
     frame_ = StartIntroTimeline::Evaluate((std::max)(0.0f,elapsed_-StageFlyover::kDuration));
     if (!touring_ && frame_.cue != lastCue_) {
-        if (frame_.cue >= 1) sound_.SoundPlay(frame_.cue == 4 ? go_ : tick_, .55f);
-        if (frame_.cue == 4) goPending_ = true;
+        sound_.SoundPlay(frame_.cue == 3 ? go_ : tick_, .55f);
+        if (frame_.cue == 3) goPending_ = true;
         lastCue_ = frame_.cue;
     }
     sound_.CleanupFinishedSoundEffects();
     if (frame_.blocksInput) {
         const auto pose = StageFlyover::Evaluate(elapsed_,stageCenter_,stageRadius_,gameCamera_);
         camera->SetPosition(pose.position); camera->SetRotation(pose.rotation);
-        camera->SetFov(touring_ ? pose.fov : cameraFov_+.12f*(1-frame_.cameraBlend));
+        // 着地後はカウント中にズームや再旋回を行わない。
+        camera->SetFov(pose.fov);
         if (!touring_) camera->SetFarClip(cameraFarClip_);
         camera->Update();
     } else if (goPending_) {
@@ -137,12 +145,12 @@ void StartIntro::Finalize() {
 }
 
 void StartIntro::UpdateSprites() {
-    constexpr std::string_view words[] = {"READY", "3", "2", "1", "GO!"};
+    constexpr std::string_view words[] = {"3", "2", "1", "GO!"};
     const auto word = words[frame_.cue];
-    const float pixel = (frame_.cue == 0 ? 10.0f : 17.0f)*frame_.scale;
+    const float pixel = 17.0f*frame_.scale;
     const float width = (static_cast<float>(word.size())*6-1)*pixel;
     const float left = 640-width*.5f;
-    const Vector4 color = frame_.cue == 4 ? Vector4{1.0f,.80f,.28f,frame_.alpha} : Vector4{.56f,.90f,1.0f,frame_.alpha};
+    const Vector4 color = frame_.cue == 3 ? Vector4{1.0f,.80f,.28f,frame_.alpha} : Vector4{.56f,.90f,1.0f,frame_.alpha};
     pixelCount_ = 0;
     for (size_t c = 0; c < word.size(); ++c) {
         const auto glyph = Glyph(word[c]);
@@ -164,12 +172,12 @@ void StartIntro::UpdateSprites() {
     backdrop_->SetPosition({0,250}); backdrop_->SetSize({1280,220});
     backdrop_->SetColor({.015f,.025f,.05f,.40f*frame_.alpha}); backdrop_->Update();
     const float angle = elapsed_*.7f;
-    const float radius = (frame_.cue == 0 || frame_.cue == 4 ? 195.0f : 120.0f)
+    const float radius = (frame_.cue == 3 ? 195.0f : 120.0f)
         -20.0f*frame_.cameraBlend;
     for (size_t i = 0; i < frameLines_.size(); ++i) {
         const float rotation = angle+static_cast<float>(i)*1.57079632679f;
         frameLines_[i]->SetPosition({640+std::cos(rotation)*radius,360+std::sin(rotation)*radius});
-        frameLines_[i]->SetSize({frame_.cue == 0 ? 20.0f : 44.0f,3});
+        frameLines_[i]->SetSize({44.0f,3});
         frameLines_[i]->SetRotation(rotation+1.57079632679f);
         frameLines_[i]->SetColor(color); frameLines_[i]->Update();
     }
