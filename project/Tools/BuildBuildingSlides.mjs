@@ -80,6 +80,28 @@ text(s,'予定形と確定結果をそろえる\n失敗時に形と在庫を守�
 text(s,'次に確かめたいこと',693,163,530,50,32,C.accent,true);
 text(s,'初期カーソルの位置は適切か\n高さと向きを迷わず変えられるか\n設置までの操作回数を減らせるか',693,245,535,171,27);
 
+// Narrative: motivation -> existing implementation -> two improvements -> results -> next steps.
+const narrativeEdits=[{"index":2,"from":"課題：持ち出した足場が、一部だけ置かれる","to":"最初の実装：回収した足場を持ち出して置く"},{"index":2,"from":"やりたいこと","to":"できていたこと"},{"index":2,"from":"回収した3マスの足場を\n使って、谷に道を作る","to":"回収した足場を在庫に保存\n選んだ場所へ配置する"},{"index":2,"from":"起きていた問題","to":"使って分かった課題"},{"index":2,"from":"変更前の実行ファイルで再現した、形状と在庫の不一致","to":"1マスずつ配置する処理では、形状と在庫に不一致が発生した"},{"index":4,"from":"仕組み：プレビューと確定で、同じ計画を使う","to":"改良①：形全体を検証し、まとめて配置する"},{"index":4,"from":"同じセル一覧を、予定形の表示と設置の確定で共有する","to":"先に全マスを検証し、その結果を予定形の表示と確定で共有する"},{"index":3,"from":"改善①：形全体を確認してから確定する","to":"改良①の結果：失敗しても形と在庫が残る"},{"index":5,"from":"改善②：置いてから、別の置き方を試せるようにする","to":"改良②：配置を取り消して、別の置き方を試す"},{"index":5,"from":"直前の配置を保存","to":"次に解決したいこと"},{"index":5,"from":"直前の配置を元に戻し\n同じ種類を1個返却\n向きを変えてもう一度置く","to":"別の向きも試したい\n直前の設置を元に戻し\n同じ種類を1個返却"},{"index":6,"from":"ゲームへの接続：ふたつの谷をつなぐ遺跡","to":"改良した結果：回収した足場で2つの谷を渡る"},{"index":7,"from":"検証：失敗しても、形と在庫を変えない","to":"結果の検証：配置と在庫の整合性を確認"},{"index":8,"from":"次の追求：迷わず置ける操作に近づける","to":"今後：設置までの操作回数を減らす"},{"index":8,"from":"今回できたこと","to":"今回の到達点"},{"index":8,"from":"次に確かめたいこと","to":"次の改良と評価"}];
+for(const edit of narrativeEdits){
+ const s=spec[edit.index];
+ if(s.title===edit.from)s.title=edit.to;
+ for(const node of s.nodes)if(node.kind==='text'&&node.value===edit.from)node.value=edit.to;
+}
+for(const node of spec[8].nodes)if(node.kind==='text' && node.value.startsWith('初期カーソルの位置は適切か'))node.value='初期カーソルを足元へ寄せる\n高さと回転の表示を整理する\n設置までの操作回数を比べる';
+text(spec[8],'同じ課題で、操作回数・置き間違い・取り消し後の復帰を記録する',56,520,1168,80,24,C.accent);
+const background=structuredClone(spec[2]);
+background.title='実装背景：足場を置き直して道を考えたい';
+background.notes='足場の向きや位置を試して道を作るため、配置結果の予測、失敗時の在庫保全、設置の取り消しを実装する。画像は完成した検証用ステージであり変更前の映像ではない。基本の回収・在庫・配置は既存機能。';
+background.nodes=[
+ {kind:'image',file:'background.png',x:56,y:160,w:760,h:428},
+ {kind:'text',value:'目指す遊び',x:862,y:170,w:350,h:45,size:28,color:C.accent,bold:true},
+ {kind:'text',value:'橋の向きや位置を変え\n道を考えて星へ進む',x:862,y:225,w:350,h:108,size:25,color:C.text},
+ {kind:'text',value:'そのために必要なこと',x:862,y:378,w:350,h:45,size:28,color:C.accent,bold:true},
+ {kind:'text',value:'置ける場所を先に知る\n失敗で足場を失わない\n置いた後も試し直せる',x:862,y:433,w:350,h:140,size:25,color:C.text},
+ {kind:'text',value:'今回の実装：全マスを確認して配置／直前の設置を取り消す',x:56,y:617,w:1168,h:36,size:22,color:C.muted}
+];
+const sequence=[spec[0],spec[1],background,spec[2],spec[4],spec[3],spec[5],spec[6],spec[7],spec[8]];
+spec.splice(0,spec.length,...sequence);
 const deck=Presentation.create({slideSize:{width:1280,height:720}});
 for(let i=0;i<spec.length;i++){
  const src=spec[i],dst=deck.slides.add();dst.background.fill=C.bg;dst.speakerNotes.text=src.notes;

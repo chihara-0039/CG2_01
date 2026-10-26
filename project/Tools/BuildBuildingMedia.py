@@ -31,3 +31,4 @@ print(out)
 diorama=root.parent/'diorama'
 if (diorama/'diorama-route.gif').exists():
  for ext in ('gif','mp4'):shutil.copy2(diorama/('diorama-route.'+ext),out/('route.'+ext))
+ run('-ss','14','-i',diorama/'diorama-route.mp4','-frames:v','1',out/'background.png')
