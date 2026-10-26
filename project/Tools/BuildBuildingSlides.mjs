@@ -137,6 +137,8 @@ for(const n of comparison.nodes){
 }
 text(comparison,'重なっていても、2マスだけ置かれる\n在庫が1個減る',56,558,532,72,24,C.text,true);
 text(comparison,'重なっているので、足場は置かない\n在庫は1個のまま',692,558,532,72,24,C.text,true);
+const intro=spec.find(s=>s.title.startsWith('今回の結果：'));
+for(const n of intro.nodes)if(n.value==='今回の到達点を先に紹介し、この後で実装背景と改良の仕組みを説明する')n.value='完成した箱庭を紹介。途中で、既存の雪の天候「Snowy」を適用した場面へ切り替わる';
 const deck=Presentation.create({slideSize:{width:1280,height:720}});
 for(let i=0;i<spec.length;i++){
  const src=spec[i],dst=deck.slides.add();dst.background.fill=C.bg;dst.speakerNotes.text=src.notes;

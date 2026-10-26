@@ -81,6 +81,16 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
                 ? ParticleManager::WeatherImpactEffect::Snow
                 : ParticleManager::WeatherImpactEffect::None;
             emitter.center = { 0.0f, 15.0f, 0.0f };
+            const auto* part=context.stage.GetCustomPart(1);
+            if(context.presetName=="Snowy" && part && part->name=="RUIN-BRIDGE") {
+                // Fit the existing snow to the small diorama. Fall particles use
+                // per-frame velocities, whereas the saved preset is much faster.
+                emitter.center={0,8,0};emitter.size={24,10,24};
+                emitter.velocity={-.025f,-.035f,.005f};
+                emitter.velocityRandom={.02f,.01f,.01f};
+                emitter.particleSize={.12f,.12f,.12f};
+                emitter.particleLife=6;emitter.emitRate=100;
+            }
         }
 
         context.particles.SetWeatherEmitter(emitter);

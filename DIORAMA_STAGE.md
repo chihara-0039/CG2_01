@@ -49,3 +49,11 @@ verification.json の noPrematureClear は、はしご上／高台へ着く前�
 
 撮影後 `BuildPresentationClips.py --root generated/PR1_01/diorama --ffmpeg <ffmpeg.exe>` で、
 発表用の短い状態名・在庫数を重ねたMP4/GIFを `presentation/` へ書く。元の録画は残す。
+
+### 雰囲気紹介：雪
+
+`StartDiorama.ps1 -Capture -Shot snow` で既存の Snowy を適用して撮影する。雷雨は使わない。
+この箱庭では雪粒の速度・発生範囲・大きさを合わせ、地形とプレイヤーが見える降り方に調整する。
+専用の地形素材は天候名に依存させず、雪に変えても芝・石積み・木の橋を保つ。
+映像編集ツールは、雪の録画がある場合に限り、冒頭の全景4秒＋雪の場面7秒をまとめる。
+他の技術説明用GIFは晴れのまま。雪の録画もカメラ・位置を自動化した紹介映像であり、手動攻略の確認ではない。

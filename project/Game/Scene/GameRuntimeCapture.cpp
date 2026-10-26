@@ -220,6 +220,7 @@ void GameRuntime::BeginDiorama() {
     dioramaCapture_=CaptureEnvironment("CG2_DIORAMA_CAPTURE")=="1";
     fogTrial_=false; buildTrial_=false;
     stageMap_.LoadFromFile("Resources/Stages/dioramaRuins.txt");
+    if(CaptureEnvironment("CG2_DIORAMA_SHOT")=="snow") stageMap_.SetWeatherPresetName("Snowy");
     backupMap_=stageMap_;
     stageRenderer_->BuildFromStageMap(stageMap_);
     stageEditorController_.ResetPlayerToStartCell(stageMap_,player_.get());
@@ -238,7 +239,7 @@ void GameRuntime::BeginDiorama() {
 void GameRuntime::UpdateDioramaCapture() {
     if(CaptureEnvironment("CG2_DIORAMA")!="1" || CaptureEnvironment("CG2_DIORAMA_CAPTURE")!="1") return;
     const auto detail=CaptureEnvironment("CG2_DIORAMA_SHOT");
-    if(detail=="overview" || detail=="rotation" || detail=="undo") {UpdateDioramaDetail(detail);return;}
+    if(detail=="overview" || detail=="rotation" || detail=="undo" || detail=="snow") {UpdateDioramaDetail(detail);return;}
     // Reproducible integration footage: positions are scripted, game rules are real.
     static int step=0;
     static bool first=false,undo=false,second=false,lock=false,earlyClear=false;
@@ -303,7 +304,7 @@ void GameRuntime::UpdateDioramaDetail(const std::string& shot) {
     static int step=0;
     const float elapsed=std::chrono::duration<float>(std::chrono::steady_clock::now()-comparisonStarted_).count();
     const float t=(std::max)(0.0f,elapsed-1.5f);
-    const bool rotation=shot=="rotation",overview=shot=="overview";
+    const bool rotation=shot=="rotation",overview=shot=="overview" || shot=="snow";
     if(!setup){
         bubblePickupController_.Update({4,2.5f,5});
         if(rotation || overview)bubblePickupController_.Update({5,2.5f,12});

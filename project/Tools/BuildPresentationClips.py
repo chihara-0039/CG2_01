@@ -23,4 +23,13 @@ for name,phases in shots.items():
   tag=f'v{i}';chain.append(f"[{last}][{i+1}:v]overlay=40:478:enable='gte(t,{start})*lt(t,{end})'[{tag}]");last=tag
  run(*args,'-filter_complex',';'.join(chain),'-map',f'[{last}]','-an','-c:v','libx264','-crf','19',out/f'{name}.mp4')
  run('-i',out/f'{name}.mp4','-filter_complex','fps=12,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer',out/f'{name}.gif')
+if (root/'diorama-snow.mp4').exists():
+ # One short atmosphere cut in the overview; keep the technical slides focused.
+ im=Image.new('RGBA',(880,52),(24,29,36,235));ImageDraw.Draw(im).text((20,7),'雰囲気紹介：雪の天候を適用した箱庭',font=font,fill=(241,245,249,255));im.save(out/'snow-caption.png')
+ run('-i',out/'overview.mp4','-i',root/'diorama-snow.mp4','-i',out/'snow-caption.png',
+     '-filter_complex',"[0:v]trim=start=0:end=4,setpts=PTS-STARTPTS[day];[1:v]trim=start=2:end=9,setpts=PTS-STARTPTS,crop=720:405:120:50,scale=960:540[snow];[snow][2:v]overlay=40:478[snowlabel];[day][snowlabel]concat=n=2:v=1:a=0[v]",
+     '-map','[v]','-an','-c:v','libx264','-crf','19',out/'overview-weather.mp4')
+ import shutil
+ shutil.copy2(out/'overview-weather.mp4',out/'overview.mp4')
+ run('-i',out/'overview.mp4','-filter_complex','fps=12,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer',out/'overview.gif')
 print(out)

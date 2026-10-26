@@ -407,7 +407,7 @@ void GameRuntime::UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4&
             WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName());
         const bool isGameplayScene =
             currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace;
-        gameplayDayNightActive_ = isGameplayScene && activePreset && activePreset->stormPreset.empty() && stageMap_.GetWeatherPresetName()!="Diorama";
+        gameplayDayNightActive_ = isGameplayScene && activePreset && activePreset->stormPreset.empty() && stageMap_.GetWeatherPresetName()!="Diorama" && !dioramaCapture_;
         if (gameplayDayNightActive_) {
             if (!isGamePaused_) {
                 gameplayDayNightTimer_ += (1.0f / 60.0f) * environmentTimeScale_;
@@ -505,7 +505,7 @@ void GameRuntime::ApplySceneLighting(const Vector3& lightDir) {
             : playerLightIntensity_;
         if (pointLightIntensity > 0.001f) {
             object3dCommon->AddPointLight(
-                playerLightPosition, stageMap_.GetWeatherPresetName()=="Diorama" ? .12f : pointLightIntensity, playerLightColor_, 12.0f);
+                playerLightPosition, (stageMap_.GetWeatherPresetName()=="Diorama" || dioramaCapture_) ? .12f : pointLightIntensity, playerLightColor_, 12.0f);
         }
     }
 
