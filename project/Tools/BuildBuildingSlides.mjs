@@ -129,6 +129,14 @@ for(const n of future.nodes){
  if(n.value==='次の改良と評価')n.value='次への改良';
  if(n.value?.startsWith('初期カーソルを足元へ寄せる'))n.value='初期カーソルを足元へ寄せる\n高さと回転の表示を整理する\n設置までの操作回数を減らせるようにする';
 }
+const comparison=spec.find(s=>s.title.startsWith('改良①の結果：'));
+for(const n of comparison.nodes){
+ if(n.value==='変更前：一部だけ置かれ、在庫が減る'){n.value='変更前（旧）';n.w=532;n.size=32;n.color='#E8ADA1';n.bold=true;}
+ if(n.value==='改善後：置かずに、形と在庫を残す'){n.value='変更後（新）';n.x=692;n.w=532;n.size=32;n.bold=true;}
+ if(n.value==='置けない場所は、置く前から赤く表示する'){n.value='同じ足場・同じ場所で比較。赤い形は、置く前の表示';n.y=642;n.h=30;n.size=18;}
+}
+text(comparison,'重なっていても、2マスだけ置かれる\n在庫が1個減る',56,558,532,72,24,C.text,true);
+text(comparison,'重なっているので、足場は置かない\n在庫は1個のまま',692,558,532,72,24,C.text,true);
 const deck=Presentation.create({slideSize:{width:1280,height:720}});
 for(let i=0;i<spec.length;i++){
  const src=spec[i],dst=deck.slides.add();dst.background.fill=C.bg;dst.speakerNotes.text=src.notes;
