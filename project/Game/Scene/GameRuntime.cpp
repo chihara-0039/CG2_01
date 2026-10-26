@@ -1,4 +1,4 @@
-#include <algorithm>
+﻿#include <algorithm>
 #include <cmath>
 #include "GameRuntime.h"
 #include "EffectPresetStore.h"
@@ -269,7 +269,7 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
 
     player_->SetCamera(view, proj);
     // 再現撮影でもGPUスキニングを更新する。nullptr更新だけでは頂点が生成されない。
-    if (comparisonActive_) player_->UpdateTransform(lightVP, dxCommon.get());
+    if (comparisonActive_ || dioramaCapture_) player_->UpdateTransform(lightVP, dxCommon.get());
     if (currentMode_ == AppMode::DebugView) {
         // DebugView の見た目は StageMap と一致しないため、不可視のステージ壁を無効化する。
         player_->SetStageCollisionEnabled(false);
@@ -407,7 +407,7 @@ void GameRuntime::UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4&
             WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName());
         const bool isGameplayScene =
             currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace;
-        gameplayDayNightActive_ = isGameplayScene && activePreset && activePreset->stormPreset.empty();
+        gameplayDayNightActive_ = isGameplayScene && activePreset && activePreset->stormPreset.empty() && stageMap_.GetWeatherPresetName()!="Diorama";
         if (gameplayDayNightActive_) {
             if (!isGamePaused_) {
                 gameplayDayNightTimer_ += (1.0f / 60.0f) * environmentTimeScale_;
@@ -505,7 +505,7 @@ void GameRuntime::ApplySceneLighting(const Vector3& lightDir) {
             : playerLightIntensity_;
         if (pointLightIntensity > 0.001f) {
             object3dCommon->AddPointLight(
-                playerLightPosition, pointLightIntensity, playerLightColor_, 12.0f);
+                playerLightPosition, stageMap_.GetWeatherPresetName()=="Diorama" ? .12f : pointLightIntensity, playerLightColor_, 12.0f);
         }
     }
 

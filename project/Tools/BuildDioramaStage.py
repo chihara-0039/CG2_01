@@ -24,7 +24,7 @@ for y in range(3,8): put(11,y,12,3)
 put(4,3,3,7)
 put(4,3,5,5,65538)
 put(5,3,12,5,65538)
-put(12,6,12,6)
+put(13,6,13,6)
 
 lines=['16 10 16','PRESET "Diorama"','ENVIRONMENT 0.48 0.67 0.80 1 0.85 1 0.96 0.88 0.5 -1 0.35',
        'PART 1 2 1 0.65 0.2 RUIN-BRIDGE']

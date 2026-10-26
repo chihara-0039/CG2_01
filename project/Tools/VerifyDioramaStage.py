@@ -24,12 +24,12 @@ def reachable():
     return seen
 assert (4,2,5) in reachable(), 'first pickup must be walkable'
 assert (5,2,12) not in reachable(), 'first gap must separate the second pickup'
-assert (12,5,12) not in reachable(), 'goal must initially be disconnected'
+assert (13,5,13) not in reachable(), 'goal must initially be disconnected'
 for z in range(7,10): cells[4,2,z]=2
 assert (5,2,12) in reachable(), 'first bridge must connect the second pickup'
-assert (12,5,12) not in reachable(), 'second bridge must still be needed'
+assert (13,5,13) not in reachable(), 'second bridge must still be needed'
 for x in range(7,10): cells[x,2,11]=2
-assert (12,5,12) in reachable(), 'rotated bridge and ladder must connect the goal'
+assert (13,5,13) in reachable(), 'rotated bridge and ladder must connect the goal'
 assert sum(t==5 for t in cells.values())==2
 assert sum(t==6 for t in cells.values())==1
 sequence=(root/'Resources/Stages/sequence.txt').read_text().splitlines()

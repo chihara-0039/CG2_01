@@ -1,4 +1,4 @@
-#include "WeatherRuntimeController.h"
+﻿#include "WeatherRuntimeController.h"
 
 #include <algorithm>
 
@@ -12,6 +12,7 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
     if (preset) {
         auto emitter = context.particles.GetWeatherEmitter();
         auto cloudEmitter = context.particles.GetAmbientCloudEmitter();
+        const bool startClouds = !cloudEmitter.active;
         const bool usesStormPreset = !preset->stormPreset.empty() && !context.suppressPresetStorm;
 
         if (--cloudHeightRefreshFrames_ <= 0) {
@@ -30,6 +31,17 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
         cloudEmitter.size = preset->cloudSize;
         cloudEmitter.color = preset->cloudColor;
         cloudEmitter.depthParallax = false;
+        if(context.presetName=="Diorama") {
+            // A cloud sea below the miniature, with stable world-space parallax.
+            cloudEmitter.center={7.5f,0,24};
+            cloudEmitter.minimumHeight=-5; cloudEmitter.heightRange=3;
+            cloudEmitter.areaX=28; cloudEmitter.areaZ=16;
+            cloudEmitter.life=40; cloudEmitter.speed=.012f;
+            cloudEmitter.wispsPerEmission=4;cloudEmitter.verticalScale=1.2f;
+            cloudEmitter.color.w=.28f;
+            cloudEmitter.depthParallax=true;
+            if(startClouds)cloudEmitter.prewarmSeconds=30;
+        }
 
         emitter.active = preset->particleEnabled && !usesStormPreset;
         if (usesStormPreset) {

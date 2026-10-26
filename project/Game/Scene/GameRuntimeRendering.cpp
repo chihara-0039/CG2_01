@@ -1,4 +1,4 @@
-// 描画パスと可視化処理を、更新・ゲーム進行から分離する。
+﻿// 描画パスと可視化処理を、更新・ゲーム進行から分離する。
 #include "GameRuntime.h"
 #include <algorithm>
 #include <cmath>
@@ -401,7 +401,7 @@ void GameRuntime::RenderScene() {
                 }
             }
 
-            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_ && !IsStartIntroHidingPlayer()) {
+            if (!dioramaCapture_ && currentMode_ == AppMode::GamePlay && gameplayUIManager_ && !IsStartIntroHidingPlayer()) {
                 gameplayUIManager_->Draw3DPrompts(
                     true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
             }
@@ -463,6 +463,7 @@ void GameRuntime::RenderScene() {
     // 黒帯と回転幕はDraw側で別途描くため、この早期returnでも表示される。
     if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsTouring()) return;
 
+    if(dioramaCapture_) return; // Clean footage: hide HUD, prompts and victory text at the source.
     if (gameplayUIManager_ && !fogTrial_) {
         gameplayUIManager_->DrawSprites(
             currentMode_ == AppMode::GamePlay ||
@@ -555,9 +556,6 @@ void GameRuntime::RenderScene() {
 
 void GameRuntime::DrawSkyboxForFrame() {
     if (fogTrial_ && currentMode_==AppMode::GamePlay) return;
-    // A plain backdrop keeps the miniature's silhouette and gaps easy to read.
-    if (stageMap_.GetWeatherPresetName()=="Diorama" &&
-        (currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace)) return;
     auto commandList = dxCommon->GetCommandList();
     if (debugFlags_.showSkybox && showSkyboxCubemap_ && skybox_) {
         skybox_->Draw();

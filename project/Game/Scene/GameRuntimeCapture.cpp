@@ -198,6 +198,7 @@ void GameRuntime::UpdateExplorationFog() {
 }
 
 void GameRuntime::DrawCaptureOverlay() {
+    if(dioramaCapture_) return;
     spriteCommon->PreDraw();
     if(buildTrial_ && (currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace)) {
         buildLabels_[buildStatus_]->Draw();
@@ -238,7 +239,7 @@ void GameRuntime::UpdateDioramaCapture() {
     if(CaptureEnvironment("CG2_DIORAMA")!="1" || CaptureEnvironment("CG2_DIORAMA_CAPTURE")!="1") return;
     // Reproducible integration footage: positions are scripted, game rules are real.
     static int step=0;
-    static bool first=false,undo=false,second=false,lock=false;
+    static bool first=false,undo=false,second=false,lock=false,earlyClear=false;
     const float elapsed=std::chrono::duration<float>(std::chrono::steady_clock::now()-comparisonStarted_).count();
     const float t=(std::max)(0.0f,elapsed-1.5f);
     if(elapsed>=1.5f && !comparisonRecordingStarted_) {
@@ -248,17 +249,18 @@ void GameRuntime::UpdateDioramaCapture() {
         comparisonRecordingStarted_=true;
         lock=!bubblePickupController_.AreAllPickupsCollected();
     }
-    if(currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace) {
+    if(!isGoalReached_ && (currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace)) {
         Vector3 p{4,2.5f,3};
         if(t>=1 && t<2)p.z=3+(t-1)*2;
         else if(t>=2 && t<5)p.z=5;
         else if(t>=5 && t<7)p.z=5+(t-5)*3.5f;
         else if(t>=7 && t<8)p={4+(t-7),2.5f,12};
-        else if(t>=8 && t<9)p={5,2.5f,12};
+        else if(t>=8 && t<9)p={5,2.5f,12-(std::min)(1.0f,(t-8)*2)};
         else if(t>=9 && t<10)p={5+(t-9)*6,2.5f,11};
         else if(t>=10 && t<10.5f)p={11,2.5f,11+(t-10)*2};
         else if(t>=10.5f && t<12)p={11,2.5f+(t-10.5f)*2,12};
-        else if(t>=12)p={11+(std::min)(1.0f,t-12),5.5f,12};
+        else if(t>=12 && t<13)p={11+(t-12),5.5f,12};
+        else if(t>=13)p={12+(std::min)(1.0f,t-13),5.5f,12+(std::min)(1.0f,t-13)};
         player_->SetPosition(p);
         bubblePickupController_.Update(p);
         blockPlacementController_.SetPlayerPosition(p);
@@ -276,6 +278,7 @@ void GameRuntime::UpdateDioramaCapture() {
         stageRenderer_->SetPlacementPreview(stageMap_,{7,2,10},BlockType::Wall,1,1.5707963f,plan.Ready()?1:2);
     }
     if(t>=9 && step==3){second=blockPlacementController_.TryPlace({7,2,10},1.5707963f);stageRenderer_->ClearPlacementPreview();++step;}
+    if(isGoalReached_ && (t<13 || player_->IsOnLadder() || player_->GetPosition().y<5.45f)) earlyClear=true;
     if(t>=15 && comparisonRecordingStarted_) {
         if(dxCommon->Recorder().IsRecording())dxCommon->Recorder().Stop();
         if(!dxCommon->Recorder().IsBusy()) {
@@ -286,8 +289,9 @@ void GameRuntime::UpdateDioramaCapture() {
                 <<",\"undo\":"<<(undo?"true":"false")
                 <<",\"rotatedSecondBridge\":"<<(second?"true":"false")
                 <<",\"allPickups\":"<<(bubblePickupController_.AreAllPickupsCollected()?"true":"false")
-                <<",\"goalReached\":"<<(isGoalReached_?"true":"false")<<"}";
-            PostQuitMessage(first&&undo&&second&&lock&&isGoalReached_?0:3);
+                <<",\"goalReached\":"<<(isGoalReached_?"true":"false")
+                <<",\"noPrematureClear\":"<<(!earlyClear?"true":"false")<<"}";
+            PostQuitMessage(first&&undo&&second&&lock&&isGoalReached_&&!earlyClear?0:3);
         }
     }
 }

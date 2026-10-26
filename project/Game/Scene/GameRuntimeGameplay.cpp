@@ -176,11 +176,13 @@ void GameRuntime::UpdateGamePlay() {
 
     // 全シャボン玉の回収後だけクリアを成立させる。
     // ゴール接触中のロック状態も保持し、未達成の理由をUIへ表示できるようにする。
+    const bool isOnGoalPlatform = stageMap_.GetWeatherPresetName()!="Diorama" ||
+        (player_ && player_->IsGrounded() && !player_->IsOnLadder() && player_->GetPosition().y>=5.45f);
     const bool isTouchingGoal =
         player_ != nullptr && Goal::Check(pPos, { 0.4f, 0.9f, 0.4f }, stageMap_);
     const bool hasCollectedAllPickups = bubblePickupController_.AreAllPickupsCollected();
     isGoalBlocked_ = isTouchingGoal && !hasCollectedAllPickups;
-    if (isTouchingGoal && hasCollectedAllPickups && !isGoalReached_) {
+    if (isTouchingGoal && isOnGoalPlatform && hasCollectedAllPickups && !isGoalReached_) {
         isGoalReached_ = true;
         isGoalBlocked_ = false;
         goalCelebrationTimer_ = 0.0f;
@@ -209,7 +211,7 @@ void GameRuntime::UpdateGoalCelebration() {
     goalCelebrationTimer_ += 1.0f / 60.0f;
 
     // スター取得直後は操作を止め、プレイヤーを中心にカメラを回して見せる。
-    if (player_ && camera) {
+    if (!dioramaCapture_ && player_ && camera) {
         const Vector3 center = player_->GetPosition();
         const float angle = goalCelebrationTimer_ * 1.8f;
         camera->SetPosition({
@@ -224,6 +226,7 @@ void GameRuntime::UpdateGoalCelebration() {
     if (starGetSprite_) {
         starGetSprite_->Update();
     }
+    if(dioramaCapture_) return; // Keep the wide shot and final pose until recording ends.
     if (goalCelebrationTimer_ >= kCelebrationDuration) {
         RequestSceneChange(SceneType::GameClear);
     }
