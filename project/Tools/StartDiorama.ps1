@@ -1,4 +1,4 @@
-param([switch]$Capture,[ValidateSet('route','overview','rotation','undo','snow')][string]$Shot='route')
+param([switch]$Capture,[ValidateSet('route','overview','rotation','undo','snow','complex')][string]$Shot='route')
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $repoRoot=Split-Path $projectRoot -Parent

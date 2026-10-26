@@ -219,7 +219,7 @@ void GameRuntime::BeginDiorama() {
     BeginFogTrial();
     dioramaCapture_=CaptureEnvironment("CG2_DIORAMA_CAPTURE")=="1";
     fogTrial_=false; buildTrial_=false;
-    stageMap_.LoadFromFile("Resources/Stages/dioramaRuins.txt");
+    stageMap_.LoadFromFile(CaptureEnvironment("CG2_DIORAMA_SHOT")=="complex" ? "Resources/Stages/complexParts.txt" : "Resources/Stages/dioramaRuins.txt");
     if(CaptureEnvironment("CG2_DIORAMA_SHOT")=="snow") stageMap_.SetWeatherPresetName("Snowy");
     backupMap_=stageMap_;
     stageRenderer_->BuildFromStageMap(stageMap_);
@@ -233,12 +233,14 @@ void GameRuntime::BeginDiorama() {
     gameplayCameraController_.ConfigureDiorama();
     RefreshGoalGuideTarget();
     object3dCommon->SetExplorationFog({0,0,0,0},{},{},{});
+    if(CaptureEnvironment("CG2_DIORAMA_SHOT")=="complex" && dioramaCapture_)complexChecksPassed_=VerifyComplexParts();
     comparisonStarted_=std::chrono::steady_clock::now();
 }
 
 void GameRuntime::UpdateDioramaCapture() {
     if(CaptureEnvironment("CG2_DIORAMA")!="1" || CaptureEnvironment("CG2_DIORAMA_CAPTURE")!="1") return;
     const auto detail=CaptureEnvironment("CG2_DIORAMA_SHOT");
+    if(detail=="complex"){UpdateComplexCapture();return;}
     if(detail=="overview" || detail=="rotation" || detail=="undo" || detail=="snow") {UpdateDioramaDetail(detail);return;}
     // Reproducible integration footage: positions are scripted, game rules are real.
     static int step=0;
@@ -347,6 +349,85 @@ void GameRuntime::UpdateDioramaDetail(const std::string& shot) {
             const bool ok=placed && (rotation || (overview?replaced:undone&&replaced));
             std::ofstream("../generated/PR1_01/diorama/"+shot+".json")<<"{\"success\":"<<(ok?"true":"false")
                 <<",\"stock\":"<<blockInventory_.GetBlockCount(BlockType::Wall,1)<<",\"scriptedPositions\":true}";
+            PostQuitMessage(ok?0:3);
+        }
+    }
+}
+
+bool GameRuntime::VerifyComplexParts() {
+    std::filesystem::create_directories("../generated/PR1_01/diorama");
+    std::ofstream report("../generated/PR1_01/diorama/complex-checks.json");
+    report<<"{\"cases\":[";bool all=true;int cases=0,checks=0;
+    for(int slot=2;slot<=4;++slot)for(int turn=0;turn<4;++turn){
+        StageMap map;map.LoadFromFile("Resources/Stages/complexParts.txt");
+        BlockInventory stock;stock.Initialize(0);stock.AddBlock(BlockType::Wall,1,slot);
+        BlockPlacementController controller;controller.Initialize(&map,stageRenderer_.get(),&stock);
+        controller.SetPlaceBlockType(BlockType::Wall);controller.SetPlaceCustomId(slot);controller.SetPlayerPosition({0,0,0});
+        auto snapshot=[&](){std::vector<std::pair<int,int>> state;for(int y=0;y<map.GetHeight();++y)for(int z=0;z<map.GetDepth();++z)for(int x=0;x<map.GetWidth();++x){const auto* c=map.GetCell(x,y,z);state.push_back({static_cast<int>(c->type),c->variant});}return state;};
+        const auto baseline=snapshot();auto expected=baseline;
+        const auto* part=map.GetCustomPart(slot);int count=0;Int3 first{},last{};
+        // Independent fixture walk: preserve height and block kind while rotating
+        // each local coordinate one quarter turn at a time.
+        for(int y=0;y<3;++y)for(int z=0;z<3;++z)for(int x=0;x<3;++x){
+            const auto type=part->cells[y][z][x].type;if(type==BlockType::None)continue;
+            int rx=x,rz=z;for(int k=0;k<turn;++k){const int next=2-rz;rz=rx;rx=next;}
+            const Int3 at{6+rx,3+y,6+rz};if(count==0)first=at;last=at;++count;
+            expected[(at.y*map.GetDepth()+at.z)*map.GetWidth()+at.x]={static_cast<int>(type),slot};
+        }
+        const float angle=turn*1.5707963f;
+        const bool exact=controller.TryPlace({6,3,6},angle) && snapshot()==expected;
+        const bool one=stock.GetBlockCount(BlockType::Wall,slot)==0;
+        const bool undo=controller.TryUndo() && snapshot()==baseline && stock.GetBlockCount(BlockType::Wall,slot)==1;
+        const bool duplicate=!controller.TryUndo() && stock.GetBlockCount(BlockType::Wall,slot)==1;
+        map.SetBlock(last,BlockType::Ground);const auto blockedBefore=snapshot();
+        const bool blocked=!controller.TryPlace({6,3,6},angle) && snapshot()==blockedBefore && stock.GetBlockCount(BlockType::Wall,slot)==1;
+        map.RemoveBlock(last);
+        const bool outside=!controller.TryPlace({17,9,14},angle) && snapshot()==baseline && stock.GetBlockCount(BlockType::Wall,slot)==1;
+        controller.SetPlayerPosition({static_cast<float>(first.x),first.y-.5f,static_cast<float>(first.z)});
+        const bool body=!controller.TryPlace({6,3,6},angle) && snapshot()==baseline && stock.GetBlockCount(BlockType::Wall,slot)==1;
+        const bool passed=exact&&one&&undo&&duplicate&&blocked&&outside&&body;all=all&&passed;checks+=7;
+        if(cases++)report<<",";
+        report<<"{\"part\":"<<slot<<",\"turn\":"<<turn<<",\"cells\":"<<count
+            <<",\"exactShapeAndEmptySpaces\":"<<(exact?"true":"false")<<",\"oneStockConsumed\":"<<(one?"true":"false")
+            <<",\"undoAllAndRefundOne\":"<<(undo?"true":"false")<<",\"noDoubleRefund\":"<<(duplicate?"true":"false")
+            <<",\"overlapKeepsWorldAndStock\":"<<(blocked?"true":"false")<<",\"outsideKeepsWorldAndStock\":"<<(outside?"true":"false")
+            <<",\"playerOverlapKeepsWorldAndStock\":"<<(body?"true":"false")<<"}";
+    }
+    report<<"],\"caseCount\":"<<cases<<",\"checkCount\":"<<checks<<",\"success\":"<<(all?"true":"false")<<"}";
+    stageRenderer_->BuildFromStageMap(stageMap_);return all;
+}
+
+void GameRuntime::UpdateComplexCapture() {
+    static bool setup=false,actionsOk=true;static int stage=-1,step=0;
+    const float elapsed=std::chrono::duration<float>(std::chrono::steady_clock::now()-comparisonStarted_).count();
+    const float t=(std::max)(0.0f,elapsed-1.5f);
+    if(!setup){for(int z:{5,7,9})bubblePickupController_.Update({2,2.5f,static_cast<float>(z)});setup=true;}
+    player_->SetPosition({2,2.5f,4});blockPlacementController_.SetPlayerPosition({2,2.5f,4});
+    gameplayCameraController_.ConfigureDioramaShot({8,3,7},-.45f+t*.02f,.7f,23);
+    if(elapsed>=1.5f && !comparisonRecordingStarted_){
+        FrameRecorder::Options o;o.name="diorama-complex";o.gifSeconds=15;
+        const auto output=CaptureEnvironment("CG2_CAPTURE_DIR");if(!output.empty())o.directory=output;
+        if(!dxCommon->Recorder().Start(o)){PostQuitMessage(2);return;}comparisonRecordingStarted_=true;
+    }
+    if(t<12){
+        const int group=static_cast<int>(t/4),slot=group+2;const float phase=t-group*4;
+        const Int3 at{3+group*4,3,6};
+        if(stage!=group){stage=group;step=0;blockPlacementController_.SetPlaceBlockType(BlockType::Wall);blockPlacementController_.SetPlaceCustomId(slot);}
+        if(phase<1 || (phase>=2 && phase<3)){
+            const float angle=phase<.5f?0:phase<2?1.5707963f:3.1415926f;
+            const auto plan=blockPlacementController_.Evaluate(at,angle);
+            stageRenderer_->SetPlacementPreview(stageMap_,at,BlockType::Wall,slot,angle,plan.Ready()?1:2);
+        }
+        if(phase>=1 && step==0){actionsOk=blockPlacementController_.TryPlace(at,1.5707963f)&&actionsOk;stageRenderer_->ClearPlacementPreview();step=1;}
+        if(phase>=2 && step==1){actionsOk=blockPlacementController_.TryUndo()&&actionsOk;step=2;}
+        if(phase>=3 && step==2){actionsOk=blockPlacementController_.TryPlace(at,3.1415926f)&&actionsOk;stageRenderer_->ClearPlacementPreview();step=3;}
+    }
+    if(t>=15 && comparisonRecordingStarted_){
+        if(dxCommon->Recorder().IsRecording())dxCommon->Recorder().Stop();
+        if(!dxCommon->Recorder().IsBusy()){
+            int cells=0;for(int y=3;y<6;++y)for(int z=6;z<9;++z)for(int x=3;x<14;++x){const auto* c=stageMap_.GetCell(x,y,z);if(c->variant>=2&&c->variant<=4)++cells;}
+            const bool ok=complexChecksPassed_&&actionsOk&&cells==40;
+            std::ofstream("../generated/PR1_01/diorama/complex.json")<<"{\"success\":"<<(ok?"true":"false")<<",\"placedCells\":"<<cells<<",\"scriptedPositions\":true}";
             PostQuitMessage(ok?0:3);
         }
     }

@@ -364,6 +364,9 @@ private:
     void BeginDiorama();
     void UpdateDioramaCapture();
     void UpdateDioramaDetail(const std::string& shot);
+    void UpdateComplexCapture();
+    bool VerifyComplexParts();
+    bool complexChecksPassed_=false;
     void UpdateBuildTrial();
     void VerifyBuilding();
     bool buildTrial_=false, buildCapture_=false, buildAction_=false;

@@ -10,6 +10,13 @@ shots={
  'rotation':[(0,2,'① 重なる場所：設置できない'),(2,4,'② 置く前の形を、空いた場所へ動かす'),(4,6,'③ 90度回転：橋の向きを合わせる'),(6,7,'④ 見えた形のまま、3マスを置く'),(7,10,'⑤ 配置した橋を渡る')],
  'undo':[(0,2,'置く前の形を確認  ｜  足場の在庫：1個'),(2,4,'足場を置く  ｜  足場の在庫：0個'),(4,5,'設置を取り消す  ｜  足場の在庫：1個'),(5,6,'別の向きも確認  ｜  足場の在庫：1個'),(6,7,'橋になる向きへ戻す  ｜  足場の在庫：1個'),(7,10,'置き直して渡る  ｜  足場の在庫：0個')]
 }
+if (root/'diorama-complex.mp4').exists():
+ phases=[]
+ for i,name in enumerate(('L字 5マス','段差＋はしご 15マス','中が空いた形 20マス')):
+  for start,end,action in ((0,1,'回して、置く前の形を確認'),(1,2,'まとめて置く'),(2,3,'取り消して、在庫を戻す'),(3,4,'別の向きで置き直す')):
+   phases.append((i*4+start,i*4+end,name+' ｜ '+action))
+ phases.append((12,15,'3種類とも、形を保って置けた（合計40マス）'))
+ shots['complex']=phases
 def run(*args):subprocess.run([a.ffmpeg,'-hide_banner','-loglevel','error','-y',*map(str,args)],check=True)
 for name,phases in shots.items():
  args=['-i',root/f'diorama-{name}.mp4']
