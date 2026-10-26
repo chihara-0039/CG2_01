@@ -7,7 +7,7 @@ root=Path(a.root).resolve();src=root/'media';out=Path(a.output).resolve() if a.o
 shutil.copy2(Path(__file__).parent/'References/reference-game.jpg',out/'reference-game.jpg')
 def run(*args):subprocess.run([a.ffmpeg,'-hide_banner','-loglevel','error','-y',*map(str,args)],check=True)
 font=ImageFont.truetype('C:/Windows/Fonts/YuGothB.ttc',24)
-for i,lines in enumerate([['予定：3マス','在庫：1個'],['実体：2マスだけ設置','在庫：0個'],['赤い予定形：設置不可','在庫：1個'],['確定を拒否：実体は0マス','在庫：1個を維持']]):
+for i,lines in enumerate([['予定：3マス','在庫：1個'],['2マスだけ置かれた','在庫：0個'],['赤い表示：ここには置けない','在庫：1個'],['置かなかった：足場は0マス','在庫：1個のまま']]):
  im=Image.new('RGBA',(584,68),(16,28,43,255));d=ImageDraw.Draw(im)
  for j,line in enumerate(lines):d.text((14,2+31*j),line,font=font,fill=(241,245,249))
  im.save(out/f'phase-{i}.png')

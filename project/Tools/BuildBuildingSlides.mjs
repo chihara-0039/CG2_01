@@ -119,6 +119,16 @@ const flow=spec[2];flow.nodes=flow.nodes.filter(n=>n.kind!=='image');
 for(const [value,x]of [['回収する\n足場を在庫へ',56],['向きを選ぶ\n予定形で確認',324],['設置する\n道をつなぐ',592]])flow.nodes.push({kind:'text',value,x,y:240,w:224,h:130,size:27,color:C.text,fill:'#2B3B47',align:'center',vertical:'middle'});
 flow.nodes.push({kind:'text',value:'→',x:284,y:278,w:36,h:60,size:35,color:C.text},{kind:'text',value:'→',x:552,y:278,w:36,h:60,size:35,color:C.text},{kind:'text',value:'← 取り消して、別の置き方を試す',x:56,y:418,w:760,h:65,size:30,color:C.accent,align:'center'},{kind:'text',value:'失敗しても、足場を失わず試せるようにする',x:56,y:510,w:760,h:60,size:25,color:C.text,align:'center'});
 spec.splice(6,0,rotationSlide);spec.splice(2,0,overviewSlide);
+// Prefer words that can be understood at a glance.
+const plainWords=[["足場配置の全マス検証と一手取り消し","足場の配置チェックと、ひとつ前に戻す機能"],["本作で追求すること","このゲームで目指すこと"],["直前の設置を戻して返却","ひとつ前の設置を取り消す"],["1マスずつ配置する処理では、形状と在庫に不一致が発生した","1マスずつ置くと、足場の一部だけが置かれて在庫も減ってしまった"],["改良①：形全体を検証し、まとめて配置する","改良①：全部のマスを確認してから置く"],["回転後の全セルを検証","回した後の全マスを確認"],["既存ブロックと重ならないか","ほかのブロックと重ならないか"],["身体と重ならないか","プレイヤーと重ならないか"],["先に全マスを検証し、その結果を予定形の表示と確定で共有する","置く前に全マスを確認し、画面に見えた形のまま置く"],["1セルでも置けなければ全体を止め、途中までの配置を作らない","1マスでも置けなければ、足場全体を置かない"],["変更前：一部だけ置いて消費","変更前：一部だけ置かれ、在庫が減る"],["改善後：形も在庫も変えず拒否","改善後：置かずに、形と在庫を残す"],["置けない理由を表示し、確定前から赤い予定形で知らせる","置けない場所は、置く前から赤く表示する"],["予定形：回転して、置ける向きを確かめる","置く前に回して、橋の向きを確かめる"],["確定すると同じ3マスへ配置","見えた形のまま3マスを置く"],["場所の変更 → 90度回転 → 確定 → 渡る、を別のカメラから確認","場所を動かす → 90度回す → 置く → 渡る"],["設置を戻して足場を返却","設置を取り消し、足場を戻す"],["変化したセルは上書きしない","後から変わったマスは戻さない"],["返却は1回だけ","足場が戻るのは1回だけ"],["操作を取り消せる範囲は、直前に成功した設置1回","取り消せるのは、ひとつ前に置いた足場だけ"],["結果の検証：配置と在庫の整合性を確認","結果を確認：形と在庫が正しく残るか"],["既存ブロックとの重なり","ほかのブロックとの重なり"],["全体を拒否・在庫を維持","置かずに在庫を残す"],["範囲外／身体との重なり","ステージの外／プレイヤーとの重なり"],["確定前に止める","置く前に止める"],["取り消し／二重取り消し","取り消しを繰り返す"],["全体を戻す・返却は1回","全部戻す・在庫は1個だけ戻る"],["足場上／設置後の変化","足場に乗っている／後から変わった"],["危険な取り消しを拒否","危ないときは取り消せない"],["14項目の配置検証と、2本の橋・回収・ゴールの接続を確認","14項目を確認し、足場を回収して橋を渡り、ゴールまで進めた"],["操作性の改善率は、今後プレイヤーが操作して確かめる","使いやすくなったかは、今後プレイヤーに試してもらう"],["予定した形と確定したときの結果をそろえる","置く前の見た目と、置いた形をそろえる"],["予定形で確認","置く前に確認"]];
+function plainText(value){for(const [from,to]of plainWords)value=value.split(from).join(to);return value;}
+for(const s of spec){s.title=plainText(s.title);for(const n of s.nodes){if(n.kind==='text')n.value=plainText(n.value);if(n.kind==='table')n.values=n.values.map(row=>row.map(v=>plainText(v)));}}
+const future=spec.at(-1);
+future.nodes=future.nodes.filter(n=>!n.value?.startsWith('同じ課題で、操作回数'));
+for(const n of future.nodes){
+ if(n.value==='次の改良と評価')n.value='次への改良';
+ if(n.value?.startsWith('初期カーソルを足元へ寄せる'))n.value='初期カーソルを足元へ寄せる\n高さと回転の表示を整理する\n設置までの操作回数を減らせるようにする';
+}
 const deck=Presentation.create({slideSize:{width:1280,height:720}});
 for(let i=0;i<spec.length;i++){
  const src=spec[i],dst=deck.slides.add();dst.background.fill=C.bg;dst.speakerNotes.text=src.notes;
