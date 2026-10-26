@@ -32,11 +32,13 @@ for name,phases in shots.items():
  run('-i',out/f'{name}.mp4','-filter_complex','fps=12,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer',out/f'{name}.gif')
 if (root/'diorama-snow.mp4').exists():
  # One short atmosphere cut in the overview; keep the technical slides focused.
- im=Image.new('RGBA',(880,52),(24,29,36,235));ImageDraw.Draw(im).text((20,7),'雰囲気紹介：雪の天候を適用した箱庭',font=font,fill=(241,245,249,255));im.save(out/'snow-caption.png')
- run('-i',out/'overview.mp4','-i',root/'diorama-snow.mp4','-i',out/'snow-caption.png',
-     '-filter_complex',"[0:v]trim=start=0:end=4,setpts=PTS-STARTPTS[day];[1:v]trim=start=2:end=9,setpts=PTS-STARTPTS,crop=720:405:120:50,scale=960:540[snow];[snow][2:v]overlay=40:478[snowlabel];[day][snowlabel]concat=n=2:v=1:a=0[v]",
+ run('-i',out/'overview.mp4','-i',root/'diorama-snow.mp4',
+     '-filter_complex',"[0:v]trim=start=0:end=4,setpts=PTS-STARTPTS[day];[1:v]trim=start=2:end=9,setpts=PTS-STARTPTS,crop=720:405:120:50,scale=960:540[snow];[day][snow]concat=n=2:v=1:a=0[v]",
      '-map','[v]','-an','-c:v','libx264','-crf','19',out/'overview-weather.mp4')
  import shutil
  shutil.copy2(out/'overview-weather.mp4',out/'overview.mp4')
  run('-i',out/'overview.mp4','-filter_complex','fps=12,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer',out/'overview.gif')
+if (root/'diorama-complexroute.gif').exists():
+ import shutil
+ for ext in ('gif','mp4'):shutil.copy2(root/f'diorama-complexroute.{ext}',out/f'complexroute.{ext}')
 print(out)

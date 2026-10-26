@@ -219,7 +219,7 @@ void GameRuntime::BeginDiorama() {
     BeginFogTrial();
     dioramaCapture_=CaptureEnvironment("CG2_DIORAMA_CAPTURE")=="1";
     fogTrial_=false; buildTrial_=false;
-    stageMap_.LoadFromFile(CaptureEnvironment("CG2_DIORAMA_SHOT")=="complex" ? "Resources/Stages/complexParts.txt" : "Resources/Stages/dioramaRuins.txt");
+    stageMap_.LoadFromFile(CaptureEnvironment("CG2_DIORAMA_SHOT")=="complexroute" ? "Resources/Stages/complexRoute.txt" : CaptureEnvironment("CG2_DIORAMA_SHOT")=="complex" ? "Resources/Stages/complexParts.txt" : "Resources/Stages/dioramaRuins.txt");
     if(CaptureEnvironment("CG2_DIORAMA_SHOT")=="snow") stageMap_.SetWeatherPresetName("Snowy");
     backupMap_=stageMap_;
     stageRenderer_->BuildFromStageMap(stageMap_);
@@ -240,6 +240,7 @@ void GameRuntime::BeginDiorama() {
 void GameRuntime::UpdateDioramaCapture() {
     if(CaptureEnvironment("CG2_DIORAMA")!="1" || CaptureEnvironment("CG2_DIORAMA_CAPTURE")!="1") return;
     const auto detail=CaptureEnvironment("CG2_DIORAMA_SHOT");
+    if(detail=="complexroute"){UpdateComplexRouteCapture();return;}
     if(detail=="complex"){UpdateComplexCapture();return;}
     if(detail=="overview" || detail=="rotation" || detail=="undo" || detail=="snow") {UpdateDioramaDetail(detail);return;}
     // Reproducible integration footage: positions are scripted, game rules are real.
@@ -575,5 +576,66 @@ int GameRuntime::PlacementStatus(Placement::Reason reason) const {
     case Placement::Reason::PlayerOverlap:return 9;
     case Placement::Reason::NoInventory:return 10;
     default:return 11;
+    }
+}
+
+// Actual stage integration: pickup inventory, placement, undo, ladder and goal
+// run through the normal gameplay systems; only movement/camera timing is scripted.
+void GameRuntime::UpdateComplexRouteCapture() {
+    static int step=0;static bool ok=true,ladderSeen=false,early=false;
+    const float elapsed=std::chrono::duration<float>(std::chrono::steady_clock::now()-comparisonStarted_).count();
+    const float t=(std::max)(0.0f,elapsed-1.5f);
+    if(elapsed>=1.5f && !comparisonRecordingStarted_){
+        FrameRecorder::Options o;o.name="diorama-complexroute";o.gifSeconds=15;
+        const auto output=CaptureEnvironment("CG2_CAPTURE_DIR");if(!output.empty())o.directory=output;
+        if(!dxCommon->Recorder().Start(o)){PostQuitMessage(2);return;}comparisonRecordingStarted_=true;
+    }
+    gameplayCameraController_.ConfigureDioramaShot({7.5f,2.5f,8},.25f,.9f,24);
+    if(t>=11 && t<13 && player_->IsOnLadder())ladderSeen=true;
+    if(!isGoalReached_){
+        Vector3 p{4,2.5f,3};
+        if(t>=1 && t<2)p.z=3+(t-1)*2;
+        else if(t>=2 && t<4)p.z=5;
+        else if(t>=4 && t<6)p.z=5+(t-4)*3.5f;
+        else if(t>=6 && t<7)p={4+(t-6),2.5f,12};
+        else if(t>=7 && t<8)p={5,2.5f,12-(t-7)};
+        else if(t>=8 && t<9)p={5+(t-8)*6,2.5f,11};
+        else if(t>=9 && t<9.5f)p={11,2.5f,11-(t-9)*2};
+        else if(t>=9.5f && t<10)p={11,2.5f,10};
+        else if(t>=10 && t<10.3f)p={11+(t-10)/.3f,2.5f,10};
+        else if(t>=10.3f && t<11)p={12,2.5f,10+(t-10.3f)/.7f*3};
+        else if(t>=11 && t<13)p={12,2.5f+(t-11)*1.5f,13};
+        else if(t>=13)p={12-(std::min)(1.0f,(t-13)*2),5.5f,13};
+        player_->SetPosition(p);bubblePickupController_.Update(p);blockPlacementController_.SetPlayerPosition(p);
+    }
+    blockPlacementController_.SetPlaceBlockType(BlockType::Wall);
+    const int slot=t<7?2:t<9.5f?1:3;
+    const Int3 origin=slot==2?Int3{4,2,7}:slot==1?Int3{7,2,10}:Int3{10,3,11};
+    const float angle=slot==1?1.5707963f:0;
+    blockPlacementController_.SetPlaceCustomId(slot);
+    if((t>=2 && t<3)||(t>=7 && t<8)||(t>=9.5f && t<10)){
+        const auto plan=blockPlacementController_.Evaluate(origin,angle);
+        stageRenderer_->SetPlacementPreview(stageMap_,origin,BlockType::Wall,slot,angle,plan.Ready()?1:2);
+    }
+    auto place=[&](){ok=blockPlacementController_.TryPlace(origin,angle)&&ok;stageRenderer_->ClearPlacementPreview();++step;};
+    if(t>=3 && step==0)place();
+    if(t>=3.4f && step==1){ok=blockPlacementController_.TryUndo()&&ok;++step;}
+    if(t>=3.8f && step==2)place();
+    if(t>=8 && step==3)place();
+    if(t>=10 && step==4)place();
+    if(isGoalReached_ && (t<13 || player_->IsOnLadder() || player_->GetPosition().y<5.45f))early=true;
+    if(t>=15 && comparisonRecordingStarted_){
+        if(dxCommon->Recorder().IsRecording())dxCommon->Recorder().Stop();
+        if(!dxCommon->Recorder().IsBusy()){
+            int l=0,stairs=0,ladders=0;for(int y=0;y<stageMap_.GetHeight();++y)for(int z=0;z<stageMap_.GetDepth();++z)for(int x=0;x<stageMap_.GetWidth();++x){
+                const auto* c=stageMap_.GetCell(x,y,z);if(c->variant==2 && c->type==BlockType::Wall)++l;
+                if(c->variant==3){if(c->type==BlockType::Wall)++stairs;if(c->type==BlockType::Ladder)++ladders;}}
+            bool support=true;for(int z=7;z<=9;++z)support=support&&stageMap_.GetCell(4,2,z)->type==BlockType::Wall;
+            for(int x=7;x<=9;++x)support=support&&stageMap_.GetCell(x,2,11)->type==BlockType::Wall;
+            const bool stock=blockInventory_.GetBlockCount(BlockType::Wall,1)==0 && blockInventory_.GetBlockCount(BlockType::Wall,2)==0 && blockInventory_.GetBlockCount(BlockType::Wall,3)==0;
+            const bool success=ok&&step==5&&l==5&&stairs==12&&ladders==3&&support&&stock&&ladderSeen&&bubblePickupController_.AreAllPickupsCollected()&&isGoalReached_&&!early;
+            std::ofstream("../generated/PR1_01/diorama/complexroute.json")<<"{\"success\":"<<(success?"true":"false")<<",\"scriptedPositions\":true,\"lCells\":"<<l<<",\"stairCells\":"<<stairs<<",\"ladderCells\":"<<ladders<<",\"placementAndUndo\":"<<(ok?"true":"false")<<",\"bridgeSupport\":"<<(support?"true":"false")<<",\"inventoryConsumed\":"<<(stock?"true":"false")<<",\"ladderDetected\":"<<(ladderSeen?"true":"false")<<",\"goalReached\":"<<(isGoalReached_?"true":"false")<<",\"noPrematureClear\":"<<(!early?"true":"false")<<"}";
+            PostQuitMessage(success?0:3);
+        }
     }
 }

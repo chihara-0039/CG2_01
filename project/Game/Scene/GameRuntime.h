@@ -365,6 +365,7 @@ private:
     void UpdateDioramaCapture();
     void UpdateDioramaDetail(const std::string& shot);
     void UpdateComplexCapture();
+    void UpdateComplexRouteCapture();
     bool VerifyComplexParts();
     bool complexChecksPassed_=false;
     void UpdateBuildTrial();
