@@ -17,7 +17,7 @@ try {
   $clip=Get-ChildItem -LiteralPath $env:CG2_CAPTURE_DIR -Filter '*.mp4' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   $movie=Join-Path $repoRoot "generated/PR1_01/diorama/diorama-$Shot.mp4"
   $gif=Join-Path $repoRoot "generated/PR1_01/diorama/diorama-$Shot.gif"
-  $framing=if($Shot -in @('route','complexroute')){'crop=600:338:180:110,scale=960:540'}else{'scale=960:540'}
+  $framing=if($Shot -eq 'route'){'crop=600:338:180:110,scale=960:540'}else{'scale=960:540'}
   & $env:CG2_FFMPEG -hide_banner -loglevel error -y -i $clip.FullName -vf $framing -an -c:v libx264 -crf 19 $movie
   if($LASTEXITCODE -ne 0){throw '発表用動画の切り抜きに失敗しました'}
   & $env:CG2_FFMPEG -hide_banner -loglevel error -y -i $movie -filter_complex 'fps=12,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer' $gif

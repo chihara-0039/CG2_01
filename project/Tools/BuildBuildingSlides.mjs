@@ -141,19 +141,7 @@ const intro=spec.find(s=>s.title.startsWith('今回の結果：'));
 for(const n of intro.nodes)if(n.value==='今回の到達点を先に紹介し、この後で実装背景と改良の仕組みを説明する')n.value='';
 const gameplayResult=spec.find(s=>s.title.startsWith('改良した結果：'));
 gameplayResult.nodes=gameplayResult.nodes.filter(n=>!n.value?.startsWith('位置と操作時刻は自動化'));
-const complexResult=structuredClone(gameplayResult);
-complexResult.title='結果：L字・段差・中が空いた形でも使えた';
-complexResult.notes='3×3×3の範囲のL字5マス、段差12マスとはしご3マス、中が空いた立体20マスを各4方向で確認。全マスと種類・空いた部分の一致、在庫1個だけの使用、一括で戻して1個だけ返す、連続で戻して増えない、重なり・ステージ外・プレイヤーとの重なりで形と在庫を変えない、の7条件。12通り×7条件=84回が成功。映像でも実配置・取消を行い、最終40マス。位置と時刻は自動化。任意のサイズや全形状を保証するという主張ではない。';
-for(const n of complexResult.nodes){
- if(n.kind==='image')n.file='complex.gif';
- if(n.value==='回収して持ち出す')n.value='3種類の形で確認';
- if(n.value==='島ごとに足場を1個回収\n回収した足場を道に使う')n.value='L字：5マス\n段差＋はしご：15マス\n中が空いた形：20マス';
- if(n.value==='置いて道を作る')n.value='4方向に回して確認';
- if(n.value==='2本目は90度回して設置\nはしごを登り、高台の星へ')n.value='形を保って、まとめて置く\n取り消すと、形も在庫も戻る';
-}
-text(complexResult,'3種類 × 4方向 × 7つの確認＝84回すべて成功（3×3×3以内の形）',56,620,1168,50,22,C.accent);
-spec.splice(spec.indexOf(gameplayResult),0,complexResult);
-gameplayResult.title='改良した結果：複雑な足場で谷を渡り、高台へ登る';
+gameplayResult.title='結果：複雑な足場を置き直し、星まで進めた';
 for(const n of gameplayResult.nodes){
  if(n.kind==='image')n.file='complexroute.gif';
  if(n.value==='改良した結果：回収した足場で2つの谷を渡る')n.value=gameplayResult.title;
@@ -162,7 +150,8 @@ for(const n of gameplayResult.nodes){
  if(n.value==='置いて道を作る')n.value='段差とはしごで高台へ';
  if(n.value==='2本目は90度回して設置\nはしごを登り、高台の星へ')n.value='15マスのパーツを回収・設置\nはしごを登って星に到達';
 }
-gameplayResult.notes='L字5マスと段差12マス＋はしご3マスを実際のステージの攻略に使用。回収・配置・取消・在庫・はしご判定・ゴールは通常のゲーム処理。撮影の移動位置と時刻は自動化。全入力操作による手動通しプレイの検証ではない。';
+gameplayResult.notes='L字5マスと段差12マス＋はしご3マスを実際のステージの攻略に使用。回収・配置・取消・在庫・はしご判定・ゴールは通常のゲーム処理。撮影の移動位置と時刻は自動化。全入力操作による手動通しプレイの検証ではない。L字5マス、段差＋はしご15マス、中が空いた形20マスを各4方向・7条件で84回確認した結果をこのページへ統合。最後の島を中央へ1マス寄せ、登坂前にカメラを回す。';
+text(gameplayResult,'3種類 × 4方向 × 7つの確認＝84回成功。L字と段差＋はしごは実ステージでも使用',56,620,1168,50,22,C.accent);
 const checksResult=spec.find(s=>s.title.startsWith('結果を確認：'));
 for(const n of checksResult.nodes)if(n.value==='14項目を確認し、足場を回収して橋を渡り、ゴールまで進めた')n.value='基本の14項目に加え、複雑な3種類を4方向・7つの条件で確認';
 const deck=Presentation.create({slideSize:{width:1280,height:720}});

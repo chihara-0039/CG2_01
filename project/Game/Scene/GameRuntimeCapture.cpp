@@ -590,7 +590,10 @@ void GameRuntime::UpdateComplexRouteCapture() {
         const auto output=CaptureEnvironment("CG2_CAPTURE_DIR");if(!output.empty())o.directory=output;
         if(!dxCommon->Recorder().Start(o)){PostQuitMessage(2);return;}comparisonRecordingStarted_=true;
     }
-    gameplayCameraController_.ConfigureDioramaShot({7.5f,2.5f,8},.25f,.9f,24);
+    // Reframe smoothly before the high part enters the shot. No post-capture crop.
+    const float cameraPhase=std::clamp((t-8.5f)/3.0f,0.0f,1.0f);
+    const float ease=cameraPhase*cameraPhase*(3-2*cameraPhase);
+    gameplayCameraController_.ConfigureDioramaShot({7.5f+ease,2.5f+1.2f*ease,7.5f+1.5f*ease},.25f-.85f*ease,.9f-.2f*ease,21-ease);
     if(t>=11 && t<13 && player_->IsOnLadder())ladderSeen=true;
     if(!isGoalReached_){
         Vector3 p{4,2.5f,3};
@@ -600,17 +603,17 @@ void GameRuntime::UpdateComplexRouteCapture() {
         else if(t>=6 && t<7)p={4+(t-6),2.5f,12};
         else if(t>=7 && t<8)p={5,2.5f,12-(t-7)};
         else if(t>=8 && t<9)p={5+(t-8)*6,2.5f,11};
-        else if(t>=9 && t<9.5f)p={11,2.5f,11-(t-9)*2};
-        else if(t>=9.5f && t<10)p={11,2.5f,10};
-        else if(t>=10 && t<10.3f)p={11+(t-10)/.3f,2.5f,10};
-        else if(t>=10.3f && t<11)p={12,2.5f,10+(t-10.3f)/.7f*3};
-        else if(t>=11 && t<13)p={12,2.5f+(t-11)*1.5f,13};
-        else if(t>=13)p={12-(std::min)(1.0f,(t-13)*2),5.5f,13};
+        else if(t>=9 && t<9.5f)p={11,2.5f,11-(t-9)*4};
+        else if(t>=9.5f && t<10)p={11,2.5f,9};
+        else if(t>=10 && t<10.3f)p={11+(t-10)/.3f,2.5f,9};
+        else if(t>=10.3f && t<11)p={12,2.5f,9+(t-10.3f)/.7f*3};
+        else if(t>=11 && t<13)p={12,2.5f+(t-11)*1.5f,12};
+        else if(t>=13)p={12-(std::min)(1.0f,(t-13)*2),5.5f,12};
         player_->SetPosition(p);bubblePickupController_.Update(p);blockPlacementController_.SetPlayerPosition(p);
     }
     blockPlacementController_.SetPlaceBlockType(BlockType::Wall);
     const int slot=t<7?2:t<9.5f?1:3;
-    const Int3 origin=slot==2?Int3{4,2,7}:slot==1?Int3{7,2,10}:Int3{10,3,11};
+    const Int3 origin=slot==2?Int3{4,2,7}:slot==1?Int3{7,2,10}:Int3{10,3,10};
     const float angle=slot==1?1.5707963f:0;
     blockPlacementController_.SetPlaceCustomId(slot);
     if((t>=2 && t<3)||(t>=7 && t<8)||(t>=9.5f && t<10)){
