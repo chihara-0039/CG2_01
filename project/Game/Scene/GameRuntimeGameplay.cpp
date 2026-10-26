@@ -1,4 +1,4 @@
-// プレイヤー操作、ステージルール、画面遷移、BGM更新を担当する。
+﻿// プレイヤー操作、ステージルール、画面遷移、BGM更新を担当する。
 #include "GameRuntime.h"
 #include "Goal.h"
 #include <algorithm>
@@ -366,6 +366,7 @@ void GameRuntime::UpdateStageSelect() {
                 player_->SetExternalCollisionBoxes(nullptr);
             }
             fogTrial_ = false;
+            buildTrial_ = false;
             stageMap_.LoadFromFile(path);
             RefreshGoalGuideTarget();
             backupMap_ = stageMap_;
@@ -376,6 +377,7 @@ void GameRuntime::UpdateStageSelect() {
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
             gameplayCameraController_.ResetCamera(
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
+            if(stageSelect_->GetSelectedFileName()=="dioramaRuins.txt") gameplayCameraController_.ConfigureDiorama();
             blockInventory_.Initialize(0);
             bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
             blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);

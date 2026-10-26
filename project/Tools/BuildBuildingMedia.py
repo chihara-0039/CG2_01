@@ -4,6 +4,7 @@ import argparse, subprocess, shutil, json
 from PIL import Image,ImageDraw,ImageFont
 p=argparse.ArgumentParser();p.add_argument('--ffmpeg',required=True);p.add_argument('--root',required=True);p.add_argument('--output');a=p.parse_args()
 root=Path(a.root).resolve();src=root/'media';out=Path(a.output).resolve() if a.output else root/'presentation-media';out.mkdir(exist_ok=True)
+shutil.copy2(Path(__file__).parent/'References/reference-game.jpg',out/'reference-game.jpg')
 def run(*args):subprocess.run([a.ffmpeg,'-hide_banner','-loglevel','error','-y',*map(str,args)],check=True)
 font=ImageFont.truetype('C:/Windows/Fonts/YuGothB.ttc',24)
 for i,lines in enumerate([['予定：3マス','在庫：1個'],['実体：2マスだけ設置','在庫：0個'],['赤い予定形：設置不可','在庫：1個'],['確定を拒否：実体は0マス','在庫：1個を維持']]):
@@ -25,3 +26,8 @@ run('-ss','6','-i',src/'before-collision.mp4','-frames:v','1',out/'problem.png')
 run('-ss','9','-i',src/'final-route.mp4','-frames:v','1',out/'hero.png')
 run('-ss','1','-i',src/'final-undo.mp4','-frames:v','1',out/'preview.png')
 print(out)
+
+# Prefer the new stage recording when it has been captured and cropped.
+diorama=root.parent/'diorama'
+if (diorama/'diorama-route.gif').exists():
+ for ext in ('gif','mp4'):shutil.copy2(diorama/('diorama-route.'+ext),out/('route.'+ext))

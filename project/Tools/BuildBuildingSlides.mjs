@@ -12,12 +12,20 @@ function text(s,value,x,y,w,h,size=28,color=C.text,bold=false){s.nodes.push({kin
 function image(s,file,x,y,w,h){s.nodes.push({kind:'image',file,x,y,w,h});}
 function table(s,values,x,y,w,h,widths,grid=false){s.nodes.push({kind:'table',values,x,y,w,h,widths,grid});}
 const capture='映像は同じ箱庭・同じカメラ条件の再現撮影。位置・操作時刻を撮影用に自動化している。実入力の連続プレイや人による操作性評価ではない。';
-let s=slide('足場づくりの操作を改善する','発表の軸は回収したブロックを使って道を作る操作の改善。録画機能・フォグ・モデル変更は独立した発表項目に含めない。'+capture);
+let s=slide('足場配置の全マス検証と一手取り消し','発表の軸は回収したブロックを使って道を作る操作の改善。録画機能・フォグ・モデル変更は独立した発表項目に含めない。'+capture);
 s.cover=true;
-text(s,'足場づくりの操作を改善する',172,264,936,86,48,C.text,false);
+text(s,'足場配置の全マス検証と一手取り消し',172,264,936,86,40,C.text,false);
 s.nodes.at(-1).align='center';
 text(s,'LE3B_20_チハラ_シゴウ',240,390,800,64,30,C.text,false);
 s.nodes.at(-1).align='center';
+
+s=slide('参考ゲームと、目指す遊び','参考：任天堂『進め！キノピオ隊長』。箱庭を見回し、仕掛けを使って道を探す遊びを参考にしている。本作独自の回収・在庫・配置を改善する。画像出典：https://www.nintendo.com/jp/switch/ajh9a/course/index.html © Nintendo');
+image(s,'reference-game.jpg',56,160,760,428);
+text(s,'進め！キノピオ隊長',862,170,350,45,28,C.accent,true);
+text(s,'箱庭を見回して道を探し\n仕掛けを使って先へ進む',862,225,350,108,25);
+text(s,'本作で追求すること',862,378,350,45,28,C.accent,true);
+text(s,'回収した足場を持ち出し\n自分で道を作る\nその配置を安心して試せる',862,433,350,140,25);
+text(s,'参考画像：任天堂『進め！キノピオ隊長』公式サイト　© Nintendo',56,617,1168,36,16,C.muted);
 
 s=slide('課題：持ち出した足場が、一部だけ置かれる','変更前のBlockPlacementController.cppと実行ファイルをgenerated/PR1_01/build/baselineに保存してから撮影。3セルの複合パーツの1セルが既存のIceBlockと重なる条件。既存処理では空いている2セルだけ置かれ、パーツ在庫が1から0に減った。before-collision.jsonに実体セル数2、在庫0を記録。'+capture);
 image(s,'problem.png',56,160,760,428);
@@ -53,17 +61,17 @@ text(s,'戻してよい場合だけ',862,409,350,45,27,C.accent,true);
 text(s,'乗っている足場は消さない\n変化したセルは上書きしない\n返却は1回だけ',862,467,350,128,24);
 text(s,'操作を取り消せる範囲は、直前に成功した設置1回',56,619,1168,34,22,C.muted);
 
-s=slide('ゲームへの接続：回収した足場で谷を渡る','実験用箱庭。BubblePickupControllerでカスタム足場を回収し、実際のインベントリUIを開いてConfirmSelection、通常の使用要求から配置モードに入る。重なる予定形を確認してから別の場所へ3セルを設置し、対岸の星へ進む。回収・在庫・設置・ゴール判定はゲームの実処理。位置・カメラ・選択タイミングは撮影用スクリプトで制御している。final-route.jsonでgoalReached=trueを確認。既存ステージの回収・在庫・配置にも同じ改善が適用される。');
+s=slide('ゲームへの接続：ふたつの谷をつなぐ遺跡','通常ステージとして追加した独自の箱庭。回収、1本目の橋、取り消し、再設置、2個目の回収、90度回転した橋、はしご、高台の星へ接続。位置と時刻は自動化し、回収・配置・在庫・取り消し・ゴール判定は実処理。手動通しプレイや入力・登攀の操作性の検証ではない。generated/PR1_01/diorama/verification.jsonの6項目がtrue。');
 image(s,'route.gif',56,160,760,428);
 text(s,'回収して持ち出す',862,172,350,45,28,C.accent,true);
-text(s,'シャボン玉から足場を回収\nインベントリで選んで使用',862,229,350,108,25);
+text(s,'島ごとに足場を1個回収\n回収した足場を道に使う',862,229,350,108,25);
 text(s,'置いて道を作る',862,390,350,45,28,C.accent,true);
-text(s,'予定形で場所を確認\n橋を置き、対岸の星へ進む',862,447,350,108,25);
+text(s,'2本目は90度回して設置\nはしごを登り、高台の星へ',862,447,350,108,25);
 text(s,'位置と操作時刻は自動化。回収・在庫・配置・クリアはゲームの実処理',56,619,1168,34,21,C.muted);
 
 s=slide('検証：失敗しても、形と在庫を変えない','ゲーム内のVerifyBuildingで14項目を確認。成功・失敗後の実際のStageMapセルとBlockInventoryを検証した。範囲外、既存ブロック、身体との重なり、全セル配置、1個だけ消費、在庫なし、足場上の取り消し禁止、復元と返却、二重取り消し禁止、4回転、設置後の変化、空パーツ、初期化時の履歴消去を確認。verification.jsonが全true。別に回収からゴールまでの再現撮影が成功。人による操作性・操作回数の改善率は未測定。');
 table(s,[['確認した条件','期待する動作','結果'],['既存ブロックとの重なり','全体を拒否・在庫を維持','成功'],['範囲外／身体との重なり','確定前に止める','成功'],['4方向の回転','表示と同じ3マスへ設置','成功'],['在庫なし／空のパーツ','形も在庫も変えない','成功'],['取り消し／二重取り消し','全体を戻す・返却は1回','成功'],['足場上／設置後の変化','危険な取り消しを拒否','成功']],56,162,1168,378,[430,560,178]);
-text(s,'14項目の状態検証と、回収からゴールまでの接続を確認',56,577,1168,48,29,C.accent,true);
+text(s,'14項目の配置検証と、2本の橋・回収・ゴールの接続を確認',56,577,1168,48,29,C.accent,true);
 text(s,'操作性の改善率は、今後プレイヤーが操作して確かめる',56,638,1168,32,21,C.muted);
 
 s=slide('次の追求：迷わず置ける操作に近づける','次に検証する対象もブロック配置に限定する。初期カーソル位置や高さ変更の案内、回転の分かりやすさを調整し、足場を置くまでの操作回数、誤確定回数、取り消し後の復帰を測りたい。現段階は配置と在庫の整合性の改善であり、人による使いやすさの評価結果ではない。');
@@ -79,7 +87,7 @@ for(let i=0;i<spec.length;i++){
  if(!src.cover)dst.shapes.add({geometry:'rect',position:{left:56,top:124,width:1168,height:1},fill:'#68717A',line:{fill:'none',width:0}});
  for(const n of texts){
   if(n.kind==='text'){const sh=dst.shapes.add({geometry:'textbox',position:{left:n.x,top:n.y,width:n.w,height:n.h},fill:'none',line:{fill:'none',width:0}});sh.text=n.value;sh.text.style={typeface:'Yu Gothic',fontSize:n.size,color:n.color,bold:n.bold||false,alignment:n.align||'left',verticalAlignment:'top',insets:0,autoFit:'none'};}
-  if(n.kind==='image')dst.images.add({blob:new Uint8Array(await fs.readFile(path.join(mediaDir,n.file))),contentType:n.file.endsWith('.gif')?'image/gif':'image/png',fit:'contain',position:{left:n.x,top:n.y,width:n.w,height:n.h}});
+  if(n.kind==='image')dst.images.add({blob:new Uint8Array(await fs.readFile(path.join(mediaDir,n.file))),contentType:n.file.endsWith('.gif')?'image/gif':n.file.endsWith('.jpg')?'image/jpeg':'image/png',fit:'contain',position:{left:n.x,top:n.y,width:n.w,height:n.h}});
   if(n.kind==='table'){
    const t=dst.tables.add({rows:n.values.length,columns:n.values[0].length,left:n.x,top:n.y,width:n.w,height:n.h,columnWidths:n.widths,values:n.values});
    for(let r=0;r<n.values.length;r++)for(let c=0;c<n.values[0].length;c++){const cell=t.getCell(r,c);cell.fill=n.grid?(n.values[r][c]?'#365B77':'#353535'):(r===0?'#353535':r%2?'#292929':'#252525');cell.text.style={typeface:'Yu Gothic',fontSize:n.grid?23:23,color:r===0&&!n.grid?C.accent:C.text,bold:r===0&&!n.grid};}

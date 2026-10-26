@@ -304,7 +304,7 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
 
 bool GameRuntime::IsWindowInactive() {
     // 明示的な再現撮影中は、ツールへフォーカスが移っても描画更新を継続する。
-    if (comparisonActive_ || trialVerification_) return false;
+    if (comparisonActive_ || trialVerification_ || dioramaCapture_) return false;
     return GetActiveWindow() != winApp->GetHwnd();
 }
 

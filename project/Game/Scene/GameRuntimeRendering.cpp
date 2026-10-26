@@ -555,6 +555,9 @@ void GameRuntime::RenderScene() {
 
 void GameRuntime::DrawSkyboxForFrame() {
     if (fogTrial_ && currentMode_==AppMode::GamePlay) return;
+    // A plain backdrop keeps the miniature's silhouette and gaps easy to read.
+    if (stageMap_.GetWeatherPresetName()=="Diorama" &&
+        (currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace)) return;
     auto commandList = dxCommon->GetCommandList();
     if (debugFlags_.showSkybox && showSkyboxCubemap_ && skybox_) {
         skybox_->Draw();

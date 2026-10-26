@@ -1,5 +1,6 @@
 ﻿// 録画ツールと探索ステージの接続。ゲームの通常ステージは変更しない。
 #include "GameRuntime.h"
+#include "Goal.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -53,6 +54,7 @@ void GameRuntime::InitializeCaptureTools() {
         comparisonActive_=true;
         comparisonStarted_=std::chrono::steady_clock::now();
     }
+    if(CaptureEnvironment("CG2_DIORAMA")=="1") BeginDiorama();
 }
 
 void GameRuntime::BeginFogTrial() {
@@ -94,6 +96,7 @@ void GameRuntime::BeginFogTrial() {
 }
 
 void GameRuntime::UpdateCaptureTools() {
+    UpdateDioramaCapture();
     auto& recorder=dxCommon->Recorder();
     const bool canUndo=(currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace) &&
         !isGamePaused_ && !isGoalReached_ && (!blockInventoryUI_ || !blockInventoryUI_->IsActive()) && !comparisonActive_;
@@ -209,6 +212,84 @@ void GameRuntime::DrawCaptureOverlay() {
         fogLabels_[fogExplorer_.Mode()]->Draw(); scanMeter_->Draw();
     }
     if (dxCommon->Recorder().IsRecording()) fogLabels_[4]->Draw();
+}
+
+void GameRuntime::BeginDiorama() {
+    BeginFogTrial();
+    dioramaCapture_=CaptureEnvironment("CG2_DIORAMA_CAPTURE")=="1";
+    fogTrial_=false; buildTrial_=false;
+    stageMap_.LoadFromFile("Resources/Stages/dioramaRuins.txt");
+    backupMap_=stageMap_;
+    stageRenderer_->BuildFromStageMap(stageMap_);
+    stageEditorController_.ResetPlayerToStartCell(stageMap_,player_.get());
+    playerBasePosition_.ApplyFromStageMap(stageMap_,player_.get());
+    blockInventory_.Initialize(0);
+    bubblePickupController_.Initialize(&stageMap_,stageRenderer_.get(),&blockInventory_);
+    blockPlacementController_.Initialize(&stageMap_,stageRenderer_.get(),&blockInventory_);
+    blockInventoryUI_->SetSelectedBlockType(BlockType::Wall);
+    blockInventoryUI_->SetSelectedCustomId(1);
+    gameplayCameraController_.ConfigureDiorama();
+    RefreshGoalGuideTarget();
+    object3dCommon->SetExplorationFog({0,0,0,0},{},{},{});
+    comparisonStarted_=std::chrono::steady_clock::now();
+}
+
+void GameRuntime::UpdateDioramaCapture() {
+    if(CaptureEnvironment("CG2_DIORAMA")!="1" || CaptureEnvironment("CG2_DIORAMA_CAPTURE")!="1") return;
+    // Reproducible integration footage: positions are scripted, game rules are real.
+    static int step=0;
+    static bool first=false,undo=false,second=false,lock=false;
+    const float elapsed=std::chrono::duration<float>(std::chrono::steady_clock::now()-comparisonStarted_).count();
+    const float t=(std::max)(0.0f,elapsed-1.5f);
+    if(elapsed>=1.5f && !comparisonRecordingStarted_) {
+        FrameRecorder::Options o;o.name="diorama-ruins";o.gifSeconds=15;
+        const auto output=CaptureEnvironment("CG2_CAPTURE_DIR");if(!output.empty())o.directory=output;
+        if(!dxCommon->Recorder().Start(o)){PostQuitMessage(2);return;}
+        comparisonRecordingStarted_=true;
+        lock=!bubblePickupController_.AreAllPickupsCollected();
+    }
+    if(currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace) {
+        Vector3 p{4,2.5f,3};
+        if(t>=1 && t<2)p.z=3+(t-1)*2;
+        else if(t>=2 && t<5)p.z=5;
+        else if(t>=5 && t<7)p.z=5+(t-5)*3.5f;
+        else if(t>=7 && t<8)p={4+(t-7),2.5f,12};
+        else if(t>=8 && t<9)p={5,2.5f,12};
+        else if(t>=9 && t<10)p={5+(t-9)*6,2.5f,11};
+        else if(t>=10 && t<10.5f)p={11,2.5f,11+(t-10)*2};
+        else if(t>=10.5f && t<12)p={11,2.5f+(t-10.5f)*2,12};
+        else if(t>=12)p={11+(std::min)(1.0f,t-12),5.5f,12};
+        player_->SetPosition(p);
+        bubblePickupController_.Update(p);
+        blockPlacementController_.SetPlayerPosition(p);
+    }
+    blockPlacementController_.SetPlaceBlockType(BlockType::Wall);blockPlacementController_.SetPlaceCustomId(1);
+    if(t>=2 && t<3) {
+        const auto plan=blockPlacementController_.Evaluate({3,2,7});
+        stageRenderer_->SetPlacementPreview(stageMap_,{3,2,7},BlockType::Wall,1,0,plan.Ready()?1:2);
+    }
+    if(t>=3 && step==0){first=blockPlacementController_.TryPlace({3,2,7});stageRenderer_->ClearPlacementPreview();++step;}
+    if(t>=3.5f && step==1){undo=blockPlacementController_.TryUndo();++step;}
+    if(t>=4 && step==2){first=blockPlacementController_.TryPlace({3,2,7})&&first;++step;}
+    if(t>=8 && t<9) {
+        const auto plan=blockPlacementController_.Evaluate({7,2,10},1.5707963f);
+        stageRenderer_->SetPlacementPreview(stageMap_,{7,2,10},BlockType::Wall,1,1.5707963f,plan.Ready()?1:2);
+    }
+    if(t>=9 && step==3){second=blockPlacementController_.TryPlace({7,2,10},1.5707963f);stageRenderer_->ClearPlacementPreview();++step;}
+    if(t>=15 && comparisonRecordingStarted_) {
+        if(dxCommon->Recorder().IsRecording())dxCommon->Recorder().Stop();
+        if(!dxCommon->Recorder().IsBusy()) {
+            std::filesystem::create_directories("../generated/PR1_01/diorama");
+            std::ofstream("../generated/PR1_01/diorama/verification.json")
+                <<"{\"goalInitiallyLocked\":"<<(lock?"true":"false")
+                <<",\"firstBridge\":"<<(first?"true":"false")
+                <<",\"undo\":"<<(undo?"true":"false")
+                <<",\"rotatedSecondBridge\":"<<(second?"true":"false")
+                <<",\"allPickups\":"<<(bubblePickupController_.AreAllPickupsCollected()?"true":"false")
+                <<",\"goalReached\":"<<(isGoalReached_?"true":"false")<<"}";
+            PostQuitMessage(first&&undo&&second&&lock&&isGoalReached_?0:3);
+        }
+    }
 }
 
 void GameRuntime::BeginBuildTrial() {

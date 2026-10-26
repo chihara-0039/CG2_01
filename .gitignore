@@ -56,6 +56,7 @@ artifacts/
 
 # --- Local authoring/review tools and generated submission previews ---
 .codex_video_tools/
+__pycache__/
 .codex-work/
 .video_review/
 .tl1_submission_work/

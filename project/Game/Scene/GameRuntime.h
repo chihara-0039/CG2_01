@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <memory>
 #include <filesystem>
@@ -361,9 +361,12 @@ private:
     void DrawCaptureOverlay();
     void BeginFogTrial();
     void BeginBuildTrial();
+    void BeginDiorama();
+    void UpdateDioramaCapture();
     void UpdateBuildTrial();
     void VerifyBuilding();
     bool buildTrial_=false, buildCapture_=false, buildAction_=false;
+    bool dioramaCapture_=false;
     int buildStep_=0;
     bool buildReached_=false;
     int buildStatus_=0;
