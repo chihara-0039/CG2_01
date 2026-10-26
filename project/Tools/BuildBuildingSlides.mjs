@@ -102,13 +102,30 @@ background.nodes=[
 ];
 const sequence=[spec[0],spec[1],background,spec[2],spec[4],spec[3],spec[5],spec[6],spec[7],spec[8]];
 spec.splice(0,spec.length,...sequence);
+// Distinct footage for each claim: overview, rotation, undo and full route.
+function editMediaSlide(s,changes,file){
+ s=structuredClone(s);
+ for(const [from,to]of changes){if(s.title===from)s.title=to;for(const node of s.nodes)if(node.kind==='text'&&node.value===from)node.value=to;}
+ for(const node of s.nodes)if(node.kind==='image')node.file=file;
+ return s;
+}
+const overviewSlide=editMediaSlide(spec[7],[["改良した結果：回収した足場で2つの谷を渡る","今回の結果：足場を試し直して道を作る"],["回収して持ち出す","形を崩さず配置する"],["島ごとに足場を1個回収\n回収した足場を道に使う","全マスを先に確認\n失敗しても形と在庫を守る"],["置いて道を作る","取り消して試し直す"],["2本目は90度回して設置\nはしごを登り、高台の星へ","直前の設置を戻して返却\n向きを変えて道をつなぐ"],["位置と操作時刻は自動化。回収・在庫・配置・クリアはゲームの実処理","今回の到達点を先に紹介し、この後で実装背景と改良の仕組みを説明する"]],'overview.gif');
+overviewSlide.notes='完成した2方向の橋を別角度から見せる周回撮影。回収・配置で準備した完成状態であり攻略の通しプレイではない。位置とカメラは撮影用に自動化。';
+const rotationSlide=editMediaSlide(spec[7],[["改良した結果：回収した足場で2つの谷を渡る","予定形：回転して、置ける向きを確かめる"],["回収して持ち出す","場所を変える"],["島ごとに足場を1個回収\n回収した足場を道に使う","重なる場所は赤で表示\n置ける場所は緑で表示"],["置いて道を作る","向きを変える"],["2本目は90度回して設置\nはしごを登り、高台の星へ","90度回して橋の向きを確認\n確定すると同じ3マスへ配置"],["位置と操作時刻は自動化。回収・在庫・配置・クリアはゲームの実処理","場所の変更 → 90度回転 → 確定 → 渡る、を別のカメラから確認"]],'rotation.gif');
+rotationSlide.notes='第2の谷を横から撮影。重なる位置、空いた位置、90度回転、確定、渡る、という局所動作。位置と時刻は自動化し、配置処理は実ゲーム。';
+for(const node of spec[6].nodes)if(node.kind==='text'&&node.value==='別の向きも試したい\n直前の設置を元に戻し\n同じ種類を1個返却')node.value='設置を戻して足場を返却\n別の向きと見比べる\n適した向きで置き直して渡る';
+spec[6].notes='上から見た第1の谷。設置、取り消し、回転して別の向きを確認、適した向きに戻して再設置、渡る。位置と時刻は自動化。実際の在庫と地形を変更。編集で状態名と在庫数の注釈を追加。';
+const flow=spec[2];flow.nodes=flow.nodes.filter(n=>n.kind!=='image');
+for(const [value,x]of [['回収する\n足場を在庫へ',56],['向きを選ぶ\n予定形で確認',324],['設置する\n道をつなぐ',592]])flow.nodes.push({kind:'text',value,x,y:240,w:224,h:130,size:27,color:C.text,fill:'#2B3B47',align:'center',vertical:'middle'});
+flow.nodes.push({kind:'text',value:'→',x:284,y:278,w:36,h:60,size:35,color:C.text},{kind:'text',value:'→',x:552,y:278,w:36,h:60,size:35,color:C.text},{kind:'text',value:'← 取り消して、別の置き方を試す',x:56,y:418,w:760,h:65,size:30,color:C.accent,align:'center'},{kind:'text',value:'失敗しても、足場を失わず試せるようにする',x:56,y:510,w:760,h:60,size:25,color:C.text,align:'center'});
+spec.splice(6,0,rotationSlide);spec.splice(2,0,overviewSlide);
 const deck=Presentation.create({slideSize:{width:1280,height:720}});
 for(let i=0;i<spec.length;i++){
  const src=spec[i],dst=deck.slides.add();dst.background.fill=C.bg;dst.speakerNotes.text=src.notes;
  const texts=src.cover?src.nodes:[{kind:'text',value:src.title,x:56,y:42,w:1168,h:90,size:40,color:C.text,bold:false},...src.nodes,{kind:'text',value:String(i+1).padStart(2,'0'),x:1180,y:678,w:48,h:28,size:18,color:C.muted}];
  if(!src.cover)dst.shapes.add({geometry:'rect',position:{left:56,top:124,width:1168,height:1},fill:'#68717A',line:{fill:'none',width:0}});
  for(const n of texts){
-  if(n.kind==='text'){const sh=dst.shapes.add({geometry:'textbox',position:{left:n.x,top:n.y,width:n.w,height:n.h},fill:'none',line:{fill:'none',width:0}});sh.text=n.value;sh.text.style={typeface:'Yu Gothic',fontSize:n.size,color:n.color,bold:n.bold||false,alignment:n.align||'left',verticalAlignment:'top',insets:0,autoFit:'none'};}
+  if(n.kind==='text'){const sh=dst.shapes.add({geometry:n.fill?'rect':'textbox',position:{left:n.x,top:n.y,width:n.w,height:n.h},fill:n.fill||'none',line:{fill:'none',width:0}});sh.text=n.value;sh.text.style={typeface:'Yu Gothic',fontSize:n.size,color:n.color,bold:n.bold||false,alignment:n.align||'left',verticalAlignment:n.vertical||'top',insets:0,autoFit:'none'};}
   if(n.kind==='image')dst.images.add({blob:new Uint8Array(await fs.readFile(path.join(mediaDir,n.file))),contentType:n.file.endsWith('.gif')?'image/gif':n.file.endsWith('.jpg')?'image/jpeg':'image/png',fit:'contain',position:{left:n.x,top:n.y,width:n.w,height:n.h}});
   if(n.kind==='table'){
    const t=dst.tables.add({rows:n.values.length,columns:n.values[0].length,left:n.x,top:n.y,width:n.w,height:n.h,columnWidths:n.widths,values:n.values});

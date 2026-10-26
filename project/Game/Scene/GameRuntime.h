@@ -363,6 +363,7 @@ private:
     void BeginBuildTrial();
     void BeginDiorama();
     void UpdateDioramaCapture();
+    void UpdateDioramaDetail(const std::string& shot);
     void UpdateBuildTrial();
     void VerifyBuilding();
     bool buildTrial_=false, buildCapture_=false, buildAction_=false;

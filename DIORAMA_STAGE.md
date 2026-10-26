@@ -38,3 +38,14 @@ LE3B_20_チハラ_シゴウ_足場配置の全マス検証と一手取り消し
 撮影用の位置列は連続した経路へ修正。クリア後は位置を固定し、モデルのGPUスキニングも更新する。
 撮影時だけHUD・3D操作案内・クリア文字を描画せず、通常プレイでは表示する。クリア後の接写・シーン遷移は撮影終了まで保留する。
 verification.json の noPrematureClear は、はしご上／高台へ着く前の早期クリアがないことを確認する。
+
+## 発表用の別撮り
+
+`StartDiorama.ps1 -Capture -Shot overview`：完成した橋を周回カメラで見せる。
+`StartDiorama.ps1 -Capture -Shot rotation`：第2の谷で、重なる場所→空いた場所→回転→設置→渡る。
+`StartDiorama.ps1 -Capture -Shot undo`：第1の谷を上から見せ、設置→取消→別の向き→再設置→渡る。
+各JSONで配置／取消などの成功と終了時の在庫を確認する。位置・カメラ・時刻は撮影スクリプトで制御する。
+攻略の通しプレイを示すものではなく、各機能の局所的な動作を示す。
+
+撮影後 `BuildPresentationClips.py --root generated/PR1_01/diorama --ffmpeg <ffmpeg.exe>` で、
+発表用の短い状態名・在庫数を重ねたMP4/GIFを `presentation/` へ書く。元の録画は残す。

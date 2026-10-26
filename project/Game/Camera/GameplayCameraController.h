@@ -19,6 +19,10 @@ public:
     void ConfigureDiorama() { cameraDistance_=25; cameraHeight_=25; cameraPitch_=.65f; cameraAngle_=-.65f;
         cameraFov_=.80f; referenceFov_=.80f; cameraPivot_={7.5f,2.5f,7.5f};
         followPlayerMode_=false; currentStageIndex_=6; cameraDirty_=true; }
+    void ConfigureDioramaShot(const Vector3& pivot,float yaw,float pitch,float distance) {
+        ConfigureDiorama();cameraPivot_=pivot;cameraAngle_=yaw;cameraPitch_=pitch;
+        cameraDistance_=distance;cameraHeight_=distance;
+    }
     // 探索ステージ用の近い追従視点。既存ステージのプリセットは変更しない。
     void ConfigureExploration() { cameraDistance_=24; cameraHeight_=22; cameraPitch_=.62f; cameraAngle_=0;
         cameraFov_=.9f; referenceFov_=.9f; followPlayerMode_=true; currentStageIndex_=1; cameraDirty_=true; }

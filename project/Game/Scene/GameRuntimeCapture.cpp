@@ -237,6 +237,8 @@ void GameRuntime::BeginDiorama() {
 
 void GameRuntime::UpdateDioramaCapture() {
     if(CaptureEnvironment("CG2_DIORAMA")!="1" || CaptureEnvironment("CG2_DIORAMA_CAPTURE")!="1") return;
+    const auto detail=CaptureEnvironment("CG2_DIORAMA_SHOT");
+    if(detail=="overview" || detail=="rotation" || detail=="undo") {UpdateDioramaDetail(detail);return;}
     // Reproducible integration footage: positions are scripted, game rules are real.
     static int step=0;
     static bool first=false,undo=false,second=false,lock=false,earlyClear=false;
@@ -292,6 +294,59 @@ void GameRuntime::UpdateDioramaCapture() {
                 <<",\"goalReached\":"<<(isGoalReached_?"true":"false")
                 <<",\"noPrematureClear\":"<<(!earlyClear?"true":"false")<<"}";
             PostQuitMessage(first&&undo&&second&&lock&&isGoalReached_&&!earlyClear?0:3);
+        }
+    }
+}
+
+void GameRuntime::UpdateDioramaDetail(const std::string& shot) {
+    static bool setup=false,placed=false,undone=false,replaced=false;
+    static int step=0;
+    const float elapsed=std::chrono::duration<float>(std::chrono::steady_clock::now()-comparisonStarted_).count();
+    const float t=(std::max)(0.0f,elapsed-1.5f);
+    const bool rotation=shot=="rotation",overview=shot=="overview";
+    if(!setup){
+        bubblePickupController_.Update({4,2.5f,5});
+        if(rotation || overview)bubblePickupController_.Update({5,2.5f,12});
+        blockPlacementController_.SetPlaceBlockType(BlockType::Wall);blockPlacementController_.SetPlaceCustomId(1);
+        blockPlacementController_.SetPlayerPosition({4,2.5f,5});
+        if(overview){placed=blockPlacementController_.TryPlace({3,2,7});replaced=blockPlacementController_.TryPlace({7,2,10},1.5707963f);}
+        setup=true;
+    }
+    Vector3 p=rotation?Vector3{5,2.5f,11}:Vector3{4,2.5f,5};
+    if(overview)p={4,2.5f,3};
+    else if(rotation && t>=7)p.x=5+std::clamp((t-7)/2,0.0f,1.0f)*6;
+    else if(!rotation && t>=8)p.z=5+std::clamp((t-8)/2,0.0f,1.0f)*6;
+    player_->SetPosition(p);blockPlacementController_.SetPlayerPosition(p);
+    if(overview)gameplayCameraController_.ConfigureDioramaShot({7.5f,2.5f,8},-.85f+t*.13f,.72f,24);
+    else if(rotation)gameplayCameraController_.ConfigureDioramaShot({8,2.5f,11},.7f,.8f,14);
+    else gameplayCameraController_.ConfigureDioramaShot({4,2.0f,8},-.12f,.95f,15);
+    if(elapsed>=1.5f && !comparisonRecordingStarted_){
+        FrameRecorder::Options o;o.name="diorama-"+shot;o.gifSeconds=10;
+        const auto output=CaptureEnvironment("CG2_CAPTURE_DIR");if(!output.empty())o.directory=output;
+        if(!dxCommon->Recorder().Start(o)){PostQuitMessage(2);return;}comparisonRecordingStarted_=true;
+    }
+    if(!overview && rotation){
+        if(t<6){const Int3 origin=t<2?Int3{4,2,10}:Int3{7,2,10};const float angle=t<4?0:1.5707963f;
+            const auto plan=blockPlacementController_.Evaluate(origin,angle);
+            stageRenderer_->SetPlacementPreview(stageMap_,origin,BlockType::Wall,1,angle,plan.Ready()?1:2);}
+        if(t>=6 && step==0){placed=blockPlacementController_.TryPlace({7,2,10},1.5707963f);stageRenderer_->ClearPlacementPreview();++step;}
+    }else if(!overview){
+        if(t<2 || (t>=4 && t<7)){
+            const float angle=t>=5 && t<6?1.5707963f:0;
+            const auto plan=blockPlacementController_.Evaluate({3,2,7},angle);
+            stageRenderer_->SetPlacementPreview(stageMap_,{3,2,7},BlockType::Wall,1,angle,plan.Ready()?1:2);}
+        if(t>=2 && step==0){placed=blockPlacementController_.TryPlace({3,2,7});stageRenderer_->ClearPlacementPreview();++step;}
+        if(t>=4 && step==1){undone=blockPlacementController_.TryUndo();++step;}
+        if(t>=7 && step==2){replaced=blockPlacementController_.TryPlace({3,2,7});stageRenderer_->ClearPlacementPreview();++step;}
+    }
+    if(t>=10 && comparisonRecordingStarted_){
+        if(dxCommon->Recorder().IsRecording())dxCommon->Recorder().Stop();
+        if(!dxCommon->Recorder().IsBusy()){
+            std::filesystem::create_directories("../generated/PR1_01/diorama");
+            const bool ok=placed && (rotation || (overview?replaced:undone&&replaced));
+            std::ofstream("../generated/PR1_01/diorama/"+shot+".json")<<"{\"success\":"<<(ok?"true":"false")
+                <<",\"stock\":"<<blockInventory_.GetBlockCount(BlockType::Wall,1)<<",\"scriptedPositions\":true}";
+            PostQuitMessage(ok?0:3);
         }
     }
 }
