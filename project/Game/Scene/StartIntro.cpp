@@ -38,7 +38,9 @@ Sound::SoundData StartIntro::MakeTone(bool landing) {
         phase += 6.28318530718*(landing ? 95*std::exp(-time*9) : 180)/44100;
         const float envelope = landing ? (std::min)(time/.008f,1.0f)*std::exp(-time*12)
             : std::sin(time/duration*3.14159265359f);
-        const float value = landing ? .65f*std::sin(phase)+filtered : filtered;
+        // 位相はdoubleで蓄積し、波形を音量計算へ渡す時点でfloatへ明示変換する。
+        const float wave = static_cast<float>(std::sin(phase));
+        const float value = landing ? .65f*wave+filtered : filtered;
         const int16_t sample = static_cast<int16_t>(value*envelope*14000);
         std::memcpy(data.buffer.data()+i*sizeof(sample),&sample,sizeof(sample));
     }
