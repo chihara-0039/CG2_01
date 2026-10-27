@@ -196,7 +196,7 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
     HandleModeChange();
 
     if (sceneType == SceneType::GamePlay && startIntroPending_ && startIntro_) {
-        // 空の余白を含むグリッドサイズではなく、実際の配置範囲へ俯瞰を合わせる。
+        // 空の余白を含むグリッドではなく、実際の配置範囲から到着演出の舞台中心を求める。
         Vector3 minimum{static_cast<float>(stageMap_.GetWidth()),static_cast<float>(stageMap_.GetHeight()),static_cast<float>(stageMap_.GetDepth())};
         Vector3 maximum{};
         bool found = false;
@@ -212,6 +212,11 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
         const float dx=maximum.x-minimum.x,dy=maximum.y-minimum.y,dz=maximum.z-minimum.z;
         const float radius = found ? .5f*std::sqrt(dx*dx+dy*dy+dz*dz) : 3.0f;
         startIntro_->Begin(camera.get(),center,radius,player_ ? player_->GetPosition() : center);
+        if (player_) {
+            player_->SetPosition(startIntro_->GetPlayerPosition());
+            player_->SetCamera(camera->GetViewMatrix(),camera->GetProjectionMatrix());
+            player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix());
+        }
         startIntroPending_ = false;
     }
 
@@ -233,7 +238,10 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
 }
 
 void GameRuntime::OnSceneExited(SceneType sceneType) {
-    if (sceneType == SceneType::GamePlay && startIntro_) startIntro_->Cancel(camera.get());
+    if (sceneType == SceneType::GamePlay && startIntro_) {
+        if (startIntro_->BlocksInput() && player_) player_->SetPosition(startIntro_->GetSpawnPosition());
+        startIntro_->Cancel(camera.get());
+    }
     if (sceneType != SceneType::StageSelect) startIntroPending_ = false;
     if (sceneType == SceneType::Title) {
         titleDayNightActive_ = false;
@@ -404,19 +412,23 @@ void GameRuntime::RunStageEditorScene() {
 
 void GameRuntime::RunGamePlayScene() {
     if (startIntro_ && startIntro_->IsActive()) {
+        const bool wasFlying = startIntro_->BlocksInput();
         startIntro_->Update(camera.get(), sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive());
+        // 見せるための降下経路。物理更新は着地まで止め、最後に正確なスポーンへ戻す。
+        if (wasFlying && player_) {
+            player_->SetPosition(startIntro_->GetPlayerPosition());
+            player_->SetCamera(camera->GetViewMatrix(),camera->GetProjectionMatrix());
+            player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix());
+        }
         if (startIntro_->ConsumeGo()) {
             objectiveGuideStartedAt_ = std::chrono::steady_clock::now();
             if (particleManager && player_) {
-                Vector3 position = player_->GetPosition();
-                position.y += .8f;
-                particleManager->EmitHitEffect(position);
+                Vector3 feet = player_->GetPosition();
+                feet.y -= player_->GetRadius().y;
+                particleManager->EmitLandingDust(feet);
             }
         }
-        if (startIntro_->BlocksInput()) {
-            if (player_) player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix());
-            return;
-        }
+        if (startIntro_->BlocksInput()) return;
     }
     UpdateGamePlay();
 }

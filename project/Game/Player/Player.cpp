@@ -450,6 +450,9 @@ void Player::UpdateTransform(const Matrix4x4& lightVP)
 		skinnedObject_->SetRotation(rotation_);
 		skinnedObject_->Update(nullptr, lightVP);
 	} else if (object_) {
+        // 物理更新を止めた到着演出でも、外部指定の座標を描画へ反映する。
+        object_->SetPosition(position_);
+        object_->SetRotation(rotation_);
 		object_->Update(lightVP);
 	}
 }

@@ -77,6 +77,52 @@ int main() {
         assert(std::abs(approach.position.z-landing.position.z) < .002f);
     }
     std::cout << "Stage flyover: four stage sizes, full 360-degree orbit, framing and exact landing passed\n";
+    // 手前の主人公と奥の舞台が実際に同じ画角へ入るかを投影座標で確認する。
+    const auto visible = [](const Vector3& point, const StageFlyover::Pose& camera) {
+        const Vector3 v{point.x-camera.position.x,point.y-camera.position.y,point.z-camera.position.z};
+        const float sy=std::sin(camera.rotation.y),cy=std::cos(camera.rotation.y);
+        const float sp=std::sin(camera.rotation.x),cp=std::cos(camera.rotation.x);
+        const float depth=v.x*sy*cp-v.y*sp+v.z*cy*cp;
+        const float x=v.x*cy-v.z*sy;
+        const float y=v.x*sy*sp+v.y*cp+v.z*cy*sp;
+        return depth>.01f && std::abs(x/depth)<std::tan(camera.fov/2)*1280/720 &&
+            std::abs(y/depth)<std::tan(camera.fov/2);
+    };
+    const Vector3 spawn{4,1.5f,0};
+    for (const Vector3 center : {Vector3{4,1,0},Vector3{16,6,16},Vector3{-30,12,-24}}) {
+        for (float radius : {3.0f,30.0f,80.0f}) for (float yaw : {0.0f,1.6f,3.1f}) {
+            const StageFlyover::Pose end{{4-std::sin(yaw)*12,9, -std::cos(yaw)*12},{.55f,yaw,0},.67f};
+            float lastHeight=1000;
+            for (int i=0;i<=480;++i) {
+                const float time=i*.01f;
+                const auto frame=StageArrival::Evaluate(time,center,radius,spawn,end);
+                assert(std::isfinite(frame.camera.position.x) && std::isfinite(frame.camera.rotation.y));
+                assert(frame.playerPosition.y<=lastHeight+.001f && frame.playerPosition.y>=spawn.y);
+                lastHeight=frame.playerPosition.y;
+                assert(frame.cloudAlpha>=0 && frame.cloudAlpha<=1 && frame.letterbox>=0 && frame.letterbox<=1);
+                assert(frame.landed==(time>=StageArrival::kFlightDuration));
+                if (time<StageArrival::kFlightDuration*.68f) {
+                    assert(visible({frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z},frame.camera));
+                    assert(visible(center,frame.camera));
+                }
+            }
+            const auto landed=StageArrival::Evaluate(StageArrival::kFlightDuration,center,radius,spawn,end);
+            const auto before=StageArrival::Evaluate(StageArrival::kFlightDuration-.001f,center,radius,spawn,end);
+            assert(landed.landed && !landed.finished && landed.cloudAlpha==0);
+            assert(landed.playerPosition.x==spawn.x && landed.playerPosition.y==spawn.y && landed.playerPosition.z==spawn.z);
+            assert(landed.camera.position.x==end.position.x && landed.camera.fov==end.fov);
+            assert(std::abs(before.camera.position.x-end.position.x)<.002f);
+            assert(std::abs(before.camera.position.y-end.position.y)<.002f);
+            assert(std::abs(before.camera.position.z-end.position.z)<.002f);
+            assert(std::abs(std::remainder(before.camera.rotation.y-end.rotation.y,6.28318530718f))<.002f);
+            assert(std::abs(before.camera.fov-end.fov)<.002f);
+            assert(std::abs(before.playerPosition.y-spawn.y)<.002f);
+            assert(StageArrival::Evaluate(6,center,radius,spawn,end).finished);
+            const auto restart=StageArrival::Evaluate(-1,center,radius,spawn,end);
+            assert(!restart.landed && restart.cloudAlpha==1);
+        }
+    }
+    std::cout << "Stage arrival: 27 layouts, foreground/background framing, descent, exact landing and restart passed\n";
     const float cueTimes[] = {0, 1, 2, 3};
     for (int cue = 0; cue < 4; ++cue) {
         const auto frame = StartIntroTimeline::Evaluate(cueTimes[cue]);

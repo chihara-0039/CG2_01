@@ -1896,3 +1896,20 @@ std::list<Particle>& ParticleManager::Particles() {
 const std::list<Particle>& ParticleManager::Particles() const {
     return GetDefaultParticleGroup().particles;
 }
+
+void ParticleManager::EmitLandingDust(const Vector3& pos) {
+    // 既存の柔らかい雲描画を短い土煙へ流用し、発光スパークは出さない。
+    for (int i=0;i<12 && Particles().size()<kMaxParticles;++i) {
+        const float angle = static_cast<float>(i)*6.28318530718f/12;
+        Particle puff{};
+        puff.type = Particle::Type::StormCloud;
+        puff.transform.translate = {pos.x+std::cos(angle)*.35f,pos.y+.08f,pos.z+std::sin(angle)*.35f};
+        puff.transform.scale = {.65f,.35f,1};
+        puff.transform.rotate = {0,0,angle};
+        puff.velocity = {std::cos(angle)*.018f,.004f,std::sin(angle)*.018f};
+        puff.color = {.82f,.76f,.63f,.32f};
+        puff.initialAlpha = puff.color.w;
+        puff.maxTime = .55f;
+        Particles().push_back(puff);
+    }
+}

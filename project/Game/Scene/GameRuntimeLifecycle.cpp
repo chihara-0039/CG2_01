@@ -287,7 +287,7 @@ void GameRuntime::Initialize() {
     recoveryTransition_ = std::make_unique<RecoveryTransition>();
     recoveryTransition_->Initialize(spriteCommon.get());
     startIntro_ = std::make_unique<StartIntro>();
-    startIntro_->Initialize(spriteCommon.get());
+    startIntro_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/arrival_cloud.png"));
 
 
     gameplayCameraController_.Initialize();

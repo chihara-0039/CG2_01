@@ -279,6 +279,9 @@ public: // メンバ関数
     // 飛沫を生成する（ブロック衝突時など）
     void EmitSplash(const Vector3& pos, const Vector4& color);
 
+    // ステージ到着時の足元から広がる薄い土煙。
+    void EmitLandingDust(const Vector3& pos);
+
     // 評価課題用: ヒット時のフラッシュ・スパーク・衝撃波をまとめて生成する
     void EmitHitEffect(const Vector3& pos);
     void EmitHitEffect(const Vector3& pos, const HitEffectSettings& settings);

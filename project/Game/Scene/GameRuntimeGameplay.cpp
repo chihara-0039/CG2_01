@@ -414,6 +414,7 @@ void GameRuntime::UpdateSceneTransition() {
     if (startIntro_ && startIntro_->BlocksInput()) {
         // 演出中のESC/Bはポーズへ入れず、ステージ選択へ戻す。
         if (input->TriggerKey(DIK_ESCAPE) || input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+            if (player_) player_->SetPosition(startIntro_->GetSpawnPosition());
             startIntro_->Cancel(camera.get());
             ReturnToStageSelect();
         }
