@@ -189,6 +189,8 @@
     <ClCompile Include="Game\Scene\EffectShowcaseController.cpp" />
     <ClCompile Include="Game\Scene\PostEffectShowcaseController.cpp" />
     <ClCompile Include="Game\Scene\GameRuntime.cpp" />
+    <ClCompile Include="Game\Scene\GameOver.cpp" />
+    <ClCompile Include="Game\Scene\GameOverTimeline.cpp" />
     <ClCompile Include="Game\Scene\GameRuntimeEditor.cpp" />
     <ClCompile Include="Game\Scene\GameRuntimeEffects.cpp" />
     <ClCompile Include="Game\Scene\GameRuntimeGameplay.cpp" />
@@ -353,6 +355,8 @@
     <ClInclude Include="Game\Scene\EffectShowcaseController.h" />
     <ClInclude Include="Game\Scene\PostEffectShowcaseController.h" />
     <ClInclude Include="Game\Scene\GameRuntime.h" />
+    <ClInclude Include="Game\Scene\GameOver.h" />
+    <ClInclude Include="Game\Scene\GameOverTimeline.h" />
     <ClInclude Include="Game\Scene\SceneFactory.h" />
     <ClInclude Include="Game\Scene\SceneManager.h" />
     <ClInclude Include="Game\Scene\SceneType.h" />

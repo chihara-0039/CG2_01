@@ -150,7 +150,12 @@ void GameRuntime::UpdateGamePlay() {
     if (player_) {
         float cameraYawForMovement = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
         player_->SetStageCollisionEnabled(true);
-        player_->Update(input.get(), stageMap_, cameraYawForMovement, lightVP, dxCommon.get());
+        player_->Update(input.get(), stageMap_, cameraYawForMovement, lightVP, dxCommon.get(), true);
+        const bool contactFailure=player_->ConsumeFailure();
+        if (contactFailure || player_->GetPosition().y < -10.0f) {
+            BeginGameOver(!contactFailure);
+            return;
+        }
     }
 
     if (stageMap_.NeedsRebuild()) {
@@ -407,6 +412,7 @@ void GameRuntime::RefreshGoalGuideTarget() {
 
 
 void GameRuntime::UpdateSceneTransition() {
+    if (gameOver_ && gameOver_->IsActive()) return;
     if (sceneFadePhase_ != SceneFadePhase::None) {
         return;
     }
@@ -485,3 +491,11 @@ void GameRuntime::ReturnToStageSelect() {
     RequestSceneChange(SceneType::StageSelect);
 }
 
+
+void GameRuntime::BeginGameOver(bool fall) {
+    if (!player_ || !gameOver_ || gameOver_->IsActive()) return;
+    if (startIntro_) startIntro_->Cancel(camera.get());
+    isGamePaused_=false;
+    bgmController_.Update(false);
+    gameOver_->Begin(camera.get(),player_->GetPosition(),player_->GetRotation(),fall);
+}

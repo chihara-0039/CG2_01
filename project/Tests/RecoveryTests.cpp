@@ -7,6 +7,7 @@
 #include "RecoveryTransitionMotion.h"
 #include "StartIntroTimeline.h"
 #include "StageFlyover.h"
+#include "GameOverTimeline.h"
 #include <cmath>
 #include <cassert>
 #include <iostream>
@@ -153,6 +154,42 @@ int main() {
         }
     }
     std::cout << "Flying model: body tilt, bank, continuous orientation and exact standing restoration passed\n";
+    // 失敗演出中の入力を遮断し、選択後の二重決定・再試行・戻るを検証する。
+    using FailureAction=GameOverTimeline::Action;
+    for (float step : {1.0f/30,1.0f/60,1.0f/144,.15f}) {
+        GameOverTimeline::Flow flow;
+        assert(!flow.Active()); flow.Begin();
+        float previousRadius=800;
+        for (int i=0;i<1000 && !flow.MenuReady();++i) {
+            assert(flow.Confirm(false)==FailureAction::None);
+            flow.MoveSelection(); assert(flow.Selected()==0);
+            flow.Advance(step);
+            const auto frame=GameOverTimeline::Evaluate(flow.Elapsed());
+            assert(frame.radius<=previousRadius+.001f && frame.radius>=0);
+            assert(frame.menuAlpha>=0 && frame.menuAlpha<=1);
+            if (flow.Elapsed()<=GameOverTimeline::kHitStop) assert(frame.motion==0 && frame.cameraBlend==0);
+            previousRadius=frame.radius;
+        }
+        assert(flow.MenuReady());
+        assert(GameOverTimeline::Evaluate(flow.Elapsed()).radius==0);
+        assert(flow.Confirm(false)==FailureAction::Retry);
+        assert(flow.Revealing() && flow.Active());
+        assert(flow.Confirm(false)==FailureAction::None && flow.Confirm(true)==FailureAction::None);
+        flow.MoveSelection(); assert(flow.Selected()==0);
+        assert(GameOverTimeline::RetryRadius(0)==0);
+        flow.Advance(GameOverTimeline::kRevealTime-.001f); assert(flow.Active());
+        flow.Advance(.002f); assert(!flow.Active());
+        assert(GameOverTimeline::RetryRadius(GameOverTimeline::kRevealTime)==800);
+        flow.Begin(); flow.Advance(3); flow.MoveSelection();
+        assert(flow.Selected()==1 && flow.Confirm(false)==FailureAction::StageSelect);
+        assert(flow.Leaving() && flow.Confirm(false)==FailureAction::None);
+        flow.Begin(); assert(flow.Selected()==0 && flow.Elapsed()==0);
+        assert(flow.Confirm(true)==FailureAction::None);
+        flow.Advance(-1); assert(flow.Elapsed()==0);
+        flow.Advance(3); assert(flow.Confirm(true)==FailureAction::StageSelect);
+        flow.Cancel(); assert(!flow.Active());
+    }
+    std::cout << "Game over: hit stop, full iris coverage, guarded input, retry/reveal, stage select and restart passed\n";
     const float cueTimes[] = {0, 1, 2, 3};
     for (int cue = 0; cue < 4; ++cue) {
         const auto frame = StartIntroTimeline::Evaluate(cueTimes[cue]);

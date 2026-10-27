@@ -240,6 +240,7 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
 }
 
 void GameRuntime::OnSceneExited(SceneType sceneType) {
+    if (sceneType==SceneType::GamePlay && gameOver_) gameOver_->Cancel(camera.get());
     if (sceneType == SceneType::GamePlay && startIntro_) {
         if (startIntro_->BlocksInput() && player_) {
             player_->SetPosition(startIntro_->GetSpawnPosition());
@@ -416,6 +417,26 @@ void GameRuntime::RunStageEditorScene() {
 }
 
 void GameRuntime::RunGamePlayScene() {
+    if (gameOver_ && gameOver_->IsActive()) {
+        const auto action=gameOver_->Update(camera.get(),*input,
+            sceneFadePhase_==SceneFadePhase::None && !IsWindowInactive());
+        if (gameOver_->IsShowingFailure() && player_) {
+            player_->SetPosition(gameOver_->GetPosition()); player_->SetRotation(gameOver_->GetRotation());
+            player_->SetCamera(camera->GetViewMatrix(),camera->GetProjectionMatrix());
+            player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix(),dxCommon.get());
+        }
+        if (action==GameOver::Action::Retry && player_) {
+            player_->Respawn();
+            useFirstPersonCamera_=false;
+            bgmController_.Update(true);
+            gameplayCameraController_.ResetCamera(camera.get(),player_.get(),stageMap_,
+                stageSelect_ ? stageSelect_->GetSelectedIndex() : 0);
+            player_->SetCamera(camera->GetViewMatrix(),camera->GetProjectionMatrix());
+            player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix(),dxCommon.get());
+            objectiveGuideStartedAt_=std::chrono::steady_clock::now();
+        } else if (action==GameOver::Action::StageSelect) ReturnToStageSelect();
+        return;
+    }
     if (startIntro_ && startIntro_->IsActive()) {
         const bool wasFlying = startIntro_->BlocksInput();
         startIntro_->Update(camera.get(), sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive());

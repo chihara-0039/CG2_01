@@ -51,6 +51,7 @@
 #include "GameBgmController.h"
 #include "RecoveryTransition.h"
 #include "StartIntro.h"
+#include "GameOver.h"
 
 #include "PostProcessRenderer.h"
 #include "PostEffectShowcaseController.h"
@@ -203,6 +204,8 @@ private:
     std::unique_ptr<Sprite> sceneFadeSprite_;
     std::unique_ptr<RecoveryTransition> recoveryTransition_;
     std::unique_ptr<StartIntro> startIntro_;
+    std::unique_ptr<GameOver> gameOver_;
+    void BeginGameOver(bool fall);
     bool startIntroPending_ = false;
     bool useRecoveryTransition_ = false;
 

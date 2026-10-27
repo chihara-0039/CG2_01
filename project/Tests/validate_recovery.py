@@ -101,6 +101,7 @@ def main():
                         str(PROJECT/"Tests/RecoveryTests.cpp"), str(PROJECT/"Game/Scene/StageSelection.cpp"),
                         str(PROJECT/"Game/Scene/RecoveryTransitionMotion.cpp"),
                         str(PROJECT/"Game/Scene/StartIntroTimeline.cpp"),
+                        str(PROJECT/"Game/Scene/GameOverTimeline.cpp"),
                         str(PROJECT/"Game/Scene/StageFlyover.cpp"),
                         str(PROJECT/"Game/Scene/SceneManager.cpp"), "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)

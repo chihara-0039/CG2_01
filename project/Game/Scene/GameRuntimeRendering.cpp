@@ -306,6 +306,9 @@ void GameRuntime::Draw() {
         spriteCommon->PreDraw();
         startIntro_->Draw();
     }
+    if (currentMode_==AppMode::GamePlay && gameOver_ && gameOver_->IsActive()) {
+        spriteCommon->PreDraw(); gameOver_->Draw();
+    }
     // すべての3D描画・HUDより後に描き、シーン全体を自然に暗転させる。
     if (sceneFadeSprite_ && sceneFadeAlpha_ > 0.0f) {
         spriteCommon->PreDraw();
@@ -389,9 +392,9 @@ void GameRuntime::RenderScene() {
 
         if (currentMode_ == AppMode::GamePlay ||
             currentMode_ == AppMode::EffectPreview) {
-            if (player_ && (!useFirstPersonCamera_ || (startIntro_ && startIntro_->BlocksInput()))) {
+            if (player_ && (!useFirstPersonCamera_ || (startIntro_ && startIntro_->BlocksInput()) || (gameOver_ && gameOver_->IsActive()))) {
                 player_->Draw();
-                if (!(startIntro_ && startIntro_->BlocksInput()) && IsPlayerHiddenByWall()) {
+                if (!(gameOver_ && gameOver_->IsActive()) && !(startIntro_ && startIntro_->BlocksInput()) && IsPlayerHiddenByWall()) {
                     object3dCommon->PreDrawPlayerHighlight();
                     player_->DrawHighlight();
                     object3dCommon->PreDraw();
@@ -399,7 +402,7 @@ void GameRuntime::RenderScene() {
                 }
             }
 
-            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_ && !(startIntro_ && startIntro_->BlocksInput())) {
+            if (currentMode_ == AppMode::GamePlay && gameplayUIManager_ && !(gameOver_ && gameOver_->IsActive()) && !(startIntro_ && startIntro_->BlocksInput())) {
                 gameplayUIManager_->Draw3DPrompts(
                     true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
             }
@@ -459,6 +462,7 @@ void GameRuntime::RenderScene() {
 
     // ステージ紹介中はチュートリアルや目標矢印で景色を遮らない。
     // 黒帯と回転幕はDraw側で別途描くため、この早期returnでも表示される。
+    if (currentMode_==AppMode::GamePlay && gameOver_ && gameOver_->IsActive()) return;
     if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsTouring()) return;
 
     if (gameplayUIManager_) {

@@ -87,7 +87,7 @@ void Player::InitializeWithDefaultSkinned(Object3dCommon* common, DirectXCommon*
 }
 
 // 更新：移動・重力・当たり判定の処理
-void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Matrix4x4& lightVP, DirectXCommon* dxCommon)
+void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Matrix4x4& lightVP, DirectXCommon* dxCommon, bool deferFailure)
 {
 	input_ = input;
 
@@ -389,7 +389,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 								pMinY <= eMaxY && pMaxY >= eMinY &&
 								pMinZ <= eMaxZ && pMaxZ >= eMinZ) 
 							{
-								Respawn();
+								if (deferFailure) failurePending_=true; else Respawn();
 								goto collision_end;
 							}
 						}
@@ -417,7 +417,7 @@ void Player::Update(const Input* input,StageMap& map, float cameraRotY, const Ma
 					pMinY <= eMaxY && pMaxY >= eMinY &&
 					pMinZ <= eMaxZ && pMaxZ >= eMinZ) 
 				{
-					Respawn();
+					if (deferFailure) failurePending_=true; else Respawn();
 					goto collision_end;
 				}
 			}
@@ -839,6 +839,7 @@ bool Player::CheckExternalCollision(const Vector3& pos) const {
 // リスポーン処理：座標をリスポーンポイントに戻し、速度と回転をリセット
 void Player::Respawn()
 {
+    failurePending_=false;
 	position_ = respawnPosition_;
 	velocity_ = { 0.0f,0.0f,0.0f };
 	rotation_ = { 0.0f,0.0f,0.0f };
