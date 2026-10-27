@@ -282,7 +282,7 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
         // 配置中もプレイ時の追従カメラを継続し、切り替え前の距離と角度を保持する。
         // 右スティックの上下入力とトリガーによるズームもこの経路で処理する。
         player_->SetStageCollisionEnabled(true);
-        player_->UpdateTransform(lightVP);
+        player_->UpdateTransform(lightVP,dxCommon.get());
         camera->SetFov(gameplayCameraController_.GetFov());
         gameplayCameraController_.SetFollowPlayerMode(true);
         gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get());
@@ -290,7 +290,7 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
         player_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
     } else if (currentMode_ != AppMode::GamePlay) {
         player_->SetStageCollisionEnabled(true);
-        player_->UpdateTransform(lightVP);
+        player_->UpdateTransform(lightVP,dxCommon.get());
     }
 }
 

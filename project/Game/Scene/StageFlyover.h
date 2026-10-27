@@ -12,7 +12,9 @@ Pose Evaluate(float seconds, const Vector3& center, float radius, const Pose& de
 
 // 到着演出は物理移動と分離し、着地時にスポーン位置へ正確に戻す。
 namespace StageArrival {
-constexpr float kFlightDuration = 4.8f;
+constexpr float kOrbitDuration = 4.8f;
+constexpr float kLandingDuration = 1.6f;
+constexpr float kFlightDuration = kOrbitDuration + kLandingDuration;
 constexpr float kFadeDuration = .45f;
 struct Frame {
     StageFlyover::Pose camera;

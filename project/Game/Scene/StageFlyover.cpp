@@ -43,18 +43,21 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     float radius, const Vector3& spawn, const StageFlyover::Pose& destination, const Vector3& spawnRotation) {
     seconds = (std::max)(seconds,0.0f);
     const float t = std::clamp(seconds/kFlightDuration,0.0f,1.0f);
-    const float travel = Smooth(t);
-    const float remaining = 1-travel;
-    // 通常視点と同じ側から進入する。舞台の大きさだけで遠ざかり続けない。
-    float yaw = destination.rotation.y;
-    const float approachX = center.x-spawn.x, approachZ = center.z-spawn.z;
-    if (approachX*approachX+approachZ*approachZ > 4) yaw = std::atan2(approachX,approachZ);
-    const Vector3 back{-std::sin(yaw),0,-std::cos(yaw)};
-    const Vector3 right{std::cos(yaw),0,-std::sin(yaw)};
-    const float height = std::clamp(center.y+radius+8-spawn.y,18.0f,36.0f);
-    const float arc = std::sin(t*3.14159265359f);
-    const Vector3 player = t >= 1 ? spawn : Vector3{spawn.x+back.x*14*remaining+right.x*3*arc,
-        spawn.y+height*remaining,spawn.z+back.z*14*remaining+right.z*3*arc};
+    // 主人公そのものが舞台中心を一周する。周回を終えてから開始地点へ降りる。
+    constexpr float twoPi=6.28318530718f;
+    const float orbitProgress=Smooth(seconds/kOrbitDuration);
+    const float landing=Smooth((seconds-kOrbitDuration)/kLandingDuration);
+    const float dx=spawn.x-center.x,dz=spawn.z-center.z;
+    const float spawnRadius=std::sqrt(dx*dx+dz*dz);
+    const float startAngle=spawnRadius>.1f ? std::atan2(dx,dz) : destination.rotation.y+3.14159265359f;
+    const float angle=startAngle+twoPi*orbitProgress;
+    const float ringRadius=(std::max)(spawnRadius+5,std::clamp(radius,10.0f,36.0f));
+    const float height=(std::max)(spawn.y+12,center.y+(std::min)(radius,32.0f)+6);
+    const Vector3 orbit{center.x+std::sin(angle)*ringRadius,height,center.z+std::cos(angle)*ringRadius};
+    const Vector3 player=t>=1 ? spawn : Vector3{Mix(orbit.x,spawn.x,landing),
+        Mix(orbit.y,spawn.y,landing),Mix(orbit.z,spawn.z,landing)};
+    const float yaw=angle+1.57079632679f;
+    const Vector3 right{std::cos(angle),0,-std::sin(angle)};
     // 肩越しに追従し、注視点を少しステージへ寄せる。プレイヤーは手前の左寄り。
     const Vector3 torso{player.x,player.y+.8f,player.z};
     const Vector3 away{torso.x-center.x,torso.y-center.y,torso.z-center.z};
@@ -67,8 +70,7 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     const Vector3 direction{target.x-follow.x,target.y-follow.y,target.z-follow.z};
     const float horizontal = std::sqrt(direction.x*direction.x+direction.z*direction.z);
     const Vector3 rotation{-std::atan2(direction.y,horizontal),std::atan2(direction.x,direction.z),0};
-    // 最後の三割で通常視点へ接続し、着地時のカメラの飛びを防ぐ。
-    const float landing = Smooth((t-.68f)/.32f);
+    // 一周完了後の着地フェーズだけで通常視点へつなぐ。
     StageFlyover::Pose camera{{Mix(follow.x,destination.position.x,landing),
         Mix(follow.y,destination.position.y,landing),Mix(follow.z,destination.position.z,landing)},
         {MixAngle(rotation.x,destination.rotation.x,landing),
@@ -78,8 +80,8 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     const float fade = Smooth((seconds-kFlightDuration)/kFadeDuration);
     // モデルの正面は-Z。進入方向へ向け、胴体を寝かせて飛行姿勢にする。
     // 終盤でバンクも解き、入力解禁前に元の立ち姿へ正確に戻す。
-    const float upright = Smooth((t-.58f)/.42f);
-    const Vector3 flightRotation{-.95f,yaw+3.14159265359f,.18f*std::sin(t*6.28318530718f)};
+    const float upright = landing;
+    const Vector3 flightRotation{-.95f,yaw+3.14159265359f,-.3f*std::sin(orbitProgress*3.14159265359f)};
     const Vector3 playerRotation = t >= 1 ? spawnRotation : Vector3{
         Mix(flightRotation.x,spawnRotation.x,upright),
         MixAngle(flightRotation.y,spawnRotation.y,upright),

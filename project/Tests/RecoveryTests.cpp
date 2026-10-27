@@ -93,7 +93,10 @@ int main() {
         for (float radius : {3.0f,30.0f,80.0f}) for (float yaw : {0.0f,1.6f,3.1f}) {
             const StageFlyover::Pose end{{4-std::sin(yaw)*12,9, -std::cos(yaw)*12},{.55f,yaw,0},.67f};
             float lastHeight=1000;
-            for (int i=0;i<=480;++i) {
+            const auto first=StageArrival::Evaluate(0,center,radius,spawn,end);
+            float lastAngle=std::atan2(first.playerPosition.x-center.x,first.playerPosition.z-center.z);
+            float playerSweep=0;
+            for (int i=0;i<=640;++i) {
                 const float time=i*.01f;
                 const auto frame=StageArrival::Evaluate(time,center,radius,spawn,end);
                 assert(std::isfinite(frame.camera.position.x) && std::isfinite(frame.camera.rotation.y));
@@ -101,11 +104,17 @@ int main() {
                 lastHeight=frame.playerPosition.y;
                 assert(frame.cloudAlpha>=0 && frame.cloudAlpha<=1 && frame.letterbox>=0 && frame.letterbox<=1);
                 assert(frame.landed==(time>=StageArrival::kFlightDuration));
-                if (time<StageArrival::kFlightDuration*.68f) {
+                if (time<=StageArrival::kOrbitDuration) {
+                    const float angle=std::atan2(frame.playerPosition.x-center.x,frame.playerPosition.z-center.z);
+                    playerSweep+=std::remainder(angle-lastAngle,6.28318530718f);
+                    lastAngle=angle;
+                    assert(std::abs(frame.playerPosition.y-first.playerPosition.y)<.001f);
+
                     assert(visible({frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z},frame.camera));
                     assert(visible(center,frame.camera));
                 }
             }
+            assert(std::abs(playerSweep-6.28318530718f)<.002f);
             const auto landed=StageArrival::Evaluate(StageArrival::kFlightDuration,center,radius,spawn,end);
             const auto before=StageArrival::Evaluate(StageArrival::kFlightDuration-.001f,center,radius,spawn,end);
             assert(landed.landed && !landed.finished && landed.cloudAlpha==0);
@@ -117,15 +126,15 @@ int main() {
             assert(std::abs(std::remainder(before.camera.rotation.y-end.rotation.y,6.28318530718f))<.002f);
             assert(std::abs(before.camera.fov-end.fov)<.002f);
             assert(std::abs(before.playerPosition.y-spawn.y)<.002f);
-            assert(StageArrival::Evaluate(6,center,radius,spawn,end).finished);
+            assert(StageArrival::Evaluate(StageArrival::kFlightDuration+StageArrival::kFadeDuration,center,radius,spawn,end).finished);
             const auto restart=StageArrival::Evaluate(-1,center,radius,spawn,end);
             assert(!restart.landed && restart.cloudAlpha==1);
         }
     }
-    std::cout << "Stage arrival: 27 layouts, foreground/background framing, descent, exact landing and restart passed\n";
+    std::cout << "Stage arrival: 27 layouts, player full orbit, foreground/background framing, descent and landing passed\n";
     // モデル本体が前傾・バンクし、着地では非ゼロの元姿勢にも正確に復帰する。
     const Vector3 originalRotation{.12f,3.05f,-.08f};
-    const auto flight=StageArrival::Evaluate(1,stageCenter,30,spawn,destination,originalRotation);
+    const auto flight=StageArrival::Evaluate(StageArrival::kOrbitDuration*.5f,stageCenter,30,spawn,destination,originalRotation);
     assert(flight.playerRotation.x<-.8f && std::abs(flight.playerRotation.z)>.1f);
     const auto touchdown=StageArrival::Evaluate(StageArrival::kFlightDuration,stageCenter,30,spawn,destination,originalRotation);
     assert(touchdown.playerRotation.x==originalRotation.x && touchdown.playerRotation.y==originalRotation.y &&
@@ -136,7 +145,7 @@ int main() {
     assert(std::abs(approach.playerRotation.z-originalRotation.z)<.001f);
     for (float step : {1.0f/30,1.0f/60,1.0f/144,.15f}) {
         auto previous=StageArrival::Evaluate(0,stageCenter,30,spawn,destination,originalRotation);
-        for (float time=step;time<5.3f;time+=step) {
+        for (float time=step;time<StageArrival::kFlightDuration+StageArrival::kFadeDuration;time+=step) {
             const auto pose=StageArrival::Evaluate(time,stageCenter,30,spawn,destination,originalRotation);
             assert(std::isfinite(pose.playerRotation.y));
             assert(std::abs(std::remainder(pose.playerRotation.y-previous.playerRotation.y,6.28318530718f))<.5f);

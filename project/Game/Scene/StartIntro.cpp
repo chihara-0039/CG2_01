@@ -102,13 +102,13 @@ void StartIntro::UpdateSprites() {
         bars_[i]->SetColor({0,0,0,.88f}); bars_[i]->Update();
     }
     // 半透明の雲が左右へ流れ、奥のステージと手前のプレイヤーを開示する。
-    const float spread = std::clamp(elapsed_/1.25f,0.0f,1.0f);
+    const float spread = std::clamp(elapsed_/.65f,0.0f,1.0f);
     for (size_t i=0;i<clouds_.size();++i) {
         const float angle = static_cast<float>(i)*.78539816339f;
-        clouds_[i]->SetPosition({640+std::cos(angle)*(170+750*spread),
-            360+std::sin(angle)*(100+440*spread)});
-        clouds_[i]->SetSize({1100,720});
-        clouds_[i]->SetColor({.92f,.97f,1,frame_.cloudAlpha*.8f});
+        clouds_[i]->SetPosition({640+std::cos(angle)*(550+750*spread),
+            360+std::sin(angle)*(310+440*spread)});
+        clouds_[i]->SetSize({750,420});
+        clouds_[i]->SetColor({.92f,.97f,1,frame_.cloudAlpha*.25f});
         clouds_[i]->Update();
     }
 }
@@ -119,7 +119,7 @@ void StartIntro::Draw() {
 }
 
 int StartIntro::ConsumeFlightCloud() {
-    if (!BlocksInput() || elapsed_<=0 || elapsed_>3.0f) return 0;
+    if (!BlocksInput() || elapsed_<=0 || elapsed_>StageArrival::kOrbitDuration) return 0;
     if (lastCloudAt_>=0 && elapsed_-lastCloudAt_<.12f) return 0;
     const int kind=lastCloudAt_<0 ? 2 : 1;
     // 低FPSや復帰時に過去の発生分を一度に積まない。

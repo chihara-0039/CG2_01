@@ -217,7 +217,7 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
             player_->SetPosition(startIntro_->GetPlayerPosition());
             player_->SetRotation(startIntro_->GetPlayerRotation());
             player_->SetCamera(camera->GetViewMatrix(),camera->GetProjectionMatrix());
-            player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix());
+            player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix(),dxCommon.get());
         }
         startIntroPending_ = false;
     }
@@ -424,7 +424,7 @@ void GameRuntime::RunGamePlayScene() {
             player_->SetPosition(startIntro_->GetPlayerPosition());
             player_->SetRotation(startIntro_->GetPlayerRotation());
             player_->SetCamera(camera->GetViewMatrix(),camera->GetProjectionMatrix());
-            player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix());
+            player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix(),dxCommon.get());
         }
         const int cloudKind = startIntro_->ConsumeFlightCloud();
         if (cloudKind && particleManager && player_) {

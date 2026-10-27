@@ -89,7 +89,7 @@ public:
     //  UpdateTransform : Object3d の行列のみを更新する (物理計算なし)。
     //  GamePlay 以外のモード (StageEditor など) で位置だけ反映したい場合に使う。
     // -------------------------------------------------------
-    void UpdateTransform(const Matrix4x4& lightVP);
+    void UpdateTransform(const Matrix4x4& lightVP, DirectXCommon* dxCommon);
 
     // -------------------------------------------------------
     //  CrumbleUpdate : 崩れる足場ブロック (Crumble) の更新処理。
