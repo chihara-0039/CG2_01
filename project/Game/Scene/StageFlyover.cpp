@@ -63,19 +63,31 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     const Vector3 away{torso.x-center.x,torso.y-center.y,torso.z-center.z};
     const float length = (std::max)(std::sqrt(away.x*away.x+away.y*away.y+away.z*away.z),.001f);
     const Vector3 axis{away.x/length,away.y/length,away.z/length};
-    // 舞台→主人公の軸上から追うため、大ステージでも舞台だけ画面外へ落ちない。
-    const Vector3 follow{torso.x+axis.x*9+right.x*3,torso.y+axis.y*9+1.2f,
-        torso.z+axis.z*9+right.z*3};
-    const Vector3 target{torso.x-axis.x*3,torso.y-axis.y*3,torso.z-axis.z*3};
+    // 周回中は約18ユニット後方から全身を見せる。手前の人物が舞台を覆わない距離を取る。
+    const Vector3 offset{axis.x*18+right.x*4.5f,axis.y*18+2,
+        axis.z*18+right.z*4.5f};
+    const Vector3 endOffset{destination.position.x-spawn.x,
+        destination.position.y-(spawn.y+.8f),destination.position.z-spawn.z};
+    const float followDistance=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);
+    const float endDistance=std::sqrt(endOffset.x*endOffset.x+endOffset.y*endOffset.y+endOffset.z*endOffset.z);
+    // 位置を直線補間すると、反対側の通常視点へ戻る途中で主人公を横切る。
+    // 主人公を中心に距離・方位・仰角を補間し、着地中の急な接近も防ぐ。
+    const float cameraYaw=MixAngle(std::atan2(offset.x,offset.z),std::atan2(endOffset.x,endOffset.z),landing);
+    const float elevation=Mix(std::atan2(offset.y,std::sqrt(offset.x*offset.x+offset.z*offset.z)),
+        std::atan2(endOffset.y,std::sqrt(endOffset.x*endOffset.x+endOffset.z*endOffset.z)),landing);
+    const float distance=Mix(followDistance,endDistance,landing);
+    const Vector3 follow{torso.x+std::sin(cameraYaw)*std::cos(elevation)*distance,
+        torso.y+std::sin(elevation)*distance,torso.z+std::cos(cameraYaw)*std::cos(elevation)*distance};
+    const Vector3 target{torso.x-axis.x*4.5f*(1-landing),
+        torso.y-axis.y*4.5f*(1-landing),torso.z-axis.z*4.5f*(1-landing)};
     const Vector3 direction{target.x-follow.x,target.y-follow.y,target.z-follow.z};
     const float horizontal = std::sqrt(direction.x*direction.x+direction.z*direction.z);
     const Vector3 rotation{-std::atan2(direction.y,horizontal),std::atan2(direction.x,direction.z),0};
-    // 一周完了後の着地フェーズだけで通常視点へつなぐ。
-    StageFlyover::Pose camera{{Mix(follow.x,destination.position.x,landing),
-        Mix(follow.y,destination.position.y,landing),Mix(follow.z,destination.position.z,landing)},
+    // 少し狭い画角にし、手前の人物だけが強調される広角感を抑える。
+    StageFlyover::Pose camera{follow,
         {MixAngle(rotation.x,destination.rotation.x,landing),
         MixAngle(rotation.y,destination.rotation.y,landing),MixAngle(0,destination.rotation.z,landing)},
-        Mix(.95f,destination.fov,landing)};
+        Mix(.90f,destination.fov,landing)};
     if (t >= 1) camera = destination;
     const float fade = Smooth((seconds-kFlightDuration)/kFadeDuration);
     // モデルの正面は-Z。進入方向へ向け、胴体を寝かせて飛行姿勢にする。

@@ -105,6 +105,13 @@ int main() {
                 lastHeight=frame.playerPosition.y;
                 assert(frame.cloudAlpha>=0 && frame.cloudAlpha<=1 && frame.letterbox>=0 && frame.letterbox<=1);
                 assert(frame.landed==(time>=StageArrival::kFlightDuration));
+                const Vector3 torso{frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z};
+                const Vector3 offset{frame.camera.position.x-torso.x,frame.camera.position.y-torso.y,frame.camera.position.z-torso.z};
+                const float clearance=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);
+                const float ex=end.position.x-spawn.x,ey=end.position.y-(spawn.y+.8f),ez=end.position.z-spawn.z;
+                // 着地でカメラが反対側へ移っても、主人公を横切って接写にならない。
+                assert(clearance >= (std::min)(18.0f,std::sqrt(ex*ex+ey*ey+ez*ez))-.002f);
+                assert(visible(torso,frame.camera));
                 if (time<=StageArrival::kOrbitDuration) {
                     const float angle=std::atan2(frame.playerPosition.x-center.x,frame.playerPosition.z-center.z);
                     playerSweep+=std::remainder(angle-lastAngle,6.28318530718f);
@@ -113,6 +120,12 @@ int main() {
 
                     assert(visible({frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z},frame.camera));
                     assert(visible(center,frame.camera));
+                    assert(clearance>18.0f);
+                    // 高さ2ユニットの基準モデルで、画面高の15%以下を目安にする。
+                    const float sy=std::sin(frame.camera.rotation.y),cy=std::cos(frame.camera.rotation.y);
+                    const float sp=std::sin(frame.camera.rotation.x),cp=std::cos(frame.camera.rotation.x);
+                    const float depth=-offset.x*sy*cp+offset.y*sp-offset.z*cy*cp;
+                    assert(2.0f/(2*depth*std::tan(frame.camera.fov/2))<.15f);
                 }
             }
             assert(std::abs(playerSweep-6.28318530718f)<.002f);
