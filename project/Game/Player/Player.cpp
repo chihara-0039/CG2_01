@@ -448,12 +448,14 @@ void Player::UpdateTransform(const Matrix4x4& lightVP, DirectXCommon* dxCommon)
 	if (isSkinned_ && skinnedObject_) {
 		skinnedObject_->SetPosition(position_);
 		skinnedObject_->SetRotation(rotation_);
+        skinnedObject_->SetScale({presentationScale_,presentationScale_,presentationScale_});
 		// 演出中もGPUスキニング頂点を生成する。nullptrでは着地まで未生成になる。
 		skinnedObject_->Update(dxCommon, lightVP);
 	} else if (object_) {
         // 物理更新を止めた到着演出でも、外部指定の座標を描画へ反映する。
         object_->SetPosition(position_);
         object_->SetRotation(rotation_);
+        object_->SetScale({presentationScale_,presentationScale_,presentationScale_});
 		object_->Update(lightVP);
 	}
 }
@@ -840,6 +842,7 @@ bool Player::CheckExternalCollision(const Vector3& pos) const {
 void Player::Respawn()
 {
     failurePending_=false;
+    presentationScale_=1;
 	position_ = respawnPosition_;
 	velocity_ = { 0.0f,0.0f,0.0f };
 	rotation_ = { 0.0f,0.0f,0.0f };

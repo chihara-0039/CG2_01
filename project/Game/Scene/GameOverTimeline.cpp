@@ -36,7 +36,8 @@ GameOverTimeline::Letter GameOverTimeline::EvaluateLetter(float seconds,int inde
     const float t=std::clamp((seconds-2.1f-static_cast<float>(std::clamp(index,0,7))*.055f)/.42f,0.0f,1.0f);
     const float ease=1-std::pow(1-t,3.0f);
     const float rebound=std::sin(t*3.14159265359f)*(1-t);
-    return {Ease(t*2),-65*(1-ease)+12*rebound,1+.28f*(1-ease),-.12f*(1-ease)};
+    return {Ease(t*2),35*(1-ease)-18*rebound,1+.5f*(1-ease),
+        (index%2==0 ? -.15f : .15f)*(1-ease)};
 }
 GameOverTimeline::Pose GameOverTimeline::EvaluatePose(float seconds,bool fall,
     const Vector3& initial,const Vector3& rotation,const Vector3& cameraPosition,const Vector3& cameraRotation,float fov) {
@@ -47,11 +48,11 @@ GameOverTimeline::Pose GameOverTimeline::EvaluatePose(float seconds,bool fall,
     // ヒットストップ後に小さく弾かれる。落下は徐々に速く沈み、カメラが見送る。
     const float kick=fall ? 0.0f : 1.2f*m;
     position.x-=std::sin(yaw)*kick; position.z-=std::cos(yaw)*kick;
-    position.y+=fall ? -7*m*m : .95f*std::sin(m*3.14159265359f);
-    body.z+=m*(fall ? 3.2f : 1.65f); body.x+=m*(fall ? .4f : -.25f);
-    const float orbit=yaw+.38f*m;
+    position.y+=fall ? -9*m*m : 1.4f*std::sin(m*3.14159265359f)-2*Ease((seconds-.95f)/1.0f);
+    body.z+=m*(fall ? 5.4f : 3.8f); body.x+=m*(fall ? .5f : -.4f);
+    const float orbit=yaw+.15f*m;
     const Vector3 target{position.x,initial.y+(position.y-initial.y)*(fall ? .35f : 1.0f)+.4f,position.z};
-    const Vector3 end{initial.x-std::sin(orbit)*7,initial.y+3.2f,initial.z-std::cos(orbit)*7};
+    const Vector3 end{initial.x-std::sin(orbit)*10,initial.y+5,initial.z-std::cos(orbit)*10};
     const float shakeTime=(std::max)(seconds-kHitStop,0.0f);
     const float shake=seconds<=kHitStop ? 0.0f : .055f*std::exp(-shakeTime*9);
     const Vector3 cam{cameraPosition.x+(end.x-cameraPosition.x)*b+std::sin(shakeTime*93)*shake,
@@ -62,6 +63,6 @@ GameOverTimeline::Pose GameOverTimeline::EvaluatePose(float seconds,bool fall,
     const float aimYaw=std::atan2(d.x,d.z);
     const Vector3 aim{cameraRotation.x+(pitch-cameraRotation.x)*b,
         cameraRotation.y+std::remainder(aimYaw-cameraRotation.y,6.28318530718f)*b,
-        cameraRotation.z+.13f*m};
-    return {position,body,cam,aim,fov+(.62f-fov)*b};
+        cameraRotation.z+.035f*m};
+    return {position,body,cam,aim,fov+(.72f-fov)*b,1-.75f*Ease((seconds-.65f)/1.4f)};
 }

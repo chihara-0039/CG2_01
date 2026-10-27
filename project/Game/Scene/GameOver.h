@@ -12,7 +12,7 @@
 class GameOver {
 public:
     using Action=GameOverTimeline::Action;
-    void Initialize(SpriteCommon* common, const std::array<uint32_t,8>& textures);
+    void Initialize(SpriteCommon* common, const std::array<uint32_t,9>& textures);
     void Begin(Camera* camera, const Vector3& position, const Vector3& rotation, bool fall);
     Action Update(Camera* camera, const Input& input, bool visible);
     void Draw();
@@ -22,6 +22,7 @@ public:
     bool IsShowingFailure() const { return flow_.Active() && !flow_.Revealing(); }
     const Vector3& GetPosition() const { return position_; }
     const Vector3& GetRotation() const { return rotation_; }
+    float GetPlayerScale() const { return playerScale_; }
 private:
     void UpdateSprites();
     Sound::SoundData MakeSound(int kind);
@@ -30,7 +31,6 @@ private:
     std::array<std::unique_ptr<Sprite>,5> labels_;
     std::array<std::unique_ptr<Sprite>,8> letters_;
     std::array<std::unique_ptr<Sprite>,24> sparks_;
-    std::array<std::unique_ptr<Sprite>,2> borders_;
     std::unique_ptr<Sprite> backdrop_, sigil_;
     std::unique_ptr<Sprite> flash_;
     std::unique_ptr<Sprite> selection_;
@@ -44,4 +44,5 @@ private:
     GameOverTimeline::Frame frame_{};
     bool fall_=false, titleSoundPlayed_=false;
     float selectionY_=425;
+    float playerScale_=1;
 };

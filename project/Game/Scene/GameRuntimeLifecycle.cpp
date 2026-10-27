@@ -295,7 +295,8 @@ void GameRuntime::Initialize() {
         textureManager->LoadTexture("Resources/UI/gameover/controls.png"),
         textureManager->LoadTexture("Resources/UI/gameover/background.png"),
         textureManager->LoadTexture("Resources/UI/gameover/sigil.png"),
-        textureManager->LoadTexture("Resources/UI/gameover/selection.png")});
+        textureManager->LoadTexture("Resources/UI/gameover/selection.png"),
+        textureManager->LoadTexture("Resources/UI/gameover/sparkle.png")});
     startIntro_ = std::make_unique<StartIntro>();
     startIntro_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/arrival_cloud.png"));
 

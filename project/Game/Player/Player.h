@@ -110,6 +110,7 @@ public:
 
     // ── 座標・回転 ────────────────────────────────────────
 
+    void SetPresentationScale(float scale) { presentationScale_=scale; }
     void SetPosition(const Vector3& pos) { position_ = pos; }
     const Vector3& GetPosition() const   { return position_; }
     bool IsGrounded() const { return isGrounded_; }
@@ -258,6 +259,7 @@ private:
     Vector3 rotation_ = { 0, 0, 0 }; // 回転 (主に Y 軸: 向き)
     Vector3 velocity_ = { 0, 0, 0 }; // 速度 (重力・ジャンプ・移動の合算)
     const std::vector<WorldCollisionBox>* externalCollisionBoxes_ = nullptr; ///< Blender配置物などの外部当たり判定。所有しない。
+    float presentationScale_=1;
     bool failurePending_ = false;
     Vector3 respawnPosition_ = { 0.0f, 1.5f, 0.0f }; // リスポーン地点
 

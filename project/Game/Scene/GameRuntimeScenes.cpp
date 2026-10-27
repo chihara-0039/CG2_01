@@ -240,7 +240,10 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
 }
 
 void GameRuntime::OnSceneExited(SceneType sceneType) {
-    if (sceneType==SceneType::GamePlay && gameOver_) gameOver_->Cancel(camera.get());
+    if (sceneType==SceneType::GamePlay && gameOver_) {
+        gameOver_->Cancel(camera.get());
+        if (player_) player_->SetPresentationScale(1);
+    }
     if (sceneType == SceneType::GamePlay && startIntro_) {
         if (startIntro_->BlocksInput() && player_) {
             player_->SetPosition(startIntro_->GetSpawnPosition());
@@ -422,6 +425,7 @@ void GameRuntime::RunGamePlayScene() {
             sceneFadePhase_==SceneFadePhase::None && !IsWindowInactive());
         if (gameOver_->IsShowingFailure() && player_) {
             player_->SetPosition(gameOver_->GetPosition()); player_->SetRotation(gameOver_->GetRotation());
+            player_->SetPresentationScale(gameOver_->GetPlayerScale());
             player_->SetCamera(camera->GetViewMatrix(),camera->GetProjectionMatrix());
             player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix(),dxCommon.get());
         }

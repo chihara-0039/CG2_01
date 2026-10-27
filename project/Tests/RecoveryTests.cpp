@@ -199,7 +199,7 @@ int main() {
     for (bool fall : {false,true}) {
         const Vector3 initial{5,2,4},body{0,3.1f,0},cam{9,8,-9},aim{.4f,3.1f,0};
         const auto frozen=GameOverTimeline::EvaluatePose(GameOverTimeline::kHitStop,fall,initial,body,cam,aim,.8f);
-        assert(frozen.position.y==initial.y && frozen.cameraPosition.x==cam.x && frozen.fov==.8f);
+        assert(frozen.position.y==initial.y && frozen.cameraPosition.x==cam.x && frozen.fov==.8f && frozen.scale==1);
         auto previous=frozen;
         for (int i=19;i<=320;++i) {
             const auto pose=GameOverTimeline::EvaluatePose(static_cast<float>(i)*.01f,fall,initial,body,cam,aim,.8f);
@@ -207,10 +207,13 @@ int main() {
             assert(std::abs(pose.cameraPosition.x-previous.cameraPosition.x)<.5f);
             assert(std::abs(pose.cameraPosition.y-previous.cameraPosition.y)<.5f);
             assert(pose.fov>=.6f && pose.fov<=.8f);
+            assert(pose.scale>=.25f && pose.scale<=1 && pose.scale<=previous.scale);
             previous=pose;
         }
         if (fall) assert(previous.position.y<initial.y-6);
-        else assert(std::abs(previous.position.y-initial.y)<.001f);
+        else assert(std::abs(previous.position.y-(initial.y-2))<.001f);
+        assert(previous.scale==.25f);
+        assert(GameOverTimeline::EvaluatePose(0,fall,initial,body,cam,aim,.8f).scale==1);
     }
     std::cout << "Game over: hit stop, full iris coverage, guarded input, retry/reveal, stage select and restart passed\n";
     const float cueTimes[] = {0, 1, 2, 3};

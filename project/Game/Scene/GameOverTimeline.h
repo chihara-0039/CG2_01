@@ -17,7 +17,7 @@ Frame Evaluate(float seconds);
 float RetryRadius(float seconds);
 struct Letter { float alpha, offsetY, scale, rotation; };
 Letter EvaluateLetter(float seconds, int index);
-struct Pose { Vector3 position, rotation, cameraPosition, cameraRotation; float fov; };
+struct Pose { Vector3 position, rotation, cameraPosition, cameraRotation; float fov, scale; };
 // 敵接触と落下で異なる芝居を、同じ時間軸でカメラへ同期する。
 Pose EvaluatePose(float seconds,bool fall,const Vector3& position,const Vector3& rotation,
     const Vector3& cameraPosition,const Vector3& cameraRotation,float fov);

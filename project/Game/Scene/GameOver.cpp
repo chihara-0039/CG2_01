@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstring>
 
-void GameOver::Initialize(SpriteCommon* common,const std::array<uint32_t,8>& textures) {
+void GameOver::Initialize(SpriteCommon* common,const std::array<uint32_t,9>& textures) {
     const auto make=[common](uint32_t texture) {
         auto sprite=std::make_unique<Sprite>(); sprite->Initialize(common,texture); return sprite;
     };
@@ -15,8 +15,7 @@ void GameOver::Initialize(SpriteCommon* common,const std::array<uint32_t,8>& tex
         letters_[i]=make(textures[0]); letters_[i]->SetAnchorPoint({.5f,.5f});
         letters_[i]->SetTextureRect({static_cast<float>(i)*144,0},{144,192});
     }
-    for (auto& spark:sparks_) { spark=make(0); spark->SetAnchorPoint({.5f,.5f}); }
-    for (auto& border:borders_) { border=make(0); border->SetAnchorPoint({.5f,.5f}); }
+    for (auto& spark:sparks_) { spark=make(textures[8]); spark->SetAnchorPoint({.5f,.5f}); }
     backdrop_=make(textures[5]); sigil_=make(textures[6]); sigil_->SetAnchorPoint({.5f,.5f});
     flash_=make(0); selection_=make(textures[7]); selection_->SetAnchorPoint({.5f,.5f});
     sound_.Initialize(); failureSound_=MakeSound(0); titleSound_=MakeSound(1);
@@ -34,14 +33,14 @@ Sound::SoundData GameOver::MakeSound(int kind) {
     for (int i=0;i<samples;++i) {
         const float time=static_cast<float>(i)/44100;
         const float t=time/duration;
-        const float note=kind==0 ? (t<.22f ? 392.0f : t<.45f ? 311.13f : 196.0f)
-            : kind==1 ? 261.63f : kind==2 ? 740.0f : (t<.33f ? 523.25f : t<.66f ? 659.25f : 783.99f);
+        const float note=kind==0 ? (t<.2f ? 415.3f : t<.43f ? 329.63f : t<.65f ? 246.94f : 164.81f)
+            : kind==1 ? 523.25f : kind==2 ? 740.0f : (t<.33f ? 523.25f : t<.66f ? 659.25f : 783.99f);
         phase+=6.28318530718*note/44100;
         const float sine=static_cast<float>(std::sin(phase));
         const float harmonic=static_cast<float>(std::sin(phase*2.002));
         const float thud=std::sin(time*95.0f*6.28318530718f)*std::exp(-time*24);
         const float envelope=(std::min)(time/.009f,1.0f)*(1-t)*(1-t);
-        const float wave=kind==0 ? sine*.26f+thud*.6f : sine*.3f+harmonic*.09f;
+        const float wave=kind==0 ? sine*.24f+thud*.25f : sine*.3f+harmonic*.09f;
         const int16_t sample=static_cast<int16_t>(wave*envelope*16000);
         std::memcpy(data.buffer.data()+i*sizeof(sample),&sample,sizeof(sample));
     }
@@ -50,7 +49,7 @@ Sound::SoundData GameOver::MakeSound(int kind) {
 void GameOver::Begin(Camera* camera,const Vector3& position,const Vector3& rotation,bool fall) {
     initialPosition_=position_=position; initialRotation_=rotation_=rotation;
     cameraPosition_=camera->GetPosition(); cameraRotation_=camera->GetRotation(); cameraFov_=camera->GetFov();
-    flow_.Begin(); fall_=fall; titleSoundPlayed_=false; selectionY_=425;
+    flow_.Begin(); fall_=fall; titleSoundPlayed_=false; selectionY_=425; playerScale_=1;
     frame_=GameOverTimeline::Evaluate(0);
     lastUpdate_=std::chrono::steady_clock::now();
     sound_.StopAllSoundEffects(); sound_.SoundPlay(failureSound_,.65f);
@@ -69,7 +68,7 @@ GameOver::Action GameOver::Update(Camera* camera,const Input& input,bool visible
     frame_=GameOverTimeline::Evaluate(flow_.Elapsed());
     const auto pose=GameOverTimeline::EvaluatePose(flow_.Elapsed(),fall_,initialPosition_,initialRotation_,
         cameraPosition_,cameraRotation_,cameraFov_);
-    position_=pose.position; rotation_=pose.rotation;
+    position_=pose.position; rotation_=pose.rotation; playerScale_=pose.scale;
     camera->SetPosition(pose.cameraPosition); camera->SetRotation(pose.cameraRotation);
     camera->SetFov(pose.fov); camera->Update();
     selectionY_+=(flow_.Selected()==0 ? 425-selectionY_ : 505-selectionY_)*(1-std::exp(-delta*18));
@@ -112,9 +111,9 @@ void GameOver::UpdateSprites() {
     const float backgroundAlpha=visible ? std::clamp((time-1.95f)/.4f,0.0f,1.0f) : 0;
     backdrop_->SetPosition({0,0}); backdrop_->SetSize({1280,720});
     backdrop_->SetColor({1,1,1,backgroundAlpha}); backdrop_->Update();
-    sigil_->SetPosition({640,250}); sigil_->SetSize({470,470}); sigil_->SetRotation(time*.055f);
-    sigil_->SetColor({.65f,.78f,1,.2f*backgroundAlpha}); sigil_->Update();
-    // 金属調の文字を一字ずつ落とし、わずかな跳ねで静止させる。
+    sigil_->SetPosition({640,310}); sigil_->SetSize({1000,720}); sigil_->SetRotation(time*.035f);
+    sigil_->SetColor({.7f,.85f,1,.65f*backgroundAlpha}); sigil_->Update();
+    // 丸い文字が手前から一字ずつ跳ね、星空へ浮かぶ。
     for (size_t i=0;i<letters_.size();++i) {
         const auto letter=GameOverTimeline::EvaluateLetter(time,static_cast<int>(i));
         const float spacing=static_cast<float>(i)*92+(i>=4 ? 30.0f : 0.0f);
@@ -131,20 +130,22 @@ void GameOver::UpdateSprites() {
         labels_[i]->SetColor({1,1,1,alpha*dim}); labels_[i]->Update();
     }
     selection_->SetPosition({640,selectionY_}); selection_->SetSize({670,82});
-    selection_->SetColor({1,1,1,alpha*(.88f+.08f*std::sin(time*3))}); selection_->Update();
-    for (size_t i=0;i<borders_.size();++i) {
-        borders_[i]->SetPosition({640,i==0 ? 347.0f : 574.0f});
-        borders_[i]->SetSize({520*alpha,1}); borders_[i]->SetColor({.65f,.56f,.33f,.35f*alpha}); borders_[i]->Update();
-    }
-    // 暗転に吸い込まれる金色の欠片。接触点のフラッシュと幕を視覚的につなぐ。
+    selection_->SetColor({1,1,1,alpha*(.88f+.08f*std::sin(time*2.5f))}); selection_->Update();
+    // 光芒を持つ星がゆっくり漂う。失敗時の破片も同じ星の光へつなぐ。
     const float burst=std::clamp((time-.18f)/1.15f,0.0f,1.0f);
     for (size_t i=0;i<sparks_.size();++i) {
-        const float angle=static_cast<float>(i)*2.39996323f;
+        const float index=static_cast<float>(i);
+        const float angle=index*2.39996323f;
+        const bool menu=time>=1.95f;
         const float distance=(45+static_cast<float>(i%5)*22)*std::sin(burst*3.14159265359f);
-        sparks_[i]->SetPosition({640+std::cos(angle+burst*.8f)*distance,
-            350+std::sin(angle+burst*.8f)*distance*.7f});
-        sparks_[i]->SetSize({2+5*(1-burst),2+5*(1-burst)}); sparks_[i]->SetRotation(angle+time);
-        sparks_[i]->SetColor({1,.78f,.35f,visible && time>.18f ? (1-burst)*.65f : 0}); sparks_[i]->Update();
+        const float x=menu ? 85+std::fmod(index*173+time*3,1110.0f) : 640+std::cos(angle)*distance;
+        const float y=menu ? 70+std::fmod(index*97+time*2,580.0f) : 350+std::sin(angle)*distance*.7f;
+        const float twinkle=.45f+.35f*std::sin(time*1.7f+index);
+        sparks_[i]->SetPosition({x,y});
+        const float size=menu ? 12+static_cast<float>(i%4)*5 : 30*(1-burst)+8;
+        sparks_[i]->SetSize({size,size}); sparks_[i]->SetRotation(menu ? .15f*std::sin(time*.4f+index) : angle+time);
+        sparks_[i]->SetColor({.8f,.9f,1,visible ? (menu ? backgroundAlpha*twinkle : (1-burst)*.7f) : 0});
+        sparks_[i]->Update();
     }
 
 }
@@ -155,7 +156,6 @@ void GameOver::Draw() {
     backdrop_->Draw(); sigil_->Draw();
     for (auto& spark:sparks_) spark->Draw();
     for (auto& letter:letters_) letter->Draw();
-    for (auto& border:borders_) border->Draw();
     selection_->Draw();
     for (size_t i=1;i<labels_.size();++i) labels_[i]->Draw();
 }
