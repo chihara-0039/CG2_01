@@ -47,12 +47,13 @@ Sound::SoundData StartIntro::MakeTone(bool landing) {
     return data;
 }
 
-void StartIntro::Begin(Camera* camera, const Vector3& center, float radius, const Vector3& spawn) {
+void StartIntro::Begin(Camera* camera, const Vector3& center, float radius, const Vector3& spawn, const Vector3& spawnRotation) {
     elapsed_ = 0; active_ = true; goPending_ = false; windStarted_ = false;
     stageCenter_ = center; stageRadius_ = radius; spawn_ = spawn;
+    spawnRotation_ = spawnRotation; lastCloudAt_ = -1;
     gameCamera_ = {camera->GetPosition(),camera->GetRotation(),camera->GetFov()};
     cameraFarClip_ = camera->GetFarClip();
-    frame_ = StageArrival::Evaluate(0,center,radius,spawn,gameCamera_);
+    frame_ = StageArrival::Evaluate(0,center,radius,spawn,gameCamera_,spawnRotation_);
     camera->SetPosition(frame_.camera.position); camera->SetRotation(frame_.camera.rotation);
     camera->SetFov(frame_.camera.fov);
     camera->SetFarClip((std::max)(cameraFarClip_,radius*6+80)); camera->Update();
@@ -70,7 +71,7 @@ void StartIntro::Update(Camera* camera, bool visible) {
     if (!windStarted_) { sound_.SoundPlay(wind_,.4f); windStarted_ = true; }
     const bool wasLanded = frame_.landed;
     elapsed_ += delta;
-    frame_ = StageArrival::Evaluate(elapsed_,stageCenter_,stageRadius_,spawn_,gameCamera_);
+    frame_ = StageArrival::Evaluate(elapsed_,stageCenter_,stageRadius_,spawn_,gameCamera_,spawnRotation_);
     if (!wasLanded) {
         camera->SetPosition(frame_.camera.position); camera->SetRotation(frame_.camera.rotation);
         camera->SetFov(frame_.camera.fov); camera->Update();
@@ -115,4 +116,13 @@ void StartIntro::Draw() {
     if (!active_) return;
     for (auto& cloud : clouds_) cloud->Draw();
     for (auto& bar : bars_) bar->Draw();
+}
+
+int StartIntro::ConsumeFlightCloud() {
+    if (!BlocksInput() || elapsed_<=0 || elapsed_>3.0f) return 0;
+    if (lastCloudAt_>=0 && elapsed_-lastCloudAt_<.12f) return 0;
+    const int kind=lastCloudAt_<0 ? 2 : 1;
+    // 低FPSや復帰時に過去の発生分を一度に積まない。
+    lastCloudAt_=elapsed_;
+    return kind;
 }

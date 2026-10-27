@@ -17,11 +17,12 @@ constexpr float kFadeDuration = .45f;
 struct Frame {
     StageFlyover::Pose camera;
     Vector3 playerPosition;
+    Vector3 playerRotation;
     float cloudAlpha;
     float letterbox;
     bool landed;
     bool finished;
 };
 Frame Evaluate(float seconds, const Vector3& center, float radius,
-    const Vector3& spawn, const StageFlyover::Pose& destination);
+    const Vector3& spawn, const StageFlyover::Pose& destination, const Vector3& spawnRotation = {});
 }

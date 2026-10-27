@@ -211,9 +211,11 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
             : player_ ? player_->GetPosition() : Vector3{};
         const float dx=maximum.x-minimum.x,dy=maximum.y-minimum.y,dz=maximum.z-minimum.z;
         const float radius = found ? .5f*std::sqrt(dx*dx+dy*dy+dz*dz) : 3.0f;
-        startIntro_->Begin(camera.get(),center,radius,player_ ? player_->GetPosition() : center);
+        startIntro_->Begin(camera.get(),center,radius,player_ ? player_->GetPosition() : center,
+            player_ ? player_->GetRotation() : Vector3{});
         if (player_) {
             player_->SetPosition(startIntro_->GetPlayerPosition());
+            player_->SetRotation(startIntro_->GetPlayerRotation());
             player_->SetCamera(camera->GetViewMatrix(),camera->GetProjectionMatrix());
             player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix());
         }
@@ -239,7 +241,10 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
 
 void GameRuntime::OnSceneExited(SceneType sceneType) {
     if (sceneType == SceneType::GamePlay && startIntro_) {
-        if (startIntro_->BlocksInput() && player_) player_->SetPosition(startIntro_->GetSpawnPosition());
+        if (startIntro_->BlocksInput() && player_) {
+            player_->SetPosition(startIntro_->GetSpawnPosition());
+            player_->SetRotation(startIntro_->GetSpawnRotation());
+        }
         startIntro_->Cancel(camera.get());
     }
     if (sceneType != SceneType::StageSelect) startIntroPending_ = false;
@@ -417,8 +422,13 @@ void GameRuntime::RunGamePlayScene() {
         // 見せるための降下経路。物理更新は着地まで止め、最後に正確なスポーンへ戻す。
         if (wasFlying && player_) {
             player_->SetPosition(startIntro_->GetPlayerPosition());
+            player_->SetRotation(startIntro_->GetPlayerRotation());
             player_->SetCamera(camera->GetViewMatrix(),camera->GetProjectionMatrix());
             player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix());
+        }
+        const int cloudKind = startIntro_->ConsumeFlightCloud();
+        if (cloudKind && particleManager && player_) {
+            particleManager->EmitArrivalCloud(player_->GetPosition(),cloudKind==2);
         }
         if (startIntro_->ConsumeGo()) {
             objectiveGuideStartedAt_ = std::chrono::steady_clock::now();

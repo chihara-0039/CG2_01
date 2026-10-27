@@ -40,7 +40,7 @@ StageFlyover::Pose StageFlyover::Evaluate(float seconds, const Vector3& center,
 }
 
 StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
-    float radius, const Vector3& spawn, const StageFlyover::Pose& destination) {
+    float radius, const Vector3& spawn, const StageFlyover::Pose& destination, const Vector3& spawnRotation) {
     seconds = (std::max)(seconds,0.0f);
     const float t = std::clamp(seconds/kFlightDuration,0.0f,1.0f);
     const float travel = Smooth(t);
@@ -76,6 +76,14 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
         Mix(.95f,destination.fov,landing)};
     if (t >= 1) camera = destination;
     const float fade = Smooth((seconds-kFlightDuration)/kFadeDuration);
-    return {camera,player,1-Smooth(seconds/1.25f),1-fade,
+    // モデルの正面は-Z。進入方向へ向け、胴体を寝かせて飛行姿勢にする。
+    // 終盤でバンクも解き、入力解禁前に元の立ち姿へ正確に戻す。
+    const float upright = Smooth((t-.58f)/.42f);
+    const Vector3 flightRotation{-.95f,yaw+3.14159265359f,.18f*std::sin(t*6.28318530718f)};
+    const Vector3 playerRotation = t >= 1 ? spawnRotation : Vector3{
+        Mix(flightRotation.x,spawnRotation.x,upright),
+        MixAngle(flightRotation.y,spawnRotation.y,upright),
+        Mix(flightRotation.z,spawnRotation.z,upright)};
+    return {camera,player,playerRotation,1-Smooth(seconds/1.25f),1-fade,
         seconds >= kFlightDuration,seconds >= kFlightDuration+kFadeDuration};
 }

@@ -1913,3 +1913,24 @@ void ParticleManager::EmitLandingDust(const Vector3& pos) {
         Particles().push_back(puff);
     }
 }
+
+void ParticleManager::EmitArrivalCloud(const Vector3& pos, bool bank) {
+    // ビルボードを実空間へ置き、カメラの移動に伴う奥行きとモデルとの重なりを作る。
+    const int count=bank ? 14 : 2;
+    for (int i=0;i<count && Particles().size()<kMaxParticles;++i) {
+        const float angle=static_cast<float>(i)*6.28318530718f/static_cast<float>(count);
+        Particle cloud{};
+        cloud.type=Particle::Type::StormCloud;
+        const float radius=bank ? 2.8f : .55f;
+        cloud.transform.translate={pos.x+std::cos(angle)*radius,pos.y+1.2f,
+            pos.z+std::sin(angle)*radius};
+        const float size=bank ? 4.0f : .8f;
+        cloud.transform.scale={size,size*.65f,1};
+        cloud.transform.rotate={0,0,angle};
+        cloud.velocity={std::cos(angle)*.008f,.006f,std::sin(angle)*.008f};
+        cloud.color={.93f,.97f,1,bank ? .55f : .22f};
+        cloud.initialAlpha=cloud.color.w;
+        cloud.maxTime=bank ? 2.4f : .65f;
+        Particles().push_back(cloud);
+    }
+}

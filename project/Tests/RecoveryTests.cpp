@@ -123,6 +123,27 @@ int main() {
         }
     }
     std::cout << "Stage arrival: 27 layouts, foreground/background framing, descent, exact landing and restart passed\n";
+    // モデル本体が前傾・バンクし、着地では非ゼロの元姿勢にも正確に復帰する。
+    const Vector3 originalRotation{.12f,3.05f,-.08f};
+    const auto flight=StageArrival::Evaluate(1,stageCenter,30,spawn,destination,originalRotation);
+    assert(flight.playerRotation.x<-.8f && std::abs(flight.playerRotation.z)>.1f);
+    const auto touchdown=StageArrival::Evaluate(StageArrival::kFlightDuration,stageCenter,30,spawn,destination,originalRotation);
+    assert(touchdown.playerRotation.x==originalRotation.x && touchdown.playerRotation.y==originalRotation.y &&
+        touchdown.playerRotation.z==originalRotation.z);
+    const auto approach=StageArrival::Evaluate(StageArrival::kFlightDuration-.001f,stageCenter,30,spawn,destination,originalRotation);
+    assert(std::abs(approach.playerRotation.x-originalRotation.x)<.001f);
+    assert(std::abs(std::remainder(approach.playerRotation.y-originalRotation.y,6.28318530718f))<.001f);
+    assert(std::abs(approach.playerRotation.z-originalRotation.z)<.001f);
+    for (float step : {1.0f/30,1.0f/60,1.0f/144,.15f}) {
+        auto previous=StageArrival::Evaluate(0,stageCenter,30,spawn,destination,originalRotation);
+        for (float time=step;time<5.3f;time+=step) {
+            const auto pose=StageArrival::Evaluate(time,stageCenter,30,spawn,destination,originalRotation);
+            assert(std::isfinite(pose.playerRotation.y));
+            assert(std::abs(std::remainder(pose.playerRotation.y-previous.playerRotation.y,6.28318530718f))<.5f);
+            previous=pose;
+        }
+    }
+    std::cout << "Flying model: body tilt, bank, continuous orientation and exact standing restoration passed\n";
     const float cueTimes[] = {0, 1, 2, 3};
     for (int cue = 0; cue < 4; ++cue) {
         const auto frame = StartIntroTimeline::Evaluate(cueTimes[cue]);
