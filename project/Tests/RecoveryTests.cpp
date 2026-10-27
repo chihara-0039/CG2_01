@@ -180,14 +180,37 @@ int main() {
         flow.Advance(GameOverTimeline::kRevealTime-.001f); assert(flow.Active());
         flow.Advance(.002f); assert(!flow.Active());
         assert(GameOverTimeline::RetryRadius(GameOverTimeline::kRevealTime)==800);
-        flow.Begin(); flow.Advance(3); flow.MoveSelection();
+        flow.Begin(); flow.Advance(GameOverTimeline::kMenuTime+.1f); flow.MoveSelection();
         assert(flow.Selected()==1 && flow.Confirm(false)==FailureAction::StageSelect);
         assert(flow.Leaving() && flow.Confirm(false)==FailureAction::None);
         flow.Begin(); assert(flow.Selected()==0 && flow.Elapsed()==0);
         assert(flow.Confirm(true)==FailureAction::None);
         flow.Advance(-1); assert(flow.Elapsed()==0);
-        flow.Advance(3); assert(flow.Confirm(true)==FailureAction::StageSelect);
+        flow.Advance(GameOverTimeline::kMenuTime+.1f); assert(flow.Confirm(true)==FailureAction::StageSelect);
         flow.Cancel(); assert(!flow.Active());
+    }
+    // 文字が順番に現れ、表示完了後にだけ操作できる。姿勢・視点の連続性も確認する。
+    for (int letter=0;letter<8;++letter) {
+        const auto hidden=GameOverTimeline::EvaluateLetter(2.0f,letter);
+        const auto settled=GameOverTimeline::EvaluateLetter(GameOverTimeline::kMenuTime,letter);
+        assert(hidden.alpha==0 && settled.alpha==1 && settled.scale==1 && settled.rotation==0);
+    }
+    assert(GameOverTimeline::EvaluateLetter(2.35f,0).alpha>GameOverTimeline::EvaluateLetter(2.35f,7).alpha);
+    for (bool fall : {false,true}) {
+        const Vector3 initial{5,2,4},body{0,3.1f,0},cam{9,8,-9},aim{.4f,3.1f,0};
+        const auto frozen=GameOverTimeline::EvaluatePose(GameOverTimeline::kHitStop,fall,initial,body,cam,aim,.8f);
+        assert(frozen.position.y==initial.y && frozen.cameraPosition.x==cam.x && frozen.fov==.8f);
+        auto previous=frozen;
+        for (int i=19;i<=320;++i) {
+            const auto pose=GameOverTimeline::EvaluatePose(static_cast<float>(i)*.01f,fall,initial,body,cam,aim,.8f);
+            assert(std::isfinite(pose.cameraRotation.y) && std::isfinite(pose.position.y));
+            assert(std::abs(pose.cameraPosition.x-previous.cameraPosition.x)<.5f);
+            assert(std::abs(pose.cameraPosition.y-previous.cameraPosition.y)<.5f);
+            assert(pose.fov>=.6f && pose.fov<=.8f);
+            previous=pose;
+        }
+        if (fall) assert(previous.position.y<initial.y-6);
+        else assert(std::abs(previous.position.y-initial.y)<.001f);
     }
     std::cout << "Game over: hit stop, full iris coverage, guarded input, retry/reveal, stage select and restart passed\n";
     const float cueTimes[] = {0, 1, 2, 3};

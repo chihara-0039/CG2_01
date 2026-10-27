@@ -497,5 +497,15 @@ void GameRuntime::BeginGameOver(bool fall) {
     if (startIntro_) startIntro_->Cancel(camera.get());
     isGamePaused_=false;
     bgmController_.Update(false);
+    if (!fall && particleManager) {
+        // 失敗時の一発だけ。主人公を覆わない小さな金色の破片と衝撃波に絞る。
+        ParticleManager::HitEffectSettings hit{};
+        hit.size=.55f; hit.brightness=.65f; hit.lifeScale=.7f;
+        hit.slashCount=0; hit.sparkCount=14; hit.blueRatio=0;
+        hit.corePower=.25f; hit.crossPower=0; hit.pillarPower=0; hit.ringPower=.35f;
+        hit.sparkColor={1,.82f,.42f,1}; hit.sparkSecondaryColor={1,.46f,.18f,1};
+        hit.coreColor={1,.88f,.6f,1}; hit.ringColor={1,.7f,.3f,1};
+        particleManager->EmitHitEffect(player_->GetPosition(),hit);
+    }
     gameOver_->Begin(camera.get(),player_->GetPosition(),player_->GetRotation(),fall);
 }

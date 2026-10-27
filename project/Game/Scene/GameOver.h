@@ -12,7 +12,7 @@
 class GameOver {
 public:
     using Action=GameOverTimeline::Action;
-    void Initialize(SpriteCommon* common, const std::array<uint32_t,5>& textures);
+    void Initialize(SpriteCommon* common, const std::array<uint32_t,8>& textures);
     void Begin(Camera* camera, const Vector3& position, const Vector3& rotation, bool fall);
     Action Update(Camera* camera, const Input& input, bool visible);
     void Draw();
@@ -24,19 +24,24 @@ public:
     const Vector3& GetRotation() const { return rotation_; }
 private:
     void UpdateSprites();
-    Sound::SoundData MakeSound();
+    Sound::SoundData MakeSound(int kind);
     // 8pxの水平帯で円の外側だけを覆う。円形の穴を滑らかに閉じる。
     std::array<std::unique_ptr<Sprite>,180> iris_;
     std::array<std::unique_ptr<Sprite>,5> labels_;
+    std::array<std::unique_ptr<Sprite>,8> letters_;
+    std::array<std::unique_ptr<Sprite>,24> sparks_;
+    std::array<std::unique_ptr<Sprite>,2> borders_;
+    std::unique_ptr<Sprite> backdrop_, sigil_;
     std::unique_ptr<Sprite> flash_;
     std::unique_ptr<Sprite> selection_;
     Sound sound_;
-    Sound::SoundData failureSound_{};
+    Sound::SoundData failureSound_{}, titleSound_{}, cursorSound_{}, confirmSound_{};
     std::chrono::steady_clock::time_point lastUpdate_{};
     Vector3 initialPosition_{}, initialRotation_{}, position_{}, rotation_{};
     Vector3 cameraPosition_{}, cameraRotation_{};
     float cameraFov_= .55f;
     GameOverTimeline::Flow flow_;
     GameOverTimeline::Frame frame_{};
-    bool fall_=false;
+    bool fall_=false, titleSoundPlayed_=false;
+    float selectionY_=425;
 };
