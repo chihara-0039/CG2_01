@@ -1,4 +1,4 @@
-#include <algorithm>
+﻿#include <algorithm>
 #include <cmath>
 #include "GameRuntime.h"
 #include "EffectPresetStore.h"
@@ -18,6 +18,7 @@ void GameRuntime::Update() {
 
 
     input->Update();
+    UpdateCaptureTools();
     UpdateBlenderLevelFileWatch();
     if (input->TriggerKey(DIK_F3)) {
         debugFlags_.showCollisionBoxes = !debugFlags_.showCollisionBoxes;
@@ -57,6 +58,8 @@ void GameRuntime::Update() {
 
     UpdateCurrentMode(lightVP, isGuiCaptured);
 
+    UpdateExplorationFog();
+
     const Matrix4x4& view = camera->GetViewMatrix();
     const Matrix4x4& proj = camera->GetProjectionMatrix();
 
@@ -91,6 +94,9 @@ void GameRuntime::Update() {
 void GameRuntime::HandleModeChange() {
     if (currentMode_ == prevMode_) {
         return;
+    }
+    if(buildTrial_ && (currentMode_==AppMode::Title || currentMode_==AppMode::StageSelect)) {
+        buildTrial_=false;fogTrial_=false;
     }
 
     // PostEffect表示で無効化したパーティクル表示を、天候を使うシーンへ持ち越さない。
@@ -262,6 +268,8 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
     }
 
     player_->SetCamera(view, proj);
+    // 再現撮影でもGPUスキニングを更新する。nullptr更新だけでは頂点が生成されない。
+    if (comparisonActive_ || dioramaCapture_) player_->UpdateTransform(lightVP, dxCommon.get());
     if (currentMode_ == AppMode::DebugView) {
         // DebugView の見た目は StageMap と一致しないため、不可視のステージ壁を無効化する。
         player_->SetStageCollisionEnabled(false);
@@ -295,6 +303,8 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Ma
 }
 
 bool GameRuntime::IsWindowInactive() {
+    // 明示的な再現撮影中は、ツールへフォーカスが移っても描画更新を継続する。
+    if (comparisonActive_ || trialVerification_ || dioramaCapture_) return false;
     return GetActiveWindow() != winApp->GetHwnd();
 }
 
@@ -397,7 +407,7 @@ void GameRuntime::UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4&
             WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName());
         const bool isGameplayScene =
             currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace;
-        gameplayDayNightActive_ = isGameplayScene && activePreset && activePreset->stormPreset.empty();
+        gameplayDayNightActive_ = isGameplayScene && activePreset && activePreset->stormPreset.empty() && stageMap_.GetWeatherPresetName()!="Diorama" && !dioramaCapture_;
         if (gameplayDayNightActive_) {
             if (!isGamePaused_) {
                 gameplayDayNightTimer_ += (1.0f / 60.0f) * environmentTimeScale_;
@@ -495,7 +505,7 @@ void GameRuntime::ApplySceneLighting(const Vector3& lightDir) {
             : playerLightIntensity_;
         if (pointLightIntensity > 0.001f) {
             object3dCommon->AddPointLight(
-                playerLightPosition, pointLightIntensity, playerLightColor_, 12.0f);
+                playerLightPosition, (stageMap_.GetWeatherPresetName()=="Diorama" || dioramaCapture_) ? .12f : pointLightIntensity, playerLightColor_, 12.0f);
         }
     }
 

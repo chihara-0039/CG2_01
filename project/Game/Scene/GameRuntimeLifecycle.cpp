@@ -295,6 +295,7 @@ void GameRuntime::Initialize() {
 
     sceneManager_ = SceneManager::GetInstance();
     sceneManager_->Initialize(&sceneFactory_, GetCurrentSceneType(), *this);
+    InitializeCaptureTools();
 }
 
 
@@ -518,6 +519,7 @@ void GameRuntime::EnsurePostProcessInitialized() {
 
 
 void GameRuntime::Finalize() {
+    if (dxCommon) dxCommon->Recorder().Finish();
 
     if (dxCommon) {
         dxCommon->WaitForGpu();

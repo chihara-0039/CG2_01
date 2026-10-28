@@ -503,6 +503,8 @@ void DirectXCommon::PreDraw(bool clearDepth) {
 void DirectXCommon::PostDraw() {
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
 
+    recorder_.Prepare(device_.Get(), commandList_.Get(), swapChainResources_[backBufferIndex].Get());
+
     // リソースバリア（RenderTarget -> Present）
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -556,6 +558,9 @@ void DirectXCommon::PostDraw() {
         fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
+
+    // 既存フェンスの完了後に読むため、録画用の追加GPU待ちは発生しない。
+    recorder_.SubmitCompletedFrame();
 
     // 次フレーム用にコマンドリセット
     hr = commandAllocator_->Reset();

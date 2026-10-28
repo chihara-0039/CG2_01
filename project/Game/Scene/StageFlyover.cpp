@@ -18,8 +18,9 @@ StageFlyover::Pose StageFlyover::Evaluate(float seconds, const Vector3& center,
     if (seconds >= kDuration) return destination;
     seconds = (std::max)(seconds, 0.0f);
     radius = (std::max)(radius, 3.0f);
-    const float sweep = Smooth(seconds/1.8f);
-    const float yaw = destination.rotation.y - .60f + .85f*sweep;
+    // ステージ中心の周りを必ず360度回ってから着地へ進む。
+    const float sweep = Smooth(seconds/kOrbitDuration);
+    const float yaw = destination.rotation.y - .60f + 6.28318530718f*sweep;
     constexpr float pitch = .65f;
     // 大ステージを球ごと収めようとして引き続けず、画角を広げて距離を抑える。
     const float tourFov = .90f + .15f*std::clamp((radius-18.0f)/12.0f,0.0f,1.0f);
@@ -27,8 +28,8 @@ StageFlyover::Pose StageFlyover::Evaluate(float seconds, const Vector3& center,
     const float distance = (std::min)(framedRadius/std::sin(tourFov*.5f)*1.10f,50.0f);
     const Vector3 orbit = {center.x-std::sin(yaw)*std::cos(pitch)*distance,
         center.y+std::sin(pitch)*distance, center.z-std::cos(yaw)*std::cos(pitch)*distance};
-    // 後半で俯瞰から実際のプレイ開始姿勢へ滑らかに寄せる。
-    const float landing = Smooth((seconds-1.4f)/(kDuration-1.4f));
+    // 周回の途中でスポーンへ寄せない。一周完了後の別フェーズで移動する。
+    const float landing = Smooth((seconds-kOrbitDuration)/kLandingDuration);
     return {{Mix(orbit.x,destination.position.x,landing),
              Mix(orbit.y,destination.position.y,landing),
              Mix(orbit.z,destination.position.z,landing)},

@@ -1,4 +1,4 @@
-﻿#include "Object3dCommon.h"
+#include "Object3dCommon.h"
 #include "Logger.h"
 #include <cassert>
 
@@ -107,6 +107,8 @@ void Object3dCommon::SetDefaultLight() {
         lightData_->pointLightCount = 0;
         lightData_->cameraPosition = { 0.0f, 0.0f, -10.0f };
         lightData_->paddingLight = 0.0f;
+        lightData_->fogSettings = {}; lightData_->fogOrigin = {};
+        lightData_->fogDirection = {}; lightData_->fogScan = {};
     }
 }
 

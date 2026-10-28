@@ -42,7 +42,7 @@ private:
 	std::unique_ptr<Object3d> stageObject_;
 
 	// 回転する仮キューブとは別に、選択内容と戻る操作を正面の文字で表示する。
-	std::array<std::unique_ptr<Model>, 6> labelModels_;
+	std::array<std::unique_ptr<Model>, 7> labelModels_;
 	std::unique_ptr<Object3d> labelObject_;
 	std::unique_ptr<Model> backGuideModel_;
 	std::unique_ptr<Object3d> backGuideObject_;

@@ -328,7 +328,7 @@ void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureMa
     CaptureRestPose();
 }
 
-void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager) {
+void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager, bool explorerOutfit) {
     restPoseCaptured_ = false;
     std::string texturePath;
     
@@ -349,6 +349,7 @@ void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string
         return;
     }
 
+    if (explorerOutfit) AddExplorerOutfit();
     activeMotionIndex_ = motions_.empty() ? -1 : 0;
 
     if (textureManager && !texturePath.empty()) {
@@ -598,6 +599,63 @@ void SkinnedModel::AddCubeMesh(const Vector3& center, const Vector3& size, int j
             skinnedVertices_.push_back(v);
         }
     }
+}
+
+// 元の人体・骨格・モーションを保ち、装備を同じスキニング頂点列へ追加する。
+// 帽子はHead、荷物はSpine2に固定するため、歩行中も身体に追従する。
+void SkinnedModel::AddExplorerOutfit() {
+    auto joint = [&](const std::string& suffix) {
+        for (size_t i=0;i<joints_.size();++i)
+            if (joints_[i].name.ends_with(suffix)) return static_cast<int>(i);
+        return -1;
+    };
+    const int head=joint(":Head"), spine=joint(":Spine2");
+    // 対応していない別のモデルへ誤った座標で装備を追加しない。
+    if (head<0 || spine<0 || skinnedVertices_.empty()) return;
+    const Vector4 khaki{.61f,.47f,.25f,1}, leather{.22f,.12f,.065f,1};
+    const Vector4 olive{.24f,.31f,.16f,1}, skin{.81f,.58f,.39f,1};
+    for (auto& v:skinnedVertices_) {
+        const auto& name=joints_[v.jointIndices[0]].name;
+        if (name.find("Head")!=std::string::npos || name.find("Neck")!=std::string::npos || name.find("Hand")!=std::string::npos) v.color=skin;
+        else if(v.position.y<.22f) v.color=leather;
+        else if(v.position.y<.60f) v.color=olive;
+        else v.color=khaki;
+    }
+    auto box=[&](Vector3 c,Vector3 size,int bone,Vector4 color) {
+        const size_t start=skinnedVertices_.size(); AddCubeMesh(c,size,bone);
+        for(size_t i=start;i<skinnedVertices_.size();++i) skinnedVertices_[i].color=color;
+    };
+    auto cylinder=[&](Vector3 c,float radius,float height,float flatten,int bone,Vector4 color) {
+        constexpr int segments=20;
+        auto triangle=[&](Vector3 a,Vector3 b,Vector3 d,Vector3 normal) {
+            for(auto p:{a,b,d}) { SkinnedVertexData v{}; v.position={p.x,p.y,p.z,1}; v.normal=normal;
+                v.texcoord={.5f,.5f}; v.color=color; v.jointIndices[0]=bone; v.weights[0]=1; skinnedVertices_.push_back(v); }
+        };
+        for(int i=0;i<segments;++i) {
+            const float a=i*6.2831853f/segments,b=(i+1)*6.2831853f/segments;
+            Vector3 p{c.x+radius*std::cos(a),c.y-height*.5f,c.z+radius*flatten*std::sin(a)};
+            Vector3 q{c.x+radius*std::cos(b),p.y,c.z+radius*flatten*std::sin(b)};
+            Vector3 r{p.x,c.y+height*.5f,p.z},s{q.x,r.y,q.z};
+            const Vector3 n{std::cos((a+b)*.5f),0,std::sin((a+b)*.5f)};
+            triangle(p,r,s,n); triangle(p,s,q,n);
+            triangle({c.x,r.y,c.z},s,r,{0,1,0}); triangle({c.x,p.y,c.z},p,q,{0,-1,0});
+        }
+    };
+    // 幅広のサファリハット、濃い帽子帯、正面の小さなランプ。
+    cylinder({0,1.60f,.015f},.48f,.035f,.86f,head,khaki);
+    cylinder({0,1.72f,.015f},.31f,.22f,.91f,head,khaki);
+    cylinder({0,1.64f,.015f},.315f,.055f,.91f,head,leather);
+    box({0,1.69f,-.28f},{.10f,.085f,.035f},head,{.95f,.83f,.48f,1});
+    // リュック本体、ふた、ポケット、肩紐、上部の寝袋。
+    box({0,.74f,.19f},{.32f,.32f,.21f},spine,olive);
+    box({0,.91f,.20f},{.35f,.07f,.24f},spine,leather);
+    box({0,.71f,.315f},{.19f,.16f,.045f},spine,khaki);
+    for(float x:{-.12f,.12f}) {
+        box({x,.77f,-.105f},{.035f,.27f,.035f},spine,leather);
+        box({x,.74f,.325f},{.028f,.27f,.025f},spine,leather);
+    }
+    box({0,.99f,.23f},{.40f,.10f,.13f},spine,{.42f,.55f,.48f,1});
+    box({0,.59f,-.02f},{.32f,.045f,.23f},joint(":Hips"),leather);
 }
 
 void SkinnedModel::SmoothWeights() {

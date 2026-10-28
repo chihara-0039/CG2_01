@@ -1,4 +1,4 @@
-// プレイヤー操作、ステージルール、画面遷移、BGM更新を担当する。
+﻿// プレイヤー操作、ステージルール、画面遷移、BGM更新を担当する。
 #include "GameRuntime.h"
 #include "Goal.h"
 #include <algorithm>
@@ -176,11 +176,13 @@ void GameRuntime::UpdateGamePlay() {
 
     // 全シャボン玉の回収後だけクリアを成立させる。
     // ゴール接触中のロック状態も保持し、未達成の理由をUIへ表示できるようにする。
+    const bool isOnGoalPlatform = stageMap_.GetWeatherPresetName()!="Diorama" ||
+        (player_ && player_->IsGrounded() && !player_->IsOnLadder() && player_->GetPosition().y>=5.45f);
     const bool isTouchingGoal =
         player_ != nullptr && Goal::Check(pPos, { 0.4f, 0.9f, 0.4f }, stageMap_);
     const bool hasCollectedAllPickups = bubblePickupController_.AreAllPickupsCollected();
     isGoalBlocked_ = isTouchingGoal && !hasCollectedAllPickups;
-    if (isTouchingGoal && hasCollectedAllPickups && !isGoalReached_) {
+    if (isTouchingGoal && isOnGoalPlatform && hasCollectedAllPickups && !isGoalReached_) {
         isGoalReached_ = true;
         isGoalBlocked_ = false;
         goalCelebrationTimer_ = 0.0f;
@@ -209,7 +211,7 @@ void GameRuntime::UpdateGoalCelebration() {
     goalCelebrationTimer_ += 1.0f / 60.0f;
 
     // スター取得直後は操作を止め、プレイヤーを中心にカメラを回して見せる。
-    if (player_ && camera) {
+    if (!dioramaCapture_ && player_ && camera) {
         const Vector3 center = player_->GetPosition();
         const float angle = goalCelebrationTimer_ * 1.8f;
         camera->SetPosition({
@@ -224,6 +226,7 @@ void GameRuntime::UpdateGoalCelebration() {
     if (starGetSprite_) {
         starGetSprite_->Update();
     }
+    if(dioramaCapture_) return; // Keep the wide shot and final pose until recording ends.
     if (goalCelebrationTimer_ >= kCelebrationDuration) {
         RequestSceneChange(SceneType::GameClear);
     }
@@ -287,6 +290,7 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
 
     // 入力処理後の最新カーソル座標を配置プレビューと確定処理に使用する。
     const Int3 cursor = mapCursor_->GetIndex();
+    if(player_)blockPlacementController_.SetPlayerPosition(player_->GetPosition());
 
     BlockType selectedType = BlockType::Ground;
     int selectedCustomId = 0;
@@ -298,7 +302,9 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
     }
 
     if (stageRenderer_) {
-        stageRenderer_->SetPlacementPreview(stageMap_, cursor, selectedType, selectedCustomId, placeRotationY_);
+        const auto plan=blockPlacementController_.Evaluate(cursor,placeRotationY_);
+        if(std::chrono::steady_clock::now()>=placementFeedbackUntil_)buildStatus_=PlacementStatus(plan.reason);
+        stageRenderer_->SetPlacementPreview(stageMap_, cursor, selectedType, selectedCustomId, placeRotationY_,plan.Ready()?1:2);
     }
 
     static bool prevMouse0 = false;
@@ -362,6 +368,8 @@ void GameRuntime::UpdateStageSelect() {
             if (player_) {
                 player_->SetExternalCollisionBoxes(nullptr);
             }
+            fogTrial_ = false;
+            buildTrial_ = false;
             stageMap_.LoadFromFile(path);
             RefreshGoalGuideTarget();
             backupMap_ = stageMap_;
@@ -372,6 +380,7 @@ void GameRuntime::UpdateStageSelect() {
             stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
             gameplayCameraController_.ResetCamera(
                 camera.get(), player_.get(), stageMap_, stageSelect_->GetSelectedIndex());
+            if(stageSelect_->GetSelectedFileName()=="dioramaRuins.txt") gameplayCameraController_.ConfigureDiorama();
             blockInventory_.Initialize(0);
             bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
             blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);

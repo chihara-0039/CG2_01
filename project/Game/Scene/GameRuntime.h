@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <memory>
 #include <filesystem>
@@ -51,6 +51,7 @@
 #include "GameBgmController.h"
 #include "RecoveryTransition.h"
 #include "StartIntro.h"
+#include "../Environment/FogExplorer.h"
 
 #include "PostProcessRenderer.h"
 #include "PostEffectShowcaseController.h"
@@ -353,6 +354,41 @@ private:
     bool IsPlayerHiddenByWall() const;
     // READY/数字表示中は本体・影・強調描画をまとめて隠し、GOで表示する。
     bool IsStartIntroHidingPlayer() const;
+
+    void InitializeCaptureTools();
+    void UpdateCaptureTools();
+    void UpdateExplorationFog();
+    void DrawCaptureOverlay();
+    void BeginFogTrial();
+    void BeginBuildTrial();
+    void BeginDiorama();
+    void UpdateDioramaCapture();
+    void UpdateDioramaDetail(const std::string& shot);
+    void UpdateComplexCapture();
+    void UpdateComplexRouteCapture();
+    bool VerifyComplexParts();
+    bool complexChecksPassed_=false;
+    void UpdateBuildTrial();
+    void VerifyBuilding();
+    bool buildTrial_=false, buildCapture_=false, buildAction_=false;
+    bool dioramaCapture_=false;
+    int buildStep_=0;
+    bool buildReached_=false;
+    int buildStatus_=0;
+    std::array<std::unique_ptr<Sprite>,12> buildLabels_;
+    std::chrono::steady_clock::time_point placementFeedbackUntil_{};
+    int PlacementStatus(Placement::Reason reason) const;
+    std::array<std::unique_ptr<Sprite>,2> buildCounts_;
+    FogExplorer fogExplorer_;
+    bool fogTrial_=false, showRecorder_=false;
+    bool comparisonActive_=false, comparisonRecordingStarted_=false, comparisonScanned_=false;
+    bool trialVerification_=false, verifyGround_=false, verifyScan_=false, verifyPause_=false, verifyLock_=false, verifyPickup_=false;
+    int verifyFrame_=0;
+    float verifyCooldown_=0;
+    int comparisonMode_=2;
+    std::chrono::steady_clock::time_point comparisonStarted_{}, fogUpdatedAt_{};
+    std::array<std::unique_ptr<Sprite>,5> fogLabels_;
+    std::unique_ptr<Sprite> scanMeter_;
 
     void LoadEffectPresetNames();
     bool SaveEffectPreset(const std::string& name);

@@ -1,151 +1,67 @@
-#include "BlockPlacementController.h"
-
-#include <Windows.h>
+﻿#include "BlockPlacementController.h"
 #include <cassert>
 #include <cmath>
+#include <tuple>
 
-void BlockPlacementController::Initialize(
-    StageMap* stageMap,
-    StageRenderer* stageRenderer,
-    BlockInventory* inventory
-) {
-    assert(stageMap);
-    assert(stageRenderer);
-    assert(inventory);
-
-    stageMap_ = stageMap;
-    stageRenderer_ = stageRenderer;
-    inventory_ = inventory;
-    placeCustomId_ = 0;
+namespace {
+auto CellState(const MapCell& c) {
+    return std::tie(c.type,c.variant,c.isSolid,c.rotationX,c.rotationY,
+        c.doorTargetIndex.x,c.doorTargetIndex.y,c.doorTargetIndex.z,
+        c.crumbleTimer,c.isCrumbling,c.isHidden,c.respawnTimer,
+        c.colorR,c.colorG,c.colorB,c.opacity,c.moveOffset.x,c.moveOffset.y,c.moveOffset.z,
+        c.moveTimer,c.currentOffsetX,c.currentOffsetY,c.currentOffsetZ,
+        c.deltaOffsetX,c.deltaOffsetY,c.deltaOffsetZ);
+}
 }
 
-// 現在選択中のブロックまたはカスタムパーツを、指定グリッド位置へ配置する。
-bool BlockPlacementController::TryPlace(const Int3& index, float rotationY) {
-    if (!stageMap_ || !stageRenderer_ || !inventory_) {
-        return false;
-    }
-
-    // カスタムパーツは3x3x3の複合ブロックとして、空いているセルへ一括配置する。
-    if (placeCustomId_ >= 1 && placeCustomId_ <= 5) {
-        const auto* part = stageMap_->GetCustomPart(placeCustomId_);
-        if (part && !part->IsEmpty()) {
-            if (!inventory_->HasBlock(placeBlockType_, placeCustomId_)) {
-                OutputDebugStringA("[BlockPlacementController] No custom assembly in inventory.\n");
-                return false;
-            }
-
-            int rotationQuarterTurns = static_cast<int>(std::round(rotationY / 1.5707963f)) % 4;
-            if (rotationQuarterTurns < 0) {
-                rotationQuarterTurns += 4;
-            }
-
-            bool placedAnyCell = false;
-            for (int localY = 0; localY < 3; ++localY) {
-                for (int localZ = 0; localZ < 3; ++localZ) {
-                    for (int localX = 0; localX < 3; ++localX) {
-                        const auto& cell = part->cells[localY][localZ][localX];
-                        if (cell.type == BlockType::None) {
-                            continue;
-                        }
-
-                        // 3x3パーツのローカル座標を、90度単位の回転後座標へ変換する。
-                        int rotatedX = localX;
-                        int rotatedZ = localZ;
-                        float cellRotationY = 0.0f;
-                        if (rotationQuarterTurns == 1) {
-                            rotatedX = 2 - localZ;
-                            rotatedZ = localX;
-                            cellRotationY = 1.5707963f;
-                        } else if (rotationQuarterTurns == 2) {
-                            rotatedX = 2 - localX;
-                            rotatedZ = 2 - localZ;
-                            cellRotationY = 3.1415927f;
-                        } else if (rotationQuarterTurns == 3) {
-                            rotatedX = localZ;
-                            rotatedZ = 2 - localX;
-                            cellRotationY = 4.712389f;
-                        }
-
-                        // 既存ブロックを上書きせず、空いているセルだけ配置する。
-                        Int3 targetIndex = { index.x + rotatedX, index.y + localY, index.z + rotatedZ };
-                        if (stageMap_->IsInside(targetIndex)) {
-                            const MapCell* targetCell = stageMap_->GetCell(targetIndex);
-                            if (targetCell && targetCell->type == BlockType::None) {
-                                stageMap_->SetBlock(targetIndex, cell.type, placeCustomId_);
-                                MapCell* placedCell = stageMap_->GetCell(targetIndex);
-                                if (placedCell) {
-                                    placedCell->rotationY = cellRotationY;
-                                }
-                                placedAnyCell = true;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!placedAnyCell) {
-                OutputDebugStringA("[BlockPlacementController] Assembly placement failed: no available empty spaces.\n");
-                return false;
-            }
-
-            inventory_->ConsumeBlock(placeBlockType_, 1, placeCustomId_);
-            stageRenderer_->BuildFromStageMap(*stageMap_);
-            OutputDebugStringA("[BlockPlacementController] Custom assembly placed successfully.\n");
-            return true;
-        }
-    }
-
-    // 通常ブロックは1マスだけ配置する。Groundは基本ブロック扱いなので在庫消費しない。
-    if (placeBlockType_ != BlockType::Ground) {
-        if (!inventory_->HasBlock(placeBlockType_, placeCustomId_)) {
-            OutputDebugStringA("[BlockPlacementController] No block of this type/customId in inventory.\n");
-            return false;
-        }
-    }
-
-    if (!CanPlaceAt(index)) {
-        OutputDebugStringA("[BlockPlacementController] Cannot place here.\n");
-        return false;
-    }
-
-    // 通常配置のWall/Ladderは、プレイヤー配置由来だと分かる専用variantを付ける。
-    int finalVariant = placeCustomId_;
-    if (placeCustomId_ == 0) {
-        if (placeBlockType_ == BlockType::Wall) {
-            finalVariant = 6;
-        } else if (placeBlockType_ == BlockType::Ladder) {
-            finalVariant = 7;
-        }
-    }
-
-    if (!stageMap_->SetBlock(index, placeBlockType_, finalVariant)) {
-        return false;
-    }
-
-    MapCell* placedCell = stageMap_->GetCell(index);
-    if (placedCell) {
-        placedCell->rotationY = rotationY;
-    }
-
-    if (placeBlockType_ != BlockType::Ground) {
-        inventory_->ConsumeBlock(placeBlockType_, 1, placeCustomId_);
-    }
-
-    stageRenderer_->BuildFromStageMap(*stageMap_);
-    OutputDebugStringA("[BlockPlacementController] Block placed.\n");
-    return true;
+void BlockPlacementController::Initialize(StageMap* map,StageRenderer* renderer,BlockInventory* inventory) {
+    assert(map && renderer && inventory);
+    stageMap_=map; stageRenderer_=renderer; inventory_=inventory;
+    placeCustomId_=0; lastPlacement_.clear(); checkPlayer_=false;
 }
 
-// 指定セルがステージ範囲内かつ空セルなら配置可能とする。
-bool BlockPlacementController::CanPlaceAt(const Int3& index) const {
-    const MapCell* cell = stageMap_->GetCell(index);
-    if (!cell) {
-        return false;
-    }
+Placement::Plan BlockPlacementController::Evaluate(const Int3& index,float rotationY) const {
+    if(!stageMap_ || !inventory_) return {{},Placement::Reason::EmptyPart};
+    auto plan=Placement::Make(*stageMap_,index,placeBlockType_,placeCustomId_,rotationY,checkPlayer_?&playerPosition_:nullptr);
+    const bool consumes=placeCustomId_!=0 || placeBlockType_!=BlockType::Ground;
+    if(plan.Ready() && consumes && !inventory_->HasBlock(placeBlockType_,placeCustomId_))plan.reason=Placement::Reason::NoInventory;
+    return plan;
+}
 
-    if (cell->type != BlockType::None) {
-        return false;
+bool BlockPlacementController::TryPlace(const Int3& index,float rotationY) {
+    auto plan=Evaluate(index,rotationY); lastReason_=plan.reason;
+    if(!plan.Ready() || !stageRenderer_)return false;
+    const bool consumes=placeCustomId_!=0 || placeBlockType_!=BlockType::Ground;
+    // 全セルの検証後、在庫とマップを一度だけ変更する。
+    if(consumes && !inventory_->ConsumeBlock(placeBlockType_,1,placeCustomId_)) {lastReason_=Placement::Reason::NoInventory;return false;}
+    std::vector<SavedCell> saved;
+    for(const auto& c:plan.cells) {
+        SavedCell item{c.index,*stageMap_->GetCell(c.index),{}};
+        if(!stageMap_->SetBlock(c.index,c.type,c.variant)) {
+            for(const auto& s:saved)*stageMap_->GetCell(s.index)=s.before;
+            if(consumes)inventory_->AddBlock(placeBlockType_,1,placeCustomId_);
+            lastReason_=Placement::Reason::Changed; return false;
+        }
+        auto* cell=stageMap_->GetCell(c.index);cell->rotationY=c.rotationY;item.placed=*cell;saved.push_back(item);
     }
+    lastPlacement_=std::move(saved);undoType_=placeBlockType_;undoCustomId_=placeCustomId_;undoConsumed_=consumes;
+    stageRenderer_->BuildFromStageMap(*stageMap_);return true;
+}
 
-    return true;
+bool BlockPlacementController::TryUndo() {
+    if(!stageMap_ || !inventory_ || !stageRenderer_ || lastPlacement_.empty()){lastReason_=Placement::Reason::Changed;return false;}
+    // 消失した足場や後で変化したセルを消して在庫を増やさない。
+    for(const auto& s:lastPlacement_) {
+        const auto* c=stageMap_->GetCell(s.index);const auto& p=s.placed;
+        if(!c || CellState(*c)!=CellState(p)) {
+            lastReason_=Placement::Reason::Changed;return false;
+        }
+        if(checkPlayer_ && std::abs(playerPosition_.x-s.index.x)<.89f && std::abs(playerPosition_.z-s.index.z)<.89f &&
+           playerPosition_.y<=s.index.y+.65f && playerPosition_.y+1.8f>=s.index.y-.5f) {
+            lastReason_=Placement::Reason::PlayerOverlap;return false;
+        }
+    }
+    for(const auto& s:lastPlacement_) {stageMap_->RemoveBlock(s.index);*stageMap_->GetCell(s.index)=s.before;}
+    if(undoConsumed_)inventory_->AddBlock(undoType_,1,undoCustomId_);
+    lastPlacement_.clear();stageRenderer_->BuildFromStageMap(*stageMap_);lastReason_=Placement::Reason::Ready;return true;
 }

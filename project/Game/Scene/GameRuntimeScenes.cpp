@@ -211,7 +211,7 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
             : player_ ? player_->GetPosition() : Vector3{};
         const float dx=maximum.x-minimum.x,dy=maximum.y-minimum.y,dz=maximum.z-minimum.z;
         const float radius = found ? .5f*std::sqrt(dx*dx+dy*dy+dz*dz) : 3.0f;
-        startIntro_->Begin(camera.get(),center,radius);
+        startIntro_->Begin(camera.get(),center,radius,player_ ? player_->GetPosition() : center);
         startIntroPending_ = false;
     }
 
@@ -403,6 +403,10 @@ void GameRuntime::RunStageEditorScene() {
 }
 
 void GameRuntime::RunGamePlayScene() {
+    // route撮影は配置だけを自動化し、回収・ゴール判定は通常のゲーム処理を通す。
+    char captureShot[32]{}; GetEnvironmentVariableA("CG2_SHOT",captureShot,sizeof(captureShot));
+    char buildingShot[32]{};GetEnvironmentVariableA("CG2_BUILD_SHOT",buildingShot,sizeof(buildingShot));
+    if (comparisonActive_ && std::string(captureShot)!="route" && std::string(buildingShot)!="route") return;
     if (startIntro_ && startIntro_->IsActive()) {
         startIntro_->Update(camera.get(), sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive());
         if (startIntro_->ConsumeGo()) {

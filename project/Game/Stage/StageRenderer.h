@@ -40,7 +40,8 @@ public:
         const Int3& cursorIndex,
         BlockType type,
         int customId,
-        float rotationY
+        float rotationY,
+        int validity = 0
     );
     void ClearPlacementPreview();
 
@@ -53,6 +54,7 @@ private:
     Object3dCommon* object3dCommon_ = nullptr;
 
     std::unique_ptr<Model> groundModel_;
+    std::unique_ptr<Model> dioramaGrass_,dioramaStone_,dioramaBridge_,dioramaCloud_;
     std::unique_ptr<Model> wallModel_;
     std::unique_ptr<Model> bubbleModel_;
     std::unique_ptr<Model> goalModel_;

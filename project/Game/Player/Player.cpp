@@ -57,7 +57,10 @@ void Player::Initialize(Object3dCommon* common, Model* model) {
 
 void Player::InitializeWithSkinnedGltf(Object3dCommon* common, DirectXCommon* dxCommon, const std::string& gltfPath, TextureManager* textureManager) {
 	skinnedObject_ = std::make_unique<SkinnedObject>();
-	skinnedObject_->InitializeFromGltf(common, dxCommon, gltfPath, textureManager);
+	char legacy[8]{};
+	GetEnvironmentVariableA("CG2_LEGACY_MODEL", legacy, sizeof(legacy));
+	const bool isPlayerMesh = gltfPath.ends_with("/human/walk.gltf") || gltfPath.ends_with("\\human\\walk.gltf");
+	skinnedObject_->InitializeFromGltf(common, dxCommon, gltfPath, textureManager, isPlayerMesh && legacy[0] != '1');
 	if (auto* model = skinnedObject_->GetModel()) {
 		model->EnsureDefaultPlayerMotions();
 	}
@@ -443,13 +446,15 @@ collision_end:
 }
 
 // Object3d の行列を更新する（ライトカメラの行列も渡す）
-void Player::UpdateTransform(const Matrix4x4& lightVP) 
+void Player::UpdateTransform(const Matrix4x4& lightVP, DirectXCommon* dxCommon)
 {
 	if (isSkinned_ && skinnedObject_) {
 		skinnedObject_->SetPosition(position_);
 		skinnedObject_->SetRotation(rotation_);
-		skinnedObject_->Update(nullptr, lightVP);
+		skinnedObject_->Update(dxCommon, lightVP);
 	} else if (object_) {
+		object_->SetPosition(position_);
+		object_->SetRotation(rotation_);
 		object_->Update(lightVP);
 	}
 }

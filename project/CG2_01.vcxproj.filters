@@ -12,6 +12,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Utility\Camera.cpp" />
+    <ClCompile Include="Engine\Utility\FrameRecorder.cpp" />
+    <ClCompile Include="Game\Environment\FogExplorer.cpp" />
+    <ClCompile Include="Game\Scene\GameRuntimeCapture.cpp" />
     <ClCompile Include="Engine\Utility\D3DResourceLeakChecker.cpp" />
     <ClCompile Include="Engine\Base\DirectXCommon.cpp" />
     <ClCompile Include="externals\imgui\imgui.cpp" />
@@ -90,6 +93,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Utility\Camera.h" />
+    <ClInclude Include="Engine\Utility\FrameRecorder.h" />
+    <ClInclude Include="Game\Environment\FogExplorer.h" />
     <ClInclude Include="Engine\Utility\D3DResourceLeakChecker.h" />
     <ClInclude Include="Engine\Base\DirectXCommon.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
@@ -153,6 +158,7 @@
     <ClInclude Include="Engine\Utility\LightCamera.h" />
     <ClInclude Include="Game\Scene\GameClearScene.h" />
     <ClInclude Include="Game\Block\BlockPlacementController.h" />
+    <ClInclude Include="Game\Block\PlacementPlan.h" />
     <ClInclude Include="Game\Block\BubblePickupController.h" />
     <ClInclude Include="Game\Block\BlockInventory.h" />
     <ClInclude Include="Game\Scene\StageSelect.h" />

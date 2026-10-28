@@ -7,6 +7,13 @@
 #include <random>
 
 
+namespace {
+bool UsesDioramaStyle(const StageMap& map) {
+    const auto* part=map.GetCustomPart(1);
+    return part && part->name=="RUIN-BRIDGE";
+}
+}
+
 // StageRenderer が所有している描画オブジェクトをまとめて解放する。
 StageRenderer::~StageRenderer() {
 	Clear();
@@ -25,6 +32,10 @@ void StageRenderer::Initialize(Object3dCommon* object3dCommon) {
 		object3dCommon_->GetTextureManager()
 	);
 
+	dioramaCloud_=Model::CreateFromOBJ(object3dCommon_->GetDxCommon(),"Resources/Models/Diorama","cloud.obj",object3dCommon_->GetTextureManager());
+	dioramaGrass_=Model::CreateFromOBJ(object3dCommon_->GetDxCommon(),"Resources/Models/Diorama","grass.obj",object3dCommon_->GetTextureManager());
+	dioramaStone_=Model::CreateFromOBJ(object3dCommon_->GetDxCommon(),"Resources/Models/Diorama","stone.obj",object3dCommon_->GetTextureManager());
+	dioramaBridge_=Model::CreateFromOBJ(object3dCommon_->GetDxCommon(),"Resources/Models/Diorama","bridge.obj",object3dCommon_->GetTextureManager());
 	// 壁モデル。通常壁、Pブロック、ON/OFFブロックなど複数用途で使い回す。
 	wallModel_ = Model::CreateFromOBJ(
 		object3dCommon_->GetDxCommon(),
@@ -206,14 +217,15 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
 	// 背景雲は天候と色・密度を共有できるParticleManager側で生成する。
 	// 旧来の球体モデル雲は二重表示を避けるため生成しない。
-	int cloudCount = 0;
+	int cloudCount = UsesDioramaStyle(stageMap) ? 8 : 0;
 	for (int cloudIndex = 0; cloudIndex < cloudCount; ++cloudIndex) {
 		CloudInstance cloud;
 		// ランダムな位置 (ステージの少し上空、周囲)
 		float randomCloudX = randomFloat() * (mapWidth * scaleX + 80.0f) - 40.0f;
 		float randomCloudY = randomFloat() * 6.0f + 3.0f; // 3.0f 〜 9.0f の高さ
 		float randomCloudZ = randomFloat() * (mapDepth * scaleZ + 80.0f) - 40.0f;
-		cloud.basePosition = { randomCloudX, randomCloudY, randomCloudZ };
+		cloud.basePosition = UsesDioramaStyle(stageMap) ?
+            Vector3{-18.0f+cloudIndex*7.0f,-3.0f+(cloudIndex%3)*.7f,22.0f+(cloudIndex%2)*9.0f} : Vector3{randomCloudX,randomCloudY,randomCloudZ};
 
 		// 流れる速度 (X軸方向へゆっくり流れる)
 		float speedX = randomFloat() * 0.4f + 0.1f;
@@ -234,16 +246,16 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 
 			// ランダムスケール
 			float s = randomFloat() * 2.0f + 1.5f;
-			cloud.localScales.push_back({ s, s * 0.5f, s }); // 雲らしく少し平べったくする
+			cloud.localScales.push_back({ s*1.25f, s*.95f, s*1.2f }); // 雲らしく少し平べったくする
 		}
 
 		// 3Dオブジェクトの作成
 		for (int partIndex = 0; partIndex < partCount; ++partIndex) {
 			std::unique_ptr<Object3d> cloudPartObject = std::make_unique<Object3d>();
 			cloudPartObject->Initialize(object3dCommon_);
-			cloudPartObject->SetModel(bubbleModel_.get()); // 球体モデルを雲のパーツとして使用
+			cloudPartObject->SetModel(UsesDioramaStyle(stageMap)?dioramaCloud_.get():bubbleModel_.get()); // 球体モデルを雲のパーツとして使用
 			cloudPartObject->SetEnableLighting(true);       // ライティングで立体感（ローポリ雲の綺麗な陰影）を出す
-			cloudPartObject->SetShininess(0.0f);            // テカらせない
+			cloudPartObject->SetShininess(32.0f);            // テカらせない
 			cloudPartObject->SetMetallic(0.0f);             // テカらせない
 			
 			// 初期位置とスケール
@@ -303,7 +315,8 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				// ブロックの種類が Ground（地面）の場合
 				case BlockType::Ground:
 				CreateStageObject(
-					groundModel_.get(),
+					UsesDioramaStyle(stageMap) ?
+                        (stageMap.GetCell(x,y+1,z) && stageMap.GetCell(x,y+1,z)->isSolid ? dioramaStone_.get():dioramaGrass_.get()) : groundModel_.get(),
 					position,
 					blockScale_,
 					{ 0.0f, 0.0f, 0.0f },
@@ -315,7 +328,7 @@ void StageRenderer::BuildFromStageMap(const StageMap& stageMap) {
 				case BlockType::Wall:
 				{
 					Object3d* obj = CreateStageObject(
-						wallModel_.get(),
+						UsesDioramaStyle(stageMap) ? (cell->variant==1?dioramaBridge_.get():dioramaStone_.get()):wallModel_.get(),
 						position,
 						blockScale_,
 						{ 0.0f, 0.0f, 0.0f },
@@ -1177,14 +1190,15 @@ void StageRenderer::SetPlacementPreview(
 	const Int3& cursorIndex,
 	BlockType type,
 	int customId,
-	float rotationY
+	float rotationY,
+    int validity
 ) {
 	StagePlacementPreviewBuilder::Build(
 		previewObjects_,
 		object3dCommon_,
 		{
 			groundModel_.get(),
-			wallModel_.get(),
+			UsesDioramaStyle(stageMap)?dioramaBridge_.get():wallModel_.get(),
 			ladderModel_.get(),
 			crumbleModel_.get(),
 			iceBlockModel_.get(),
@@ -1195,7 +1209,7 @@ void StageRenderer::SetPlacementPreview(
 		cursorIndex,
 		type,
 		customId,
-		rotationY);
+		rotationY,validity);
 	BuildPreviewRenderGroups();
 }
 
