@@ -57,7 +57,13 @@ def main():
         assert (PROJECT/f"Resources/Models/ClearText/{character}/{character}.obj").is_file()
 
     sequence = (PROJECT/"Resources/Stages/sequence.txt").read_text().splitlines()
-    assert len(sequence) == 6, "Recovery stage labels correspond to the six current sequence entries"
+    # PR1 adds the playable diorama as a seventh stage; keep every label and original entry.
+    original = ["tutorial.txt", "gameStage01.txt", "gameStage02.txt", "stage04.txt", "new_stage_03.txt", "stage_03 .txt"]
+    assert sequence[:6] == original, "Original recovery stages must remain in order"
+    assert sequence[-1] == "dioramaRuins.txt" and len(sequence) == 7
+    assert len(sequence) == len(set(sequence)), "Stage entries must be unique"
+    for index in range(len(sequence)):
+        assert (PROJECT/f"Resources/Models/Recovery/stageLabel{index}.obj").is_file()
     for name in sequence:
         stage = PROJECT/"Resources/Stages"/name
         lines = stage.read_text().splitlines()
@@ -101,6 +107,7 @@ def main():
                         str(PROJECT/"Tests/RecoveryTests.cpp"), str(PROJECT/"Game/Scene/StageSelection.cpp"),
                         str(PROJECT/"Game/Scene/RecoveryTransitionMotion.cpp"),
                         str(PROJECT/"Game/Scene/StartIntroTimeline.cpp"),
+                        str(PROJECT/"Game/Scene/GameOverTimeline.cpp"),
                         str(PROJECT/"Game/Scene/StageFlyover.cpp"),
                         str(PROJECT/"Game/Scene/SceneManager.cpp"), "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)

@@ -1,4 +1,4 @@
-﻿// 描画パスと可視化処理を、更新・ゲーム進行から分離する。
+// 描画パスと可視化処理を、更新・ゲーム進行から分離する。
 #include "GameRuntime.h"
 #include <algorithm>
 #include <cmath>
@@ -56,7 +56,6 @@ void SetEditorSceneViewport(ID3D12GraphicsCommandList* commandList) {
 
 void GameRuntime::DrawCollisionDebugBoxes() {
 #ifdef USE_IMGUI
-    if (IsStartIntroHidingPlayer()) return;
     if (!debugFlags_.showCollisionBoxes || !camera || !player_ ||
         (currentMode_ != AppMode::GamePlay &&
          currentMode_ != AppMode::GamePlay_BlockPlace &&
@@ -255,7 +254,7 @@ void GameRuntime::Draw() {
             obj->DrawShadow(lightVP);
         }
     }
-    if (player_ && !IsStartIntroHidingPlayer()) {
+    if (player_) {
         player_->DrawShadow(lightVP);
     }
     if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
@@ -307,6 +306,9 @@ void GameRuntime::Draw() {
     if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsActive()) {
         spriteCommon->PreDraw();
         startIntro_->Draw();
+    }
+    if (currentMode_==AppMode::GamePlay && gameOver_ && gameOver_->IsActive()) {
+        spriteCommon->PreDraw(); gameOver_->Draw();
     }
     // すべての3D描画・HUDより後に描き、シーン全体を自然に暗転させる。
     if (sceneFadeSprite_ && sceneFadeAlpha_ > 0.0f) {
@@ -391,9 +393,9 @@ void GameRuntime::RenderScene() {
 
         if (currentMode_ == AppMode::GamePlay ||
             currentMode_ == AppMode::EffectPreview) {
-            if (player_ && !useFirstPersonCamera_ && !IsStartIntroHidingPlayer()) {
+            if (player_ && (!useFirstPersonCamera_ || (startIntro_ && startIntro_->BlocksInput()) || (gameOver_ && gameOver_->IsActive()))) {
                 player_->Draw();
-                if (IsPlayerHiddenByWall()) {
+                if (!(gameOver_ && gameOver_->IsActive()) && !(startIntro_ && startIntro_->BlocksInput()) && IsPlayerHiddenByWall()) {
                     object3dCommon->PreDrawPlayerHighlight();
                     player_->DrawHighlight();
                     object3dCommon->PreDraw();
@@ -401,7 +403,7 @@ void GameRuntime::RenderScene() {
                 }
             }
 
-            if (!dioramaCapture_ && currentMode_ == AppMode::GamePlay && gameplayUIManager_ && !IsStartIntroHidingPlayer()) {
+            if (!dioramaCapture_ && currentMode_ == AppMode::GamePlay && gameplayUIManager_ && !(gameOver_ && gameOver_->IsActive()) && !(startIntro_ && startIntro_->BlocksInput())) {
                 gameplayUIManager_->Draw3DPrompts(
                     true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
             }
@@ -461,6 +463,7 @@ void GameRuntime::RenderScene() {
 
     // ステージ紹介中はチュートリアルや目標矢印で景色を遮らない。
     // 黒帯と回転幕はDraw側で別途描くため、この早期returnでも表示される。
+    if (currentMode_==AppMode::GamePlay && gameOver_ && gameOver_->IsActive()) return;
     if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsTouring()) return;
 
     if(dioramaCapture_) return; // Clean footage: hide HUD, prompts and victory text at the source.
@@ -565,11 +568,6 @@ void GameRuntime::DrawSkyboxForFrame() {
         skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         skydomeObject_->Draw();
     }
-}
-
-bool GameRuntime::IsStartIntroHidingPlayer() const {
-    // 演出の表示終了ではなく、操作解禁と同じ判定にする。GOの最初のフレームから映る。
-    return currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->BlocksInput();
 }
 
 bool GameRuntime::IsPlayerHiddenByWall() const {

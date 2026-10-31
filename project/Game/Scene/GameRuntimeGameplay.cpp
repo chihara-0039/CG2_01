@@ -150,7 +150,14 @@ void GameRuntime::UpdateGamePlay() {
     if (player_) {
         float cameraYawForMovement = useFirstPersonCamera_ ? fpsCameraYaw_ : gameplayCameraController_.GetAngle();
         player_->SetStageCollisionEnabled(true);
-        player_->Update(input.get(), stageMap_, cameraYawForMovement, lightVP, dxCommon.get());
+        // PR1の自動撮影・検証は即復帰を維持し、対話プレイでだけ失敗演出へ進む。
+        const bool deferFailure=!(comparisonActive_ || dioramaCapture_ || trialVerification_);
+        player_->Update(input.get(), stageMap_, cameraYawForMovement, lightVP, dxCommon.get(), deferFailure);
+        const bool contactFailure=player_->ConsumeFailure();
+        if (deferFailure && (contactFailure || player_->GetPosition().y < -10.0f)) {
+            BeginGameOver(!contactFailure);
+            return;
+        }
     }
 
     if (stageMap_.NeedsRebuild()) {
@@ -416,6 +423,7 @@ void GameRuntime::RefreshGoalGuideTarget() {
 
 
 void GameRuntime::UpdateSceneTransition() {
+    if (gameOver_ && gameOver_->IsActive()) return;
     if (sceneFadePhase_ != SceneFadePhase::None) {
         return;
     }
@@ -423,6 +431,10 @@ void GameRuntime::UpdateSceneTransition() {
     if (startIntro_ && startIntro_->BlocksInput()) {
         // 演出中のESC/Bはポーズへ入れず、ステージ選択へ戻す。
         if (input->TriggerKey(DIK_ESCAPE) || input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+            if (player_) {
+                player_->SetPosition(startIntro_->GetSpawnPosition());
+                player_->SetRotation(startIntro_->GetSpawnRotation());
+            }
             startIntro_->Cancel(camera.get());
             ReturnToStageSelect();
         }
@@ -490,3 +502,21 @@ void GameRuntime::ReturnToStageSelect() {
     RequestSceneChange(SceneType::StageSelect);
 }
 
+
+void GameRuntime::BeginGameOver(bool fall) {
+    if (!player_ || !gameOver_ || gameOver_->IsActive()) return;
+    if (startIntro_) startIntro_->Cancel(camera.get());
+    isGamePaused_=false;
+    bgmController_.Update(false);
+    if (!fall && particleManager) {
+        // 失敗時の一発だけ。主人公を覆わない小さな星色の破片と衝撃波に絞る。
+        ParticleManager::HitEffectSettings hit{};
+        hit.size=.55f; hit.brightness=.65f; hit.lifeScale=.7f;
+        hit.slashCount=0; hit.sparkCount=14; hit.blueRatio=0;
+        hit.corePower=.25f; hit.crossPower=0; hit.pillarPower=0; hit.ringPower=.35f;
+        hit.sparkColor={.7f,.9f,1,1}; hit.sparkSecondaryColor={.85f,.7f,1,1};
+        hit.coreColor={.85f,.95f,1,1}; hit.ringColor={.55f,.8f,1,1};
+        particleManager->EmitHitEffect(player_->GetPosition(),hit);
+    }
+    gameOver_->Begin(camera.get(),player_->GetPosition(),player_->GetRotation(),fall);
+}

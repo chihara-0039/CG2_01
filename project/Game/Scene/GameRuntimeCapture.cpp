@@ -99,6 +99,7 @@ void GameRuntime::UpdateCaptureTools() {
     UpdateDioramaCapture();
     auto& recorder=dxCommon->Recorder();
     const bool canUndo=(currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace) &&
+        !(gameOver_ && gameOver_->IsActive()) && !(startIntro_ && startIntro_->BlocksInput()) &&
         !isGamePaused_ && !isGoalReached_ && (!blockInventoryUI_ || !blockInventoryUI_->IsActive()) && !comparisonActive_;
     if(canUndo && player_) {
         blockPlacementController_.SetPlayerPosition(player_->GetPosition());
@@ -188,7 +189,7 @@ void GameRuntime::UpdateExplorationFog() {
         if (elapsed>=captureDuration+1.5f && comparisonRecordingStarted_ && dxCommon->Recorder().IsRecording()) dxCommon->Recorder().Stop();
         if (elapsed>=captureDuration+1.5f && comparisonRecordingStarted_ && !dxCommon->Recorder().IsBusy()) PostQuitMessage(0);
     }
-    const bool paused=isGamePaused_ || (blockInventoryUI_ && blockInventoryUI_->IsActive()) || sceneFadePhase_!=SceneFadePhase::None || isGoalReached_ || (!comparisonActive_ && IsWindowInactive());
+    const bool paused=(gameOver_ && gameOver_->IsActive()) || (startIntro_ && startIntro_->BlocksInput()) || isGamePaused_ || (blockInventoryUI_ && blockInventoryUI_->IsActive()) || sceneFadePhase_!=SceneFadePhase::None || isGoalReached_ || (!comparisonActive_ && IsWindowInactive());
     if (!paused && input->TriggerKey(DIK_G)) fogExplorer_.TryScan();
     fogExplorer_.Update(dt,player_->GetPosition(),camera->GetRotation().y,paused);
     const auto p=fogExplorer_.Origin(), d=fogExplorer_.Direction();

@@ -83,13 +83,13 @@ public:
     //               プレイヤーの移動方向をカメラ相対にするために使用。
     // -------------------------------------------------------
     void Update(const Input* input, StageMap& map, float cameraRotY,
-                const Matrix4x4& lightVP, DirectXCommon* dxCommon);
+                const Matrix4x4& lightVP, DirectXCommon* dxCommon, bool deferFailure = false);
 
     // -------------------------------------------------------
     //  UpdateTransform : Object3d の行列のみを更新する (物理計算なし)。
     //  GamePlay 以外のモード (StageEditor など) で位置だけ反映したい場合に使う。
     // -------------------------------------------------------
-    void UpdateTransform(const Matrix4x4& lightVP, DirectXCommon* dxCommon = nullptr);
+    void UpdateTransform(const Matrix4x4& lightVP, DirectXCommon* dxCommon);
 
     // -------------------------------------------------------
     //  CrumbleUpdate : 崩れる足場ブロック (Crumble) の更新処理。
@@ -110,6 +110,7 @@ public:
 
     // ── 座標・回転 ────────────────────────────────────────
 
+    void SetPresentationScale(float scale) { presentationScale_=scale; }
     void SetPosition(const Vector3& pos) { position_ = pos; }
     const Vector3& GetPosition() const   { return position_; }
     bool IsGrounded() const { return isGrounded_; }
@@ -153,6 +154,8 @@ public:
 
     /// <summary>プレイヤーをリスポーン地点に戻し、速度をリセットする</summary>
     void Respawn();
+    // GamePlayのみ失敗を演出側へ渡す。ポーリングで一度だけ消費する。
+    bool ConsumeFailure() { const bool result=failurePending_; failurePending_=false; return result; }
 
     // ── ゲーム特殊ブロック処理 ────────────────────────────
 
@@ -256,6 +259,8 @@ private:
     Vector3 rotation_ = { 0, 0, 0 }; // 回転 (主に Y 軸: 向き)
     Vector3 velocity_ = { 0, 0, 0 }; // 速度 (重力・ジャンプ・移動の合算)
     const std::vector<WorldCollisionBox>* externalCollisionBoxes_ = nullptr; ///< Blender配置物などの外部当たり判定。所有しない。
+    float presentationScale_=1;
+    bool failurePending_ = false;
     Vector3 respawnPosition_ = { 0.0f, 1.5f, 0.0f }; // リスポーン地点
 
     // ── コライダー ────────────────────────────────────────

@@ -7,6 +7,7 @@
 #include "RecoveryTransitionMotion.h"
 #include "StartIntroTimeline.h"
 #include "StageFlyover.h"
+#include "GameOverTimeline.h"
 #include <cmath>
 #include <cassert>
 #include <iostream>
@@ -77,6 +78,157 @@ int main() {
         assert(std::abs(approach.position.z-landing.position.z) < .002f);
     }
     std::cout << "Stage flyover: four stage sizes, full 360-degree orbit, framing and exact landing passed\n";
+    // 手前の主人公と奥の舞台が実際に同じ画角へ入るかを投影座標で確認する。
+    const auto visible = [](const Vector3& point, const StageFlyover::Pose& camera) {
+        const Vector3 v{point.x-camera.position.x,point.y-camera.position.y,point.z-camera.position.z};
+        const float sy=std::sin(camera.rotation.y),cy=std::cos(camera.rotation.y);
+        const float sp=std::sin(camera.rotation.x),cp=std::cos(camera.rotation.x);
+        const float depth=v.x*sy*cp-v.y*sp+v.z*cy*cp;
+        const float x=v.x*cy-v.z*sy;
+        const float y=v.x*sy*sp+v.y*cp+v.z*cy*sp;
+        return depth>.01f && std::abs(x/depth)<std::tan(camera.fov/2)*1280/720 &&
+            std::abs(y/depth)<std::tan(camera.fov/2);
+    };
+    const Vector3 spawn{4,1.5f,0};
+    for (const Vector3 center : {Vector3{4,1,0},Vector3{16,6,16},Vector3{-30,12,-24}}) {
+        for (float radius : {3.0f,30.0f,80.0f}) for (float yaw : {0.0f,1.6f,3.1f}) {
+            const StageFlyover::Pose end{{4-std::sin(yaw)*12,9, -std::cos(yaw)*12},{.55f,yaw,0},.67f};
+            float lastHeight=1000;
+            const auto first=StageArrival::Evaluate(0,center,radius,spawn,end);
+            float lastAngle=std::atan2(first.playerPosition.x-center.x,first.playerPosition.z-center.z);
+            float playerSweep=0;
+            for (int i=0;i<=640;++i) {
+                const float time=i*.01f;
+                const auto frame=StageArrival::Evaluate(time,center,radius,spawn,end);
+                assert(std::isfinite(frame.camera.position.x) && std::isfinite(frame.camera.rotation.y));
+                assert(frame.playerPosition.y<=lastHeight+.001f && frame.playerPosition.y>=spawn.y);
+                lastHeight=frame.playerPosition.y;
+                assert(frame.cloudAlpha>=0 && frame.cloudAlpha<=1 && frame.letterbox>=0 && frame.letterbox<=1);
+                assert(frame.landed==(time>=StageArrival::kFlightDuration));
+                const Vector3 torso{frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z};
+                const Vector3 offset{frame.camera.position.x-torso.x,frame.camera.position.y-torso.y,frame.camera.position.z-torso.z};
+                const float clearance=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);
+                const float ex=end.position.x-spawn.x,ey=end.position.y-(spawn.y+.8f),ez=end.position.z-spawn.z;
+                // 着地でカメラが反対側へ移っても、主人公を横切って接写にならない。
+                assert(clearance >= (std::min)(18.0f,std::sqrt(ex*ex+ey*ey+ez*ez))-.002f);
+                assert(visible(torso,frame.camera));
+                if (time<=StageArrival::kOrbitDuration) {
+                    const float angle=std::atan2(frame.playerPosition.x-center.x,frame.playerPosition.z-center.z);
+                    playerSweep+=std::remainder(angle-lastAngle,6.28318530718f);
+                    lastAngle=angle;
+                    assert(std::abs(frame.playerPosition.y-first.playerPosition.y)<.001f);
+
+                    assert(visible({frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z},frame.camera));
+                    assert(visible(center,frame.camera));
+                    assert(clearance>18.0f);
+                    // 高さ2ユニットの基準モデルで、画面高の15%以下を目安にする。
+                    const float sy=std::sin(frame.camera.rotation.y),cy=std::cos(frame.camera.rotation.y);
+                    const float sp=std::sin(frame.camera.rotation.x),cp=std::cos(frame.camera.rotation.x);
+                    const float depth=-offset.x*sy*cp+offset.y*sp-offset.z*cy*cp;
+                    assert(2.0f/(2*depth*std::tan(frame.camera.fov/2))<.15f);
+                }
+            }
+            assert(std::abs(playerSweep-6.28318530718f)<.002f);
+            const auto landed=StageArrival::Evaluate(StageArrival::kFlightDuration,center,radius,spawn,end);
+            const auto before=StageArrival::Evaluate(StageArrival::kFlightDuration-.001f,center,radius,spawn,end);
+            assert(landed.landed && !landed.finished && landed.cloudAlpha==0);
+            assert(landed.playerPosition.x==spawn.x && landed.playerPosition.y==spawn.y && landed.playerPosition.z==spawn.z);
+            assert(landed.camera.position.x==end.position.x && landed.camera.fov==end.fov);
+            assert(std::abs(before.camera.position.x-end.position.x)<.002f);
+            assert(std::abs(before.camera.position.y-end.position.y)<.002f);
+            assert(std::abs(before.camera.position.z-end.position.z)<.002f);
+            assert(std::abs(std::remainder(before.camera.rotation.y-end.rotation.y,6.28318530718f))<.002f);
+            assert(std::abs(before.camera.fov-end.fov)<.002f);
+            assert(std::abs(before.playerPosition.y-spawn.y)<.002f);
+            assert(StageArrival::Evaluate(StageArrival::kFlightDuration+StageArrival::kFadeDuration,center,radius,spawn,end).finished);
+            const auto restart=StageArrival::Evaluate(-1,center,radius,spawn,end);
+            assert(!restart.landed && restart.cloudAlpha==1);
+        }
+    }
+    std::cout << "Stage arrival: 27 layouts, player full orbit, foreground/background framing, descent and landing passed\n";
+    // モデル本体が前傾・バンクし、着地では非ゼロの元姿勢にも正確に復帰する。
+    const Vector3 originalRotation{.12f,3.05f,-.08f};
+    const auto flight=StageArrival::Evaluate(StageArrival::kOrbitDuration*.5f,stageCenter,30,spawn,destination,originalRotation);
+    assert(flight.playerRotation.x<-.8f && std::abs(flight.playerRotation.z)>.1f);
+    const auto touchdown=StageArrival::Evaluate(StageArrival::kFlightDuration,stageCenter,30,spawn,destination,originalRotation);
+    assert(touchdown.playerRotation.x==originalRotation.x && touchdown.playerRotation.y==originalRotation.y &&
+        touchdown.playerRotation.z==originalRotation.z);
+    const auto approach=StageArrival::Evaluate(StageArrival::kFlightDuration-.001f,stageCenter,30,spawn,destination,originalRotation);
+    assert(std::abs(approach.playerRotation.x-originalRotation.x)<.001f);
+    assert(std::abs(std::remainder(approach.playerRotation.y-originalRotation.y,6.28318530718f))<.001f);
+    assert(std::abs(approach.playerRotation.z-originalRotation.z)<.001f);
+    for (float step : {1.0f/30,1.0f/60,1.0f/144,.15f}) {
+        auto previous=StageArrival::Evaluate(0,stageCenter,30,spawn,destination,originalRotation);
+        for (float time=step;time<StageArrival::kFlightDuration+StageArrival::kFadeDuration;time+=step) {
+            const auto pose=StageArrival::Evaluate(time,stageCenter,30,spawn,destination,originalRotation);
+            assert(std::isfinite(pose.playerRotation.y));
+            assert(std::abs(std::remainder(pose.playerRotation.y-previous.playerRotation.y,6.28318530718f))<.5f);
+            previous=pose;
+        }
+    }
+    std::cout << "Flying model: body tilt, bank, continuous orientation and exact standing restoration passed\n";
+    // 失敗演出中の入力を遮断し、選択後の二重決定・再試行・戻るを検証する。
+    using FailureAction=GameOverTimeline::Action;
+    for (float step : {1.0f/30,1.0f/60,1.0f/144,.15f}) {
+        GameOverTimeline::Flow flow;
+        assert(!flow.Active()); flow.Begin();
+        float previousRadius=800;
+        for (int i=0;i<1000 && !flow.MenuReady();++i) {
+            assert(flow.Confirm(false)==FailureAction::None);
+            flow.MoveSelection(); assert(flow.Selected()==0);
+            flow.Advance(step);
+            const auto frame=GameOverTimeline::Evaluate(flow.Elapsed());
+            assert(frame.radius<=previousRadius+.001f && frame.radius>=0);
+            assert(frame.menuAlpha>=0 && frame.menuAlpha<=1);
+            if (flow.Elapsed()<=GameOverTimeline::kHitStop) assert(frame.motion==0 && frame.cameraBlend==0);
+            previousRadius=frame.radius;
+        }
+        assert(flow.MenuReady());
+        assert(GameOverTimeline::Evaluate(flow.Elapsed()).radius==0);
+        assert(flow.Confirm(false)==FailureAction::Retry);
+        assert(flow.Revealing() && flow.Active());
+        assert(flow.Confirm(false)==FailureAction::None && flow.Confirm(true)==FailureAction::None);
+        flow.MoveSelection(); assert(flow.Selected()==0);
+        assert(GameOverTimeline::RetryRadius(0)==0);
+        flow.Advance(GameOverTimeline::kRevealTime-.001f); assert(flow.Active());
+        flow.Advance(.002f); assert(!flow.Active());
+        assert(GameOverTimeline::RetryRadius(GameOverTimeline::kRevealTime)==800);
+        flow.Begin(); flow.Advance(GameOverTimeline::kMenuTime+.1f); flow.MoveSelection();
+        assert(flow.Selected()==1 && flow.Confirm(false)==FailureAction::StageSelect);
+        assert(flow.Leaving() && flow.Confirm(false)==FailureAction::None);
+        flow.Begin(); assert(flow.Selected()==0 && flow.Elapsed()==0);
+        assert(flow.Confirm(true)==FailureAction::None);
+        flow.Advance(-1); assert(flow.Elapsed()==0);
+        flow.Advance(GameOverTimeline::kMenuTime+.1f); assert(flow.Confirm(true)==FailureAction::StageSelect);
+        flow.Cancel(); assert(!flow.Active());
+    }
+    // 文字が順番に現れ、表示完了後にだけ操作できる。姿勢・視点の連続性も確認する。
+    for (int letter=0;letter<8;++letter) {
+        const auto hidden=GameOverTimeline::EvaluateLetter(2.0f,letter);
+        const auto settled=GameOverTimeline::EvaluateLetter(GameOverTimeline::kMenuTime,letter);
+        assert(hidden.alpha==0 && settled.alpha==1 && settled.scale==1 && settled.rotation==0);
+    }
+    assert(GameOverTimeline::EvaluateLetter(2.35f,0).alpha>GameOverTimeline::EvaluateLetter(2.35f,7).alpha);
+    for (bool fall : {false,true}) {
+        const Vector3 initial{5,2,4},body{0,3.1f,0},cam{9,8,-9},aim{.4f,3.1f,0};
+        const auto frozen=GameOverTimeline::EvaluatePose(GameOverTimeline::kHitStop,fall,initial,body,cam,aim,.8f);
+        assert(frozen.position.y==initial.y && frozen.cameraPosition.x==cam.x && frozen.fov==.8f && frozen.scale==1);
+        auto previous=frozen;
+        for (int i=19;i<=320;++i) {
+            const auto pose=GameOverTimeline::EvaluatePose(static_cast<float>(i)*.01f,fall,initial,body,cam,aim,.8f);
+            assert(std::isfinite(pose.cameraRotation.y) && std::isfinite(pose.position.y));
+            assert(std::abs(pose.cameraPosition.x-previous.cameraPosition.x)<.5f);
+            assert(std::abs(pose.cameraPosition.y-previous.cameraPosition.y)<.5f);
+            assert(pose.fov>=.6f && pose.fov<=.8f);
+            assert(pose.scale>=.25f && pose.scale<=1 && pose.scale<=previous.scale);
+            previous=pose;
+        }
+        if (fall) assert(previous.position.y<initial.y-6);
+        else assert(std::abs(previous.position.y-(initial.y-2))<.001f);
+        assert(previous.scale==.25f);
+        assert(GameOverTimeline::EvaluatePose(0,fall,initial,body,cam,aim,.8f).scale==1);
+    }
+    std::cout << "Game over: hit stop, full iris coverage, guarded input, retry/reveal, stage select and restart passed\n";
     const float cueTimes[] = {0, 1, 2, 3};
     for (int cue = 0; cue < 4; ++cue) {
         const auto frame = StartIntroTimeline::Evaluate(cueTimes[cue]);
@@ -174,6 +326,17 @@ int main() {
         }
     }
     for (bool value : reached) assert(value);
+    // PR1のジオラマを含む7ステージが、順方向・逆方向どちらでも一巡できる。
+    for (Direction direction : {Direction::Left,Direction::Right}) {
+        bool monthlyReached[7]{};
+        int index=0;
+        for (int i=0;i<7;++i) {
+            assert(!monthlyReached[index]); monthlyReached[index]=true;
+            index=StageSelection::Move(index,direction,7);
+        }
+        assert(index==0);
+        for (bool value:monthlyReached) assert(value);
+    }
     assert(StageSelection::Move(5, Direction::Right, 0) == 0);
 
     const std::vector<SceneType> route = {
