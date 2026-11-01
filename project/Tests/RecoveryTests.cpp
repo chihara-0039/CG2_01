@@ -105,6 +105,7 @@ int main() {
                 lastHeight=frame.playerPosition.y;
                 assert(frame.cloudAlpha>=0 && frame.cloudAlpha<=1 && frame.letterbox>=0 && frame.letterbox<=1);
                 assert(frame.landed==(time>=StageArrival::kFlightDuration));
+                assert(frame.playerVisible==(time>=StageArrival::kCloudExitTime));
                 const Vector3 torso{frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z};
                 const Vector3 offset{frame.camera.position.x-torso.x,frame.camera.position.y-torso.y,frame.camera.position.z-torso.z};
                 const float clearance=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);

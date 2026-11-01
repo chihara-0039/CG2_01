@@ -12,6 +12,7 @@ Pose Evaluate(float seconds, const Vector3& center, float radius, const Pose& de
 
 // 到着演出は物理移動と分離し、着地時にスポーン位置へ正確に戻す。
 namespace StageArrival {
+constexpr float kCloudExitTime = .55f;
 constexpr float kOrbitDuration = 3.8f;
 constexpr float kLandingDuration = 1.6f;
 constexpr float kFlightDuration = kOrbitDuration + kLandingDuration;
@@ -24,6 +25,7 @@ struct Frame {
     float letterbox;
     bool landed;
     bool finished;
+    bool playerVisible;
 };
 Frame Evaluate(float seconds, const Vector3& center, float radius,
     const Vector3& spawn, const StageFlyover::Pose& destination, const Vector3& spawnRotation = {});

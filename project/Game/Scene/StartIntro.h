@@ -1,5 +1,7 @@
 #pragma once
 #include "Sprite.h"
+#include "Object3d.h"
+#include "Model.h"
 #include "Sound.h"
 #include "Camera.h"
 #include "StageFlyover.h"
@@ -10,14 +12,16 @@
 // ステージ到着専用。降下・追従視点・雲抜け・着地音を一つの時計で同期する。
 class StartIntro {
 public:
-    void Initialize(SpriteCommon* common, uint32_t cloudTexture, uint32_t starTexture);
+    void Initialize(SpriteCommon* common, uint32_t cloudTexture, uint32_t starTexture, Object3dCommon* objectCommon);
     void Begin(Camera* camera, const Vector3& stageCenter, float stageRadius, const Vector3& spawnPosition, const Vector3& spawnRotation);
     void Update(Camera* camera, bool visible);
     void Cancel(Camera* camera);
     void Finalize();
     void Draw();
+    void DrawLaunchCloud(const Matrix4x4& view,const Matrix4x4& projection,const Matrix4x4& lightVP);
     bool IsActive() const { return active_; }
     bool IsTouring() const { return active_; }
+    bool IsPlayerVisible() const { return !active_ || frame_.playerVisible; }
     bool BlocksInput() const { return active_ && !frame_.landed; }
     const Vector3& GetPlayerPosition() const { return frame_.playerPosition; }
     const Vector3& GetPlayerRotation() const { return frame_.playerRotation; }
@@ -29,6 +33,9 @@ public:
 private:
     void UpdateSprites();
     Sound::SoundData MakeTone(bool landing);
+    std::unique_ptr<Model> launchCloudModel_;
+    std::array<std::unique_ptr<Object3d>,5> launchCloudObjects_;
+    Vector3 launchCloudPosition_{};
     std::array<std::unique_ptr<Sprite>,2> bars_;
     std::array<std::unique_ptr<Sprite>,8> clouds_;
     std::array<std::unique_ptr<Sprite>,24> trailStars_;

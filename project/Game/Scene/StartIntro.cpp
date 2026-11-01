@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstring>
 
-void StartIntro::Initialize(SpriteCommon* common, uint32_t cloudTexture, uint32_t starTexture) {
+void StartIntro::Initialize(SpriteCommon* common, uint32_t cloudTexture, uint32_t starTexture, Object3dCommon* objectCommon) {
     for (auto& bar : bars_) {
         bar = std::make_unique<Sprite>(); bar->Initialize(common,0);
     }
@@ -12,6 +12,8 @@ void StartIntro::Initialize(SpriteCommon* common, uint32_t cloudTexture, uint32_
         cloud->SetAnchorPoint({.5f,.5f});
     }
     for(auto& star:trailStars_){star=std::make_unique<Sprite>();star->Initialize(common,starTexture);star->SetAnchorPoint({.5f,.5f});}
+    launchCloudModel_=Model::CreateFromOBJ(objectCommon->GetDxCommon(),"Resources/Models/Diorama","cloud.obj",objectCommon->GetTextureManager());
+    for(auto& cloud:launchCloudObjects_){cloud=std::make_unique<Object3d>();cloud->Initialize(objectCommon);cloud->SetModel(launchCloudModel_.get());cloud->SetColor({1,1,1,1});cloud->SetShininess(.04f);cloud->SetMetallic(0);}
     sound_.Initialize();
     wind_ = MakeTone(false);
     landing_ = MakeTone(true);
@@ -55,6 +57,7 @@ void StartIntro::Begin(Camera* camera, const Vector3& center, float radius, cons
     gameCamera_ = {camera->GetPosition(),camera->GetRotation(),camera->GetFov()};
     cameraFarClip_ = camera->GetFarClip();
     frame_ = StageArrival::Evaluate(0,center,radius,spawn,gameCamera_,spawnRotation_);
+    launchCloudPosition_=frame_.playerPosition;
     camera->SetPosition(frame_.camera.position); camera->SetRotation(frame_.camera.rotation);
     camera->SetFov(frame_.camera.fov);
     camera->SetFarClip((std::max)(cameraFarClip_,radius*6+80)); camera->Update();
@@ -134,8 +137,21 @@ void StartIntro::Draw() {
 int StartIntro::ConsumeFlightCloud() {
     if (!BlocksInput() || elapsed_<=0 || elapsed_>StageArrival::kOrbitDuration) return 0;
     if (lastCloudAt_>=0 && elapsed_-lastCloudAt_<.12f) return 0;
-    const int kind=lastCloudAt_<0 ? 2 : 1;
+    const int kind=1; // The dense launch cloud is a world-space stage mesh.
     // 低FPSや復帰時に過去の発生分を一度に積まない。
     lastCloudAt_=elapsed_;
     return kind;
+}
+
+void StartIntro::DrawLaunchCloud(const Matrix4x4& view,const Matrix4x4& projection,const Matrix4x4& lightVP) {
+    if(!active_ || elapsed_>=2.0f)return;
+    const float fade=std::clamp((elapsed_-1.1f)/.9f,0.0f,1.0f);
+    const float scale=1-fade*fade*(3-2*fade);
+    const Vector3 offsets[]={{0,.6f,0},{-1.8f,.1f,0},{1.8f,.25f,0},{0,.3f,-1.6f},{0,.4f,1.6f}};
+    for(size_t i=0;i<launchCloudObjects_.size();++i){
+        auto& cloud=launchCloudObjects_[i];const auto o=offsets[i];
+        cloud->SetPosition({launchCloudPosition_.x+o.x,launchCloudPosition_.y+o.y,launchCloudPosition_.z+o.z});
+        const float size=(i==0?3.2f:2.5f)*scale;
+        cloud->SetScale({size,size*.8f,size});cloud->SetCamera(view,projection);cloud->Update(lightVP);cloud->Draw();
+    }
 }

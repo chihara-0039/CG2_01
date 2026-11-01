@@ -80,16 +80,19 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     const float distance=Mix(followDistance,endDistance,landing);
     const Vector3 follow{torso.x+std::sin(cameraYaw)*std::cos(elevation)*distance,
         torso.y+std::sin(elevation)*distance,torso.z+std::cos(cameraYaw)*std::cos(elevation)*distance};
-    const Vector3 target{torso.x-axis.x*6.0f*(1-landing),
-        torso.y-axis.y*6.0f*(1-landing),torso.z-axis.z*6.0f*(1-landing)};
+    // Aim at a world-space point throughout descent. Blending Euler angles late
+    // in the shot could turn away from the player even with a correct camera path.
+    const Vector3 endForward{std::sin(destination.rotation.y)*std::cos(destination.rotation.x),
+        -std::sin(destination.rotation.x),std::cos(destination.rotation.y)*std::cos(destination.rotation.x)};
+    const Vector3 endAimOffset{endOffset.x+endForward.x*endDistance,
+        endOffset.y+endForward.y*endDistance,endOffset.z+endForward.z*endDistance};
+    const Vector3 target{torso.x+Mix(-axis.x*6,endAimOffset.x,landing),
+        torso.y+Mix(-axis.y*6,endAimOffset.y,landing),torso.z+Mix(-axis.z*6,endAimOffset.z,landing)};
     const Vector3 direction{target.x-follow.x,target.y-follow.y,target.z-follow.z};
     const float horizontal = std::sqrt(direction.x*direction.x+direction.z*direction.z);
-    const Vector3 rotation{-std::atan2(direction.y,horizontal),std::atan2(direction.x,direction.z),0};
-    // 加速中だけ画角を広げ、降下では主人公を注視し続ける。
-    const float restoreAim=Smooth((landing-.85f)/.15f);
-    StageFlyover::Pose camera{follow,
-        {MixAngle(rotation.x,destination.rotation.x,restoreAim),
-        MixAngle(rotation.y,destination.rotation.y,restoreAim),MixAngle(0,destination.rotation.z,restoreAim)},
+    const Vector3 rotation{-std::atan2(direction.y,horizontal),std::atan2(direction.x,direction.z),
+        MixAngle(0,destination.rotation.z,landing)};
+    StageFlyover::Pose camera{follow,rotation,
         Mix(.90f+.10f*std::sin(orbitProgress*3.14159265359f),destination.fov,landing)};
     if (t >= 1) camera = destination;
     const float fade = Smooth((seconds-kFlightDuration)/kFadeDuration);
@@ -102,5 +105,5 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
         MixAngle(flightRotation.y,spawnRotation.y,upright),
         Mix(flightRotation.z,spawnRotation.z,upright)};
     return {camera,player,playerRotation,1-Smooth(seconds/1.25f),1-fade,
-        seconds >= kFlightDuration,seconds >= kFlightDuration+kFadeDuration};
+        seconds >= kFlightDuration,seconds >= kFlightDuration+kFadeDuration,seconds >= kCloudExitTime};
 }

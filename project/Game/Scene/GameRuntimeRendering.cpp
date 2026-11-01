@@ -254,7 +254,7 @@ void GameRuntime::Draw() {
             obj->DrawShadow(lightVP);
         }
     }
-    if (player_) {
+    if (player_ && (!startIntro_ || startIntro_->IsPlayerVisible())) {
         player_->DrawShadow(lightVP);
     }
     if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
@@ -390,10 +390,11 @@ void GameRuntime::RenderScene() {
         }
 
         DrawRuntimeLevelObjects();
+        if(currentMode_==AppMode::GamePlay && startIntro_)startIntro_->DrawLaunchCloud(camera->GetViewMatrix(),camera->GetProjectionMatrix(),lightCamera_->GetViewProjectionMatrix());
 
         if (currentMode_ == AppMode::GamePlay ||
             currentMode_ == AppMode::EffectPreview) {
-            if (player_ && (!useFirstPersonCamera_ || (startIntro_ && startIntro_->BlocksInput()) || (gameOver_ && gameOver_->IsActive()))) {
+            if (player_ && (!startIntro_ || startIntro_->IsPlayerVisible()) && (!useFirstPersonCamera_ || (startIntro_ && startIntro_->BlocksInput()) || (gameOver_ && gameOver_->IsActive()))) {
                 player_->Draw();
                 if (!(gameOver_ && gameOver_->IsActive()) && !(startIntro_ && startIntro_->BlocksInput()) && IsPlayerHiddenByWall()) {
                     object3dCommon->PreDrawPlayerHighlight();
