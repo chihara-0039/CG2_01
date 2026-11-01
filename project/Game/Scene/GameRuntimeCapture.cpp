@@ -65,8 +65,17 @@ void GameRuntime::InitializeCaptureTools() {
             bubblePickupController_.Initialize(&stageMap_,stageRenderer_.get(),&blockInventory_);
             blockPlacementController_.Initialize(&stageMap_,stageRenderer_.get(),&blockInventory_);
             gameplayCameraController_.ResetCamera(camera.get(),player_.get(),stageMap_,0);
-            startIntroPending_=CaptureEnvironment("CG2_CINEMATIC_SHOT")=="arrival";
-            OnSceneEntered(SceneType::GamePlay);
+            if(CaptureEnvironment("CG2_CINEMATIC_SHOT")=="arrival_transition") {
+                sceneManager_->ChangeScene(SceneType::StageSelect,*this);
+                // Regression fixture: the outgoing selection camera must never
+                // become the arrival's gameplay destination.
+                camera->SetPosition({70,45,-65});camera->SetRotation({.2f,1.4f,0});camera->SetFov(.45f);camera->Update();
+                startIntroPending_=true;
+                RequestSceneChange(SceneType::GamePlay);
+            } else {
+                startIntroPending_=CaptureEnvironment("CG2_CINEMATIC_SHOT")=="arrival";
+                OnSceneEntered(SceneType::GamePlay);
+            }
         }
         comparisonStarted_=std::chrono::steady_clock::now();
     }
@@ -114,6 +123,17 @@ void GameRuntime::UpdateCaptureTools() {
     const auto cinematic=CaptureEnvironment("CG2_CINEMATIC_SHOT");
     if(!cinematic.empty()) {
         static bool triggered=false;
+        static bool framingOk=true;static int trackedFrames=0;
+        static float maxNdcX=0,maxNdcY=0;
+        if(cinematic=="arrival_transition" && startIntro_ && startIntro_->BlocksInput() && startIntro_->IsPlayerVisible()) {
+            const auto p=player_->GetPosition(),c=camera->GetPosition(),r=camera->GetRotation();
+            const float x=p.x-c.x,y=p.y+.8f-c.y,z=p.z-c.z;
+            const float depth=x*std::sin(r.y)*std::cos(r.x)-y*std::sin(r.x)+z*std::cos(r.y)*std::cos(r.x);
+            const float nx=(x*std::cos(r.y)-z*std::sin(r.y))/(depth*std::tan(camera->GetFov()/2)*(1280.0f/720));
+            const float ny=(x*std::sin(r.y)*std::sin(r.x)+y*std::cos(r.x)+z*std::cos(r.y)*std::sin(r.x))/(depth*std::tan(camera->GetFov()/2));
+            maxNdcX=(std::max)(maxNdcX,std::abs(nx));maxNdcY=(std::max)(maxNdcY,std::abs(ny));
+            framingOk=framingOk && depth>0 && std::abs(nx)<.56f && std::abs(ny)<.56f;++trackedFrames;
+        }
         static std::ofstream trace("../generated/cinematic-review/trace-"+cinematic+".csv");
         const auto cp=camera->GetPosition(), pp=player_->GetPosition();
         const auto cr=camera->GetRotation();
@@ -125,12 +145,21 @@ void GameRuntime::UpdateCaptureTools() {
             if(!dxCommon->Recorder().Start(options)){PostQuitMessage(2);return;}
             comparisonRecordingStarted_=true;
         }
-        if(cinematic!="arrival" && cinematic!="title" && elapsed>=1 && !triggered){
+        if(cinematic!="arrival" && cinematic!="arrival_transition" && cinematic!="title" && elapsed>=1 && !triggered){
             BeginGameOver(cinematic=="fall");triggered=true;
         }
-        if(elapsed>=8) {
+        if(elapsed>=(cinematic=="arrival_transition" ? 10.0f : 8.0f)) {
             if(dxCommon->Recorder().IsRecording())dxCommon->Recorder().Stop();
-            if(!dxCommon->Recorder().IsBusy())PostQuitMessage(0);
+            if(!dxCommon->Recorder().IsBusy()) {
+                bool ok=true;
+                if(cinematic=="arrival_transition") {
+                    const auto p=player_->GetPosition(),spawn=startIntro_->GetSpawnPosition();
+                    const bool landed=std::abs(p.x-spawn.x)<.01f && std::abs(p.y-spawn.y)<.01f && std::abs(p.z-spawn.z)<.01f;
+                    ok=framingOk && trackedFrames>60 && landed;
+                    std::ofstream("../generated/cinematic-review/arrival-transition-check.json")<<"{\"success\":"<<(ok?"true":"false")<<",\"outgoingCameraPerturbed\":true,\"trackedFrames\":"<<trackedFrames<<",\"maxNdcX\":"<<maxNdcX<<",\"maxNdcY\":"<<maxNdcY<<",\"landedAtSpawn\":"<<(landed?"true":"false")<<",\"spawnY\":"<<spawn.y<<"}";
+                }
+                PostQuitMessage(ok?0:3);
+            }
         }
         return;
     }

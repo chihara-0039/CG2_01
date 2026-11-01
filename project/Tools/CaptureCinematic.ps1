@@ -1,4 +1,4 @@
-param([ValidateSet('arrival','fall','hit','title')][string]$Shot='arrival')
+param([ValidateSet('arrival','fall','hit','title','arrival_transition')][string]$Shot='arrival')
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $repoRoot=Split-Path $projectRoot -Parent

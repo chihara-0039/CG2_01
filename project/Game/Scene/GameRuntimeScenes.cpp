@@ -196,6 +196,16 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
     HandleModeChange();
 
     if (sceneType == SceneType::GamePlay && startIntroPending_ && startIntro_) {
+        // StageSelect can change the camera while its outgoing wipe is running.
+        // Rebuild the real gameplay destination only after that scene has exited.
+        playerBasePosition_.ApplyFromStageMap(stageMap_,player_.get());
+        gameplayCameraController_.ResetCamera(camera.get(),player_.get(),stageMap_,stageSelect_ ? stageSelect_->GetSelectedIndex() : 0);
+        if(stageSelect_ && stageSelect_->GetSelectedFileName()=="dioramaRuins.txt") {
+            gameplayCameraController_.ConfigureDiorama();
+            gameplayCameraController_.Update(input.get(),camera.get(),winApp.get(),player_.get());
+            camera->Update();
+        }
+
         // 空の余白を含むグリッドではなく、実際の配置範囲から到着演出の舞台中心を求める。
         Vector3 minimum{static_cast<float>(stageMap_.GetWidth()),static_cast<float>(stageMap_.GetHeight()),static_cast<float>(stageMap_.GetDepth())};
         Vector3 maximum{};

@@ -74,12 +74,37 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     }
     if(t>=1)player=spawn;
     const float yaw=angle+1.57079632679f;
-    // Keep a constant offset from the player. Orbiting a second camera around
-    // the descent made the apparent flight direction swing away from spawn.
-    const Vector3 displacement{player.x-spawn.x,player.y-spawn.y,player.z-spawn.z};
-    StageFlyover::Pose camera{{destination.position.x+displacement.x,
-        destination.position.y+displacement.y,destination.position.z+displacement.z},
-        destination.rotation,Mix((std::max)(.75f,destination.fov),destination.fov,landing)};
+    // A distant stage tour: frame both the stage and the actual player rather
+    // than inheriting the outgoing stage-select camera's off-centre view.
+    const Vector3 torso{player.x,player.y+.8f,player.z};
+    const Vector3 endForward{std::sin(destination.rotation.y)*std::cos(destination.rotation.x),
+        -std::sin(destination.rotation.x),std::cos(destination.rotation.y)*std::cos(destination.rotation.x)};
+    const Vector3 endRelative{destination.position.x-spawn.x,destination.position.y-(spawn.y+.8f),destination.position.z-spawn.z};
+    const float endDistance=std::sqrt(endRelative.x*endRelative.x+endRelative.y*endRelative.y+endRelative.z*endRelative.z);
+    const Vector3 endTarget{destination.position.x+endForward.x*endDistance,
+        destination.position.y+endForward.y*endDistance,destination.position.z+endForward.z*endDistance};
+    const Vector3 joint{Mix(center.x,torso.x,.55f),Mix(center.y,torso.y,.55f),Mix(center.z,torso.z,.55f)};
+    const Vector3 target{Mix(joint.x,endTarget.x,landing),Mix(joint.y,endTarget.y,landing),Mix(joint.z,endTarget.z,landing)};
+    const float span=std::sqrt((torso.x-center.x)*(torso.x-center.x)+(torso.y-center.y)*(torso.y-center.y)+(torso.z-center.z)*(torso.z-center.z));
+    constexpr float tourFov=1.0f;
+    const float tourDistance=(radius*.7f+span*.6f+3)/std::sin(tourFov*.5f);
+    const float cameraYaw=MixAngle(angle+.65f,std::atan2(-endForward.x,-endForward.z),landing);
+    const float elevation=Mix(.5f,std::asin(std::clamp(-endForward.y,-1.0f,1.0f)),landing);
+    const float fov=Mix(tourFov,destination.fov,landing);
+    const Vector3 unit{std::sin(cameraYaw)*std::cos(elevation),std::sin(elevation),std::cos(cameraYaw)*std::cos(elevation)};
+    const Vector3 a{torso.x-target.x,torso.y-target.y,torso.z-target.z};
+    const float aimYaw=cameraYaw+3.14159265359f;
+    const float side=a.x*std::cos(aimYaw)-a.z*std::sin(aimYaw);
+    const float up=a.x*std::sin(aimYaw)*std::sin(elevation)+a.y*std::cos(elevation)+a.z*std::cos(aimYaw)*std::sin(elevation);
+    const float axial=a.x*unit.x+a.y*unit.y+a.z*unit.z;
+    const float safeDepth=(std::max)({(std::abs(side)+1.0f)/(std::tan(fov*.5f)*(1280.0f/720)*.55f),
+        (std::abs(up)+1.0f)/(std::tan(fov*.5f)*.55f),(std::min)(12.0f,endDistance)});
+    const float distance=(std::max)(Mix(tourDistance,endDistance,landing),axial+safeDepth);
+    const Vector3 position{target.x+std::sin(cameraYaw)*std::cos(elevation)*distance,
+        target.y+std::sin(elevation)*distance,target.z+std::cos(cameraYaw)*std::cos(elevation)*distance};
+    const Vector3 direction{target.x-position.x,target.y-position.y,target.z-position.z};
+    StageFlyover::Pose camera{position,{-std::atan2(direction.y,std::sqrt(direction.x*direction.x+direction.z*direction.z)),
+        std::atan2(direction.x,direction.z),MixAngle(0,destination.rotation.z,landing)},fov};
     if (t >= 1) camera = destination;
     const float fade = Smooth((seconds-kFlightDuration)/kFadeDuration);
     // モデルの正面は-Z。進入方向へ向け、胴体を寝かせて飛行姿勢にする。

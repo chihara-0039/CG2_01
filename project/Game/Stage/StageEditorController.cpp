@@ -96,7 +96,7 @@ void StageEditorController::ResetPlayerToStartCell(StageMap& stageMap, Player* p
 				if (cell && cell->type == BlockType::PlayerStart) {
 					Vector3 startPos = {
 						static_cast<float>(x),
-						static_cast<float>(y) + 1.1f,
+						static_cast<float>(y) - 0.5f,
 						static_cast<float>(z)
 					};
 
