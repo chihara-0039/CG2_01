@@ -105,6 +105,10 @@ int main() {
                 lastHeight=frame.playerPosition.y;
                 assert(frame.cloudAlpha>=0 && frame.cloudAlpha<=1 && frame.letterbox>=0 && frame.letterbox<=1);
                 assert(frame.landed==(time>=StageArrival::kFlightDuration));
+                assert(std::abs((frame.camera.position.x-frame.playerPosition.x)-(end.position.x-spawn.x))<.001f);
+                assert(std::abs((frame.camera.position.y-frame.playerPosition.y)-(end.position.y-spawn.y))<.001f);
+                assert(std::abs((frame.camera.position.z-frame.playerPosition.z)-(end.position.z-spawn.z))<.001f);
+                assert(frame.camera.rotation.x==end.rotation.x && frame.camera.rotation.y==end.rotation.y);
                 assert(frame.playerVisible==(time>=StageArrival::kCloudExitTime));
                 const Vector3 torso{frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z};
                 const Vector3 offset{frame.camera.position.x-torso.x,frame.camera.position.y-torso.y,frame.camera.position.z-torso.z};
@@ -121,8 +125,8 @@ int main() {
                     assert(frame.playerPosition.y<=first.playerPosition.y+.001f && frame.playerPosition.y>=first.playerPosition.y-4.001f);
 
                     assert(visible({frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z},frame.camera));
-                    assert(visible(center,frame.camera));
-                    assert(clearance>12.0f);
+                    // Player tracking intentionally does not keep the whole stage in view.
+                    assert(clearance >= (std::min)(12.0f,std::sqrt(ex*ex+ey*ey+ez*ez))-.002f);
                     // 高さ2ユニットの基準モデルで、画面高の25%以下を目安にする。
                     const float sy=std::sin(frame.camera.rotation.y),cy=std::cos(frame.camera.rotation.y);
                     const float sp=std::sin(frame.camera.rotation.x),cp=std::cos(frame.camera.rotation.x);
@@ -155,7 +159,7 @@ int main() {
     assert(seamBefore.playerPosition.y>seam.playerPosition.y && seam.playerPosition.y>seamAfter.playerPosition.y);
     const auto impact=StageArrival::Evaluate(StageArrival::kFlightDuration-.05f,stageCenter,30,spawn,destination);
     assert(impact.playerPosition.y-spawn.y>.3f); // Keep falling until actual contact, rather than hovering.
-    std::cout << "Stage arrival: 27 layouts, player full orbit, foreground/background framing, descent and landing passed\n";
+    std::cout << "Stage arrival: 27 layouts, fixed player tracking, full orbit, exact spawn and landing passed\n";
     // モデル本体が前傾・バンクし、着地では非ゼロの元姿勢にも正確に復帰する。
     const Vector3 originalRotation{.12f,3.05f,-.08f};
     const auto flight=StageArrival::Evaluate(StageArrival::kOrbitDuration*.5f,stageCenter,30,spawn,destination,originalRotation);
@@ -229,7 +233,7 @@ int main() {
             const auto pose=GameOverTimeline::EvaluatePose(static_cast<float>(i)*.01f,fall,initial,body,cam,aim,.8f);
             assert(std::isfinite(pose.cameraRotation.y) && std::isfinite(pose.position.y));
             assert(std::abs(pose.rotation.z-body.z)<.5f);
-            if(fall)assert(pose.position.y<=previous.position.y);
+            if(fall){assert(pose.position.y<=previous.position.y);assert(pose.rotation.x==body.x && pose.rotation.z==body.z);}
             assert(std::abs(pose.cameraPosition.x-previous.cameraPosition.x)<.5f);
             assert(std::abs(pose.cameraPosition.y-previous.cameraPosition.y)<.5f);
             assert(pose.fov>=.6f && pose.fov<=.8f);

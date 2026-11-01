@@ -144,14 +144,14 @@ void GameOver::UpdateSprites() {
         sparks_[i]->SetPosition({x,y});
         const float size=menu ? 12+static_cast<float>(i%4)*5 : 30*(1-burst)+8;
         sparks_[i]->SetSize({size,size}); sparks_[i]->SetRotation(menu ? .15f*std::sin(time*.4f+index) : angle+time);
-        sparks_[i]->SetColor({.8f,.9f,1,visible ? (menu ? backgroundAlpha*twinkle : (1-burst)*.7f) : 0});
+        sparks_[i]->SetColor({.8f,.9f,1,visible && (!fall_ || menu) ? (menu ? backgroundAlpha*twinkle : (1-burst)*.7f) : 0});
         sparks_[i]->Update();
     }
 
 }
 void GameOver::Draw() {
     if (!flow_.Active()) return;
-    flash_->Draw();
+    if(!fall_)flash_->Draw();
     for (auto& strip:iris_) strip->Draw();
     backdrop_->Draw(); sigil_->Draw();
     for (auto& spark:sparks_) spark->Draw();

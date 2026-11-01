@@ -49,13 +49,13 @@ GameOverTimeline::Pose GameOverTimeline::EvaluatePose(float seconds,bool fall,
     const float kick=fall ? 0.0f : 1.2f*m;
     position.x-=std::sin(yaw)*kick; position.z-=std::cos(yaw)*kick;
     position.y+=fall ? -14*m*m : 1.4f*std::sin(m*3.14159265359f)-2*Ease((seconds-.95f)/1.0f);
-    body.z+=fall ? .18f*std::sin(m*5)*m : .45f*std::sin(m*3.14159265359f);
-    body.x+=fall ? -.25f*m : -.35f*m;
+    body.z+=fall ? 0.0f : .45f*std::sin(m*3.14159265359f);
+    body.x+=fall ? 0.0f : -.35f*m;
     const float orbit=yaw+.15f*m;
     const Vector3 target{position.x,initial.y+(position.y-initial.y)*(fall ? .65f : 1.0f)+.4f,position.z};
     const Vector3 end{initial.x-std::sin(orbit)*10,initial.y+5,initial.z-std::cos(orbit)*10};
     const float shakeTime=(std::max)(seconds-kHitStop,0.0f);
-    const float shake=seconds<=kHitStop ? 0.0f : .055f*std::exp(-shakeTime*9);
+    const float shake=fall || seconds<=kHitStop ? 0.0f : .055f*std::exp(-shakeTime*9);
     const Vector3 cam{cameraPosition.x+(end.x-cameraPosition.x)*b+std::sin(shakeTime*93)*shake,
         cameraPosition.y+(end.y-cameraPosition.y)*b+std::sin(shakeTime*77)*shake,
         cameraPosition.z+(end.z-cameraPosition.z)*b};

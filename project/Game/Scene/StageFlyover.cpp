@@ -74,41 +74,12 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     }
     if(t>=1)player=spawn;
     const float yaw=angle+1.57079632679f;
-    const Vector3 right{std::cos(angle),0,-std::sin(angle)};
-    // 肩越しに追従し、注視点を少しステージへ寄せる。プレイヤーは手前の左寄り。
-    const Vector3 torso{player.x,player.y+.8f,player.z};
-    const Vector3 away{torso.x-center.x,torso.y-center.y,torso.z-center.z};
-    const float length = (std::max)(std::sqrt(away.x*away.x+away.y*away.y+away.z*away.z),.001f);
-    const Vector3 axis{away.x/length,away.y/length,away.z/length};
-    // 周回中は進路の横へ回り込み、手前の主人公と奥の舞台を重ねない。
-    const Vector3 offset{axis.x*10+right.x*10,axis.y*10+2,
-        axis.z*10+right.z*10};
-    const Vector3 endOffset{destination.position.x-spawn.x,
-        destination.position.y-(spawn.y+.8f),destination.position.z-spawn.z};
-    const float followDistance=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);
-    const float endDistance=std::sqrt(endOffset.x*endOffset.x+endOffset.y*endOffset.y+endOffset.z*endOffset.z);
-    // 位置を直線補間すると、反対側の通常視点へ戻る途中で主人公を横切る。
-    // 主人公を中心に距離・方位・仰角を補間し、着地中の急な接近も防ぐ。
-    const float cameraYaw=MixAngle(std::atan2(offset.x,offset.z),std::atan2(endOffset.x,endOffset.z),landing);
-    const float elevation=Mix(std::atan2(offset.y,std::sqrt(offset.x*offset.x+offset.z*offset.z)),
-        std::atan2(endOffset.y,std::sqrt(endOffset.x*endOffset.x+endOffset.z*endOffset.z)),landing);
-    const float distance=Mix(followDistance,endDistance,landing);
-    const Vector3 follow{torso.x+std::sin(cameraYaw)*std::cos(elevation)*distance,
-        torso.y+std::sin(elevation)*distance,torso.z+std::cos(cameraYaw)*std::cos(elevation)*distance};
-    // Aim at a world-space point throughout descent. Blending Euler angles late
-    // in the shot could turn away from the player even with a correct camera path.
-    const Vector3 endForward{std::sin(destination.rotation.y)*std::cos(destination.rotation.x),
-        -std::sin(destination.rotation.x),std::cos(destination.rotation.y)*std::cos(destination.rotation.x)};
-    const Vector3 endAimOffset{endOffset.x+endForward.x*endDistance,
-        endOffset.y+endForward.y*endDistance,endOffset.z+endForward.z*endDistance};
-    const Vector3 target{torso.x+Mix(-axis.x*6,endAimOffset.x,landing),
-        torso.y+Mix(-axis.y*6,endAimOffset.y,landing),torso.z+Mix(-axis.z*6,endAimOffset.z,landing)};
-    const Vector3 direction{target.x-follow.x,target.y-follow.y,target.z-follow.z};
-    const float horizontal = std::sqrt(direction.x*direction.x+direction.z*direction.z);
-    const Vector3 rotation{-std::atan2(direction.y,horizontal),std::atan2(direction.x,direction.z),
-        MixAngle(0,destination.rotation.z,landing)};
-    StageFlyover::Pose camera{follow,rotation,
-        Mix(.90f+.10f*std::sin(orbitProgress*3.14159265359f),destination.fov,landing)};
+    // Keep a constant offset from the player. Orbiting a second camera around
+    // the descent made the apparent flight direction swing away from spawn.
+    const Vector3 displacement{player.x-spawn.x,player.y-spawn.y,player.z-spawn.z};
+    StageFlyover::Pose camera{{destination.position.x+displacement.x,
+        destination.position.y+displacement.y,destination.position.z+displacement.z},
+        destination.rotation,Mix((std::max)(.75f,destination.fov),destination.fov,landing)};
     if (t >= 1) camera = destination;
     const float fade = Smooth((seconds-kFlightDuration)/kFadeDuration);
     // モデルの正面は-Z。進入方向へ向け、胴体を寝かせて飛行姿勢にする。
