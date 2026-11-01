@@ -137,16 +137,24 @@ int main() {
             assert(landed.playerPosition.x==spawn.x && landed.playerPosition.y==spawn.y && landed.playerPosition.z==spawn.z);
             assert(landed.camera.position.x==end.position.x && landed.camera.fov==end.fov);
             assert(std::abs(before.camera.position.x-end.position.x)<.002f);
-            assert(std::abs(before.camera.position.y-end.position.y)<.002f);
+            assert(std::abs(before.camera.position.y-end.position.y)<.012f);
             assert(std::abs(before.camera.position.z-end.position.z)<.002f);
             assert(std::abs(std::remainder(before.camera.rotation.y-end.rotation.y,6.28318530718f))<.002f);
             assert(std::abs(before.camera.fov-end.fov)<.002f);
-            assert(std::abs(before.playerPosition.y-spawn.y)<.002f);
+            assert(std::abs(before.playerPosition.y-spawn.y)<.012f);
             assert(StageArrival::Evaluate(StageArrival::kFlightDuration+StageArrival::kFadeDuration,center,radius,spawn,end).finished);
             const auto restart=StageArrival::Evaluate(-1,center,radius,spawn,end);
             assert(!restart.landed && restart.cloudAlpha==1);
         }
     }
+    const auto seamBefore=StageArrival::Evaluate(StageArrival::kOrbitDuration-.001f,stageCenter,30,spawn,destination);
+    const auto seam=StageArrival::Evaluate(StageArrival::kOrbitDuration,stageCenter,30,spawn,destination);
+    const auto seamAfter=StageArrival::Evaluate(StageArrival::kOrbitDuration+.001f,stageCenter,30,spawn,destination);
+    assert(std::abs((seam.playerPosition.x-seamBefore.playerPosition.x)-(seamAfter.playerPosition.x-seam.playerPosition.x))<.001f);
+    assert(std::abs((seam.playerPosition.z-seamBefore.playerPosition.z)-(seamAfter.playerPosition.z-seam.playerPosition.z))<.001f);
+    assert(seamBefore.playerPosition.y>seam.playerPosition.y && seam.playerPosition.y>seamAfter.playerPosition.y);
+    const auto impact=StageArrival::Evaluate(StageArrival::kFlightDuration-.05f,stageCenter,30,spawn,destination);
+    assert(impact.playerPosition.y-spawn.y>.3f); // Keep falling until actual contact, rather than hovering.
     std::cout << "Stage arrival: 27 layouts, player full orbit, foreground/background framing, descent and landing passed\n";
     // モデル本体が前傾・バンクし、着地では非ゼロの元姿勢にも正確に復帰する。
     const Vector3 originalRotation{.12f,3.05f,-.08f};

@@ -45,7 +45,8 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     const float t = std::clamp(seconds/kFlightDuration,0.0f,1.0f);
     // 主人公そのものが舞台中心を一周する。周回を終えてから開始地点へ降りる。
     constexpr float twoPi=6.28318530718f;
-    const float orbitProgress=Smooth(seconds/kOrbitDuration);
+    const float orbitTime=std::clamp(seconds/kOrbitDuration,0.0f,1.0f);
+    const float orbitProgress=orbitTime*orbitTime*(2-orbitTime);
     const float landing=Smooth((seconds-kOrbitDuration)/kLandingDuration);
     const float dx=spawn.x-center.x,dz=spawn.z-center.z;
     const float spawnRadius=std::sqrt(dx*dx+dz*dz);
@@ -56,8 +57,22 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     const float cruiseHeight=(std::max)(spawn.y+10,center.y+(std::min)(radius,32.0f)+4);
     const float height=cruiseHeight+4*(1-orbitProgress);
     const Vector3 orbit{center.x+std::sin(angle)*ringRadius,height,center.z+std::cos(angle)*ringRadius};
-    const Vector3 player=t>=1 ? spawn : Vector3{Mix(orbit.x,spawn.x,landing),
-        Mix(orbit.y,spawn.y,landing),Mix(orbit.z,spawn.z,landing)};
+    Vector3 player=orbit;
+    if(seconds>=kOrbitDuration) {
+        // Carry the orbit's velocity into a curved descent. Do not ease to a stop
+        // at either the orbit seam or just above the ground.
+        const float q=std::clamp((seconds-kOrbitDuration)/kLandingDuration,0.0f,1.0f);
+        const float q2=q*q,q3=q2*q;
+        const float h00=2*q3-3*q2+1,h10=q3-2*q2+q,h01=-2*q3+3*q2,h11=q3-q2;
+        const Vector3 entry{center.x+std::sin(startAngle)*baseRadius,cruiseHeight,center.z+std::cos(startAngle)*baseRadius};
+        const float radial=-baseRadius*.1f*3.14159265359f/kOrbitDuration;
+        const float angular=twoPi/kOrbitDuration;
+        const Vector3 velocity{std::cos(startAngle)*baseRadius*angular+std::sin(startAngle)*radial,
+            -4/kOrbitDuration,-std::sin(startAngle)*baseRadius*angular+std::cos(startAngle)*radial};
+        auto descend=[&](float from,float speed,float to,float impact){return h00*from+h10*speed*kLandingDuration+h01*to+h11*impact*kLandingDuration;};
+        player={descend(entry.x,velocity.x,spawn.x,0),descend(entry.y,velocity.y,spawn.y,-8),descend(entry.z,velocity.z,spawn.z,0)};
+    }
+    if(t>=1)player=spawn;
     const float yaw=angle+1.57079632679f;
     const Vector3 right{std::cos(angle),0,-std::sin(angle)};
     // 肩越しに追従し、注視点を少しステージへ寄せる。プレイヤーは手前の左寄り。
