@@ -5,7 +5,7 @@
 namespace {
 float Smooth(float t) {
     t = std::clamp(t, 0.0f, 1.0f);
-    return t*t*t*(t*(t*6-15)+10); // 開始・終了の速度と加速度を0にする
+    return std::clamp(t*t*t*(t*(t*6-15)+10),0.0f,1.0f); // 開始・終了の速度と加速度を0にする
 }
 float Mix(float a, float b, float t) { return a+(b-a)*t; }
 float MixAngle(float a, float b, float t) {
@@ -51,8 +51,10 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     const float spawnRadius=std::sqrt(dx*dx+dz*dz);
     const float startAngle=spawnRadius>.1f ? std::atan2(dx,dz) : destination.rotation.y+3.14159265359f;
     const float angle=startAngle+twoPi*orbitProgress;
-    const float ringRadius=(std::max)(spawnRadius+5,std::clamp(radius,10.0f,36.0f));
-    const float height=(std::max)(spawn.y+12,center.y+(std::min)(radius,32.0f)+6);
+    const float baseRadius=(std::max)(spawnRadius+5,std::clamp(radius,10.0f,36.0f));
+    const float ringRadius=baseRadius*(1+.10f*std::sin(orbitProgress*3.14159265359f));
+    const float cruiseHeight=(std::max)(spawn.y+10,center.y+(std::min)(radius,32.0f)+4);
+    const float height=cruiseHeight+4*(1-orbitProgress);
     const Vector3 orbit{center.x+std::sin(angle)*ringRadius,height,center.z+std::cos(angle)*ringRadius};
     const Vector3 player=t>=1 ? spawn : Vector3{Mix(orbit.x,spawn.x,landing),
         Mix(orbit.y,spawn.y,landing),Mix(orbit.z,spawn.z,landing)};
@@ -63,9 +65,9 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     const Vector3 away{torso.x-center.x,torso.y-center.y,torso.z-center.z};
     const float length = (std::max)(std::sqrt(away.x*away.x+away.y*away.y+away.z*away.z),.001f);
     const Vector3 axis{away.x/length,away.y/length,away.z/length};
-    // 周回中は約18ユニット後方から全身を見せる。手前の人物が舞台を覆わない距離を取る。
-    const Vector3 offset{axis.x*18+right.x*4.5f,axis.y*18+2,
-        axis.z*18+right.z*4.5f};
+    // 周回中は進路の横へ回り込み、手前の主人公と奥の舞台を重ねない。
+    const Vector3 offset{axis.x*10+right.x*10,axis.y*10+2,
+        axis.z*10+right.z*10};
     const Vector3 endOffset{destination.position.x-spawn.x,
         destination.position.y-(spawn.y+.8f),destination.position.z-spawn.z};
     const float followDistance=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);
@@ -78,22 +80,23 @@ StageArrival::Frame StageArrival::Evaluate(float seconds, const Vector3& center,
     const float distance=Mix(followDistance,endDistance,landing);
     const Vector3 follow{torso.x+std::sin(cameraYaw)*std::cos(elevation)*distance,
         torso.y+std::sin(elevation)*distance,torso.z+std::cos(cameraYaw)*std::cos(elevation)*distance};
-    const Vector3 target{torso.x-axis.x*4.5f*(1-landing),
-        torso.y-axis.y*4.5f*(1-landing),torso.z-axis.z*4.5f*(1-landing)};
+    const Vector3 target{torso.x-axis.x*6.0f*(1-landing),
+        torso.y-axis.y*6.0f*(1-landing),torso.z-axis.z*6.0f*(1-landing)};
     const Vector3 direction{target.x-follow.x,target.y-follow.y,target.z-follow.z};
     const float horizontal = std::sqrt(direction.x*direction.x+direction.z*direction.z);
     const Vector3 rotation{-std::atan2(direction.y,horizontal),std::atan2(direction.x,direction.z),0};
-    // 少し狭い画角にし、手前の人物だけが強調される広角感を抑える。
+    // 加速中だけ画角を広げ、降下では主人公を注視し続ける。
+    const float restoreAim=Smooth((landing-.85f)/.15f);
     StageFlyover::Pose camera{follow,
-        {MixAngle(rotation.x,destination.rotation.x,landing),
-        MixAngle(rotation.y,destination.rotation.y,landing),MixAngle(0,destination.rotation.z,landing)},
-        Mix(.90f,destination.fov,landing)};
+        {MixAngle(rotation.x,destination.rotation.x,restoreAim),
+        MixAngle(rotation.y,destination.rotation.y,restoreAim),MixAngle(0,destination.rotation.z,restoreAim)},
+        Mix(.90f+.10f*std::sin(orbitProgress*3.14159265359f),destination.fov,landing)};
     if (t >= 1) camera = destination;
     const float fade = Smooth((seconds-kFlightDuration)/kFadeDuration);
     // モデルの正面は-Z。進入方向へ向け、胴体を寝かせて飛行姿勢にする。
     // 終盤でバンクも解き、入力解禁前に元の立ち姿へ正確に戻す。
     const float upright = landing;
-    const Vector3 flightRotation{-.95f,yaw+3.14159265359f,-.3f*std::sin(orbitProgress*3.14159265359f)};
+    const Vector3 flightRotation{-.95f,yaw+3.14159265359f,-.48f*std::sin(orbitProgress*3.14159265359f)};
     const Vector3 playerRotation = t >= 1 ? spawnRotation : Vector3{
         Mix(flightRotation.x,spawnRotation.x,upright),
         MixAngle(flightRotation.y,spawnRotation.y,upright),

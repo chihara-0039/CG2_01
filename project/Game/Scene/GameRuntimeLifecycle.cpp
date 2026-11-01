@@ -298,7 +298,7 @@ void GameRuntime::Initialize() {
         textureManager->LoadTexture("Resources/UI/gameover/selection.png"),
         textureManager->LoadTexture("Resources/UI/gameover/sparkle.png")});
     startIntro_ = std::make_unique<StartIntro>();
-    startIntro_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/arrival_cloud.png"));
+    startIntro_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/arrival_cloud.png"), textureManager->LoadTexture("Resources/UI/gameover/sparkle.png"));
 
 
     gameplayCameraController_.Initialize();

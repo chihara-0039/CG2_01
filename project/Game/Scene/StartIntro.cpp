@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstring>
 
-void StartIntro::Initialize(SpriteCommon* common, uint32_t cloudTexture) {
+void StartIntro::Initialize(SpriteCommon* common, uint32_t cloudTexture, uint32_t starTexture) {
     for (auto& bar : bars_) {
         bar = std::make_unique<Sprite>(); bar->Initialize(common,0);
     }
@@ -11,6 +11,7 @@ void StartIntro::Initialize(SpriteCommon* common, uint32_t cloudTexture) {
         cloud = std::make_unique<Sprite>(); cloud->Initialize(common,cloudTexture);
         cloud->SetAnchorPoint({.5f,.5f});
     }
+    for(auto& star:trailStars_){star=std::make_unique<Sprite>();star->Initialize(common,starTexture);star->SetAnchorPoint({.5f,.5f});}
     sound_.Initialize();
     wind_ = MakeTone(false);
     landing_ = MakeTone(true);
@@ -101,6 +102,17 @@ void StartIntro::UpdateSprites() {
         bars_[i]->SetSize({1280,44*frame_.letterbox});
         bars_[i]->SetColor({0,0,0,.88f}); bars_[i]->Update();
     }
+    // Star streaks open outward during acceleration and disappear before landing.
+    const float cruise=std::clamp(elapsed_/StageArrival::kOrbitDuration,0.0f,1.0f);
+    const float speed=std::sin(cruise*3.14159265359f);
+    for(size_t i=0;i<trailStars_.size();++i){
+        const float index=static_cast<float>(i),angle=index*2.39996323f;
+        const float phase=std::fmod(elapsed_*.7f+index*.137f,1.0f);
+        trailStars_[i]->SetPosition({640+std::cos(angle)*(200+phase*570),360+std::sin(angle)*(120+phase*350)});
+        const float size=9+phase*18;
+        trailStars_[i]->SetSize({size,size*(1+2*speed)});trailStars_[i]->SetRotation(angle-1.5707963f);
+        trailStars_[i]->SetColor({.65f+.35f*(i%2),.85f,1,speed*(1-phase)});trailStars_[i]->Update();
+    }
     // 半透明の雲が左右へ流れ、奥のステージと手前のプレイヤーを開示する。
     const float spread = std::clamp(elapsed_/.65f,0.0f,1.0f);
     for (size_t i=0;i<clouds_.size();++i) {
@@ -114,6 +126,7 @@ void StartIntro::UpdateSprites() {
 }
 void StartIntro::Draw() {
     if (!active_) return;
+    for (auto& star : trailStars_) star->Draw();
     for (auto& cloud : clouds_) cloud->Draw();
     for (auto& bar : bars_) bar->Draw();
 }

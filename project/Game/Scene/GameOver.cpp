@@ -104,7 +104,7 @@ void GameOver::UpdateSprites() {
         }
     }
     flash_->SetPosition({0,0}); flash_->SetSize({1280,720});
-    flash_->SetColor({1,.22f,.12f,flow_.Revealing() ? 0.0f : frame_.flash}); flash_->Update();
+    flash_->SetColor({.75f,.9f,1,flow_.Revealing() ? 0.0f : frame_.flash}); flash_->Update();
     const bool visible=flow_.Active() && !flow_.Revealing() && !flow_.Leaving();
     const float time=flow_.Elapsed();
     const float alpha=visible ? frame_.menuAlpha : 0;
@@ -139,7 +139,7 @@ void GameOver::UpdateSprites() {
         const bool menu=time>=1.95f;
         const float distance=(45+static_cast<float>(i%5)*22)*std::sin(burst*3.14159265359f);
         const float x=menu ? 85+std::fmod(index*173+time*3,1110.0f) : 640+std::cos(angle)*distance;
-        const float y=menu ? 70+std::fmod(index*97+time*2,580.0f) : 350+std::sin(angle)*distance*.7f;
+        const float y=menu ? 70+std::fmod(index*97+time*2,580.0f) : 350+std::sin(angle)*distance*.45f+220*burst*burst;
         const float twinkle=.45f+.35f*std::sin(time*1.7f+index);
         sparks_[i]->SetPosition({x,y});
         const float size=menu ? 12+static_cast<float>(i%4)*5 : 30*(1-burst)+8;

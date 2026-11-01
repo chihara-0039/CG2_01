@@ -10,7 +10,7 @@
 // ステージ到着専用。降下・追従視点・雲抜け・着地音を一つの時計で同期する。
 class StartIntro {
 public:
-    void Initialize(SpriteCommon* common, uint32_t cloudTexture);
+    void Initialize(SpriteCommon* common, uint32_t cloudTexture, uint32_t starTexture);
     void Begin(Camera* camera, const Vector3& stageCenter, float stageRadius, const Vector3& spawnPosition, const Vector3& spawnRotation);
     void Update(Camera* camera, bool visible);
     void Cancel(Camera* camera);
@@ -31,6 +31,7 @@ private:
     Sound::SoundData MakeTone(bool landing);
     std::array<std::unique_ptr<Sprite>,2> bars_;
     std::array<std::unique_ptr<Sprite>,8> clouds_;
+    std::array<std::unique_ptr<Sprite>,24> trailStars_;
     Sound sound_;
     Sound::SoundData wind_{};
     Sound::SoundData landing_{};

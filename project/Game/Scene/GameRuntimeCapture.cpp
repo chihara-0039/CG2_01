@@ -55,6 +55,21 @@ void GameRuntime::InitializeCaptureTools() {
         comparisonStarted_=std::chrono::steady_clock::now();
     }
     if(CaptureEnvironment("CG2_DIORAMA")=="1") BeginDiorama();
+    if(!CaptureEnvironment("CG2_CINEMATIC_SHOT").empty()) {
+        if(CaptureEnvironment("CG2_CINEMATIC_SHOT")!="title") {
+            BeginFogTrial();fogTrial_=false;dioramaCapture_=true;
+            stageMap_.LoadFromFile("Resources/Stages/tutorial.txt");backupMap_=stageMap_;
+            stageRenderer_->BuildFromStageMap(stageMap_);
+            stageEditorController_.ResetPlayerToStartCell(stageMap_,player_.get());
+            playerBasePosition_.ApplyFromStageMap(stageMap_,player_.get());
+            bubblePickupController_.Initialize(&stageMap_,stageRenderer_.get(),&blockInventory_);
+            blockPlacementController_.Initialize(&stageMap_,stageRenderer_.get(),&blockInventory_);
+            gameplayCameraController_.ResetCamera(camera.get(),player_.get(),stageMap_,0);
+            startIntroPending_=CaptureEnvironment("CG2_CINEMATIC_SHOT")=="arrival";
+            OnSceneEntered(SceneType::GamePlay);
+        }
+        comparisonStarted_=std::chrono::steady_clock::now();
+    }
 }
 
 void GameRuntime::BeginFogTrial() {
@@ -96,6 +111,29 @@ void GameRuntime::BeginFogTrial() {
 }
 
 void GameRuntime::UpdateCaptureTools() {
+    const auto cinematic=CaptureEnvironment("CG2_CINEMATIC_SHOT");
+    if(!cinematic.empty()) {
+        static bool triggered=false;
+        static std::ofstream trace("../generated/cinematic-review/trace-"+cinematic+".csv");
+        const auto cp=camera->GetPosition(), pp=player_->GetPosition();
+        const auto cr=camera->GetRotation();
+        trace<<pp.x<<","<<pp.y<<","<<pp.z<<","<<cp.x<<","<<cp.y<<","<<cp.z<<","<<cr.x<<","<<cr.y<<","<<camera->GetFov()<<"\n";
+        const float elapsed=std::chrono::duration<float>(std::chrono::steady_clock::now()-comparisonStarted_).count();
+        if(!comparisonRecordingStarted_) {
+            FrameRecorder::Options options;options.name="cinematic-"+cinematic;options.gifSeconds=10;
+            const auto output=CaptureEnvironment("CG2_CAPTURE_DIR");if(!output.empty())options.directory=output;
+            if(!dxCommon->Recorder().Start(options)){PostQuitMessage(2);return;}
+            comparisonRecordingStarted_=true;
+        }
+        if(cinematic!="arrival" && cinematic!="title" && elapsed>=1 && !triggered){
+            BeginGameOver(cinematic=="fall");triggered=true;
+        }
+        if(elapsed>=8) {
+            if(dxCommon->Recorder().IsRecording())dxCommon->Recorder().Stop();
+            if(!dxCommon->Recorder().IsBusy())PostQuitMessage(0);
+        }
+        return;
+    }
     UpdateDioramaCapture();
     auto& recorder=dxCommon->Recorder();
     const bool canUndo=(currentMode_==AppMode::GamePlay || currentMode_==AppMode::GamePlay_BlockPlace) &&
@@ -206,9 +244,6 @@ void GameRuntime::DrawCaptureOverlay() {
         buildCounts_[blockInventory_.GetBlockCount(BlockType::Wall,1)>0 ? 1:0]->Draw();
         return;
     }
-    if(currentMode_==AppMode::GamePlay_BlockPlace ||
-        (currentMode_==AppMode::GamePlay && std::chrono::steady_clock::now()<placementFeedbackUntil_)) buildLabels_[buildStatus_]->Draw();
-    if (currentMode_==AppMode::Title && fogLabels_[3]) fogLabels_[3]->Draw();
     const auto shot=CaptureEnvironment("CG2_SHOT");
     if (fogTrial_ && currentMode_==AppMode::GamePlay && shot!="character" && shot!="route") {
         fogLabels_[fogExplorer_.Mode()]->Draw(); scanMeter_->Draw();

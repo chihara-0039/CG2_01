@@ -154,7 +154,7 @@ void GameRuntime::UpdateGamePlay() {
         const bool deferFailure=!(comparisonActive_ || dioramaCapture_ || trialVerification_);
         player_->Update(input.get(), stageMap_, cameraYawForMovement, lightVP, dxCommon.get(), deferFailure);
         const bool contactFailure=player_->ConsumeFailure();
-        if (deferFailure && (contactFailure || player_->GetPosition().y < -10.0f)) {
+        if (deferFailure && (contactFailure || player_->GetPosition().y < -3.0f)) {
             BeginGameOver(!contactFailure);
             return;
         }

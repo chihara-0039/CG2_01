@@ -11,7 +11,7 @@ GameOverTimeline::Frame GameOverTimeline::Evaluate(float seconds) {
     seconds=(std::max)(seconds,0.0f);
     return {Ease((seconds-kHitStop)/.8f),Ease((seconds-kHitStop)/.65f),
         800*(1-Ease((seconds-1.2f)/.95f)),
-        .18f*(1-Ease(seconds/.18f)),Ease((seconds-2.75f)/.4f),seconds>=kMenuTime};
+        0.0f,Ease((seconds-2.75f)/.4f),seconds>=kMenuTime};
 }
 float GameOverTimeline::RetryRadius(float seconds) { return 800*Ease(seconds/kRevealTime); }
 
@@ -48,10 +48,11 @@ GameOverTimeline::Pose GameOverTimeline::EvaluatePose(float seconds,bool fall,
     // ヒットストップ後に小さく弾かれる。落下は徐々に速く沈み、カメラが見送る。
     const float kick=fall ? 0.0f : 1.2f*m;
     position.x-=std::sin(yaw)*kick; position.z-=std::cos(yaw)*kick;
-    position.y+=fall ? -9*m*m : 1.4f*std::sin(m*3.14159265359f)-2*Ease((seconds-.95f)/1.0f);
-    body.z+=m*(fall ? 5.4f : 3.8f); body.x+=m*(fall ? .5f : -.4f);
+    position.y+=fall ? -14*m*m : 1.4f*std::sin(m*3.14159265359f)-2*Ease((seconds-.95f)/1.0f);
+    body.z+=fall ? .18f*std::sin(m*5)*m : .45f*std::sin(m*3.14159265359f);
+    body.x+=fall ? -.25f*m : -.35f*m;
     const float orbit=yaw+.15f*m;
-    const Vector3 target{position.x,initial.y+(position.y-initial.y)*(fall ? .35f : 1.0f)+.4f,position.z};
+    const Vector3 target{position.x,initial.y+(position.y-initial.y)*(fall ? .65f : 1.0f)+.4f,position.z};
     const Vector3 end{initial.x-std::sin(orbit)*10,initial.y+5,initial.z-std::cos(orbit)*10};
     const float shakeTime=(std::max)(seconds-kHitStop,0.0f);
     const float shake=seconds<=kHitStop ? 0.0f : .055f*std::exp(-shakeTime*9);
@@ -63,6 +64,6 @@ GameOverTimeline::Pose GameOverTimeline::EvaluatePose(float seconds,bool fall,
     const float aimYaw=std::atan2(d.x,d.z);
     const Vector3 aim{cameraRotation.x+(pitch-cameraRotation.x)*b,
         cameraRotation.y+std::remainder(aimYaw-cameraRotation.y,6.28318530718f)*b,
-        cameraRotation.z+.035f*m};
+        cameraRotation.z};
     return {position,body,cam,aim,fov+(.72f-fov)*b,1-.75f*Ease((seconds-.65f)/1.4f)};
 }

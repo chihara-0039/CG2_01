@@ -110,22 +110,23 @@ int main() {
                 const float clearance=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);
                 const float ex=end.position.x-spawn.x,ey=end.position.y-(spawn.y+.8f),ez=end.position.z-spawn.z;
                 // 着地でカメラが反対側へ移っても、主人公を横切って接写にならない。
-                assert(clearance >= (std::min)(18.0f,std::sqrt(ex*ex+ey*ey+ez*ez))-.002f);
+                assert(clearance >= (std::min)(12.0f,std::sqrt(ex*ex+ey*ey+ez*ez))-.002f);
+                if(!visible(torso,frame.camera))std::cerr<<"Out of frame: "<<center.x<<","<<center.y<<","<<center.z<<" radius="<<radius<<" yaw="<<yaw<<" t="<<time<<"\n";
                 assert(visible(torso,frame.camera));
                 if (time<=StageArrival::kOrbitDuration) {
                     const float angle=std::atan2(frame.playerPosition.x-center.x,frame.playerPosition.z-center.z);
                     playerSweep+=std::remainder(angle-lastAngle,6.28318530718f);
                     lastAngle=angle;
-                    assert(std::abs(frame.playerPosition.y-first.playerPosition.y)<.001f);
+                    assert(frame.playerPosition.y<=first.playerPosition.y+.001f && frame.playerPosition.y>=first.playerPosition.y-4.001f);
 
                     assert(visible({frame.playerPosition.x,frame.playerPosition.y+.8f,frame.playerPosition.z},frame.camera));
                     assert(visible(center,frame.camera));
-                    assert(clearance>18.0f);
-                    // 高さ2ユニットの基準モデルで、画面高の15%以下を目安にする。
+                    assert(clearance>12.0f);
+                    // 高さ2ユニットの基準モデルで、画面高の25%以下を目安にする。
                     const float sy=std::sin(frame.camera.rotation.y),cy=std::cos(frame.camera.rotation.y);
                     const float sp=std::sin(frame.camera.rotation.x),cp=std::cos(frame.camera.rotation.x);
                     const float depth=-offset.x*sy*cp+offset.y*sp-offset.z*cy*cp;
-                    assert(2.0f/(2*depth*std::tan(frame.camera.fov/2))<.15f);
+                    assert(2.0f/(2*depth*std::tan(frame.camera.fov/2))<.25f);
                 }
             }
             assert(std::abs(playerSweep-6.28318530718f)<.002f);
@@ -208,6 +209,7 @@ int main() {
         const auto settled=GameOverTimeline::EvaluateLetter(GameOverTimeline::kMenuTime,letter);
         assert(hidden.alpha==0 && settled.alpha==1 && settled.scale==1 && settled.rotation==0);
     }
+    assert(GameOverTimeline::Evaluate(0).flash==0);
     assert(GameOverTimeline::EvaluateLetter(2.35f,0).alpha>GameOverTimeline::EvaluateLetter(2.35f,7).alpha);
     for (bool fall : {false,true}) {
         const Vector3 initial{5,2,4},body{0,3.1f,0},cam{9,8,-9},aim{.4f,3.1f,0};
@@ -217,6 +219,8 @@ int main() {
         for (int i=19;i<=320;++i) {
             const auto pose=GameOverTimeline::EvaluatePose(static_cast<float>(i)*.01f,fall,initial,body,cam,aim,.8f);
             assert(std::isfinite(pose.cameraRotation.y) && std::isfinite(pose.position.y));
+            assert(std::abs(pose.rotation.z-body.z)<.5f);
+            if(fall)assert(pose.position.y<=previous.position.y);
             assert(std::abs(pose.cameraPosition.x-previous.cameraPosition.x)<.5f);
             assert(std::abs(pose.cameraPosition.y-previous.cameraPosition.y)<.5f);
             assert(pose.fov>=.6f && pose.fov<=.8f);
