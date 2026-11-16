@@ -1,15 +1,12 @@
-struct VertexShaderInput
-{
+struct VertexShaderInput {
     float4 position : POSITION0;
 };
 
-struct VertexShaderOutput
-{
+struct VertexShaderOutput {
     float4 position : SV_POSITION;
 };
 
-struct InstanceData
-{
+struct InstanceData {
     float4x4 World;
     float4 Color;
     float Shininess;
@@ -18,8 +15,7 @@ struct InstanceData
     float3 padding;
 };
 
-struct ViewProjectionMatrix
-{
+struct ViewProjectionMatrix {
     float4x4 ViewProjection;
     float4x4 lightViewProjection;
 };
@@ -27,8 +23,8 @@ struct ViewProjectionMatrix
 ConstantBuffer<ViewProjectionMatrix> gViewProjection : register(b0);
 StructuredBuffer<InstanceData> gInstances : register(t2);
 
-VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID)
-{
+// インスタンスの変換を適用し、頂点を光源の投影空間へ送る。
+VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID) {
     VertexShaderOutput output;
     float4x4 worldMatrix = gInstances[instanceId].World;
     float4x4 lightWVP = mul(worldMatrix, gViewProjection.lightViewProjection);

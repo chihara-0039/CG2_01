@@ -7,6 +7,7 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// 入力テクスチャの色を、そのまま画面出力へ渡す。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
     output.color = gTexture.Sample(gSampler, input.texcoord);

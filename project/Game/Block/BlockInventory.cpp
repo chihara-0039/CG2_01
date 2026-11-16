@@ -1,5 +1,6 @@
 #include "BlockInventory.h"
 
+// 配置パーツの在庫を準備し、初期値と必要なリソースを設定する。
 void BlockInventory::Initialize(int initialCount) {
     // プレイヤーが十分に遊べるよう、各ブロック種別のデフォルト所持数を99個にする（互換性維持のため）
     // ただし、0 が指定された場合は全てのブロックの所持数を 0 個にする（仕様対応）
@@ -30,7 +31,7 @@ void BlockInventory::AddBlock(BlockType type, int count, int customId) {
         return;
     }
 
-	// カスタムパーツ枠のIDが1～5の場合は、customCounts_配列に追加する
+    // カスタムパーツ枠のIDが1～5の場合は、customCounts_配列に追加する
     if (customId >= 1 && customId <= 5) {
         customCounts_[customId - 1] += count;
     } else {
@@ -59,7 +60,7 @@ bool BlockInventory::ConsumeBlock(BlockType type, int count, int customId) {
         return false;
     }
 
-	// カスタムパーツ枠のIDが1～5の場合は、customCounts_配列から消費する
+    // カスタムパーツ枠のIDが1～5の場合は、customCounts_配列から消費する
     if (customId >= 1 && customId <= 5) {
         if (customCounts_[customId - 1] >= count) {
             customCounts_[customId - 1] -= count;
@@ -108,7 +109,7 @@ int BlockInventory::GetBlockCount(BlockType type, int customId) const {
         return customCounts_[customId - 1];
     }
 
-	// 通常ブロックの所持数を返す
+    // 通常ブロックの所持数を返す
     if (type == BlockType::Wall) {
         return wallCount_;
     } else if (type == BlockType::Ladder) {
@@ -123,6 +124,7 @@ int BlockInventory::GetBlockCount(BlockType type, int customId) const {
     return 0;
 }
 
+// ブロック種類とカスタム番号に対応する在庫数を返す。
 int BlockInventory::GetBlockCount() const {
     int total = wallCount_ + ladderCount_ + iceCount_ + movingCount_ + crumbleCount_;
     for (int i = 0; i < 5; ++i) {
@@ -133,12 +135,17 @@ int BlockInventory::GetBlockCount() const {
 
 bool BlockInventory::HasBlock(BlockType type, int customId) const {
     return GetBlockCount(type, customId) > 0;
-    }
+}
 
+// 指定パーツを配置できるだけの在庫があるか調べる。
 bool BlockInventory::HasBlock() const {
-    if (wallCount_ > 0 || ladderCount_ > 0 || iceCount_ > 0 || movingCount_ > 0 || crumbleCount_ > 0) return true;
+    if (wallCount_ > 0 || ladderCount_ > 0 || iceCount_ > 0 || movingCount_ > 0 || crumbleCount_ > 0) {
+        return true;
+    }
     for (int i = 0; i < 5; ++i) {
-        if (customCounts_[i] > 0) return true;
+        if (customCounts_[i] > 0) {
+            return true;
+        }
     }
     return false;
 }

@@ -1,3 +1,4 @@
+# 日本語タイトルの輪郭から、面取りと厚みを持つ3D文字を生成する。
 """Generate the cached bevelled title geometry from Noto Sans CJK JP outlines.
 
 Optional authoring tool: requires matplotlib, Shapely >= 2.1, and a JP font.
@@ -14,6 +15,7 @@ from shapely.affinity import translate, scale
 from shapely.geometry.polygon import orient
 
 
+# 日本語フォントの輪郭から表面・側面・面取りを作り、三角形データを保存する。
 def build(font, output):
     text = "回転の国の探検隊"
     outlines = TextPath((0,0), text, size=100, prop=FontProperties(fname=str(font))).to_polygons()
@@ -31,6 +33,7 @@ def build(font, output):
     bevel = shape.difference(inset)
     triangles = []
 
+    # 文字の輪郭を三角形へ分割し、表裏と面取りの面を作る。
     def surface(geometry, front, bevelled=False):
         for triangle in constrained_delaunay_triangles(geometry).geoms:
             vertices = list(orient(triangle, sign=1).exterior.coords)[:3]

@@ -1,15 +1,12 @@
-#include "BubblePickupController.h"
+﻿#include "BubblePickupController.h"
 
 #include <cmath>
 #include <cassert>
 #include <utility>
 #include <Windows.h>
 
-void BubblePickupController::Initialize(
-    StageMap* stageMap,
-    StageRenderer* stageRenderer,
-    BlockInventory* inventory
-) {
+// シャボン玉の回収を準備し、初期値と必要なリソースを設定する。
+void BubblePickupController::Initialize(StageMap *stageMap, StageRenderer *stageRenderer, BlockInventory *inventory) {
     assert(stageMap);
     assert(stageRenderer);
     assert(inventory);
@@ -24,7 +21,7 @@ void BubblePickupController::Initialize(
     for (int y = 0; y < stageMap_->GetHeight(); ++y) {
         for (int z = 0; z < stageMap_->GetDepth(); ++z) {
             for (int x = 0; x < stageMap_->GetWidth(); ++x) {
-                const MapCell* cell = stageMap_->GetCell(x, y, z);
+                const MapCell *cell = stageMap_->GetCell(x, y, z);
                 if (cell != nullptr && cell->type == BlockType::BubblePickup) {
                     ++totalPickupCount_;
                 }
@@ -33,30 +30,33 @@ void BubblePickupController::Initialize(
     }
 }
 
-void BubblePickupController::SetCollectCallback(std::function<void(const Vector3&)> callback) {
+void BubblePickupController::SetCollectCallback(std::function<void(const Vector3 &)> callback) {
     collectCallback_ = std::move(callback);
 }
 
-void BubblePickupController::Update(const Vector3& playerPosition) {
+// プレイヤー周囲のセルを調べ、接触したシャボン玉の中身を在庫へ移す。
+void BubblePickupController::Update(const Vector3 &playerPosition) {
     if (!stageMap_ || !stageRenderer_ || !inventory_) {
         return;
     }
 
     Int3 baseIndex = ToGridIndex(playerPosition);
 
-    // プレイヤーのY座標とマップ上のアイテム位置が少しズレることがあるので、
-    // 足元・中心・少し上をまとめて確認する
-    for (int yOffset = -1; yOffset <= 1; ++yOffset) {
+    // The player's position is the feet, not the body centre. Only inspect
+    // cells overlapping the body; the former -1 offset collected through floors.
+    const int minimumY = static_cast<int>(std::floor(playerPosition.y + 0.5f));
+    const int maximumY = static_cast<int>(std::floor(playerPosition.y + 1.6f + 0.5f - 0.0001f));
+    for (int y = minimumY; y <= maximumY; ++y) {
         Int3 checkIndex = baseIndex;
-        checkIndex.y += yOffset;
-
+        checkIndex.y = y;
         if (TryCollectAt(checkIndex)) {
             return;
         }
     }
 }
 
-Int3 BubblePickupController::ToGridIndex(const Vector3& position) const {
+// ワールド座標を、対応するステージのセル番号へ変換する。
+Int3 BubblePickupController::ToGridIndex(const Vector3 &position) const {
     Int3 index{};
 
     // x/z は四捨五入気味にする
@@ -67,8 +67,9 @@ Int3 BubblePickupController::ToGridIndex(const Vector3& position) const {
     return index;
 }
 
-bool BubblePickupController::TryCollectAt(const Int3& index) {
-    MapCell* cell = stageMap_->GetCell(index);
+// 対象セルのシャボン玉を確認し、中身を在庫へ移して回収済みにする。
+bool BubblePickupController::TryCollectAt(const Int3 &index) {
+    MapCell *cell = stageMap_->GetCell(index);
     if (!cell) {
         return false;
     }
@@ -83,9 +84,14 @@ bool BubblePickupController::TryCollectAt(const Int3& index) {
     if (insideBlock == BlockType::None) {
         insideBlock = BlockType::Wall; // 安全策としてデフォルトを Wall に
     }
-    
+
     // カスタムIDを保持してインベントリに追加
+    const int beforeCount = inventory_->GetBlockCount(insideBlock, insideCustomId);
     inventory_->AddBlock(insideBlock, 1, insideCustomId);
+    if (inventory_->GetBlockCount(insideBlock, insideCustomId) <= beforeCount) {
+        // Unsupported contents must not disappear without awarding an item.
+        return false;
+    }
 
     // マップ上からシャボン玉を消す
     stageMap_->RemoveBlock(index);
@@ -95,11 +101,8 @@ bool BubblePickupController::TryCollectAt(const Int3& index) {
     stageRenderer_->BuildFromStageMap(*stageMap_);
 
     if (collectCallback_) {
-        collectCallback_({
-            static_cast<float>(index.x),
-            static_cast<float>(index.y) + 0.5f,
-            static_cast<float>(index.z)
-        });
+        collectCallback_(
+            {static_cast<float>(index.x), static_cast<float>(index.y) + 0.5f, static_cast<float>(index.z)});
     }
 
     OutputDebugStringA("[BubblePickupController] Bubble collected.\n");

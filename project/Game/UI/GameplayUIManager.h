@@ -13,27 +13,29 @@
 
 // ゲームプレイ中に表示する2Dガイドと3D操作プロンプトをまとめて管理する。
 class GameplayUIManager {
-public:
+  public:
     // UI表示に必要な描画共通リソースとモデルを初期化する。
-    void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager, SpriteCommon* spriteCommon, Object3dCommon* object3dCommon);
+    void Initialize(DirectXCommon *dxCommon, TextureManager *textureManager, SpriteCommon *spriteCommon,
+                    Object3dCommon *object3dCommon);
     // プレイヤー位置やカメラ状態に応じて、表示すべきUIの位置と表示状態を更新する。
-    void Update(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
+    void Update(bool isGamePlayMode, Player *player, Camera *camera, LightCamera *lightCamera);
     // カメラ操作ガイドの表示時間と入力状態を更新する。
-    void UpdateCameraGuide(bool isGamePlay, Input* input, WinApp* winApp);
+    void UpdateCameraGuide(bool isGamePlay, Input *input, WinApp *winApp);
     // 2DスプライトUIを描画する。
     void DrawSprites(bool isGamePlayMode, bool isFollowPlayerMode);
     // 扉、はしご、鍵などの3Dプロンプトを描画する。
-    void Draw3DPrompts(bool isGamePlayMode, Player* player, Object3dCommon* object3dCommon, ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle);
+    void Draw3DPrompts(bool isGamePlayMode, Player *player, Object3dCommon *object3dCommon,
+                       ID3D12GraphicsCommandList *commandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle);
     void Finalize();
 
-private:
-    void UpdateDoorPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
-    void UpdateLadderPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
-    void UpdatePSwitchPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
-    void UpdateKeyPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
-    void UpdateKeyBlockPrompt3D(bool isGamePlayMode, Player* player, Camera* camera, LightCamera* lightCamera);
+  private:
+    void UpdateDoorPrompt3D(bool isGamePlayMode, Player *player, Camera *camera, LightCamera *lightCamera);
+    void UpdateLadderPrompt3D(bool isGamePlayMode, Player *player, Camera *camera, LightCamera *lightCamera);
+    void UpdatePSwitchPrompt3D(bool isGamePlayMode, Player *player, Camera *camera, LightCamera *lightCamera);
+    void UpdateKeyPrompt3D(bool isGamePlayMode, Player *player, Camera *camera, LightCamera *lightCamera);
+    void UpdateKeyBlockPrompt3D(bool isGamePlayMode, Player *player, Camera *camera, LightCamera *lightCamera);
 
-    SpriteCommon* spriteCommon_ = nullptr;
+    SpriteCommon *spriteCommon_ = nullptr;
 
     // カメラ回転ガイド用の方向スプライト。
     std::unique_ptr<Sprite> cameraGuideLeftSprite_;

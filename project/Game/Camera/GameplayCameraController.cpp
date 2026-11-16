@@ -1,4 +1,4 @@
-#include "GameplayCameraController.h"
+﻿#include "GameplayCameraController.h"
 #include <algorithm>
 #include <cmath>
 
@@ -6,12 +6,13 @@
 #include "externals/imgui/imgui.h"
 #endif
 
+// プレイ用の追従カメラを準備し、初期値と必要なリソースを設定する。
 void GameplayCameraController::Initialize() {
     cameraAngle_ = 6.267f;
     cameraPitch_ = 0.400f;
     cameraFov_ = 0.55f;
 
-    cameraPivot_ = { 4.0f, 9.0f, 4.5f };
+    cameraPivot_ = {4.0f, 9.0f, 4.5f};
     cameraDistance_ = 35.0f;
     cameraHeight_ = 20.0f;
 
@@ -19,12 +20,14 @@ void GameplayCameraController::Initialize() {
     cameraDirty_ = true;
 }
 
-void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winApp, Player* player) {
+// 追従設定と視点入力から、目標の注視点・角度・距離を更新する。
+void GameplayCameraController::Update(Input *input, Camera *camera, WinApp *winApp, Player *player,
+                                      bool placementMode) {
     if (!input || !camera || !winApp || !player) {
         return;
     }
 
-    const auto& mouse = input->GetMouseState();
+    const auto &mouse = input->GetMouseState();
 
     bool isGuiCaptured = false;
 #if defined(USE_IMGUI) && !defined(NDEBUG)
@@ -34,15 +37,14 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 #endif
 
     bool hasCameraParameterChanged = false;
-    const GamePadState& gamePad = input->GetGamePadState();
+    const GamePadState &gamePad = input->GetGamePadState();
 
     if (followPlayerMode_) {
         // プレイヤー追従時は、上半身付近をカメラの注視点にする。
         Vector3 targetPivot = player->GetPosition();
         targetPivot.y += 0.8f;
 
-        if (std::abs(cameraPivot_.x - targetPivot.x) > 0.001f ||
-            std::abs(cameraPivot_.y - targetPivot.y) > 0.001f ||
+        if (std::abs(cameraPivot_.x - targetPivot.x) > 0.001f || std::abs(cameraPivot_.y - targetPivot.y) > 0.001f ||
             std::abs(cameraPivot_.z - targetPivot.z) > 0.001f) {
             cameraPivot_ = targetPivot;
             hasCameraParameterChanged = true;
@@ -71,7 +73,7 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     }
 
     // マウスを使わない操作向けに、Q/Eでも段階的にズームできるようにする。
-    if (input->PushKey(DIK_Q) || input->PushKey(DIK_E)) {
+    if (!placementMode && (input->PushKey(DIK_Q) || input->PushKey(DIK_E))) {
         float minFov = minFov_;
         float maxFov = maxFov_;
         if (currentStageIndex_ == 3) {
@@ -86,7 +88,7 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     }
 
     // 画面端のガイド領域を左クリックした時だけ、カメラを段階的に回転させる。
-    if (mouse.buttons[0] && !isGuiCaptured) {
+    if (!placementMode && mouse.buttons[0] && !isGuiCaptured) {
         RECT clientRect;
         GetClientRect(winApp->GetHwnd(), &clientRect);
 
@@ -100,11 +102,11 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
             float scaledMouseY = static_cast<float>(mouse.posY) * windowScaleY;
 
 #ifdef NDEBUG
-            float mouseX = static_cast<float>(mouse.posX) *
-                (static_cast<float>(WinApp::kClientWidth) / currentClientWidth);
+            float mouseX =
+                static_cast<float>(mouse.posX) * (static_cast<float>(WinApp::kClientWidth) / currentClientWidth);
 
-            float mouseY = static_cast<float>(mouse.posY) *
-                (static_cast<float>(WinApp::kClientHeight) / currentClientHeight);
+            float mouseY =
+                static_cast<float>(mouse.posY) * (static_cast<float>(WinApp::kClientHeight) / currentClientHeight);
 #else
             float debugViewportOffsetX = static_cast<float>(WinApp::kWindowWidth - WinApp::kClientWidth) / 2.0f;
             float mouseX = scaledMouseX - debugViewportOffsetX;
@@ -136,22 +138,20 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
             const float halfHitSize = hitSize * 0.5f;
 
 #ifdef NDEBUG
-            Vector2 leftGuideOffset = { 0.0f, 0.0f };
-            Vector2 rightGuideOffset = { -40.0f, 0.0f };
-            Vector2 upGuideOffset = { 0.0f, 0.0f };
-            Vector2 downGuideOffset = { 0.0f, -60.0f };
+            Vector2 leftGuideOffset = {0.0f, 0.0f};
+            Vector2 rightGuideOffset = {-40.0f, 0.0f};
+            Vector2 upGuideOffset = {0.0f, 0.0f};
+            Vector2 downGuideOffset = {0.0f, -60.0f};
 #else
-            Vector2 leftGuideOffset = { 0.0f, 0.0f };
-            Vector2 rightGuideOffset = { -20.0f, 0.0f };
-            Vector2 upGuideOffset = { 0.0f, 0.0f };
-            Vector2 downGuideOffset = { 0.0f, -20.0f };
+            Vector2 leftGuideOffset = {0.0f, 0.0f};
+            Vector2 rightGuideOffset = {-20.0f, 0.0f};
+            Vector2 upGuideOffset = {0.0f, 0.0f};
+            Vector2 downGuideOffset = {0.0f, -20.0f};
 #endif
 
             auto isMouseInsideGuide = [&](float guideCenterX, float guideCenterY) {
-                return mouseX >= guideCenterX - halfHitSize &&
-                    mouseX <= guideCenterX + halfHitSize &&
-                    mouseY >= guideCenterY - halfHitSize &&
-                    mouseY <= guideCenterY + halfHitSize;
+                return mouseX >= guideCenterX - halfHitSize && mouseX <= guideCenterX + halfHitSize &&
+                       mouseY >= guideCenterY - halfHitSize && mouseY <= guideCenterY + halfHitSize;
             };
 
             bool hitLeftGuide = isMouseInsideGuide(leftGuideX + leftGuideOffset.x, centerY + leftGuideOffset.y);
@@ -175,6 +175,12 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
 
             cameraPitch_ = std::clamp(cameraPitch_, minPitch, maxPitch);
         }
+    }
+
+    if (placementMode && mouse.buttons[1] && !isGuiCaptured && (mouse.x != 0 || mouse.y != 0)) {
+        cameraAngle_ -= static_cast<float>(mouse.x) * 0.004f;
+        cameraPitch_ += static_cast<float>(mouse.y) * 0.004f;
+        hasCameraParameterChanged = true;
     }
 
     // 画面上の矢印操作と同じ回転をキーボードの矢印キーでも行えるようにする。
@@ -240,7 +246,8 @@ void GameplayCameraController::Update(Input* input, Camera* camera, WinApp* winA
     cameraDirty_ = false;
 }
 
-void GameplayCameraController::ApplyCamera(Camera* camera) {
+// 目標角度と距離からカメラ位置を求め、現在の追従設定へ反映する。
+void GameplayCameraController::ApplyCamera(Camera *camera) {
     if (!camera) {
         return;
     }
@@ -249,32 +256,25 @@ void GameplayCameraController::ApplyCamera(Camera* camera) {
 
     Vector3 cameraPosition;
     // 画角だけの拡大では距離フォグが晴れないため、実カメラも緩やかに寄せる。
-    const float dolly = std::clamp(cameraFov_/(std::max)(referenceFov_,.1f),.75f,1.3f);
-    cameraPosition.x = targetPosition.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * cameraDistance_*dolly;
-    cameraPosition.y = targetPosition.y + std::sin(cameraPitch_) * cameraHeight_*dolly;
-    cameraPosition.z = targetPosition.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * cameraDistance_*dolly;
+    const float dolly = std::clamp(cameraFov_ / (std::max)(referenceFov_, .1f), .75f, 1.3f);
+    cameraPosition.x = targetPosition.x - std::cos(cameraPitch_) * std::sin(cameraAngle_) * cameraDistance_ * dolly;
+    cameraPosition.y = targetPosition.y + std::sin(cameraPitch_) * cameraHeight_ * dolly;
+    cameraPosition.z = targetPosition.z - std::cos(cameraPitch_) * std::cos(cameraAngle_) * cameraDistance_ * dolly;
 
     camera->SetPosition(cameraPosition);
 
-    Vector3 cameraToTarget = {
-        targetPosition.x - cameraPosition.x,
-        targetPosition.y - cameraPosition.y,
-        targetPosition.z - cameraPosition.z
-    };
+    Vector3 cameraToTarget = {targetPosition.x - cameraPosition.x, targetPosition.y - cameraPosition.y,
+                              targetPosition.z - cameraPosition.z};
 
     float cameraYaw = std::atan2(cameraToTarget.x, cameraToTarget.z);
     float horizontalDistance = std::sqrt(cameraToTarget.x * cameraToTarget.x + cameraToTarget.z * cameraToTarget.z);
     float cameraPitch = -std::atan2(cameraToTarget.y, horizontalDistance);
 
-    camera->SetRotation({ cameraPitch, cameraYaw, 0.0f });
+    camera->SetRotation({cameraPitch, cameraYaw, 0.0f});
 }
 
-void GameplayCameraController::ResetCamera(
-    Camera* camera,
-    Player* player,
-    const StageMap& stageMap,
-    int stageIndex
-) {
+// ステージとプレイヤーに合う注視点・角度・距離へカメラを戻す。
+void GameplayCameraController::ResetCamera(Camera *camera, Player *player, const StageMap &stageMap, int stageIndex) {
     if (!camera || !player) {
         return;
     }
@@ -337,6 +337,17 @@ void GameplayCameraController::ResetCamera(
         preset.pivotYRate = 0.45f;
         break;
 
+    case 7:
+        // Grand tour: show the local challenge clearly; the arrival tour shows the whole island.
+        preset.enableWallTransparency = false;
+        preset.wallTransparencyAlpha = 1.0f;
+        preset.angle = 5.55f;
+        preset.pitch = .78f;
+        preset.distanceRate = .60f;
+        preset.heightRate = .48f;
+        preset.fov = .60f;
+        preset.pivotYRate = .35f;
+        break;
     default:
         // 通常ステージ向けの標準カメラ設定。
         preset.angle = 0.785f;
@@ -356,8 +367,8 @@ void GameplayCameraController::ResetCamera(
     cameraAngle_ = preset.angle;
     cameraPitch_ = preset.pitch;
     // 見回しは開始演出が担当し、プレイ開始カメラはプレイヤーを見失わない距離に収める。
-    cameraDistance_ = std::clamp(maxStageSize * preset.distanceRate,8.0f,36.0f);
-    cameraHeight_ = std::clamp(maxStageSize * preset.heightRate,6.0f,24.0f);
+    cameraDistance_ = std::clamp(maxStageSize * preset.distanceRate, 8.0f, 36.0f);
+    cameraHeight_ = std::clamp(maxStageSize * preset.heightRate, 6.0f, 24.0f);
     cameraFov_ = preset.fov;
     referenceFov_ = preset.fov;
 

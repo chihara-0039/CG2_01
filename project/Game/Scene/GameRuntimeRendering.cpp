@@ -1,4 +1,4 @@
-// 描画パスと可視化処理を、更新・ゲーム進行から分離する。
+﻿// 描画パスと可視化処理を、更新・ゲーム進行から分離する。
 #include "GameRuntime.h"
 #include <algorithm>
 #include <cmath>
@@ -17,6 +17,7 @@ struct EditorViewportRect {
     float height;
 };
 
+// エディタのパネルを除いた、3D表示領域の矩形を求める。
 EditorViewportRect GetEditorViewportRect() {
     const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
     const float width = (std::max)(displaySize.x, 1.0f);
@@ -29,25 +30,16 @@ EditorViewportRect GetEditorViewportRect() {
     if (height < 820.0f) {
         bottomPanel = std::clamp(height * 0.28f, 220.0f, 320.0f);
     }
-    return {
-        leftPanel,
-        toolbarHeight,
-        (std::max)(480.0f, width - leftPanel - rightPanel),
-        (std::max)(300.0f, height - toolbarHeight - bottomPanel)
-    };
+    return {leftPanel, toolbarHeight, (std::max)(480.0f, width - leftPanel - rightPanel),
+            (std::max)(300.0f, height - toolbarHeight - bottomPanel)};
 }
 
-void SetEditorSceneViewport(ID3D12GraphicsCommandList* commandList) {
+// エディタの表示領域へ、ビューポートと描画範囲を設定する。
+void SetEditorSceneViewport(ID3D12GraphicsCommandList *commandList) {
     const EditorViewportRect rect = GetEditorViewportRect();
-    const D3D12_VIEWPORT viewport = {
-        rect.x, rect.y, rect.width, rect.height, 0.0f, 1.0f
-    };
-    const D3D12_RECT scissor = {
-        static_cast<LONG>(rect.x),
-        static_cast<LONG>(rect.y),
-        static_cast<LONG>(rect.x + rect.width),
-        static_cast<LONG>(rect.y + rect.height)
-    };
+    const D3D12_VIEWPORT viewport = {rect.x, rect.y, rect.width, rect.height, 0.0f, 1.0f};
+    const D3D12_RECT scissor = {static_cast<LONG>(rect.x), static_cast<LONG>(rect.y),
+                                static_cast<LONG>(rect.x + rect.width), static_cast<LONG>(rect.y + rect.height)};
     commandList->RSSetViewports(1, &viewport);
     commandList->RSSetScissorRects(1, &scissor);
 }
@@ -57,20 +49,17 @@ void SetEditorSceneViewport(ID3D12GraphicsCommandList* commandList) {
 void GameRuntime::DrawCollisionDebugBoxes() {
 #ifdef USE_IMGUI
     if (!debugFlags_.showCollisionBoxes || !camera || !player_ ||
-        (currentMode_ != AppMode::GamePlay &&
-         currentMode_ != AppMode::GamePlay_BlockPlace &&
-         currentMode_ != AppMode::StageEditor &&
-         currentMode_ != AppMode::SkinningEditor)) {
+        (currentMode_ != AppMode::GamePlay && currentMode_ != AppMode::GamePlay_BlockPlace &&
+         currentMode_ != AppMode::StageEditor && currentMode_ != AppMode::SkinningEditor)) {
         return;
     }
 
-    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    ImDrawList *drawList = ImGui::GetForegroundDrawList();
     if (!drawList) {
         return;
     }
 
-    const Matrix4x4 viewProjection = Math::Multiply(
-        camera->GetViewMatrix(), camera->GetProjectionMatrix());
+    const Matrix4x4 viewProjection = Math::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
 
 #ifdef NDEBUG
     const float viewportLeft = 0.0f;
@@ -85,18 +74,16 @@ void GameRuntime::DrawCollisionDebugBoxes() {
     const float viewportHeight = editorViewport.height;
 #endif
 
-    drawList->PushClipRect(
-        ImVec2(viewportLeft, viewportTop),
-        ImVec2(viewportLeft + viewportWidth, viewportTop + viewportHeight),
-        true);
+    drawList->PushClipRect(ImVec2(viewportLeft, viewportTop),
+                           ImVec2(viewportLeft + viewportWidth, viewportTop + viewportHeight), true);
 
-    auto project = [&](const Vector3& point, ImVec2& screen) {
+    auto project = [&](const Vector3 &point, ImVec2 &screen) {
         const float clipX = point.x * viewProjection.m[0][0] + point.y * viewProjection.m[1][0] +
-            point.z * viewProjection.m[2][0] + viewProjection.m[3][0];
+                            point.z * viewProjection.m[2][0] + viewProjection.m[3][0];
         const float clipY = point.x * viewProjection.m[0][1] + point.y * viewProjection.m[1][1] +
-            point.z * viewProjection.m[2][1] + viewProjection.m[3][1];
+                            point.z * viewProjection.m[2][1] + viewProjection.m[3][1];
         const float clipW = point.x * viewProjection.m[0][3] + point.y * viewProjection.m[1][3] +
-            point.z * viewProjection.m[2][3] + viewProjection.m[3][3];
+                            point.z * viewProjection.m[2][3] + viewProjection.m[3][3];
         if (clipW <= 0.01f) {
             return false;
         }
@@ -108,13 +95,11 @@ void GameRuntime::DrawCollisionDebugBoxes() {
         return true;
     };
 
-    auto drawBox = [&](const Vector3& minimum, const Vector3& maximum, ImU32 color) {
-        const Vector3 corners[8] = {
-            { minimum.x, minimum.y, minimum.z }, { maximum.x, minimum.y, minimum.z },
-            { maximum.x, maximum.y, minimum.z }, { minimum.x, maximum.y, minimum.z },
-            { minimum.x, minimum.y, maximum.z }, { maximum.x, minimum.y, maximum.z },
-            { maximum.x, maximum.y, maximum.z }, { minimum.x, maximum.y, maximum.z }
-        };
+    auto drawBox = [&](const Vector3 &minimum, const Vector3 &maximum, ImU32 color) {
+        const Vector3 corners[8] = {{minimum.x, minimum.y, minimum.z}, {maximum.x, minimum.y, minimum.z},
+                                    {maximum.x, maximum.y, minimum.z}, {minimum.x, maximum.y, minimum.z},
+                                    {minimum.x, minimum.y, maximum.z}, {maximum.x, minimum.y, maximum.z},
+                                    {maximum.x, maximum.y, maximum.z}, {minimum.x, maximum.y, maximum.z}};
         ImVec2 projected[8];
         for (int i = 0; i < 8; ++i) {
             if (!project(corners[i], projected[i])) {
@@ -122,18 +107,15 @@ void GameRuntime::DrawCollisionDebugBoxes() {
             }
         }
 
-        constexpr int edges[12][2] = {
-            {0,1}, {1,2}, {2,3}, {3,0},
-            {4,5}, {5,6}, {6,7}, {7,4},
-            {0,4}, {1,5}, {2,6}, {3,7}
-        };
-        for (const auto& edge : edges) {
+        constexpr int edges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
+                                      {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+        for (const auto &edge : edges) {
             drawList->AddLine(projected[edge[0]], projected[edge[1]], color, 2.0f);
         }
     };
 
     if (currentMode_ == AppMode::SkinningEditor) {
-        for (const WorldCollisionBox& collider : skinningEditor_.BuildWorldCollisionBoxes()) {
+        for (const WorldCollisionBox &collider : skinningEditor_.BuildWorldCollisionBoxes()) {
             drawBox(collider.minimum, collider.maximum, IM_COL32(60, 210, 255, 240));
         }
         drawList->PopClipRect();
@@ -142,23 +124,20 @@ void GameRuntime::DrawCollisionDebugBoxes() {
 
     const Vector3 playerPosition = player_->GetPosition();
     const Vector3 playerRadius = player_->GetRadius();
-    drawBox(
-        { playerPosition.x - playerRadius.x, playerPosition.y, playerPosition.z - playerRadius.z },
-        { playerPosition.x + playerRadius.x, playerPosition.y + playerRadius.y * 2.0f,
-          playerPosition.z + playerRadius.z },
-        IM_COL32(80, 255, 120, 255));
+    drawBox({playerPosition.x - playerRadius.x, playerPosition.y, playerPosition.z - playerRadius.z},
+            {playerPosition.x + playerRadius.x, playerPosition.y + playerRadius.y * 2.0f,
+             playerPosition.z + playerRadius.z},
+            IM_COL32(80, 255, 120, 255));
 
-    for (const WorldCollisionBox& collider : blenderRuntimeLevel_.GetCollisionBoxes()) {
+    for (const WorldCollisionBox &collider : blenderRuntimeLevel_.GetCollisionBoxes()) {
         drawBox(collider.minimum, collider.maximum, IM_COL32(60, 210, 255, 240));
     }
     if (blenderRuntimeLevel_.HasPlayerSpawn()) {
-        const Vector3& runtimePlayerSpawn = blenderRuntimeLevel_.GetPlayerSpawn();
-        const Vector3 halfSize{ 0.2f, 0.2f, 0.2f };
+        const Vector3 &runtimePlayerSpawn = blenderRuntimeLevel_.GetPlayerSpawn();
+        const Vector3 halfSize{0.2f, 0.2f, 0.2f};
         drawBox(
-            { runtimePlayerSpawn.x - halfSize.x, runtimePlayerSpawn.y - halfSize.y,
-              runtimePlayerSpawn.z - halfSize.z },
-            { runtimePlayerSpawn.x + halfSize.x, runtimePlayerSpawn.y + halfSize.y,
-              runtimePlayerSpawn.z + halfSize.z },
+            {runtimePlayerSpawn.x - halfSize.x, runtimePlayerSpawn.y - halfSize.y, runtimePlayerSpawn.z - halfSize.z},
+            {runtimePlayerSpawn.x + halfSize.x, runtimePlayerSpawn.y + halfSize.y, runtimePlayerSpawn.z + halfSize.z},
             IM_COL32(255, 80, 220, 255));
     }
 
@@ -176,30 +155,23 @@ void GameRuntime::DrawCollisionDebugBoxes() {
     for (int y = minY; y <= maxY; ++y) {
         for (int z = minZ; z <= maxZ; ++z) {
             for (int x = minX; x <= maxX; ++x) {
-                const MapCell* cell = stageMap_.GetCell(x, y, z);
+                const MapCell *cell = stageMap_.GetCell(x, y, z);
                 if (!cell || cell->isHidden) {
                     continue;
                 }
-                const bool pBlockCollision =
-                    cell->type == BlockType::PBlock && !stageMap_.IsPSwitchActive();
+                const bool pBlockCollision = cell->type == BlockType::PBlock && !stageMap_.IsPSwitchActive();
                 if (!cell->isSolid && !pBlockCollision) {
                     continue;
                 }
 
-                Vector3 center = {
-                    static_cast<float>(x),
-                    static_cast<float>(y) + 0.5f,
-                    static_cast<float>(z)
-                };
+                Vector3 center = {static_cast<float>(x), static_cast<float>(y) + 0.5f, static_cast<float>(z)};
                 if (cell->type == BlockType::MovingFloor) {
                     center.x += cell->currentOffsetX;
                     center.y += cell->currentOffsetY;
                     center.z += cell->currentOffsetZ;
                 }
-                drawBox(
-                    { center.x - 0.5f, center.y - 0.5f, center.z - 0.5f },
-                    { center.x + 0.5f, center.y + 0.5f, center.z + 0.5f },
-                    IM_COL32(255, 170, 40, 230));
+                drawBox({center.x - 0.5f, center.y - 0.5f, center.z - 0.5f},
+                        {center.x + 0.5f, center.y + 0.5f, center.z + 0.5f}, IM_COL32(255, 170, 40, 230));
             }
         }
     }
@@ -207,28 +179,23 @@ void GameRuntime::DrawCollisionDebugBoxes() {
 #endif
 }
 
+// ゲーム全体の表示対象を選び、描画コマンドを記録する。
 void GameRuntime::Draw() {
     auto commandList = dxCommon->GetCommandList();
 
     Vector4 skyTint = {1.0f, 1.0f, 1.0f, 1.0f};
-    const bool usesStageWeather =
-        currentMode_ == AppMode::StageEditor ||
-        currentMode_ == AppMode::GamePlay ||
-        currentMode_ == AppMode::GameClear ||
-        currentMode_ == AppMode::GamePlay_BlockPlace;
+    const bool usesStageWeather = currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay ||
+                                  currentMode_ == AppMode::GameClear || currentMode_ == AppMode::GamePlay_BlockPlace;
     if (currentMode_ == AppMode::Title && titleDayNightActive_) {
         skyTint = gameplaySkyTint_;
     } else if (usesStageWeather) {
         if (gameplayDayNightActive_) {
             skyTint = gameplaySkyTint_;
-        } else if (const WeatherPreset* preset =
-            WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName())) {
-            skyTint = {
-                std::clamp(preset->skyColor.x * preset->skyBrightness, 0.0f, 2.0f),
-                std::clamp(preset->skyColor.y * preset->skyBrightness, 0.0f, 2.0f),
-                std::clamp(preset->skyColor.z * preset->skyBrightness, 0.0f, 2.0f),
-                preset->skyColor.w
-            };
+        } else if (const WeatherPreset *preset =
+                       WeatherPresetManager::GetInstance().GetPresetByName(stageMap_.GetWeatherPresetName())) {
+            skyTint = {std::clamp(preset->skyColor.x * preset->skyBrightness, 0.0f, 2.0f),
+                       std::clamp(preset->skyColor.y * preset->skyBrightness, 0.0f, 2.0f),
+                       std::clamp(preset->skyColor.z * preset->skyBrightness, 0.0f, 2.0f), preset->skyColor.w};
         }
     } else if (postProcessInitialized_ && postProcess_.GetSkyboxLinkMode() == 1) {
         skyTint = postProcess_.GetClearColor();
@@ -242,27 +209,29 @@ void GameRuntime::Draw() {
         skybox_->SetColor(skyTint);
     }
 
-    const Matrix4x4& lightVP = lightCamera_->GetViewProjectionMatrix();
+    const Matrix4x4 &lightVP = lightCamera_->GetViewProjectionMatrix();
 
     shadowMap_->PreDraw(commandList);
     commandList->SetGraphicsRootSignature(object3dCommon->GetRootSignature());
     commandList->SetPipelineState(object3dCommon->GetShadowPipelineState());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    for (auto& obj : objectList) {
+    for (auto &obj : objectList) {
         if (obj) {
             obj->DrawShadow(lightVP);
         }
     }
-    if (player_ && (!startIntro_ || startIntro_->IsPlayerVisible())) {
+    if (player_ &&
+        (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace ||
+         currentMode_ == AppMode::DebugView) &&
+        (!startIntro_ || startIntro_->IsPlayerVisible())) {
         player_->DrawShadow(lightVP);
     }
     if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_) {
-        skinningEditor_.DrawShadow(lightVP); 
+        skinningEditor_.DrawShadow(lightVP);
     }
     DrawRuntimeLevelShadows(lightVP);
-    const bool showNativeStageShadow =
-        !(currentMode_ == AppMode::StageEditor && blenderStageActive_);
+    const bool showNativeStageShadow = !(currentMode_ == AppMode::StageEditor && blenderStageActive_);
     if (stageRenderer_ && showNativeStageShadow) {
         stageRenderer_->DrawShadow(lightVP);
     }
@@ -280,20 +249,15 @@ void GameRuntime::Draw() {
         postProcess_.DrawToBackBuffer(commandList, camera->GetProjectionMatrix());
     } else {
 #if defined(NDEBUG) || !defined(USE_IMGUI)
-        D3D12_VIEWPORT viewport = { 0.0f, 0.0f, (float)WinApp::kWindowWidth, (float)WinApp::kWindowHeight, 0.0f, 1.0f };
-        D3D12_RECT scissor = { 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight };
+        D3D12_VIEWPORT viewport = {0.0f, 0.0f, (float)WinApp::kWindowWidth, (float)WinApp::kWindowHeight, 0.0f, 1.0f};
+        D3D12_RECT scissor = {0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight};
 #else
         const EditorViewportRect editorViewport = GetEditorViewportRect();
         D3D12_VIEWPORT viewport = {
-            editorViewport.x, editorViewport.y,
-            editorViewport.width, editorViewport.height, 0.0f, 1.0f
-        };
-        D3D12_RECT scissor = {
-            static_cast<LONG>(editorViewport.x),
-            static_cast<LONG>(editorViewport.y),
-            static_cast<LONG>(editorViewport.x + editorViewport.width),
-            static_cast<LONG>(editorViewport.y + editorViewport.height)
-        };
+            editorViewport.x, editorViewport.y, editorViewport.width, editorViewport.height, 0.0f, 1.0f};
+        D3D12_RECT scissor = {static_cast<LONG>(editorViewport.x), static_cast<LONG>(editorViewport.y),
+                              static_cast<LONG>(editorViewport.x + editorViewport.width),
+                              static_cast<LONG>(editorViewport.y + editorViewport.height)};
 #endif
         commandList->RSSetViewports(1, &viewport);
         commandList->RSSetScissorRects(1, &scissor);
@@ -301,20 +265,32 @@ void GameRuntime::Draw() {
         RenderScene();
     }
 
+    if (currentMode_ == AppMode::GameClear && sceneManager_) {
+        const auto dsv = dxCommon->GetDsvHeap()->GetCPUDescriptorHandleForHeapStart();
+        commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+        object3dCommon->PreDrawBook();
+        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+        sceneManager_->Draw(*this);
+    }
+    RenderUi();
+    DrawPlayerOcclusionMarker();
     DrawCollisionDebugBoxes();
     DrawCaptureOverlay();
     if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsActive()) {
         spriteCommon->PreDraw();
         startIntro_->Draw();
     }
-    if (currentMode_==AppMode::GamePlay && gameOver_ && gameOver_->IsActive()) {
-        spriteCommon->PreDraw(); gameOver_->Draw();
+    if (currentMode_ == AppMode::GamePlay && gameOver_ && gameOver_->IsActive()) {
+        spriteCommon->PreDraw();
+        gameOver_->Draw();
     }
     // すべての3D描画・HUDより後に描き、シーン全体を自然に暗転させる。
     if (sceneFadeSprite_ && sceneFadeAlpha_ > 0.0f) {
         spriteCommon->PreDraw();
         sceneFadeSprite_->Draw();
-        if (useRecoveryTransition_ && recoveryTransition_) recoveryTransition_->Draw();
+        if (useRecoveryTransition_ && recoveryTransition_) {
+            recoveryTransition_->Draw();
+        }
     }
 
 #ifdef USE_IMGUI
@@ -323,19 +299,16 @@ void GameRuntime::Draw() {
     dxCommon->PostDraw();
 }
 
+// 背景・地形・影・プレイヤーなど、現在のシーンの3D描画を記録する。
 void GameRuntime::RenderScene() {
     auto commandList = dxCommon->GetCommandList();
 
-    if (!debugFlags_.show3DObjects &&
-        currentMode_ != AppMode::EffectPreview &&
-        currentMode_ != AppMode::EffectShowcase &&
-        currentMode_ != AppMode::PostEffectShowcase) {
+    if (!debugFlags_.show3DObjects && currentMode_ != AppMode::EffectPreview &&
+        currentMode_ != AppMode::EffectShowcase && currentMode_ != AppMode::PostEffectShowcase) {
         return;
     }
 
-    ID3D12DescriptorHeap* heaps[] = {
-        textureManager->GetSrvHeap()
-    };
+    ID3D12DescriptorHeap *heaps[] = {textureManager->GetSrvHeap()};
     commandList->SetDescriptorHeaps(1, heaps);
     object3dCommon->PreDraw();
     commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
@@ -345,7 +318,7 @@ void GameRuntime::RenderScene() {
             terrainObject_->Draw();
         }
         if (debugFlags_.showParticles && !IsWindowInactive()) {
-            ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
+            ID3D12DescriptorHeap *particleHeaps[] = {textureManager->GetSrvHeap()};
             commandList->SetDescriptorHeaps(1, particleHeaps);
             particleManager->Draw();
         }
@@ -374,14 +347,10 @@ void GameRuntime::RenderScene() {
         }
         skinningEditor_.Draw(object3dCommon.get(), camera.get());
     } else {
-        const bool isGameMode =
-            currentMode_ == AppMode::StageEditor ||
-            currentMode_ == AppMode::GamePlay ||
-            currentMode_ == AppMode::GamePlay_BlockPlace ||
-            currentMode_ == AppMode::EffectPreview;
+        const bool isGameMode = currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay ||
+                                currentMode_ == AppMode::GamePlay_BlockPlace || currentMode_ == AppMode::EffectPreview;
 
-        const bool showNativeStage =
-            !(currentMode_ == AppMode::StageEditor && blenderStageActive_);
+        const bool showNativeStage = !(currentMode_ == AppMode::StageEditor && blenderStageActive_);
         if (isGameMode && stageRenderer_ && showNativeStage) {
             stageRenderer_->Draw();
             stageRenderer_->DrawTransparent();
@@ -390,29 +359,33 @@ void GameRuntime::RenderScene() {
         }
 
         DrawRuntimeLevelObjects();
-        if(currentMode_==AppMode::GamePlay && startIntro_)startIntro_->DrawLaunchCloud(camera->GetViewMatrix(),camera->GetProjectionMatrix(),lightCamera_->GetViewProjectionMatrix());
+        if (currentMode_ == AppMode::GamePlay && startIntro_) {
+            startIntro_->DrawLaunchCloud(camera->GetViewMatrix(), camera->GetProjectionMatrix(),
+                                         lightCamera_->GetViewProjectionMatrix());
+        }
 
-        if (currentMode_ == AppMode::GamePlay ||
-            currentMode_ == AppMode::EffectPreview) {
-            if (player_ && (!startIntro_ || startIntro_->IsPlayerVisible()) && (!useFirstPersonCamera_ || (startIntro_ && startIntro_->BlocksInput()) || (gameOver_ && gameOver_->IsActive()))) {
-                player_->Draw();
-                if (!(gameOver_ && gameOver_->IsActive()) && !(startIntro_ && startIntro_->BlocksInput()) && IsPlayerHiddenByWall()) {
+        if (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::EffectPreview) {
+            if (player_ && (!startIntro_ || startIntro_->IsPlayerVisible()) &&
+                (!useFirstPersonCamera_ || (startIntro_ && startIntro_->BlocksInput()) ||
+                 (gameOver_ && gameOver_->IsActive()))) {
+                if (ShouldShowPlayerOcclusion()) {
                     object3dCommon->PreDrawPlayerHighlight();
                     player_->DrawHighlight();
                     object3dCommon->PreDraw();
                     commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
                 }
+                // Draw visible fragments last, so the player never occludes their own highlight.
+                player_->Draw();
             }
 
-            if (!dioramaCapture_ && currentMode_ == AppMode::GamePlay && gameplayUIManager_ && !(gameOver_ && gameOver_->IsActive()) && !(startIntro_ && startIntro_->BlocksInput())) {
-                gameplayUIManager_->Draw3DPrompts(
-                    true, player_.get(), object3dCommon.get(), commandList, shadowMap_->GetSrvHandle());
+            if (!isGoalReached_ && !dioramaCapture_ && currentMode_ == AppMode::GamePlay && gameplayUIManager_ &&
+                !(gameOver_ && gameOver_->IsActive()) && !(startIntro_ && startIntro_->BlocksInput())) {
+                gameplayUIManager_->Draw3DPrompts(true, player_.get(), object3dCommon.get(), commandList,
+                                                  shadowMap_->GetSrvHandle());
             }
         }
 
-        if (showNativeStage &&
-            (currentMode_ == AppMode::StageEditor ||
-             currentMode_ == AppMode::GamePlay_BlockPlace) &&
+        if (showNativeStage && (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace) &&
             mapCursor_) {
             mapCursor_->Draw();
         }
@@ -422,13 +395,13 @@ void GameRuntime::RenderScene() {
                 terrainObject_->Draw();
             }
             if (debugFlags_.show3DObjects) {
-                for (auto& obj : objectList) {
+                for (auto &obj : objectList) {
                     if (obj) {
                         obj->Draw();
                     }
                 }
             }
-            if (player_) { 
+            if (player_) {
                 player_->Draw();
             }
             if (skinningEditorInitialized_) {
@@ -445,13 +418,13 @@ void GameRuntime::RenderScene() {
     }
 
     if (debugFlags_.showParticles && !IsWindowInactive()) {
-        ID3D12DescriptorHeap* particleHeaps[] = { textureManager->GetSrvHeap() };
+        ID3D12DescriptorHeap *particleHeaps[] = {textureManager->GetSrvHeap()};
         commandList->SetDescriptorHeaps(1, particleHeaps);
         particleManager->Draw();
     }
 
-    // シーン固有モデルはパーティクルの後に描き、クリア文字を花火より手前に見せる。
-    if (sceneManager_) {
+    // The 3D journal is composited with its own depth after post effects.
+    if (sceneManager_ && currentMode_ != AppMode::GameClear) {
         object3dCommon->PreDraw();
         commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
         sceneManager_->Draw(*this);
@@ -459,29 +432,63 @@ void GameRuntime::RenderScene() {
 
     if (debugFlags_.showSprite && currentMode_ == AppMode::DebugView) {
         spriteCommon->PreDraw();
-        if (sprite) { sprite->Draw(); }
+        if (sprite) {
+            sprite->Draw();
+        }
     }
+}
 
+// UI is composited after bloom/tonemapping, preserving authored ink and paper colours.
+void GameRuntime::RenderUi() {
     // ステージ紹介中はチュートリアルや目標矢印で景色を遮らない。
     // 黒帯と回転幕はDraw側で別途描くため、この早期returnでも表示される。
-    if (currentMode_==AppMode::GamePlay && gameOver_ && gameOver_->IsActive()) return;
-    if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsTouring()) return;
-
-    if(dioramaCapture_) return; // Clean footage: hide HUD, prompts and victory text at the source.
-    if (gameplayUIManager_ && !fogTrial_) {
-        gameplayUIManager_->DrawSprites(
-            currentMode_ == AppMode::GamePlay ||
-            currentMode_ == AppMode::GamePlay_BlockPlace,
-            gameplayCameraController_.IsFollowPlayerMode());
+    if (currentMode_ == AppMode::GamePlay && gameOver_ && gameOver_->IsActive()) {
+        return;
+    }
+    if (currentMode_ == AppMode::GamePlay && startIntro_ && startIntro_->IsTouring()) {
+        return;
     }
 
-    if (blockInventoryUI_ &&
-        (currentMode_ == AppMode::GamePlay ||
-         currentMode_ == AppMode::GamePlay_BlockPlace)) {
+    if (currentMode_ == AppMode::GamePlay && isGoalReached_) {
+        if (starGetSprite_) {
+            spriteCommon->PreDraw();
+            starGetSprite_->Draw();
+        }
+        return;
+    }
+    if (dioramaCapture_) {
+        // Explicitly opened inventory remains reviewable in capture footage.
+        if (blockInventoryUI_ && blockInventoryUI_->IsActive()) {
+            blockInventoryUI_->Draw();
+        }
+        return;
+    }
+    if (isGamePaused_) {
+        spriteCommon->PreDraw();
+        const bool pad = input && input->IsUsingGamePad();
+        if (pad && pauseXboxSprite_) {
+            pauseXboxSprite_->Draw();
+        } else if (pauseKeyboardSprite_) {
+            pauseKeyboardSprite_->Draw();
+        }
+        return;
+    }
+    if (showControlHelp_ && gameplayUIManager_ && !fogTrial_) {
+        gameplayUIManager_->DrawSprites(currentMode_ == AppMode::GamePlay ||
+                                            currentMode_ == AppMode::GamePlay_BlockPlace,
+                                        gameplayCameraController_.IsFollowPlayerMode());
+    }
+
+    if (blockInventoryUI_ && (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
         blockInventoryUI_->Draw();
     }
 
     const bool isInventoryOpen = blockInventoryUI_ && blockInventoryUI_->IsActive();
+    if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) && !isInventoryOpen &&
+        !isGamePaused_ && !showControlHelp_ && keyProgressSprite_) {
+        spriteCommon->PreDraw();
+        keyProgressSprite_->Draw();
+    }
     const bool isUsingGamePad = input && input->IsUsingGamePad();
     if (currentMode_ == AppMode::StageSelect) {
         spriteCommon->PreDraw();
@@ -499,14 +506,7 @@ void GameRuntime::RenderScene() {
             tutorialSprite_->Draw();
         }
     }
-    if (isInventoryOpen) {
-        spriteCommon->PreDraw();
-        if (isUsingGamePad && controllerInventoryTutorialSprite_) {
-            controllerInventoryTutorialSprite_->Draw();
-        } else if (inventoryTutorialSprite_) {
-            inventoryTutorialSprite_->Draw();
-        }
-    } else if (currentMode_ == AppMode::GamePlay_BlockPlace) {
+    if (!isInventoryOpen && currentMode_ == AppMode::GamePlay_BlockPlace) {
         spriteCommon->PreDraw();
         if (isUsingGamePad && controllerPlacementTutorialSprite_) {
             controllerPlacementTutorialSprite_->Draw();
@@ -514,16 +514,8 @@ void GameRuntime::RenderScene() {
             placementTutorialSprite_->Draw();
         }
     }
-    const bool showObjectiveGuide = objectiveGuideActive_ &&
-        std::chrono::duration<float>(
-            std::chrono::steady_clock::now() - objectiveGuideStartedAt_).count() < 5.0f;
-    if ((currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace) &&
-        !isInventoryOpen && showObjectiveGuide && objectiveGuideSprite_) {
-        spriteCommon->PreDraw();
-        objectiveGuideSprite_->Draw();
-    }
-    if (currentMode_ == AppMode::GamePlay && !isInventoryOpen && !isGamePaused_ &&
-        !isGoalReached_ && hasGoalGuideTarget_ && goalDirectionSprite_ && !fogTrial_) {
+    if (currentMode_ == AppMode::GamePlay && !isInventoryOpen && !isGamePaused_ && !isGoalReached_ &&
+        hasGoalGuideTarget_ && goalDirectionSprite_ && !fogTrial_) {
         spriteCommon->PreDraw();
         goalDirectionSprite_->Draw();
     }
@@ -535,19 +527,11 @@ void GameRuntime::RenderScene() {
             clearGuideSprite_->Draw();
         }
     }
-    if (isGoalReached_ && starGetSprite_) {
+    if (currentMode_ == AppMode::GamePlay && isGoalReached_ && starGetSprite_) {
         spriteCommon->PreDraw();
         starGetSprite_->Draw();
     }
-    if (isGamePaused_) {
-        spriteCommon->PreDraw();
-        if (isUsingGamePad && pauseXboxSprite_) {
-            pauseXboxSprite_->Draw();
-        } else if (pauseKeyboardSprite_) {
-            pauseKeyboardSprite_->Draw();
-        }
-    }
-    // 選択画面は3DのBACK案内を使う。終了案内はタイトルにだけ表示する。
+    // The title uses the same paper control strip as the other screens.
     if (currentMode_ == AppMode::Title) {
         spriteCommon->PreDraw();
         if (isUsingGamePad && menuExitXboxSprite_) {
@@ -558,61 +542,129 @@ void GameRuntime::RenderScene() {
     }
 }
 
+// 現在のシーンと天候に合わせて、空の背景を描画する。
 void GameRuntime::DrawSkyboxForFrame() {
-    if (fogTrial_ && currentMode_==AppMode::GamePlay) return;
+    if (fogTrial_ && currentMode_ == AppMode::GamePlay) {
+        return;
+    }
     auto commandList = dxCommon->GetCommandList();
     if (debugFlags_.showSkybox && showSkyboxCubemap_ && skybox_) {
         skybox_->Draw();
         object3dCommon->PreDraw();
         commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
     } else if (debugFlags_.showSkybox && skydomeObject_) {
+        object3dCommon->PreDrawSkydome();
         skydomeObject_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         skydomeObject_->Draw();
+        object3dCommon->PreDraw();
+        commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
     }
 }
 
+bool GameRuntime::ShouldShowPlayerOcclusion() const {
+    return currentMode_ == AppMode::GamePlay && !isGoalReached_ && !isGamePaused_ && !useFirstPersonCamera_ &&
+           player_ && camera && !(startIntro_ && startIntro_->BlocksInput()) && !(gameOver_ && gameOver_->IsActive());
+}
+
+// カメラからプレイヤーまでを検査し、遮っている地形があるか調べる。
 bool GameRuntime::IsPlayerHiddenByWall() const {
-    if (!player_ || !camera) { 
+    if (!player_ || !camera) {
         return false;
     }
-
-    Vector3 cameraPosition = camera->GetPosition();
-    Vector3 playerPos = player_->GetPosition();
-    playerPos.y += 0.8f;
-
-    Vector3 cameraToPlayer = {
-        playerPos.x - cameraPosition.x,
-        playerPos.y - cameraPosition.y,
-        playerPos.z - cameraPosition.z
-    };
-    const float cameraToPlayerLength = std::sqrt(
-        cameraToPlayer.x * cameraToPlayer.x +
-        cameraToPlayer.y * cameraToPlayer.y +
-        cameraToPlayer.z * cameraToPlayer.z);
-    if (cameraToPlayerLength <= 0.001f) {
-        return false;
-    }
-
-    Vector3 cameraToPlayerDirection = {
-        cameraToPlayer.x / cameraToPlayerLength,
-        cameraToPlayer.y / cameraToPlayerLength,
-        cameraToPlayer.z / cameraToPlayerLength
-    };
-    for (float rayDistance = 0.8f; rayDistance < cameraToPlayerLength - 1.0f; rayDistance += 0.8f) {
-        Vector3 samplePosition = {
-            cameraPosition.x + cameraToPlayerDirection.x * rayDistance,
-            cameraPosition.y + cameraToPlayerDirection.y * rayDistance,
-            cameraPosition.z + cameraToPlayerDirection.z * rayDistance
-        };
-        const MapCell* cell = stageMap_.GetCell(
-            static_cast<int>(std::floor(samplePosition.x + 0.5f)),
-            static_cast<int>(std::floor(samplePosition.y)),
-            static_cast<int>(std::floor(samplePosition.z + 0.5f)));
-        if (cell && cell->isSolid) { 
-            return true;
+    const auto origin = camera->GetPosition();
+    for (float height : {0.15f, 0.8f, 1.4f}) {
+        auto target = player_->GetPosition();
+        target.y += height;
+        const Vector3 delta{target.x - origin.x, target.y - origin.y, target.z - origin.z};
+        const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+        if (length < 0.01f) {
+            continue;
+        }
+        for (float distance = 0.1f; distance < length - 0.1f; distance += 0.15f) {
+            const float t = distance / length;
+            const Vector3 sample{origin.x + delta.x * t, origin.y + delta.y * t, origin.z + delta.z * t};
+            const auto *cell = stageMap_.GetCell(static_cast<int>(std::floor(sample.x + .5f)),
+                                                 static_cast<int>(std::floor(sample.y + .5f)),
+                                                 static_cast<int>(std::floor(sample.z + .5f)));
+            if (cell && !cell->isHidden && cell->isSolid && cell->type != BlockType::MovingFloor) {
+                return true;
+            }
+            if (!blenderStageActive_) {
+                continue;
+            }
+            for (const auto &box : blenderRuntimeLevel_.GetCollisionBoxes()) {
+                if (sample.x >= box.minimum.x && sample.x <= box.maximum.x && sample.y >= box.minimum.y &&
+                    sample.y <= box.maximum.y && sample.z >= box.minimum.z && sample.z <= box.maximum.z) {
+                    return true;
+                }
+            }
         }
     }
     return false;
 }
 
-
+// 遮蔽中のプレイヤー形状と足元印を描き、現在位置を示す。
+void GameRuntime::DrawPlayerOcclusionMarker() {
+    if (!ShouldShowPlayerOcclusion() || !IsPlayerHiddenByWall()) {
+        return;
+    }
+    const auto vp = Math::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+    float left = 0, top = 0, width = static_cast<float>(WinApp::kWindowWidth),
+          height = static_cast<float>(WinApp::kWindowHeight);
+#if defined(USE_IMGUI) && !defined(NDEBUG)
+    const auto viewport = GetEditorViewportRect();
+    left = viewport.x;
+    top = viewport.y;
+    width = viewport.width;
+    height = viewport.height;
+#endif
+    const auto foot = player_->GetPosition();
+    auto project = [&](const Vector3 &p, Vector2 &screen) {
+        const float w = p.x * vp.m[0][3] + p.y * vp.m[1][3] + p.z * vp.m[2][3] + vp.m[3][3];
+        if (w <= 0.001f) {
+            return false;
+        }
+        const float x = (p.x * vp.m[0][0] + p.y * vp.m[1][0] + p.z * vp.m[2][0] + vp.m[3][0]) / w;
+        const float y = (p.x * vp.m[0][1] + p.y * vp.m[1][1] + p.z * vp.m[2][1] + vp.m[3][1]) / w;
+        screen = {left + (x + 1) * .5f * width, top + (1 - y) * .5f * height};
+        return true;
+    };
+    Vector2 center{};
+    if (!project(foot, center)) {
+        return;
+    }
+    float minX = center.x, maxX = center.x, minY = center.y, maxY = center.y;
+    for (int i = 0; i < 32; ++i) {
+        const float angle = i * 6.2831853f / 32;
+        Vector2 point{};
+        if (!project({foot.x + .32f * std::cos(angle), foot.y, foot.z + .32f * std::sin(angle)}, point)) {
+            return;
+        }
+        minX = (std::min)(minX, point.x);
+        maxX = (std::max)(maxX, point.x);
+        minY = (std::min)(minY, point.y);
+        maxY = (std::max)(maxY, point.y);
+    }
+    if (!playerOcclusionMarker_) {
+        playerOcclusionMarker_ = std::make_unique<Sprite>();
+        playerOcclusionMarker_->Initialize(spriteCommon.get(),
+                                           textureManager->LoadTexture("Resources/UI/player-location.png"));
+    }
+    const float uiScaleX = static_cast<float>(WinApp::kClientWidth) / WinApp::kWindowWidth;
+    const float uiScaleY = static_cast<float>(WinApp::kClientHeight) / WinApp::kWindowHeight;
+    playerOcclusionMarker_->SetPosition({minX * uiScaleX, minY * uiScaleY});
+    playerOcclusionMarker_->SetSize(
+        {(std::max)(maxX - minX, 16.0f) * uiScaleX, (std::max)(maxY - minY, 8.0f) * uiScaleY});
+    playerOcclusionMarker_->Update();
+    auto *commandList = dxCommon->GetCommandList();
+    const D3D12_VIEWPORT full{0, 0, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight),
+                              0, 1};
+    const D3D12_RECT clip{static_cast<LONG>(left), static_cast<LONG>(top), static_cast<LONG>(left + width),
+                          static_cast<LONG>(top + height)};
+    commandList->RSSetViewports(1, &full);
+    commandList->RSSetScissorRects(1, &clip);
+    spriteCommon->PreDraw();
+    playerOcclusionMarker_->Draw();
+    const D3D12_VIEWPORT scene{left, top, width, height, 0, 1};
+    commandList->RSSetViewports(1, &scene);
+}

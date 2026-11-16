@@ -1,11 +1,10 @@
-struct VertexShaderOutput
-{
+﻿struct VertexShaderOutput {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL0;
     float4 lightSpacePosition : POSITION0;
     float3 worldPosition : POSITION1;
-    
+
     float4 color : COLOR0;
     float shininess : SHININESS0;
     float metallic : METALLIC0;
@@ -14,17 +13,16 @@ struct VertexShaderOutput
 
 static const uint MAX_POINT_LIGHTS = 8;
 
-struct PointLight
-{
+struct PointLight {
     float3 position;
     float intensity;
     float4 color;
     float radius;
     float3 padding;
+    float4 directionOuterCos;
 };
 
-struct DirectionalLight
-{
+struct DirectionalLight {
     float4 color;
     float3 direction;
     float intensity;
@@ -45,13 +43,12 @@ Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 Texture2D<float> gShadowMap : register(t1);
 
-struct PixelShaderOutput
-{
+struct PixelShaderOutput {
     float4 color : SV_Target0;
 };
 
-float3 ApplyFantasyAtmosphere(float3 color, float3 worldPosition)
-{
+// 空気遠近・環境色などを合成し、ステージ全体の色調を整える。
+float3 ApplyFantasyAtmosphere(float3 color, float3 worldPosition) {
     float distanceFromCamera = distance(gDirectionalLight.cameraPosition, worldPosition);
     // 通常モデルと同じ距離・濃度にし、ブロックだけ霧が濃くなる差を作らない。
     float distanceFog = smoothstep(22.0f, 100.0f, distanceFromCamera);
@@ -62,26 +59,26 @@ float3 ApplyFantasyAtmosphere(float3 color, float3 worldPosition)
         // 専用探索ステージのみ。通常のタイトルや他ステージの霧は従来どおり。
         float4 setting = gDirectionalLight.fogSettings;
         fogAmount = smoothstep(setting.y, setting.z, distanceFromCamera) * setting.w;
-        fogColor = float3(.48f,.64f,.76f);
+        fogColor = float3(.48f, .64f, .76f);
         float2 offset = worldPosition.xz - gDirectionalLight.fogOrigin.xz;
         float radial = length(offset);
         float mode = gDirectionalLight.fogOrigin.w;
-        float reveal = mode >= .5f ? 1-smoothstep(4,8,radial) : 0;
+        float reveal = mode >= .5f ? 1 - smoothstep(4, 8, radial) : 0;
         float scanMask = 0;
         if (mode >= 1.5f) {
             float2 direction = gDirectionalLight.fogDirection.xz;
-            float along = clamp(dot(offset,direction),0,gDirectionalLight.fogDirection.w);
-            float corridor = 1-smoothstep(4,8,length(offset-direction*along));
-            float wave = 1-smoothstep(gDirectionalLight.fogScan.y-2,gDirectionalLight.fogScan.y+2,radial);
+            float along = clamp(dot(offset, direction), 0, gDirectionalLight.fogDirection.w);
+            float corridor = 1 - smoothstep(4, 8, length(offset - direction * along));
+            float wave = 1 - smoothstep(gDirectionalLight.fogScan.y - 2, gDirectionalLight.fogScan.y + 2, radial);
             scanMask = corridor * wave * gDirectionalLight.fogScan.x;
-            reveal = max(reveal,scanMask);
+            reveal = max(reveal, scanMask);
         }
         // 高さの違う遠景まで一括で消さず、足場と同じ高さ付近に作用する。
-        float heightMask = 1-smoothstep(4,9,abs(worldPosition.y-gDirectionalLight.fogOrigin.y));
-        fogAmount *= 1-saturate(reveal*heightMask)*.94f;
+        float heightMask = 1 - smoothstep(4, 9, abs(worldPosition.y - gDirectionalLight.fogOrigin.y));
+        fogAmount *= 1 - saturate(reveal * heightMask) * .94f;
         // スキャン境界を淡く発光させ、何が起きたかを画面でも伝える。
-        float rim = (1-smoothstep(0,.8f,abs(radial-gDirectionalLight.fogScan.y))) * scanMask;
-        color += float3(.08f,.26f,.30f)*rim;
+        float rim = (1 - smoothstep(0, .8f, abs(radial - gDirectionalLight.fogScan.y))) * scanMask;
+        color += float3(.08f, .26f, .30f) * rim;
     }
     color = lerp(color, fogColor, fogAmount);
     float luminance = dot(color, float3(0.2126f, 0.7152f, 0.0722f));
@@ -89,8 +86,8 @@ float3 ApplyFantasyAtmosphere(float3 color, float3 worldPosition)
     return max(color, 0.0f) / (1.0f + max(color, 0.0f) * 0.12f);
 }
 
-float CalculateSoftShadow(float4 lightSpacePosition, float3 normal, float3 lightDirection)
-{
+// 周辺の深度を複数参照し、影の境界を滑らかにする。
+float CalculateSoftShadow(float4 lightSpacePosition, float3 normal, float3 lightDirection) {
     float3 lightPosition = lightSpacePosition.xyz / lightSpacePosition.w;
     float2 shadowUV = lightPosition.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
     if (shadowUV.x < 0.0f || shadowUV.x > 1.0f || shadowUV.y < 0.0f || shadowUV.y > 1.0f) {
@@ -103,12 +100,9 @@ float CalculateSoftShadow(float4 lightSpacePosition, float3 normal, float3 light
     float NdotL = saturate(dot(normal, lightDirection));
     float bias = max(0.00035f, 0.0016f * (1.0f - NdotL));
     float visibility = 0.0f;
-    [unroll]
-    for (int y = -1; y <= 1; ++y) {
-        [unroll]
-        for (int x = -1; x <= 1; ++x) {
-            float sampledDepth = gShadowMap.SampleLevel(
-                gSampler, shadowUV + float2(x, y) * texelSize, 0.0f);
+    [unroll] for (int y = -1; y <= 1; ++y) {
+        [unroll] for (int x = -1; x <= 1; ++x) {
+            float sampledDepth = gShadowMap.SampleLevel(gSampler, shadowUV + float2(x, y) * texelSize, 0.0f);
             visibility += lightPosition.z - bias <= sampledDepth ? 1.0f : 0.0f;
         }
     }
@@ -116,35 +110,30 @@ float CalculateSoftShadow(float4 lightSpacePosition, float3 normal, float3 light
     return lerp(0.58f, 1.0f, visibility);
 }
 
-PixelShaderOutput main(VertexShaderOutput input)
-{
+// インスタンスごとの色へ材質・光源・影を適用し、画素色を決める。
+PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
-    
+
     float4 textureColor = gTexture.Sample(gSampler, input.texcoord);
-    
+
     float4 matColor = input.color;
     float matShininess = input.shininess;
     float matMetallic = input.metallic;
     float matEmissive = input.emissive;
-    
+
     float3 normal = normalize(input.normal);
     float3 lightDir = normalize(-gDirectionalLight.direction);
     float shadowFactor = CalculateSoftShadow(input.lightSpacePosition, normal, lightDir);
     float NdotL = dot(normal, lightDir);
     float wrappedDiffuse = saturate((NdotL + 0.22f) / 1.22f);
     float hemisphere = normal.y * 0.5f + 0.5f;
-    float3 ambientColor = lerp(
-        float3(0.20f, 0.16f, 0.13f),
-        float3(0.30f, 0.43f, 0.62f),
-        hemisphere);
-    
+    float3 ambientColor = lerp(float3(0.20f, 0.16f, 0.13f), float3(0.30f, 0.43f, 0.62f), hemisphere);
+
     // 1. Diffuse
     float3 albedo = matColor.rgb * textureColor.rgb;
-    float3 diffuseColor =
-        albedo * ambientColor +
-        albedo * gDirectionalLight.color.rgb *
-        wrappedDiffuse * shadowFactor * gDirectionalLight.intensity * 0.82f;
-    
+    float3 diffuseColor = albedo * ambientColor + albedo * gDirectionalLight.color.rgb * wrappedDiffuse * shadowFactor *
+                                                      gDirectionalLight.intensity * 0.82f;
+
     // Multiple Point Light Contributions
     const uint pointLightCount = min(gDirectionalLight.pointLightCount, MAX_POINT_LIGHTS);
     for (uint lightIndex = 0; lightIndex < pointLightCount; ++lightIndex) {
@@ -156,36 +145,39 @@ PixelShaderOutput main(VertexShaderOutput input)
             float plNdotL = max(0.0f, dot(normalize(input.normal), plDir));
             float plAtten = saturate(1.0f - (plDist / pointLight.radius));
             plAtten *= plAtten;
+            if (pointLight.directionOuterCos.w > -1.0f) {
+                const float coneCos = dot(-plDir, pointLight.directionOuterCos.xyz);
+                plAtten *= smoothstep(pointLight.directionOuterCos.w, pointLight.padding.x, coneCos);
+            }
             float3 plContrib = pointLight.color.rgb * plNdotL * plAtten * pointLight.intensity;
             diffuseColor += plContrib * matColor.rgb * textureColor.rgb;
         }
     }
-    
+
     // 2. Specular
     float3 viewDir = normalize(gDirectionalLight.cameraPosition - input.worldPosition);
     float3 halfDir = normalize(lightDir + viewDir);
-    
+
     float specPower = lerp(8.0f, 256.0f, matShininess);
     float specular = pow(saturate(dot(normalize(input.normal), halfDir)), specPower);
-    
+
     float3 specBaseColor = lerp(float3(1.0f, 1.0f, 1.0f), matColor.rgb, matMetallic);
     float fresnel = pow(1.0f - saturate(dot(normal, viewDir)), 5.0f);
     float specIntensity = lerp(0.10f, 0.62f, matShininess) * (0.75f + fresnel * 0.45f);
-    
+
     float3 sunHighlight = gDirectionalLight.color.rgb * float3(1.04f, 0.98f, 0.88f);
-    float3 specColor = sunHighlight * gDirectionalLight.intensity * specular * specBaseColor * specIntensity * shadowFactor;
-    
+    float3 specColor =
+        sunHighlight * gDirectionalLight.intensity * specular * specBaseColor * specIntensity * shadowFactor;
+
     // 3. Rim
     float rim = pow(1.0f - saturate(dot(normal, viewDir)), 4.0f);
     float3 rimColor = float3(0.68f, 0.84f, 1.0f) * rim * (0.18f + matEmissive * 0.42f) * gDirectionalLight.intensity;
-    
+
     // 4. Emission
     float3 emissiveColor = matColor.rgb * matEmissive;
-    
-    output.color.rgb = ApplyFantasyAtmosphere(
-        diffuseColor + specColor + rimColor + emissiveColor,
-        input.worldPosition);
+
+    output.color.rgb = ApplyFantasyAtmosphere(diffuseColor + specColor + rimColor + emissiveColor, input.worldPosition);
     output.color.a = matColor.a * textureColor.a;
-    
+
     return output;
 }

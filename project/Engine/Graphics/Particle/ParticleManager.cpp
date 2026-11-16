@@ -8,77 +8,73 @@
 using namespace Microsoft::WRL;
 
 namespace {
-    constexpr uint32_t kGPUParticleEmitCount = 10;
-    constexpr float kGPUParticleEmitFrequency = 0.5f;
+constexpr uint32_t kGPUParticleEmitCount = 10;
+constexpr float kGPUParticleEmitFrequency = 0.5f;
 
-    enum class GPUParticleComputeRoot : uint32_t {
-        ParticlesUAV = 0,
-        FreeListIndexUAV,
-        EmitterCBV,
-        PerFrameCBV,
-        FreeListUAV,
-        Count
-    };
+enum class GPUParticleComputeRoot : uint32_t {
+    ParticlesUAV = 0,
+    FreeListIndexUAV,
+    EmitterCBV,
+    PerFrameCBV,
+    FreeListUAV,
+    Count
+};
 
-    constexpr uint32_t ToRootIndex(GPUParticleComputeRoot root) {
-        return static_cast<uint32_t>(root);
-    }
+constexpr uint32_t ToRootIndex(GPUParticleComputeRoot root) {
+    return static_cast<uint32_t>(root);
+}
 
-    D3D12_HEAP_PROPERTIES MakeHeapProperties(D3D12_HEAP_TYPE type) {
-        D3D12_HEAP_PROPERTIES heapProps = {};
-        heapProps.Type = type;
-        heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-        heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-        heapProps.CreationNodeMask = 1;
-        heapProps.VisibleNodeMask = 1;
-        return heapProps;
-    }
+// GPUリソースの用途に合うヒープ属性を組み立てる。
+D3D12_HEAP_PROPERTIES MakeHeapProperties(D3D12_HEAP_TYPE type) {
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = type;
+    heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    heapProps.CreationNodeMask = 1;
+    heapProps.VisibleNodeMask = 1;
+    return heapProps;
+}
 
-    D3D12_RESOURCE_DESC MakeBufferDesc(UINT64 width, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE) {
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Width = width;
-        desc.Height = 1;
-        desc.DepthOrArraySize = 1;
-        desc.MipLevels = 1;
-        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        desc.SampleDesc.Count = 1;
-        desc.Flags = flags;
-        return desc;
-    }
+// バッファのサイズと用途から、リソース記述を組み立てる。
+D3D12_RESOURCE_DESC MakeBufferDesc(UINT64 width, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE) {
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width = width;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.SampleDesc.Count = 1;
+    desc.Flags = flags;
+    return desc;
+}
 
-    UINT64 AlignConstantBufferSize(size_t size) {
-        return (static_cast<UINT64>(size) + 0xff) & ~0xffull;
-    }
+UINT64 AlignConstantBufferSize(size_t size) {
+    return (static_cast<UINT64>(size) + 0xff) & ~0xffull;
+}
 
-    ComPtr<ID3D12Resource> CreateBufferResource(
-        ID3D12Device* device,
-        D3D12_HEAP_TYPE heapType,
-        UINT64 byteSize,
-        D3D12_RESOURCE_STATES initialState,
-        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE) {
+// 指定サイズのGPUバッファを作成し、利用可能な状態で返す。
+ComPtr<ID3D12Resource> CreateBufferResource(ID3D12Device *device, D3D12_HEAP_TYPE heapType, UINT64 byteSize,
+                                            D3D12_RESOURCE_STATES initialState,
+                                            D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE) {
 
-        auto heapProps = MakeHeapProperties(heapType);
-        auto desc = MakeBufferDesc(byteSize, flags);
+    auto heapProps = MakeHeapProperties(heapType);
+    auto desc = MakeBufferDesc(byteSize, flags);
 
-        ComPtr<ID3D12Resource> resource;
-        HRESULT hr = device->CreateCommittedResource(
-            &heapProps,
-            D3D12_HEAP_FLAG_NONE,
-            &desc,
-            initialState,
-            nullptr,
-            IID_PPV_ARGS(&resource));
-        assert(SUCCEEDED(hr));
-        return resource;
-    }
+    ComPtr<ID3D12Resource> resource;
+    HRESULT hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, initialState, nullptr,
+                                                 IID_PPV_ARGS(&resource));
+    assert(SUCCEEDED(hr));
+    return resource;
+}
 }
 
 // 乱数生成器
 static std::random_device seed_gen;
 static std::mt19937_64 engine(seed_gen());
 
-void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager) {
+// 粒子の発生・更新・描画を準備し、初期値と必要なリソースを設定する。
+void ParticleManager::Initialize(DirectXCommon *dxCommon, TextureManager *textureManager) {
     assert(dxCommon);
     dxCommon_ = dxCommon;
     textureManager_ = textureManager;
@@ -101,42 +97,54 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
         auto device = dxCommon_->GetDevice();
         UINT size = sizeof(InstanceData) * kMaxParticles;
 
-        D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+        D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                           D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
         D3D12_RESOURCE_DESC resDesc = {};
         resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
         resDesc.Width = size;
-        resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
-        resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+        resDesc.Height = 1;
+        resDesc.DepthOrArraySize = 1;
+        resDesc.MipLevels = 1;
+        resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        resDesc.SampleDesc.Count = 1;
 
-        HRESULT hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&instancingBuffer_));
+        HRESULT hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                                     D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                     IID_PPV_ARGS(&instancingBuffer_));
         assert(SUCCEEDED(hr));
 
-        instancingBuffer_->Map(0, nullptr, (void**)&instancingDataMapped_);
+        instancingBuffer_->Map(0, nullptr, (void **)&instancingDataMapped_);
 
         instancingBufferView_.BufferLocation = instancingBuffer_->GetGPUVirtualAddress();
         instancingBufferView_.SizeInBytes = size;
         instancingBufferView_.StrideInBytes = sizeof(InstanceData);
 
-        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&cloudInstancingBuffer_));
+        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                             D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                             IID_PPV_ARGS(&cloudInstancingBuffer_));
         assert(SUCCEEDED(hr));
-        cloudInstancingBuffer_->Map(0, nullptr, (void**)&cloudInstancingDataMapped_);
+        cloudInstancingBuffer_->Map(0, nullptr, (void **)&cloudInstancingDataMapped_);
         cloudInstancingBufferView_.BufferLocation = cloudInstancingBuffer_->GetGPUVirtualAddress();
         cloudInstancingBufferView_.SizeInBytes = size;
         cloudInstancingBufferView_.StrideInBytes = sizeof(InstanceData);
 
-        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&ringInstancingBuffer_));
+        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                             D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                             IID_PPV_ARGS(&ringInstancingBuffer_));
         assert(SUCCEEDED(hr));
 
-        ringInstancingBuffer_->Map(0, nullptr, (void**)&ringInstancingDataMapped_);
+        ringInstancingBuffer_->Map(0, nullptr, (void **)&ringInstancingDataMapped_);
 
         ringInstancingBufferView_.BufferLocation = ringInstancingBuffer_->GetGPUVirtualAddress();
         ringInstancingBufferView_.SizeInBytes = size;
         ringInstancingBufferView_.StrideInBytes = sizeof(InstanceData);
 
-        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&cylinderInstancingBuffer_));
+        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                             D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                             IID_PPV_ARGS(&cylinderInstancingBuffer_));
         assert(SUCCEEDED(hr));
 
-        cylinderInstancingBuffer_->Map(0, nullptr, (void**)&cylinderInstancingDataMapped_);
+        cylinderInstancingBuffer_->Map(0, nullptr, (void **)&cylinderInstancingDataMapped_);
 
         cylinderInstancingBufferView_.BufferLocation = cylinderInstancingBuffer_->GetGPUVirtualAddress();
         cylinderInstancingBufferView_.SizeInBytes = size;
@@ -147,9 +155,10 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, TextureManager* textur
     CreateGPUParticlePipeline();
 }
 
-void ParticleManager::SetStormActive(bool active, const Vector3& center) {
-    if (stormActive_ == active && (!active ||
-        (stormCenter_.x == center.x && stormCenter_.y == center.y && stormCenter_.z == center.z))) {
+// 嵐の有効状態を切り替え、雨や雷の発生状態を調整する。
+void ParticleManager::SetStormActive(bool active, const Vector3 &center) {
+    if (stormActive_ == active &&
+        (!active || (stormCenter_.x == center.x && stormCenter_.y == center.y && stormCenter_.z == center.z))) {
         return;
     }
     stormActive_ = active;
@@ -163,21 +172,23 @@ void ParticleManager::SetStormActive(bool active, const Vector3& center) {
     stormLightningFlash_ = false;
 
     if (!active) {
-        Particles().remove_if([](const Particle& particle) {
-            return particle.type == Particle::Type::StormCloud ||
-                   particle.type == Particle::Type::StormRain ||
+        Particles().remove_if([](const Particle &particle) {
+            return particle.type == Particle::Type::StormCloud || particle.type == Particle::Type::StormRain ||
                    particle.type == Particle::Type::StormWind;
         });
     }
 }
 
+// 未処理の雷フラッシュを取り出し、同じ閃光の重複適用を防ぐ。
 bool ParticleManager::ConsumeStormLightningFlash() {
     const bool flashed = stormLightningFlash_;
     stormLightningFlash_ = false;
     return flashed;
 }
 
-void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const Vector3& playerPos, StageMap* stageMap) {
+// 寿命と速度を進め、天候・衝撃などの粒子を更新して描画データへまとめる。
+void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix,
+                             const Vector3 &playerPos, StageMap *stageMap) {
     // GPU Particle用Emitterの更新。
     // CPU側では「このフレームに射出してよいか」だけ判定し、実際のParticle生成はCSで行う。
     gpuParticlePerFrame_.time += deltaTime;
@@ -193,34 +204,33 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
     if (weatherEmitter_.active && weatherEmitter_.emitRate > 0.0f) {
         weatherEmitter_.emitTimer += deltaTime;
         float emitInterval = 1.0f / weatherEmitter_.emitRate;
-        
+
         while (weatherEmitter_.emitTimer >= emitInterval) {
             weatherEmitter_.emitTimer -= emitInterval;
-            
+
             if (Particles().size() < kMaxParticles) {
-                std::uniform_real_distribution<float> distX(-weatherEmitter_.size.x / 2.0f, weatherEmitter_.size.x / 2.0f);
-                std::uniform_real_distribution<float> distY(-weatherEmitter_.size.y / 2.0f, weatherEmitter_.size.y / 2.0f);
-                std::uniform_real_distribution<float> distZ(-weatherEmitter_.size.z / 2.0f, weatherEmitter_.size.z / 2.0f);
-                
+                std::uniform_real_distribution<float> distX(-weatherEmitter_.size.x / 2.0f,
+                                                            weatherEmitter_.size.x / 2.0f);
+                std::uniform_real_distribution<float> distY(-weatherEmitter_.size.y / 2.0f,
+                                                            weatherEmitter_.size.y / 2.0f);
+                std::uniform_real_distribution<float> distZ(-weatherEmitter_.size.z / 2.0f,
+                                                            weatherEmitter_.size.z / 2.0f);
+
                 std::uniform_real_distribution<float> randV(-1.0f, 1.0f);
-                
+
                 Particle p;
                 p.transform.scale = weatherEmitter_.particleSize;
-                p.transform.rotate = { 0.0f, 0.0f, 0.0f };
-                
+                p.transform.rotate = {0.0f, 0.0f, 0.0f};
+
                 // プレイヤーの周囲に発生させる
-                p.transform.translate = {
-                    playerPos.x + weatherEmitter_.center.x + distX(engine),
-                    playerPos.y + weatherEmitter_.center.y + distY(engine),
-                    playerPos.z + weatherEmitter_.center.z + distZ(engine)
-                };
-                
-                p.velocity = {
-                    weatherEmitter_.velocity.x + randV(engine) * weatherEmitter_.velocityRandom.x,
-                    weatherEmitter_.velocity.y + randV(engine) * weatherEmitter_.velocityRandom.y,
-                    weatherEmitter_.velocity.z + randV(engine) * weatherEmitter_.velocityRandom.z
-                };
-                
+                p.transform.translate = {playerPos.x + weatherEmitter_.center.x + distX(engine),
+                                         playerPos.y + weatherEmitter_.center.y + distY(engine),
+                                         playerPos.z + weatherEmitter_.center.z + distZ(engine)};
+
+                p.velocity = {weatherEmitter_.velocity.x + randV(engine) * weatherEmitter_.velocityRandom.x,
+                              weatherEmitter_.velocity.y + randV(engine) * weatherEmitter_.velocityRandom.y,
+                              weatherEmitter_.velocity.z + randV(engine) * weatherEmitter_.velocityRandom.z};
+
                 p.type = Particle::Type::Fall;
                 p.color = weatherEmitter_.color;
                 p.initialAlpha = p.color.w;
@@ -245,46 +255,32 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             const float baseX = ambientCloudEmitter_.center.x + unit(engine) * ambientCloudEmitter_.areaX;
             const float baseZ = ambientCloudEmitter_.center.z + unit(engine) * ambientCloudEmitter_.areaZ;
             const float normalizedDepth = ambientCloudEmitter_.areaZ > 0.001f
-                ? (baseZ - ambientCloudEmitter_.center.z) / ambientCloudEmitter_.areaZ
-                : 0.0f;
+                                              ? (baseZ - ambientCloudEmitter_.center.z) / ambientCloudEmitter_.areaZ
+                                              : 0.0f;
             // カメラ側(-Z)ほど大きく、濃く、速くして雲の視差を作る。
-            const float nearFactor = ambientCloudEmitter_.depthParallax
-                ? std::clamp((1.0f - normalizedDepth) * 0.5f, 0.0f, 1.0f)
-                : 0.5f;
-            const float depthScale = ambientCloudEmitter_.depthParallax
-                ? 0.62f + nearFactor * 0.92f
-                : 1.0f;
-            const float depthSpeed = ambientCloudEmitter_.depthParallax
-                ? 0.48f + nearFactor * 1.18f
-                : 1.0f;
-            const float depthAlpha = ambientCloudEmitter_.depthParallax
-                ? 0.58f + nearFactor * 0.42f
-                : 1.0f;
+            const float nearFactor =
+                ambientCloudEmitter_.depthParallax ? std::clamp((1.0f - normalizedDepth) * 0.5f, 0.0f, 1.0f) : 0.5f;
+            const float depthScale = ambientCloudEmitter_.depthParallax ? 0.62f + nearFactor * 0.92f : 1.0f;
+            const float depthSpeed = ambientCloudEmitter_.depthParallax ? 0.48f + nearFactor * 1.18f : 1.0f;
+            const float depthAlpha = ambientCloudEmitter_.depthParallax ? 0.58f + nearFactor * 0.42f : 1.0f;
             const int wispsPerCloud = std::clamp(ambientCloudEmitter_.wispsPerEmission, 1, 8);
             for (int i = 0; i < wispsPerCloud && Particles().size() < kMaxParticles; ++i) {
-                const float scale = ambientCloudEmitter_.size *
-                    (0.72f + zeroOne(engine) * 0.72f) * depthScale;
+                const float scale = ambientCloudEmitter_.size * (0.72f + zeroOne(engine) * 0.72f) * depthScale;
                 Particle cloud;
                 cloud.type = Particle::Type::StormCloud;
                 cloud.ambientCloud = true;
-                cloud.transform.translate = {
-                    baseX + unit(engine) * 2.4f * ambientCloudEmitter_.size,
-                    ambientCloudEmitter_.minimumHeight +
-                        zeroOne(engine) * ambientCloudEmitter_.heightRange +
-                        unit(engine) * 0.45f,
-                    baseZ + unit(engine) * 1.8f * ambientCloudEmitter_.size
-                };
-                cloud.transform.scale = {
-                    (3.0f + zeroOne(engine) * 2.6f) * scale,
-                    (0.85f + zeroOne(engine) * 0.65f) * scale *
-                        (std::max)(ambientCloudEmitter_.verticalScale, 0.05f),
-                    1.0f
-                };
-                cloud.transform.rotate = { 0.0f, 0.0f, unit(engine) * 0.08f };
-                cloud.velocity = {
-                    ambientCloudEmitter_.speed * (0.72f + zeroOne(engine) * 0.55f) * depthSpeed,
-                    0.0f,
-                    0.0f };
+                cloud.transform.translate = {baseX + unit(engine) * 2.4f * ambientCloudEmitter_.size,
+                                             ambientCloudEmitter_.minimumHeight +
+                                                 zeroOne(engine) * ambientCloudEmitter_.heightRange +
+                                                 unit(engine) * 0.45f,
+                                             baseZ + unit(engine) * 1.8f * ambientCloudEmitter_.size};
+                cloud.transform.scale = {(3.0f + zeroOne(engine) * 2.6f) * scale,
+                                         (0.85f + zeroOne(engine) * 0.65f) * scale *
+                                             (std::max)(ambientCloudEmitter_.verticalScale, 0.05f),
+                                         1.0f};
+                cloud.transform.rotate = {0.0f, 0.0f, unit(engine) * 0.08f};
+                cloud.velocity = {ambientCloudEmitter_.speed * (0.72f + zeroOne(engine) * 0.55f) * depthSpeed, 0.0f,
+                                  0.0f};
                 cloud.color = ambientCloudEmitter_.color;
                 cloud.color.w *= depthAlpha;
                 cloud.initialAlpha = cloud.color.w;
@@ -302,14 +298,16 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
 
     // 暴風雷: 雲・雨・風を継続生成し、間欠的に枝分かれ雷を落とす。
     if (stormActive_) {
-        auto pushStormParticle = [&](Particle::Type type, const Vector3& position, const Vector3& scale,
-                                     const Vector3& velocity, const Vector4& color, float life, float rotateZ = 0.0f) {
-            if (Particles().size() >= kMaxParticles) return;
+        auto pushStormParticle = [&](Particle::Type type, const Vector3 &position, const Vector3 &scale,
+                                     const Vector3 &velocity, const Vector4 &color, float life, float rotateZ = 0.0f) {
+            if (Particles().size() >= kMaxParticles) {
+                return;
+            }
             Particle particle;
             particle.type = type;
             particle.transform.translate = position;
             particle.transform.scale = scale;
-            particle.transform.rotate = { 0.0f, 0.0f, rotateZ };
+            particle.transform.rotate = {0.0f, 0.0f, rotateZ};
             particle.velocity = velocity;
             particle.color = color;
             particle.initialAlpha = color.w;
@@ -320,7 +318,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
 
         std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
         std::uniform_real_distribution<float> zeroOne(0.0f, 1.0f);
-        const StormEffectSettings& storm = stormSettings_;
+        const StormEffectSettings &storm = stormSettings_;
 
         stormCloudEmitTimer_ += deltaTime;
         const float cloudInterval = 1.0f / (std::max)(storm.cloudEmitRate, 0.1f);
@@ -329,7 +327,8 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             constexpr int kCloudWispsPerEmission = 3;
             const float baseCloudX = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaX : 0.0f;
             const float baseCloudZ = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaZ : 0.0f;
-            const float baseCloudY = (std::max)(stormCenter_.y + storm.cloudHeight, stormMinimumCloudHeight_) + zeroOne(engine) * 1.4f;
+            const float baseCloudY =
+                (std::max)(stormCenter_.y + storm.cloudHeight, stormMinimumCloudHeight_) + zeroOne(engine) * 1.4f;
             for (int wisp = 0; wisp < kCloudWispsPerEmission; ++wisp) {
                 const float cloudScale = storm.randomizeCloudSize ? 0.78f + zeroOne(engine) * 0.95f : 1.0f;
                 const float localSpreadX = unit(engine) * storm.cloudSize * (0.42f + zeroOne(engine) * 0.34f);
@@ -338,24 +337,12 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 Vector4 mistColor = storm.cloudColor;
                 mistColor.w *= 0.54f + zeroOne(engine) * 0.28f;
                 pushStormParticle(Particle::Type::StormCloud,
-                    {
-                        stormCenter_.x + baseCloudX + localSpreadX,
-                        baseCloudY + localSpreadY,
-                        stormCenter_.z + baseCloudZ + localSpreadZ
-                    },
-                    {
-                        (3.2f + zeroOne(engine) * 3.4f) * cloudScale * storm.cloudSize,
-                        (1.0f + zeroOne(engine) * 1.15f) * cloudScale * storm.cloudSize,
-                        1.0f
-                    },
-                    {
-                        0.0025f + zeroOne(engine) * 0.0065f,
-                        unit(engine) * 0.0009f,
-                        unit(engine) * 0.0022f
-                    },
-                    mistColor,
-                    storm.cloudLife * (0.85f + zeroOne(engine) * 0.55f),
-                    unit(engine) * 0.26f);
+                                  {stormCenter_.x + baseCloudX + localSpreadX, baseCloudY + localSpreadY,
+                                   stormCenter_.z + baseCloudZ + localSpreadZ},
+                                  {(3.2f + zeroOne(engine) * 3.4f) * cloudScale * storm.cloudSize,
+                                   (1.0f + zeroOne(engine) * 1.15f) * cloudScale * storm.cloudSize, 1.0f},
+                                  {0.0025f + zeroOne(engine) * 0.0065f, unit(engine) * 0.0009f, unit(engine) * 0.0022f},
+                                  mistColor, storm.cloudLife * (0.85f + zeroOne(engine) * 0.55f), unit(engine) * 0.26f);
             }
         }
 
@@ -368,23 +355,25 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             const float rainSpeedVariation = storm.randomizeRainSpeed ? 0.78f + zeroOne(engine) * 0.44f : 1.0f;
             const float rainSpawnBaseY = (std::max)(stormCenter_.y + 2.0f, stormMinimumCloudHeight_ - 5.0f);
             pushStormParticle(Particle::Type::StormRain,
-                { stormCenter_.x + rainX, rainSpawnBaseY + zeroOne(engine) * 5.5f, stormCenter_.z + rainZ },
-                { 0.018f, (0.42f + zeroOne(engine) * 0.48f) * storm.rainLength, 1.0f },
-                { (0.027f + zeroOne(engine) * 0.009f) * storm.rainSpeed * rainSpeedVariation, -0.132f * storm.rainSpeed * rainSpeedVariation, unit(engine) * 0.004f },
-                storm.rainColor,
-                0.9f + zeroOne(engine) * 0.65f, -0.14f);
+                              {stormCenter_.x + rainX, rainSpawnBaseY + zeroOne(engine) * 5.5f, stormCenter_.z + rainZ},
+                              {0.018f, (0.42f + zeroOne(engine) * 0.48f) * storm.rainLength, 1.0f},
+                              {(0.027f + zeroOne(engine) * 0.009f) * storm.rainSpeed * rainSpeedVariation,
+                               -0.132f * storm.rainSpeed * rainSpeedVariation, unit(engine) * 0.004f},
+                              storm.rainColor, 0.9f + zeroOne(engine) * 0.65f, -0.14f);
         }
 
         stormWindEmitTimer_ += deltaTime;
         const float windInterval = 1.0f / (std::max)(storm.windEmitRate, 0.1f);
         while (stormWindEmitTimer_ >= windInterval) {
             stormWindEmitTimer_ -= windInterval;
-            pushStormParticle(Particle::Type::StormWind,
-                { stormCenter_.x - storm.rainAreaX + zeroOne(engine) * 2.0f, stormCenter_.y + 0.4f + zeroOne(engine) * 3.8f, stormCenter_.z + unit(engine) * storm.rainAreaZ },
-                { 0.026f + zeroOne(engine) * 0.025f, (1.2f + zeroOne(engine) * 2.2f) * storm.windLength, 1.0f },
-                { (0.075f + zeroOne(engine) * 0.055f) * storm.windSpeed, 0.002f + unit(engine) * 0.003f, unit(engine) * 0.003f },
-                storm.windColor,
-                1.1f + zeroOne(engine) * 0.7f, 1.5707963f);
+            pushStormParticle(
+                Particle::Type::StormWind,
+                {stormCenter_.x - storm.rainAreaX + zeroOne(engine) * 2.0f,
+                 stormCenter_.y + 0.4f + zeroOne(engine) * 3.8f, stormCenter_.z + unit(engine) * storm.rainAreaZ},
+                {0.026f + zeroOne(engine) * 0.025f, (1.2f + zeroOne(engine) * 2.2f) * storm.windLength, 1.0f},
+                {(0.075f + zeroOne(engine) * 0.055f) * storm.windSpeed, 0.002f + unit(engine) * 0.003f,
+                 unit(engine) * 0.003f},
+                storm.windColor, 1.1f + zeroOne(engine) * 0.7f, 1.5707963f);
         }
 
         stormLightningTimer_ -= deltaTime;
@@ -397,10 +386,11 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         } else if (stormLightningTimer_ <= 0.0f) {
             emitLightningGroup = true;
             const int configuredBurstCount = std::clamp(storm.lightningBurstCount, 1, 12);
-            const int burstCount = storm.randomizeLightningBurstCount
-                ? (std::min)(configuredBurstCount,
-                    1 + static_cast<int>(zeroOne(engine) * static_cast<float>(configuredBurstCount)))
-                : configuredBurstCount;
+            const int burstCount =
+                storm.randomizeLightningBurstCount
+                    ? (std::min)(configuredBurstCount,
+                                 1 + static_cast<int>(zeroOne(engine) * static_cast<float>(configuredBurstCount)))
+                    : configuredBurstCount;
             stormLightningBurstsRemaining_ = burstCount - 1;
             stormLightningBurstTimer_ = (std::max)(storm.lightningBurstInterval, 0.02f);
 
@@ -408,89 +398,98 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             const float maxInterval = (std::max)(storm.lightningIntervalMin, storm.lightningIntervalMax);
             const float frequency = (std::max)(storm.lightningFrequency, 0.05f);
             const float nextInterval = storm.randomizeLightningInterval
-                ? minInterval + zeroOne(engine) * (maxInterval - minInterval)
-                : (minInterval + maxInterval) * 0.5f;
-            stormLightningTimer_ = nextInterval / frequency + storm.lightningBurstInterval * static_cast<float>(burstCount - 1);
+                                           ? minInterval + zeroOne(engine) * (maxInterval - minInterval)
+                                           : (minInterval + maxInterval) * 0.5f;
+            stormLightningTimer_ =
+                nextInterval / frequency + storm.lightningBurstInterval * static_cast<float>(burstCount - 1);
         }
 
         if (emitLightningGroup) {
             const int simultaneousCount = std::clamp(storm.lightningSimultaneousCount, 1, 8);
             for (int strikeIndex = 0; strikeIndex < simultaneousCount; ++strikeIndex) {
                 HitEffectSettings lightning;
-            // One shared energy value keeps each strike visually coherent: small bolts are
-            // short/thin/dim, while rare large bolts grow longer, thicker and brighter.
-            const float energy = storm.randomizeLightningSize ? zeroOne(engine) : 0.5f;
-            const auto rangedScale = [energy](float a, float b, float curve = 1.0f) {
-                const float lo = (std::min)(a, b);
-                const float hi = (std::max)(a, b);
-                return lo + (hi - lo) * std::pow(energy, curve);
-            };
-            const float sizeScale = storm.randomizeLightningSize
-                ? rangedScale(storm.lightningSizeRandomMin, storm.lightningSizeRandomMax) : 1.0f;
-            const float lengthScale = storm.randomizeLightningSize
-                ? rangedScale(storm.lightningLengthRandomMin, storm.lightningLengthRandomMax, 0.85f) : 1.0f;
-            const float widthScale = storm.randomizeLightningSize
-                ? rangedScale(storm.lightningWidthRandomMin, storm.lightningWidthRandomMax, 1.35f) : 1.0f;
-            const float coreScale = storm.randomizeLightningSize
-                ? rangedScale(storm.lightningCoreRandomMin, storm.lightningCoreRandomMax, 1.15f) : 1.0f;
-            lightning.brightness = 2.4f * (0.68f + energy * 0.48f);
-            lightning.lifeScale = 1.15f;
-            lightning.size = storm.lightningStrikeSize * sizeScale;
-            lightning.slashCount = 1;
-            lightning.slashSpread = 0.2f;
-            lightning.sparkCount = std::clamp(static_cast<int>(18.0f * coreScale), 5, 48);
-            lightning.sparkSpeed = 1.8f;
-            lightning.sparkLength = 1.4f * coreScale;
-            lightning.ringPower = 0.0f;
-            lightning.corePower = 0.18f * coreScale;
-            lightning.crossPower = 0.0f;
-            lightning.pillarPower = 0.0f;
-            lightning.lightningCount = storm.lightningCount;
-            lightning.lightningSegments = storm.lightningSegments;
-            lightning.lightningLength = storm.lightningLength * lengthScale;
-            lightning.lightningSpread = storm.lightningSpread;
-            lightning.lightningPower = storm.lightningPower * (0.72f + energy * 0.53f);
-            lightning.lightningWidth = storm.lightningWidth * widthScale;
-            lightning.lightningGlowWidth = storm.lightningGlowWidth;
-            lightning.lightningGlowOpacity = storm.lightningGlowOpacity;
-            lightning.lightningBranchCount = storm.lightningBranchCount;
-            if (storm.randomizeLightningBranchCount && storm.lightningBranchCount > 0) {
-                lightning.lightningBranchCount = (std::min)(storm.lightningBranchCount,
-                    1 + static_cast<int>(zeroOne(engine) * static_cast<float>(storm.lightningBranchCount)));
-            }
-            lightning.lightningBranchLength = storm.lightningBranchLength;
-            lightning.lightningBranchSpread = storm.lightningBranchSpread;
-            lightning.lightningBranchWidth = storm.lightningBranchWidth;
-            lightning.lightningMode = 3;
-            lightning.lightningDirection = -1.5707963f;
-            lightning.lightningDirectionSpread = 0.16f;
-            lightning.randomizeDirection = storm.randomizeLightningDirection;
-            lightning.lightningColor = storm.lightningColor;
-            lightning.lightningGlowColor = storm.lightningGlowColor;
-            lightning.coreColor = storm.lightningColor;
-            lightning.sparkColor = storm.lightningColor;
-            lightning.sparkSecondaryColor = { 0.88f, 0.94f, 1.0f, 1.0f };
+                // One shared energy value keeps each strike visually coherent: small bolts are
+                // short/thin/dim, while rare large bolts grow longer, thicker and brighter.
+                const float energy = storm.randomizeLightningSize ? zeroOne(engine) : 0.5f;
+                const auto rangedScale = [energy](float a, float b, float curve = 1.0f) {
+                    const float lo = (std::min)(a, b);
+                    const float hi = (std::max)(a, b);
+                    return lo + (hi - lo) * std::pow(energy, curve);
+                };
+                const float sizeScale = storm.randomizeLightningSize
+                                            ? rangedScale(storm.lightningSizeRandomMin, storm.lightningSizeRandomMax)
+                                            : 1.0f;
+                const float lengthScale =
+                    storm.randomizeLightningSize
+                        ? rangedScale(storm.lightningLengthRandomMin, storm.lightningLengthRandomMax, 0.85f)
+                        : 1.0f;
+                const float widthScale =
+                    storm.randomizeLightningSize
+                        ? rangedScale(storm.lightningWidthRandomMin, storm.lightningWidthRandomMax, 1.35f)
+                        : 1.0f;
+                const float coreScale = storm.randomizeLightningSize ? rangedScale(storm.lightningCoreRandomMin,
+                                                                                   storm.lightningCoreRandomMax, 1.15f)
+                                                                     : 1.0f;
+                lightning.brightness = 2.4f * (0.68f + energy * 0.48f);
+                lightning.lifeScale = 1.15f;
+                lightning.size = storm.lightningStrikeSize * sizeScale;
+                lightning.slashCount = 1;
+                lightning.slashSpread = 0.2f;
+                lightning.sparkCount = std::clamp(static_cast<int>(18.0f * coreScale), 5, 48);
+                lightning.sparkSpeed = 1.8f;
+                lightning.sparkLength = 1.4f * coreScale;
+                lightning.ringPower = 0.0f;
+                lightning.corePower = 0.18f * coreScale;
+                lightning.crossPower = 0.0f;
+                lightning.pillarPower = 0.0f;
+                lightning.lightningCount = storm.lightningCount;
+                lightning.lightningSegments = storm.lightningSegments;
+                lightning.lightningLength = storm.lightningLength * lengthScale;
+                lightning.lightningSpread = storm.lightningSpread;
+                lightning.lightningPower = storm.lightningPower * (0.72f + energy * 0.53f);
+                lightning.lightningWidth = storm.lightningWidth * widthScale;
+                lightning.lightningGlowWidth = storm.lightningGlowWidth;
+                lightning.lightningGlowOpacity = storm.lightningGlowOpacity;
+                lightning.lightningBranchCount = storm.lightningBranchCount;
+                if (storm.randomizeLightningBranchCount && storm.lightningBranchCount > 0) {
+                    lightning.lightningBranchCount =
+                        (std::min)(storm.lightningBranchCount,
+                                   1 + static_cast<int>(zeroOne(engine) *
+                                                        static_cast<float>(storm.lightningBranchCount)));
+                }
+                lightning.lightningBranchLength = storm.lightningBranchLength;
+                lightning.lightningBranchSpread = storm.lightningBranchSpread;
+                lightning.lightningBranchWidth = storm.lightningBranchWidth;
+                lightning.lightningMode = 3;
+                lightning.lightningDirection = -1.5707963f;
+                lightning.lightningDirectionSpread = 0.16f;
+                lightning.randomizeDirection = storm.randomizeLightningDirection;
+                lightning.lightningColor = storm.lightningColor;
+                lightning.lightningGlowColor = storm.lightningGlowColor;
+                lightning.coreColor = storm.lightningColor;
+                lightning.sparkColor = storm.lightningColor;
+                lightning.sparkSecondaryColor = {0.88f, 0.94f, 1.0f, 1.0f};
 
-            const float groupOffsetX = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
-            const float groupOffsetZ = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
-            const float lightningCloudY = (std::max)(
-                stormCenter_.y + storm.cloudHeight + 1.2f,
-                stormMinimumCloudHeight_ + 1.2f);
-            const Vector3 lightningOrigin = {
-                stormCenter_.x + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaX : 0.0f) + groupOffsetX,
-                lightningCloudY + zeroOne(engine) * 0.8f,
-                stormCenter_.z + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaZ : 0.0f) + groupOffsetZ
-            };
-            stormLightningPosition_ = { lightningOrigin.x, stormCenter_.y + 0.45f, lightningOrigin.z };
-            stormLightningPowerScale_ = 0.35f + energy * 1.15f;
-            EmitHitEffect(lightningOrigin, lightning);
-            stormLightningFlash_ = true;
+                const float groupOffsetX = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
+                const float groupOffsetZ = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
+                const float lightningCloudY =
+                    (std::max)(stormCenter_.y + storm.cloudHeight + 1.2f, stormMinimumCloudHeight_ + 1.2f);
+                const Vector3 lightningOrigin = {
+                    stormCenter_.x + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaX : 0.0f) +
+                        groupOffsetX,
+                    lightningCloudY + zeroOne(engine) * 0.8f,
+                    stormCenter_.z + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaZ : 0.0f) +
+                        groupOffsetZ};
+                stormLightningPosition_ = {lightningOrigin.x, stormCenter_.y + 0.45f, lightningOrigin.z};
+                stormLightningPowerScale_ = 0.35f + energy * 1.15f;
+                EmitHitEffect(lightningOrigin, lightning);
+                stormLightningFlash_ = true;
             }
         }
     }
 
     // 1. パーティクル更新。グループごとに寿命・座標・衝突を処理する。
-    for (auto& [groupName, group] : particleGroups_) {
+    for (auto &[groupName, group] : particleGroups_) {
         (void)groupName;
         for (auto it = group.particles.begin(); it != group.particles.end();) {
             it->lifeTime += deltaTime;
@@ -508,7 +507,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 // 風で雲海が片側へ流れ切らないよう、画面外の端で循環させる。
                 const float left = ambientCloudEmitter_.center.x - ambientCloudEmitter_.areaX;
                 const float width = ambientCloudEmitter_.areaX * 2.0f;
-                float& x = it->transform.translate.x;
+                float &x = it->transform.translate.x;
                 x -= std::floor((x - left) / width) * width;
             }
 
@@ -517,7 +516,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 it->velocity.y -= 0.0012f * deltaTime * 60.0f;
                 const float remaining = 1.0f - it->lifeTime / it->maxTime;
                 const float scale = 0.035f + 0.075f * remaining;
-                it->transform.scale = { scale, scale, 1.0f };
+                it->transform.scale = {scale, scale, 1.0f};
             }
 
             if (it->type == Particle::Type::StormRain) {
@@ -530,7 +529,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                     const int oldBlockY = static_cast<int>(std::floor(oldY + 0.5f));
                     const int newBlockY = static_cast<int>(std::floor(it->transform.translate.y + 0.5f));
                     for (int y = oldBlockY; y >= newBlockY; --y) {
-                        const MapCell* cell = stageMap->GetCell(blockX, y, blockZ);
+                        const MapCell *cell = stageMap->GetCell(blockX, y, blockZ);
                         if (cell && cell->type != BlockType::None) {
                             hitGround = true;
                             impactY = static_cast<float>(y) + 0.6f;
@@ -553,12 +552,12 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
             if (it->type == Particle::Type::Ring) {
                 float t = it->lifeTime / it->maxTime;
                 float ringScale = 0.25f + 1.8f * t;
-                it->transform.scale = { ringScale, ringScale, 1.0f };
+                it->transform.scale = {ringScale, ringScale, 1.0f};
             } else if (it->type == Particle::Type::Cylinder) {
                 float t = it->lifeTime / it->maxTime;
                 float radiusScale = 0.7f + 0.6f * t;
                 float heightScale = 0.8f + 0.4f * t;
-                it->transform.scale = { radiusScale, heightScale, radiusScale };
+                it->transform.scale = {radiusScale, heightScale, radiusScale};
             }
 
             // 当たり判定 (StageMapとの衝突判定)
@@ -572,7 +571,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 int hitY = newBy;
                 // 落下前の位置から落下後の位置までの間のセルを確認（すり抜け防止）
                 for (int y = oldBy; y >= newBy; --y) {
-                    const MapCell* cell = stageMap->GetCell(bx, y, bz);
+                    const MapCell *cell = stageMap->GetCell(bx, y, bz);
                     if (cell != nullptr && cell->type != BlockType::None) {
                         hit = true;
                         hitY = y;
@@ -602,14 +601,12 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
 
             // フェードアウト
             float normalizedLife = it->lifeTime / it->maxTime;
-            float alpha = it->type == Particle::Type::StormCloud
-                ? std::sin(normalizedLife * 3.14159265f)
-                : 1.0f - normalizedLife;
+            float alpha =
+                it->type == Particle::Type::StormCloud ? std::sin(normalizedLife * 3.14159265f) : 1.0f - normalizedLife;
             if (it->ambientCloud) {
                 const float fadeIn = std::clamp(normalizedLife / 0.08f, 0.0f, 1.0f);
                 const float fadeOut = std::clamp((1.0f - normalizedLife) / 0.16f, 0.0f, 1.0f);
-                alpha = fadeIn * fadeIn * (3.0f - 2.0f * fadeIn) *
-                    fadeOut * fadeOut * (3.0f - 2.0f * fadeOut);
+                alpha = fadeIn * fadeIn * (3.0f - 2.0f * fadeIn) * fadeOut * fadeOut * (3.0f - 2.0f * fadeOut);
             }
             it->color.w = it->initialAlpha * alpha;
 
@@ -624,16 +621,22 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
     cylinderInstanceCount_ = 0;
     Matrix4x4 cameraMatrix = Math::Inverse(viewMatrix);
     Matrix4x4 billboardMat = Math::MakeIdentity4x4();
-    billboardMat.m[0][0] = cameraMatrix.m[0][0]; billboardMat.m[0][1] = cameraMatrix.m[0][1]; billboardMat.m[0][2] = cameraMatrix.m[0][2];
-    billboardMat.m[1][0] = cameraMatrix.m[1][0]; billboardMat.m[1][1] = cameraMatrix.m[1][1]; billboardMat.m[1][2] = cameraMatrix.m[1][2];
-    billboardMat.m[2][0] = cameraMatrix.m[2][0]; billboardMat.m[2][1] = cameraMatrix.m[2][1]; billboardMat.m[2][2] = cameraMatrix.m[2][2];
+    billboardMat.m[0][0] = cameraMatrix.m[0][0];
+    billboardMat.m[0][1] = cameraMatrix.m[0][1];
+    billboardMat.m[0][2] = cameraMatrix.m[0][2];
+    billboardMat.m[1][0] = cameraMatrix.m[1][0];
+    billboardMat.m[1][1] = cameraMatrix.m[1][1];
+    billboardMat.m[1][2] = cameraMatrix.m[1][2];
+    billboardMat.m[2][0] = cameraMatrix.m[2][0];
+    billboardMat.m[2][1] = cameraMatrix.m[2][1];
+    billboardMat.m[2][2] = cameraMatrix.m[2][2];
 
     if (perViewData_) {
         perViewData_->viewProjection = Math::Multiply(viewMatrix, projectionMatrix);
         perViewData_->billboardMatrix = billboardMat;
     }
 
-    for (auto& [groupName, group] : particleGroups_) {
+    for (auto &[groupName, group] : particleGroups_) {
         (void)groupName;
         group.planeInstanceStart = planeInstanceCount_;
         group.cloudInstanceStart = cloudInstanceCount_;
@@ -645,24 +648,24 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
         group.cylinderInstanceCount = 0;
 
         // 半透明の雲は奥から手前へ合成し、重なりの不自然な縁を防ぐ。
-        std::vector<const Particle*> drawOrder;
+        std::vector<const Particle *> drawOrder;
         drawOrder.reserve(group.particles.size());
-        for (const auto& particle : group.particles) {
+        for (const auto &particle : group.particles) {
             drawOrder.push_back(&particle);
         }
-        std::stable_sort(drawOrder.begin(), drawOrder.end(), [&](const Particle* a, const Particle* b) {
-            const auto viewDepth = [&](const Particle* p) {
-                const auto& pos = p->transform.translate;
-                return pos.x * viewMatrix.m[0][2] + pos.y * viewMatrix.m[1][2] +
-                    pos.z * viewMatrix.m[2][2] + viewMatrix.m[3][2];
+        std::stable_sort(drawOrder.begin(), drawOrder.end(), [&](const Particle *a, const Particle *b) {
+            const auto viewDepth = [&](const Particle *p) {
+                const auto &pos = p->transform.translate;
+                return pos.x * viewMatrix.m[0][2] + pos.y * viewMatrix.m[1][2] + pos.z * viewMatrix.m[2][2] +
+                       viewMatrix.m[3][2];
             };
             return viewDepth(a) > viewDepth(b);
         });
-        for (const Particle* particlePtr : drawOrder) {
-            const auto& particle = *particlePtr;
-            uint32_t* indexPtr = &planeInstanceCount_;
-            uint32_t* groupCountPtr = &group.planeInstanceCount;
-            InstanceData* instancingData = instancingDataMapped_;
+        for (const Particle *particlePtr : drawOrder) {
+            const auto &particle = *particlePtr;
+            uint32_t *indexPtr = &planeInstanceCount_;
+            uint32_t *groupCountPtr = &group.planeInstanceCount;
+            InstanceData *instancingData = instancingDataMapped_;
             bool useBillboard = true;
 
             if (particle.type == Particle::Type::StormCloud) {
@@ -680,16 +683,20 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 useBillboard = false;
             }
 
-            uint32_t& index = *indexPtr;
+            uint32_t &index = *indexPtr;
 
-            if (index >= kMaxParticles) continue;
+            if (index >= kMaxParticles) {
+                continue;
+            }
 
             Matrix4x4 scaleMat = Math::Matrix4x4MakeScaleMatrix(particle.transform.scale);
             Matrix4x4 rotateMat = Math::MakeRotateZMatrix(particle.transform.rotate.z);
             Matrix4x4 transMat = Math::MakeTranslateMatrix(particle.transform.translate);
-            Matrix4x4 worldMat = useBillboard
-                ? Math::Multiply(scaleMat, Math::Multiply(rotateMat, Math::Multiply(billboardMat, transMat)))
-                : Math::MakeAffineMatrix(particle.transform.scale, particle.transform.rotate, particle.transform.translate);
+            Matrix4x4 worldMat =
+                useBillboard
+                    ? Math::Multiply(scaleMat, Math::Multiply(rotateMat, Math::Multiply(billboardMat, transMat)))
+                    : Math::MakeAffineMatrix(particle.transform.scale, particle.transform.rotate,
+                                             particle.transform.translate);
             Matrix4x4 wvp = Math::Multiply(worldMat, Math::Multiply(viewMatrix, projectionMatrix));
 
             instancingData[index].WVP = wvp;
@@ -701,41 +708,39 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4& viewMatrix, const
                 instancingData[index].color.z = ambientCloudEmitter_.color.z;
             }
             if (particle.type == Particle::Type::StormCloud) {
-                const Vector3& direction = ambientCloudEmitter_.lightDirection;
+                const Vector3 &direction = ambientCloudEmitter_.lightDirection;
                 instancingData[index].lightColor = {
                     ambientCloudEmitter_.lightColor.x * ambientCloudEmitter_.lightIntensity,
                     ambientCloudEmitter_.lightColor.y * ambientCloudEmitter_.lightIntensity,
-                    ambientCloudEmitter_.lightColor.z * ambientCloudEmitter_.lightIntensity,
-                    1.0f
-                };
+                    ambientCloudEmitter_.lightColor.z * ambientCloudEmitter_.lightIntensity, 1.0f};
                 // 光源方向をビルボードの座標系へ変換。カメラや雲の回転にも追従する。
-                const float viewX = direction.x * viewMatrix.m[0][0] +
-                    direction.y * viewMatrix.m[1][0] + direction.z * viewMatrix.m[2][0];
-                const float viewY = direction.x * viewMatrix.m[0][1] +
-                    direction.y * viewMatrix.m[1][1] + direction.z * viewMatrix.m[2][1];
+                const float viewX = direction.x * viewMatrix.m[0][0] + direction.y * viewMatrix.m[1][0] +
+                                    direction.z * viewMatrix.m[2][0];
+                const float viewY = direction.x * viewMatrix.m[0][1] + direction.y * viewMatrix.m[1][1] +
+                                    direction.z * viewMatrix.m[2][1];
                 const float cosRotation = std::cos(particle.transform.rotate.z);
                 const float sinRotation = std::sin(particle.transform.rotate.z);
-                instancingData[index].lightDirection = {
-                    viewX * cosRotation + viewY * sinRotation,
-                    -viewX * sinRotation + viewY * cosRotation };
+                instancingData[index].lightDirection = {viewX * cosRotation + viewY * sinRotation,
+                                                        -viewX * sinRotation + viewY * cosRotation};
                 instancingData[index].ambientLight = ambientCloudEmitter_.ambientLight;
             } else {
-                instancingData[index].lightColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-                instancingData[index].lightDirection = { 0.0f, -1.0f };
+                instancingData[index].lightColor = {1.0f, 1.0f, 1.0f, 1.0f};
+                instancingData[index].lightDirection = {0.0f, -1.0f};
                 instancingData[index].ambientLight = 1.0f;
             }
-            instancingData[index].shape = particle.type == Particle::Type::StormCloud
-                ? 2.0f
-                : particle.type == Particle::Type::Lightning ? 1.0f : 0.0f;
+            instancingData[index].shape = particle.type == Particle::Type::StormCloud  ? 2.0f
+                                          : particle.type == Particle::Type::Lightning ? 1.0f
+                                                                                       : 0.0f;
             index++;
             (*groupCountPtr)++;
         }
     }
 }
 
-
+// 粒子の発生・更新・描画の表示対象を選び、描画コマンドを記録する。
 void ParticleManager::Draw() {
-    if (planeInstanceCount_ == 0 && cloudInstanceCount_ == 0 && ringInstanceCount_ == 0 && cylinderInstanceCount_ == 0) {
+    if (planeInstanceCount_ == 0 && cloudInstanceCount_ == 0 && ringInstanceCount_ == 0 &&
+        cylinderInstanceCount_ == 0) {
         if (drawGPUParticleSphere_) {
             DrawGPUParticles();
         }
@@ -751,13 +756,10 @@ void ParticleManager::Draw() {
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    for (const auto& [groupName, group] : particleGroups_) {
+    for (const auto &[groupName, group] : particleGroups_) {
         (void)groupName;
         const uint32_t groupInstanceCount =
-            group.planeInstanceCount +
-            group.cloudInstanceCount +
-            group.ringInstanceCount +
-            group.cylinderInstanceCount;
+            group.planeInstanceCount + group.cloudInstanceCount + group.ringInstanceCount + group.cylinderInstanceCount;
         if (groupInstanceCount == 0) {
             continue;
         }
@@ -791,7 +793,8 @@ void ParticleManager::Draw() {
             commandList->SetPipelineState(primitivePipelineState_.Get());
             commandList->IASetVertexBuffers(0, 1, &cylinderVertexBufferView_);
             commandList->IASetVertexBuffers(1, 1, &cylinderInstancingBufferView_);
-            commandList->DrawInstanced(cylinderVertexCount_, group.cylinderInstanceCount, 0, group.cylinderInstanceStart);
+            commandList->DrawInstanced(cylinderVertexCount_, group.cylinderInstanceCount, 0,
+                                       group.cylinderInstanceStart);
         }
     }
 
@@ -800,6 +803,7 @@ void ParticleManager::Draw() {
     }
 }
 
+// シェーダーへ渡す定数・テクスチャの配置を定義する。
 void ParticleManager::CreateRootSignature() {
     D3D12_DESCRIPTOR_RANGE range = {};
     range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -838,31 +842,38 @@ void ParticleManager::CreateRootSignature() {
     ComPtr<ID3DBlob> blob, errorBlob;
     HRESULT hr = D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &errorBlob);
     assert(SUCCEEDED(hr));
-    hr = dxCommon_->GetDevice()->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
+    hr = dxCommon_->GetDevice()->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                                     IID_PPV_ARGS(&rootSignature_));
     assert(SUCCEEDED(hr));
 }
 
+// シェーダーと合成方法をまとめた描画パイプラインを作成する。
 void ParticleManager::CreatePipelineState() {
     // --- ★修正ポイント: InputLayoutをHLSLと完全に一致させる ---
     D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
         // Slot 0: メッシュデータ
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 
         // Slot 1: インスタンスデータ (WVP行列を4つのfloat4に分割して定義)
         // HLSL側: INSTANCE_WVP0, 1, 2, 3 に対応
-        { "INSTANCE_WVP", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0,  D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
-        { "INSTANCE_WVP", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 16, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
-        { "INSTANCE_WVP", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 32, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
-        { "INSTANCE_WVP", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 48, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        {"INSTANCE_WVP", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        {"INSTANCE_WVP", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 16, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        {"INSTANCE_WVP", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 32, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        {"INSTANCE_WVP", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 48, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
 
         // Color
-        { "INSTANCE_COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 64, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
-        { "INSTANCE_LIGHT_COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 80, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
-        { "INSTANCE_LIGHT_DIRECTION", 0, DXGI_FORMAT_R32G32_FLOAT, 1, 96, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
-        { "INSTANCE_AMBIENT_LIGHT", 0, DXGI_FORMAT_R32_FLOAT, 1, 104, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
-        { "INSTANCE_SHAPE", 0, DXGI_FORMAT_R32_FLOAT, 1, 108, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 },
+        {"INSTANCE_COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 64, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        {"INSTANCE_LIGHT_COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 80, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+         1},
+        {"INSTANCE_LIGHT_DIRECTION", 0, DXGI_FORMAT_R32G32_FLOAT, 1, 96, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+         1},
+        {"INSTANCE_AMBIENT_LIGHT", 0, DXGI_FORMAT_R32_FLOAT, 1, 104, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        {"INSTANCE_SHAPE", 0, DXGI_FORMAT_R32_FLOAT, 1, 108, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
 
     // シェーダーコンパイル (パスにhlsl/を追加済み)
@@ -875,12 +886,12 @@ void ParticleManager::CreatePipelineState() {
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = rootSignature_.Get();
-    psoDesc.InputLayout = { inputLayout, _countof(inputLayout) };
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.InputLayout = {inputLayout, _countof(inputLayout)};
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
 
     // ブレンド設定 (加算合成)
-    auto& blend = psoDesc.BlendState.RenderTarget[0];
+    auto &blend = psoDesc.BlendState.RenderTarget[0];
     blend.BlendEnable = TRUE;
     blend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
     blend.DestBlend = D3D12_BLEND_ONE;
@@ -925,7 +936,7 @@ void ParticleManager::CreatePipelineState() {
     blend.DestBlend = D3D12_BLEND_ONE;
     blend.DestBlendAlpha = D3D12_BLEND_ZERO;
 
-    psoDesc.PS = { primitivePsBlob->GetBufferPointer(), primitivePsBlob->GetBufferSize() };
+    psoDesc.PS = {primitivePsBlob->GetBufferPointer(), primitivePsBlob->GetBufferSize()};
     hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&primitivePipelineState_));
     if (FAILED(hr)) {
         OutputDebugStringA("Failed to create GraphicsPipelineState for Particle Primitives!\n");
@@ -934,9 +945,9 @@ void ParticleManager::CreatePipelineState() {
 
     auto gpuVsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/GPUParticle.VS.hlsl", L"vs_6_0");
     assert(gpuVsBlob != nullptr && "GPU Particle VS Compile Failed");
-    psoDesc.InputLayout = { inputLayout, 3 };
-    psoDesc.VS = { gpuVsBlob->GetBufferPointer(), gpuVsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.InputLayout = {inputLayout, 3};
+    psoDesc.VS = {gpuVsBlob->GetBufferPointer(), gpuVsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
 
     hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&gpuParticlePipelineState_));
     if (FAILED(hr)) {
@@ -945,66 +956,52 @@ void ParticleManager::CreatePipelineState() {
     }
 }
 
+// GPUパーティクルの状態・空き番号・描画定数を保持するバッファを作成する。
 void ParticleManager::CreateGPUParticleResources() {
     auto device = dxCommon_->GetDevice();
 
-    gpuParticleResource_ = CreateBufferResource(
-        device,
-        D3D12_HEAP_TYPE_DEFAULT,
-        sizeof(GPUParticle) * kMaxGPUParticles,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+    gpuParticleResource_ =
+        CreateBufferResource(device, D3D12_HEAP_TYPE_DEFAULT, sizeof(GPUParticle) * kMaxGPUParticles,
+                             D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     gpuParticleResourceState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
-    gpuParticleFreeListIndexResource_ = CreateBufferResource(
-        device,
-        D3D12_HEAP_TYPE_DEFAULT,
-        sizeof(int32_t),
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+    gpuParticleFreeListIndexResource_ =
+        CreateBufferResource(device, D3D12_HEAP_TYPE_DEFAULT, sizeof(int32_t), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                             D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-    gpuParticleFreeListResource_ = CreateBufferResource(
-        device,
-        D3D12_HEAP_TYPE_DEFAULT,
-        sizeof(uint32_t) * kMaxGPUParticles,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+    gpuParticleFreeListResource_ =
+        CreateBufferResource(device, D3D12_HEAP_TYPE_DEFAULT, sizeof(uint32_t) * kMaxGPUParticles,
+                             D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-    perViewResource_ = CreateBufferResource(
-        device,
-        D3D12_HEAP_TYPE_UPLOAD,
-        AlignConstantBufferSize(sizeof(PerView)),
-        D3D12_RESOURCE_STATE_GENERIC_READ);
-    perViewResource_->Map(0, nullptr, reinterpret_cast<void**>(&perViewData_));
+    perViewResource_ = CreateBufferResource(device, D3D12_HEAP_TYPE_UPLOAD, AlignConstantBufferSize(sizeof(PerView)),
+                                            D3D12_RESOURCE_STATE_GENERIC_READ);
+    perViewResource_->Map(0, nullptr, reinterpret_cast<void **>(&perViewData_));
     perViewData_->viewProjection = Math::MakeIdentity4x4();
     perViewData_->billboardMatrix = Math::MakeIdentity4x4();
 
-    gpuParticleEmitterResource_ = CreateBufferResource(
-        device,
-        D3D12_HEAP_TYPE_UPLOAD,
-        AlignConstantBufferSize(sizeof(GPUParticleEmitterSphere)),
-        D3D12_RESOURCE_STATE_GENERIC_READ);
-    gpuParticleEmitterResource_->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticleEmitterData_));
-    gpuParticleEmitter_.translate = { 0.0f, 0.0f, 0.0f };
+    gpuParticleEmitterResource_ =
+        CreateBufferResource(device, D3D12_HEAP_TYPE_UPLOAD, AlignConstantBufferSize(sizeof(GPUParticleEmitterSphere)),
+                             D3D12_RESOURCE_STATE_GENERIC_READ);
+    gpuParticleEmitterResource_->Map(0, nullptr, reinterpret_cast<void **>(&gpuParticleEmitterData_));
+    gpuParticleEmitter_.translate = {0.0f, 0.0f, 0.0f};
     gpuParticleEmitter_.radius = 1.0f;
     gpuParticleEmitter_.count = kGPUParticleEmitCount;
     gpuParticleEmitter_.frequency = kGPUParticleEmitFrequency;
     *gpuParticleEmitterData_ = gpuParticleEmitter_;
 
-    gpuParticlePerFrameResource_ = CreateBufferResource(
-        device,
-        D3D12_HEAP_TYPE_UPLOAD,
-        AlignConstantBufferSize(sizeof(GPUParticlePerFrame)),
-        D3D12_RESOURCE_STATE_GENERIC_READ);
-    gpuParticlePerFrameResource_->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticlePerFrameData_));
+    gpuParticlePerFrameResource_ =
+        CreateBufferResource(device, D3D12_HEAP_TYPE_UPLOAD, AlignConstantBufferSize(sizeof(GPUParticlePerFrame)),
+                             D3D12_RESOURCE_STATE_GENERIC_READ);
+    gpuParticlePerFrameResource_->Map(0, nullptr, reinterpret_cast<void **>(&gpuParticlePerFrameData_));
     *gpuParticlePerFrameData_ = gpuParticlePerFrame_;
 }
 
+// GPUパーティクルの初期化・発生・更新・描画設定を作成する。
 void ParticleManager::CreateGPUParticlePipeline() {
     D3D12_ROOT_PARAMETER rootParams[ToRootIndex(GPUParticleComputeRoot::Count)] = {};
 
     auto setRootDescriptor = [&](GPUParticleComputeRoot root, D3D12_ROOT_PARAMETER_TYPE type, UINT shaderRegister) {
-        D3D12_ROOT_PARAMETER& param = rootParams[ToRootIndex(root)];
+        D3D12_ROOT_PARAMETER &param = rootParams[ToRootIndex(root)];
         param.ParameterType = type;
         param.Descriptor.ShaderRegister = shaderRegister;
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
@@ -1024,12 +1021,13 @@ void ParticleManager::CreateGPUParticlePipeline() {
     HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &errorBlob);
     if (FAILED(hr)) {
         if (errorBlob) {
-            OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
+            OutputDebugStringA(static_cast<const char *>(errorBlob->GetBufferPointer()));
         }
         assert(false);
     }
 
-    hr = dxCommon_->GetDevice()->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&initializeParticleRootSignature_));
+    hr = dxCommon_->GetDevice()->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                                     IID_PPV_ARGS(&initializeParticleRootSignature_));
     assert(SUCCEEDED(hr));
 
     auto csBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/InitializeParticle.CS.hlsl", L"cs_6_0");
@@ -1037,27 +1035,29 @@ void ParticleManager::CreateGPUParticlePipeline() {
 
     D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = initializeParticleRootSignature_.Get();
-    psoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
+    psoDesc.CS = {csBlob->GetBufferPointer(), csBlob->GetBufferSize()};
     hr = dxCommon_->GetDevice()->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&initializeParticlePipelineState_));
     assert(SUCCEEDED(hr));
 
     auto emitCsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/EmitParticle.CS.hlsl", L"cs_6_0");
     assert(emitCsBlob != nullptr && "EmitParticle CS Compile Failed");
 
-    psoDesc.CS = { emitCsBlob->GetBufferPointer(), emitCsBlob->GetBufferSize() };
+    psoDesc.CS = {emitCsBlob->GetBufferPointer(), emitCsBlob->GetBufferSize()};
     hr = dxCommon_->GetDevice()->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&emitParticlePipelineState_));
     assert(SUCCEEDED(hr));
 
     auto updateCsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/UpdateParticle.CS.hlsl", L"cs_6_0");
     assert(updateCsBlob != nullptr && "UpdateParticle CS Compile Failed");
 
-    psoDesc.CS = { updateCsBlob->GetBufferPointer(), updateCsBlob->GetBufferSize() };
+    psoDesc.CS = {updateCsBlob->GetBufferPointer(), updateCsBlob->GetBufferSize()};
     hr = dxCommon_->GetDevice()->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&updateParticlePipelineState_));
     assert(SUCCEEDED(hr));
 }
 
+// パーティクル状態と空きリストを初期値へそろえる。
 void ParticleManager::InitializeGPUParticles() {
-    if (gpuParticlesInitialized_ || !gpuParticleResource_ || !initializeParticleRootSignature_ || !initializeParticlePipelineState_) {
+    if (gpuParticlesInitialized_ || !gpuParticleResource_ || !initializeParticleRootSignature_ ||
+        !initializeParticlePipelineState_) {
         return;
     }
 
@@ -1065,18 +1065,22 @@ void ParticleManager::InitializeGPUParticles() {
     TransitionGPUParticleResource(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandList->SetComputeRootSignature(initializeParticleRootSignature_.Get());
     commandList->SetPipelineState(initializeParticlePipelineState_.Get());
-    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::ParticlesUAV), gpuParticleResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListIndexUAV), gpuParticleFreeListIndexResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListUAV), gpuParticleFreeListResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::ParticlesUAV),
+                                                   gpuParticleResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListIndexUAV),
+                                                   gpuParticleFreeListIndexResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListUAV),
+                                                   gpuParticleFreeListResource_->GetGPUVirtualAddress());
     commandList->Dispatch(1, 1, 1);
     TransitionGPUParticleResource(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     gpuParticlesInitialized_ = true;
 }
 
+// 発生条件をGPUへ渡し、空きスロットへ新しい粒子を作る。
 void ParticleManager::EmitGPUParticles() {
     if (!gpuParticlesInitialized_ || !emitParticlePipelineState_ || !gpuParticleResource_ ||
-        !gpuParticleFreeListIndexResource_ || !gpuParticleFreeListResource_ ||
-        !gpuParticleEmitterResource_ || !gpuParticlePerFrameResource_) {
+        !gpuParticleFreeListIndexResource_ || !gpuParticleFreeListResource_ || !gpuParticleEmitterResource_ ||
+        !gpuParticlePerFrameResource_) {
         return;
     }
 
@@ -1095,11 +1099,16 @@ void ParticleManager::EmitGPUParticles() {
     TransitionGPUParticleResource(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandList->SetComputeRootSignature(initializeParticleRootSignature_.Get());
     commandList->SetPipelineState(emitParticlePipelineState_.Get());
-    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::ParticlesUAV), gpuParticleResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListIndexUAV), gpuParticleFreeListIndexResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::EmitterCBV), gpuParticleEmitterResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::PerFrameCBV), gpuParticlePerFrameResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListUAV), gpuParticleFreeListResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::ParticlesUAV),
+                                                   gpuParticleResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListIndexUAV),
+                                                   gpuParticleFreeListIndexResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::EmitterCBV),
+                                                  gpuParticleEmitterResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::PerFrameCBV),
+                                                  gpuParticlePerFrameResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListUAV),
+                                                   gpuParticleFreeListResource_->GetGPUVirtualAddress());
     commandList->Dispatch(1, 1, 1);
 
     D3D12_RESOURCE_BARRIER barrier = {};
@@ -1108,10 +1117,11 @@ void ParticleManager::EmitGPUParticles() {
     commandList->ResourceBarrier(1, &barrier);
 }
 
+// GPU上の粒子に速度・寿命などの時間変化を適用する。
 void ParticleManager::UpdateGPUParticles() {
     if (!gpuParticlesInitialized_ || !updateParticlePipelineState_ || !gpuParticleResource_ ||
-        !gpuParticleFreeListIndexResource_ || !gpuParticleFreeListResource_ ||
-        !gpuParticleEmitterResource_ || !gpuParticlePerFrameResource_) {
+        !gpuParticleFreeListIndexResource_ || !gpuParticleFreeListResource_ || !gpuParticleEmitterResource_ ||
+        !gpuParticlePerFrameResource_) {
         return;
     }
 
@@ -1123,14 +1133,20 @@ void ParticleManager::UpdateGPUParticles() {
     TransitionGPUParticleResource(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandList->SetComputeRootSignature(initializeParticleRootSignature_.Get());
     commandList->SetPipelineState(updateParticlePipelineState_.Get());
-    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::ParticlesUAV), gpuParticleResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListIndexUAV), gpuParticleFreeListIndexResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::EmitterCBV), gpuParticleEmitterResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::PerFrameCBV), gpuParticlePerFrameResource_->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListUAV), gpuParticleFreeListResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::ParticlesUAV),
+                                                   gpuParticleResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListIndexUAV),
+                                                   gpuParticleFreeListIndexResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::EmitterCBV),
+                                                  gpuParticleEmitterResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootConstantBufferView(ToRootIndex(GPUParticleComputeRoot::PerFrameCBV),
+                                                  gpuParticlePerFrameResource_->GetGPUVirtualAddress());
+    commandList->SetComputeRootUnorderedAccessView(ToRootIndex(GPUParticleComputeRoot::FreeListUAV),
+                                                   gpuParticleFreeListResource_->GetGPUVirtualAddress());
     commandList->Dispatch(1, 1, 1);
 }
 
+// GPUで更新した粒子の状態を使い、まとめて描画する。
 void ParticleManager::DrawGPUParticles() {
     if (!gpuParticlePipelineState_ || !gpuParticleResource_ || !perViewResource_) {
         return;
@@ -1153,6 +1169,7 @@ void ParticleManager::DrawGPUParticles() {
     commandList->DrawInstanced(planeVertexCount_, kMaxGPUParticles, 0, 0);
 }
 
+// GPUパーティクル用リソースを、計算または参照に必要な状態へ切り替える。
 void ParticleManager::TransitionGPUParticleResource(D3D12_RESOURCE_STATES stateAfter) {
     if (!gpuParticleResource_ || gpuParticleResourceState_ == stateAfter) {
         return;
@@ -1168,31 +1185,35 @@ void ParticleManager::TransitionGPUParticleResource(D3D12_RESOURCE_STATES stateA
     gpuParticleResourceState_ = stateAfter;
 }
 
+// パーティクル描画に使う基本形状の頂点を作成する。
 void ParticleManager::CreateMesh() {
     VertexData vertices[] = {
-        {{-0.5f,  0.5f, 0, 1}, {0.0f, 0.0f}, {0, 0, -1}},
-        {{ 0.5f,  0.5f, 0, 1}, {1.0f, 0.0f}, {0, 0, -1}},
-        {{-0.5f, -0.5f, 0, 1}, {0.0f, 1.0f}, {0, 0, -1}},
-        {{-0.5f, -0.5f, 0, 1}, {0.0f, 1.0f}, {0, 0, -1}},
-        {{ 0.5f,  0.5f, 0, 1}, {1.0f, 0.0f}, {0, 0, -1}},
-        {{ 0.5f, -0.5f, 0, 1}, {1.0f, 1.0f}, {0, 0, -1}},
+        {{-0.5f, 0.5f, 0, 1}, {0.0f, 0.0f}, {0, 0, -1}},  {{0.5f, 0.5f, 0, 1}, {1.0f, 0.0f}, {0, 0, -1}},
+        {{-0.5f, -0.5f, 0, 1}, {0.0f, 1.0f}, {0, 0, -1}}, {{-0.5f, -0.5f, 0, 1}, {0.0f, 1.0f}, {0, 0, -1}},
+        {{0.5f, 0.5f, 0, 1}, {1.0f, 0.0f}, {0, 0, -1}},   {{0.5f, -0.5f, 0, 1}, {1.0f, 1.0f}, {0, 0, -1}},
     };
 
     planeVertexCount_ = static_cast<uint32_t>(_countof(vertices));
     UINT size = sizeof(vertices);
 
-    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
     D3D12_RESOURCE_DESC resDesc = {};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resDesc.Width = size;
-    resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resDesc.SampleDesc.Count = 1;
 
-    HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer_));
+    HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                                                 D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                                 IID_PPV_ARGS(&vertexBuffer_));
     assert(SUCCEEDED(hr));
 
-    VertexData* data = nullptr;
-    vertexBuffer_->Map(0, nullptr, (void**)&data);
+    VertexData *data = nullptr;
+    vertexBuffer_->Map(0, nullptr, (void **)&data);
     memcpy(data, vertices, size);
     vertexBuffer_->Unmap(0, nullptr);
 
@@ -1201,6 +1222,7 @@ void ParticleManager::CreateMesh() {
     vertexBufferView_.StrideInBytes = sizeof(VertexData);
 }
 
+// リング状のパーティクル形状を頂点列へ展開する。
 void ParticleManager::CreateRingMesh() {
     constexpr uint32_t kRingDivide = 64;
     constexpr float kOuterRadius = 0.5f;
@@ -1221,10 +1243,10 @@ void ParticleManager::CreateRingMesh() {
         float sin1 = std::sin(angle1);
         float cos1 = std::cos(angle1);
 
-        VertexData outer0 = { { sin0 * kOuterRadius, cos0 * kOuterRadius, 0.0f, 1.0f }, { 0.5f, 0.5f }, { 0, 0, -1 } };
-        VertexData outer1 = { { sin1 * kOuterRadius, cos1 * kOuterRadius, 0.0f, 1.0f }, { 0.5f, 0.5f }, { 0, 0, -1 } };
-        VertexData inner0 = { { sin0 * kInnerRadius, cos0 * kInnerRadius, 0.0f, 1.0f }, { 0.5f, 0.5f }, { 0, 0, -1 } };
-        VertexData inner1 = { { sin1 * kInnerRadius, cos1 * kInnerRadius, 0.0f, 1.0f }, { 0.5f, 0.5f }, { 0, 0, -1 } };
+        VertexData outer0 = {{sin0 * kOuterRadius, cos0 * kOuterRadius, 0.0f, 1.0f}, {0.5f, 0.5f}, {0, 0, -1}};
+        VertexData outer1 = {{sin1 * kOuterRadius, cos1 * kOuterRadius, 0.0f, 1.0f}, {0.5f, 0.5f}, {0, 0, -1}};
+        VertexData inner0 = {{sin0 * kInnerRadius, cos0 * kInnerRadius, 0.0f, 1.0f}, {0.5f, 0.5f}, {0, 0, -1}};
+        VertexData inner1 = {{sin1 * kInnerRadius, cos1 * kInnerRadius, 0.0f, 1.0f}, {0.5f, 0.5f}, {0, 0, -1}};
 
         vertices.push_back(outer0);
         vertices.push_back(outer1);
@@ -1237,18 +1259,24 @@ void ParticleManager::CreateRingMesh() {
     ringVertexCount_ = static_cast<uint32_t>(vertices.size());
     UINT size = static_cast<UINT>(sizeof(VertexData) * vertices.size());
 
-    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
     D3D12_RESOURCE_DESC resDesc = {};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resDesc.Width = size;
-    resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resDesc.SampleDesc.Count = 1;
 
-    HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&ringVertexBuffer_));
+    HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                                                 D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                                 IID_PPV_ARGS(&ringVertexBuffer_));
     assert(SUCCEEDED(hr));
 
-    VertexData* data = nullptr;
-    ringVertexBuffer_->Map(0, nullptr, (void**)&data);
+    VertexData *data = nullptr;
+    ringVertexBuffer_->Map(0, nullptr, (void **)&data);
     memcpy(data, vertices.data(), size);
     ringVertexBuffer_->Unmap(0, nullptr);
 
@@ -1257,6 +1285,7 @@ void ParticleManager::CreateRingMesh() {
     ringVertexBufferView_.StrideInBytes = sizeof(VertexData);
 }
 
+// 円柱状のパーティクル形状を頂点列へ展開する。
 void ParticleManager::CreateCylinderMesh() {
     constexpr uint32_t kCylinderDivide = 64;
     constexpr float kTopRadius = 0.5f;
@@ -1278,10 +1307,10 @@ void ParticleManager::CreateCylinderMesh() {
         float sin1 = std::sin(angle1);
         float cos1 = std::cos(angle1);
 
-        VertexData top0 = { { sin0 * kTopRadius, kHeight, cos0 * kTopRadius, 1.0f }, { t0, 0.0f }, { sin0, 0, cos0 } };
-        VertexData top1 = { { sin1 * kTopRadius, kHeight, cos1 * kTopRadius, 1.0f }, { t1, 0.0f }, { sin1, 0, cos1 } };
-        VertexData bottom0 = { { sin0 * kBottomRadius, 0.0f, cos0 * kBottomRadius, 1.0f }, { t0, 1.0f }, { sin0, 0, cos0 } };
-        VertexData bottom1 = { { sin1 * kBottomRadius, 0.0f, cos1 * kBottomRadius, 1.0f }, { t1, 1.0f }, { sin1, 0, cos1 } };
+        VertexData top0 = {{sin0 * kTopRadius, kHeight, cos0 * kTopRadius, 1.0f}, {t0, 0.0f}, {sin0, 0, cos0}};
+        VertexData top1 = {{sin1 * kTopRadius, kHeight, cos1 * kTopRadius, 1.0f}, {t1, 0.0f}, {sin1, 0, cos1}};
+        VertexData bottom0 = {{sin0 * kBottomRadius, 0.0f, cos0 * kBottomRadius, 1.0f}, {t0, 1.0f}, {sin0, 0, cos0}};
+        VertexData bottom1 = {{sin1 * kBottomRadius, 0.0f, cos1 * kBottomRadius, 1.0f}, {t1, 1.0f}, {sin1, 0, cos1}};
 
         vertices.push_back(top0);
         vertices.push_back(top1);
@@ -1294,18 +1323,24 @@ void ParticleManager::CreateCylinderMesh() {
     cylinderVertexCount_ = static_cast<uint32_t>(vertices.size());
     UINT size = static_cast<UINT>(sizeof(VertexData) * vertices.size());
 
-    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
     D3D12_RESOURCE_DESC resDesc = {};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resDesc.Width = size;
-    resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resDesc.SampleDesc.Count = 1;
 
-    HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&cylinderVertexBuffer_));
+    HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                                                 D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                                 IID_PPV_ARGS(&cylinderVertexBuffer_));
     assert(SUCCEEDED(hr));
 
-    VertexData* data = nullptr;
-    cylinderVertexBuffer_->Map(0, nullptr, (void**)&data);
+    VertexData *data = nullptr;
+    cylinderVertexBuffer_->Map(0, nullptr, (void **)&data);
     memcpy(data, vertices.data(), size);
     cylinderVertexBuffer_->Unmap(0, nullptr);
 
@@ -1314,7 +1349,8 @@ void ParticleManager::CreateCylinderMesh() {
     cylinderVertexBufferView_.StrideInBytes = sizeof(VertexData);
 }
 
-void ParticleManager::EmitStormRainSplash(const Vector3& pos, const Vector4& color) {
+// 雨が地面へ当たる位置に、水しぶきの粒子を発生させる。
+void ParticleManager::EmitStormRainSplash(const Vector3 &pos, const Vector4 &color) {
     constexpr int kDropCount = 3;
     std::uniform_real_distribution<float> angleDistribution(0.0f, 6.2831853f);
     std::uniform_real_distribution<float> speedDistribution(0.010f, 0.024f);
@@ -1326,14 +1362,10 @@ void ParticleManager::EmitStormRainSplash(const Vector3& pos, const Vector4& col
         Particle splash;
         splash.type = Particle::Type::Splash;
         splash.transform.translate = pos;
-        splash.transform.scale = { 0.025f, 0.055f, 1.0f };
-        splash.transform.rotate = { 0.0f, 0.0f, -angle };
-        splash.velocity = {
-            std::cos(angle) * speed,
-            0.018f + speed * 0.45f,
-            std::sin(angle) * speed
-        };
-        splash.color = { color.x * 1.25f, color.y * 1.25f, color.z * 1.25f, (std::max)(color.w, 0.32f) };
+        splash.transform.scale = {0.025f, 0.055f, 1.0f};
+        splash.transform.rotate = {0.0f, 0.0f, -angle};
+        splash.velocity = {std::cos(angle) * speed, 0.018f + speed * 0.45f, std::sin(angle) * speed};
+        splash.color = {color.x * 1.25f, color.y * 1.25f, color.z * 1.25f, (std::max)(color.w, 0.32f)};
         splash.initialAlpha = splash.color.w;
         splash.lifeTime = 0.0f;
         splash.maxTime = lifeDistribution(engine);
@@ -1341,7 +1373,8 @@ void ParticleManager::EmitStormRainSplash(const Vector3& pos, const Vector4& col
     }
 }
 
-void ParticleManager::EmitSnowImpact(const Vector3& pos, const Vector4& color) {
+// 雪の接触位置へ小さな粒子を出し、地面への着地を表現する。
+void ParticleManager::EmitSnowImpact(const Vector3 &pos, const Vector4 &color) {
     std::uniform_real_distribution<float> angleDistribution(0.0f, 6.2831853f);
     std::uniform_real_distribution<float> offsetDistribution(-0.07f, 0.07f);
     std::uniform_real_distribution<float> lifeDistribution(0.28f, 0.52f);
@@ -1350,11 +1383,11 @@ void ParticleManager::EmitSnowImpact(const Vector3& pos, const Vector4& color) {
     if (Particles().size() < kMaxParticles) {
         Particle puff;
         puff.type = Particle::Type::Splash;
-        puff.transform.translate = { pos.x, pos.y + 0.025f, pos.z };
-        puff.transform.scale = { 0.12f, 0.055f, 1.0f };
-        puff.transform.rotate = { 0.0f, 0.0f, angleDistribution(engine) };
-        puff.velocity = { 0.0f, 0.0f, 0.0f };
-        puff.color = { color.x, color.y, color.z, 0.22f };
+        puff.transform.translate = {pos.x, pos.y + 0.025f, pos.z};
+        puff.transform.scale = {0.12f, 0.055f, 1.0f};
+        puff.transform.rotate = {0.0f, 0.0f, angleDistribution(engine)};
+        puff.velocity = {0.0f, 0.0f, 0.0f};
+        puff.color = {color.x, color.y, color.z, 0.22f};
         puff.initialAlpha = puff.color.w;
         puff.lifeTime = 0.0f;
         puff.maxTime = 0.42f;
@@ -1367,15 +1400,12 @@ void ParticleManager::EmitSnowImpact(const Vector3& pos, const Vector4& color) {
         const float angle = angleDistribution(engine);
         Particle flake;
         flake.type = Particle::Type::Splash;
-        flake.transform.translate = {
-            pos.x + offsetDistribution(engine),
-            pos.y + 0.035f,
-            pos.z + offsetDistribution(engine)
-        };
-        flake.transform.scale = { 0.035f, 0.035f, 1.0f };
-        flake.transform.rotate = { 0.0f, 0.0f, angle };
-        flake.velocity = { std::cos(angle) * 0.006f, 0.006f, std::sin(angle) * 0.006f };
-        flake.color = { color.x, color.y, color.z, (std::max)(color.w, 0.5f) };
+        flake.transform.translate = {pos.x + offsetDistribution(engine), pos.y + 0.035f,
+                                     pos.z + offsetDistribution(engine)};
+        flake.transform.scale = {0.035f, 0.035f, 1.0f};
+        flake.transform.rotate = {0.0f, 0.0f, angle};
+        flake.velocity = {std::cos(angle) * 0.006f, 0.006f, std::sin(angle) * 0.006f};
+        flake.color = {color.x, color.y, color.z, (std::max)(color.w, 0.5f)};
         flake.initialAlpha = flake.color.w;
         flake.lifeTime = 0.0f;
         flake.maxTime = lifeDistribution(engine);
@@ -1383,7 +1413,8 @@ void ParticleManager::EmitSnowImpact(const Vector3& pos, const Vector4& color) {
     }
 }
 
-void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
+// 指定位置からしぶきの粒子を広げる。
+void ParticleManager::EmitSplash(const Vector3 &pos, const Vector4 &color) {
     constexpr int kSplashCount = 8;
     constexpr float kPi = 3.14159265f;
 
@@ -1397,11 +1428,11 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     if (Particles().size() < kMaxParticles) {
         Particle cylinder;
         cylinder.type = Particle::Type::Cylinder;
-        cylinder.transform.translate = { pos.x, pos.y - 0.05f, pos.z };
-        cylinder.transform.scale = { 0.7f, 0.8f, 0.7f };
-        cylinder.transform.rotate = { 0.0f, distRotate(engine), 0.0f };
-        cylinder.velocity = { 0.0f, 0.0f, 0.0f };
-        cylinder.color = { color.x * 0.55f, color.y * 0.75f, 1.0f, 0.28f };
+        cylinder.transform.translate = {pos.x, pos.y - 0.05f, pos.z};
+        cylinder.transform.scale = {0.7f, 0.8f, 0.7f};
+        cylinder.transform.rotate = {0.0f, distRotate(engine), 0.0f};
+        cylinder.velocity = {0.0f, 0.0f, 0.0f};
+        cylinder.color = {color.x * 0.55f, color.y * 0.75f, 1.0f, 0.28f};
         cylinder.initialAlpha = cylinder.color.w;
         cylinder.lifeTime = 0.0f;
         cylinder.maxTime = 0.45f;
@@ -1411,11 +1442,11 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     if (Particles().size() < kMaxParticles) {
         Particle ring;
         ring.type = Particle::Type::Ring;
-        ring.transform.translate = { pos.x, pos.y + 0.22f, pos.z };
-        ring.transform.scale = { 0.25f, 0.25f, 1.0f };
-        ring.transform.rotate = { 0.0f, 0.0f, distRotate(engine) };
-        ring.velocity = { 0.0f, 0.0f, 0.0f };
-        ring.color = { color.x, color.y, color.z, 0.75f };
+        ring.transform.translate = {pos.x, pos.y + 0.22f, pos.z};
+        ring.transform.scale = {0.25f, 0.25f, 1.0f};
+        ring.transform.rotate = {0.0f, 0.0f, distRotate(engine)};
+        ring.velocity = {0.0f, 0.0f, 0.0f};
+        ring.color = {color.x, color.y, color.z, 0.75f};
         ring.initialAlpha = ring.color.w;
         ring.lifeTime = 0.0f;
         ring.maxTime = 0.35f;
@@ -1423,13 +1454,15 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     }
 
     for (int i = 0; i < kSplashCount; ++i) {
-        if (Particles().size() >= kMaxParticles) break;
+        if (Particles().size() >= kMaxParticles) {
+            break;
+        }
 
         const float speed = distSplashSpeed(engine);
         Vector3 direction = {};
         float lengthSquared = 0.0f;
         do {
-            direction = { distUnit(engine), distUnit(engine), distUnit(engine) };
+            direction = {distUnit(engine), distUnit(engine), distUnit(engine)};
             lengthSquared = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
         } while (lengthSquared < 0.0001f || lengthSquared > 1.0f);
         const float inverseLength = 1.0f / std::sqrt(lengthSquared);
@@ -1438,19 +1471,12 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
         direction.z *= inverseLength;
         Particle p;
         p.type = Particle::Type::Splash;
-        p.transform.translate = {
-            pos.x + distOffset(engine),
-            pos.y + 0.2f + distOffset(engine),
-            pos.z + distOffset(engine)
-        };
-        p.transform.scale = { 0.05f, distScale(engine), 1.0f };
-        p.transform.rotate = { distRotate(engine), distRotate(engine), distRotate(engine) };
+        p.transform.translate = {pos.x + distOffset(engine), pos.y + 0.2f + distOffset(engine),
+                                 pos.z + distOffset(engine)};
+        p.transform.scale = {0.05f, distScale(engine), 1.0f};
+        p.transform.rotate = {distRotate(engine), distRotate(engine), distRotate(engine)};
 
-        p.velocity = {
-            direction.x * speed,
-            direction.y * speed,
-            direction.z * speed
-        };
+        p.velocity = {direction.x * speed, direction.y * speed, direction.z * speed};
         p.color = color;
         p.initialAlpha = p.color.w;
         p.lifeTime = 0.0f;
@@ -1460,7 +1486,8 @@ void ParticleManager::EmitSplash(const Vector3& pos, const Vector4& color) {
     }
 }
 
-void ParticleManager::EmitFireworkBurst(const Vector3& pos) {
+// 中心から放射状に粒子を飛ばし、花火の広がりを作る。
+void ParticleManager::EmitFireworkBurst(const Vector3 &pos) {
     constexpr int kSparkCount = 84;
     constexpr float kPi = 3.14159265f;
     std::uniform_real_distribution<float> zeroOne(0.0f, 1.0f);
@@ -1470,17 +1497,17 @@ void ParticleManager::EmitFireworkBurst(const Vector3& pos) {
     std::uniform_real_distribution<float> offset(-0.08f, 0.08f);
 
     const int palette = static_cast<int>(zeroOne(engine) * 4.0f) % 4;
-    Vector4 primary = { 1.0f, 0.34f, 0.12f, 1.0f };
-    Vector4 secondary = { 1.0f, 0.88f, 0.24f, 1.0f };
+    Vector4 primary = {1.0f, 0.34f, 0.12f, 1.0f};
+    Vector4 secondary = {1.0f, 0.88f, 0.24f, 1.0f};
     if (palette == 1) {
-        primary = { 0.22f, 0.72f, 1.0f, 1.0f };
-        secondary = { 0.72f, 0.94f, 1.0f, 1.0f };
+        primary = {0.22f, 0.72f, 1.0f, 1.0f};
+        secondary = {0.72f, 0.94f, 1.0f, 1.0f};
     } else if (palette == 2) {
-        primary = { 1.0f, 0.20f, 0.68f, 1.0f };
-        secondary = { 0.72f, 0.30f, 1.0f, 1.0f };
+        primary = {1.0f, 0.20f, 0.68f, 1.0f};
+        secondary = {0.72f, 0.30f, 1.0f, 1.0f};
     } else if (palette == 3) {
-        primary = { 0.34f, 1.0f, 0.40f, 1.0f };
-        secondary = { 1.0f, 0.92f, 0.36f, 1.0f };
+        primary = {0.34f, 1.0f, 0.40f, 1.0f};
+        secondary = {1.0f, 0.92f, 0.36f, 1.0f};
     }
 
     // 球面上へ均等に近い方向で火花を飛ばす。
@@ -1492,14 +1519,11 @@ void ParticleManager::EmitFireworkBurst(const Vector3& pos) {
 
         Particle spark;
         spark.type = Particle::Type::Firework;
-        spark.transform.translate = { pos.x + offset(engine), pos.y + offset(engine), pos.z + offset(engine) };
-        spark.transform.scale = { 0.11f, 0.11f, 1.0f };
-        spark.transform.rotate = { 0.0f, 0.0f, azimuth };
-        spark.velocity = {
-            std::cos(azimuth) * horizontal * sparkSpeed,
-            y * sparkSpeed,
-            std::sin(azimuth) * horizontal * sparkSpeed
-        };
+        spark.transform.translate = {pos.x + offset(engine), pos.y + offset(engine), pos.z + offset(engine)};
+        spark.transform.scale = {0.11f, 0.11f, 1.0f};
+        spark.transform.rotate = {0.0f, 0.0f, azimuth};
+        spark.velocity = {std::cos(azimuth) * horizontal * sparkSpeed, y * sparkSpeed,
+                          std::sin(azimuth) * horizontal * sparkSpeed};
         spark.color = (i % 4 == 0) ? secondary : primary;
         spark.initialAlpha = 1.0f;
         spark.lifeTime = 0.0f;
@@ -1512,7 +1536,7 @@ void ParticleManager::EmitFireworkBurst(const Vector3& pos) {
         Particle flash;
         flash.type = Particle::Type::Ring;
         flash.transform.translate = pos;
-        flash.transform.scale = { 0.35f, 0.35f, 1.0f };
+        flash.transform.scale = {0.35f, 0.35f, 1.0f};
         flash.transform.rotate = {};
         flash.velocity = {};
         flash.color = secondary;
@@ -1523,11 +1547,12 @@ void ParticleManager::EmitFireworkBurst(const Vector3& pos) {
     }
 }
 
-void ParticleManager::EmitHitEffect(const Vector3& pos) {
+void ParticleManager::EmitHitEffect(const Vector3 &pos) {
     EmitHitEffect(pos, HitEffectSettings{});
 }
 
-void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings& settings) {
+// プリセットに従って、衝撃の光や破片を発生させる。
+void ParticleManager::EmitHitEffect(const Vector3 &pos, const HitEffectSettings &settings) {
     constexpr float kPi = 3.14159265f;
     std::uniform_real_distribution<float> distAngle(-0.18f, 0.18f);
     std::uniform_real_distribution<float> distOffset(-0.12f, 0.12f);
@@ -1548,27 +1573,25 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
     const float lightningSpread = settings.lightningSpread < 0.0f ? 0.0f : settings.lightningSpread;
     const float lightningPower = settings.lightningPower < 0.0f ? 0.0f : settings.lightningPower;
 
-    auto tintColor = [&](const Vector4& color, float r, float g, float b, float a) {
-        return Vector4{
-            color.x * r * brightness,
-            color.y * g * brightness,
-            color.z * b * brightness,
-            color.w * a * alphaScale
-        };
+    auto tintColor = [&](const Vector4 &color, float r, float g, float b, float a) {
+        return Vector4{color.x * r * brightness, color.y * g * brightness, color.z * b * brightness,
+                       color.w * a * alphaScale};
     };
 
-    auto pushParticle = [&](const Particle& particle) {
+    auto pushParticle = [&](const Particle &particle) {
         if (Particles().size() < kMaxParticles) {
             Particles().push_back(particle);
         }
     };
 
-    auto pushPlane = [&](const Vector3& translate, const Vector3& scale, float rotateZ, const Vector4& color, float lifeTime, const Vector3& velocity = { 0.0f, 0.0f, 0.0f }, Particle::Type type = Particle::Type::Splash) {
+    auto pushPlane = [&](const Vector3 &translate, const Vector3 &scale, float rotateZ, const Vector4 &color,
+                         float lifeTime, const Vector3 &velocity = {0.0f, 0.0f, 0.0f},
+                         Particle::Type type = Particle::Type::Splash) {
         Particle particle;
         particle.type = type;
         particle.transform.translate = translate;
         particle.transform.scale = scale;
-        particle.transform.rotate = { 0.0f, 0.0f, rotateZ };
+        particle.transform.rotate = {0.0f, 0.0f, rotateZ};
         particle.velocity = velocity;
         particle.color = color;
         particle.initialAlpha = color.w;
@@ -1581,9 +1604,9 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
     Particle core;
     core.type = Particle::Type::Splash;
     core.transform.translate = pos;
-    core.transform.scale = { 1.15f * size * corePower, 1.15f * size * corePower, 1.0f };
-    core.transform.rotate = { 0.0f, 0.0f, 0.0f };
-    core.velocity = { 0.0f, 0.0f, 0.0f };
+    core.transform.scale = {1.15f * size * corePower, 1.15f * size * corePower, 1.0f};
+    core.transform.rotate = {0.0f, 0.0f, 0.0f};
+    core.velocity = {0.0f, 0.0f, 0.0f};
     core.color = tintColor(settings.coreColor, 1.35f, 1.25f, 1.15f, 1.0f);
     core.initialAlpha = core.color.w;
     core.lifeTime = 0.0f;
@@ -1604,15 +1627,16 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
         const float positionJitter = settings.randomizePosition ? distOffset(engine) * size * 0.35f : 0.0f;
         const float scaleJitter = settings.randomizeScale ? 0.88f + distSparkTone(engine) * 0.24f : 1.0f;
         const float lifeJitter = settings.randomizeLifetime ? 0.85f + distSparkTone(engine) * 0.30f : 1.0f;
-        Vector3 slashPos = {
-            pos.x + side * 0.30f * size + positionJitter,
-            pos.y + (0.05f + std::sin(t * kPi) * 0.12f) * size + positionJitter,
-            pos.z + side * 0.10f * size + positionJitter
-        };
+        Vector3 slashPos = {pos.x + side * 0.30f * size + positionJitter,
+                            pos.y + (0.05f + std::sin(t * kPi) * 0.12f) * size + positionJitter,
+                            pos.z + side * 0.10f * size + positionJitter};
         Vector4 slashColor = (!settings.randomizeColor || i % 2 == 0)
-            ? tintColor(settings.slashColor, 1.0f, 1.0f, 1.0f, 0.82f)
-            : tintColor(settings.slashColor, 0.58f, 0.80f, 1.0f, 0.62f);
-        pushPlane(slashPos, { (0.11f + 0.04f * std::sin(t * kPi)) * size * scaleJitter, (2.85f - 0.45f * std::abs(side)) * size * scaleJitter, 1.0f }, angle, slashColor, (0.18f + 0.04f * t) * lifeScale * lifeJitter);
+                                 ? tintColor(settings.slashColor, 1.0f, 1.0f, 1.0f, 0.82f)
+                                 : tintColor(settings.slashColor, 0.58f, 0.80f, 1.0f, 0.62f);
+        pushPlane(slashPos,
+                  {(0.11f + 0.04f * std::sin(t * kPi)) * size * scaleJitter,
+                   (2.85f - 0.45f * std::abs(side)) * size * scaleJitter, 1.0f},
+                  angle, slashColor, (0.18f + 0.04f * t) * lifeScale * lifeJitter);
     }
 
     int lightningCount = std::clamp(settings.lightningCount, 0, 12);
@@ -1636,19 +1660,18 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
                 break;
             default: // Radial
                 angle = settings.randomizeDirection
-                    ? distLightningAngle(engine)
-                    : (static_cast<float>(i) / static_cast<float>(lightningCount)) * kPi * 2.0f;
+                            ? distLightningAngle(engine)
+                            : (static_cast<float>(i) / static_cast<float>(lightningCount)) * kPi * 2.0f;
                 break;
             }
             if (settings.lightningMode != 0 && settings.randomizeDirection) {
                 angle += distDirection(engine) * settings.lightningDirectionSpread;
             }
-            const float distance = settings.randomizePosition ? distLightningRadius(engine) * 0.12f * size * lightningSpread : 0.0f;
-            Vector3 boltCursor = {
-                pos.x + std::cos(angle) * distance,
-                pos.y + (settings.randomizePosition ? distOffset(engine) * size : 0.0f),
-                pos.z + (settings.randomizePosition ? distOffset(engine) * size * 0.35f : 0.0f)
-            };
+            const float distance =
+                settings.randomizePosition ? distLightningRadius(engine) * 0.12f * size * lightningSpread : 0.0f;
+            Vector3 boltCursor = {pos.x + std::cos(angle) * distance,
+                                  pos.y + (settings.randomizePosition ? distOffset(engine) * size : 0.0f),
+                                  pos.z + (settings.randomizePosition ? distOffset(engine) * size * 0.35f : 0.0f)};
             std::vector<Vector3> mainBoltPoints;
             std::vector<float> mainBoltAngles;
             mainBoltPoints.reserve(static_cast<size_t>(lightningSegments) + 1);
@@ -1658,25 +1681,28 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
             const float boltWidth = (0.018f + 0.016f * boltTone) * size * lightningPower * settings.lightningWidth;
             const float boltLife = (settings.randomizeLifetime ? distLightningLife(engine) : 0.115f) * lifeScale;
             const float colorVariation = settings.randomizeColor ? 0.82f + boltTone * 0.36f : 1.0f;
-            const Vector4 boltColor = tintColor(settings.lightningColor, 1.45f * colorVariation, 1.35f * colorVariation, 1.20f * colorVariation, 0.68f * lightningPower);
-            const Vector4 glowColor = tintColor(settings.lightningGlowColor, 1.0f, 1.0f, 1.0f, settings.lightningGlowOpacity * lightningPower);
+            const Vector4 boltColor = tintColor(settings.lightningColor, 1.45f * colorVariation, 1.35f * colorVariation,
+                                                1.20f * colorVariation, 0.68f * lightningPower);
+            const Vector4 glowColor = tintColor(settings.lightningGlowColor, 1.0f, 1.0f, 1.0f,
+                                                settings.lightningGlowOpacity * lightningPower);
 
             for (int segment = 0; segment < lightningSegments; ++segment) {
                 const float segmentScale = settings.randomizeScale ? 0.72f + distSparkTone(engine) * 0.56f : 1.0f;
-                const float segmentLength = size * lightningLength * segmentScale / static_cast<float>(lightningSegments);
+                const float segmentLength =
+                    size * lightningLength * segmentScale / static_cast<float>(lightningSegments);
                 const float jitter = settings.randomizeDirection ? distAngle(engine) * (1.8f + lightningSpread) : 0.0f;
                 angle += jitter;
 
-                const Vector3 direction = { std::cos(angle), std::sin(angle), 0.0f };
-                const Vector3 segmentCenter = {
-                    boltCursor.x + direction.x * segmentLength * 0.5f,
-                    boltCursor.y + direction.y * segmentLength * 0.5f,
-                    boltCursor.z
-                };
+                const Vector3 direction = {std::cos(angle), std::sin(angle), 0.0f};
+                const Vector3 segmentCenter = {boltCursor.x + direction.x * segmentLength * 0.5f,
+                                               boltCursor.y + direction.y * segmentLength * 0.5f, boltCursor.z};
                 if (settings.lightningGlowOpacity > 0.001f) {
-                    pushPlane(segmentCenter, { boltWidth * settings.lightningGlowWidth, segmentLength * 1.34f, 1.0f }, angle - kPi * 0.5f, glowColor, boltLife * 1.15f, { 0.0f, 0.0f, 0.0f }, Particle::Type::Lightning);
+                    pushPlane(segmentCenter, {boltWidth * settings.lightningGlowWidth, segmentLength * 1.34f, 1.0f},
+                              angle - kPi * 0.5f, glowColor, boltLife * 1.15f, {0.0f, 0.0f, 0.0f},
+                              Particle::Type::Lightning);
                 }
-                pushPlane(segmentCenter, { boltWidth, segmentLength * 1.30f, 1.0f }, angle - kPi * 0.5f, boltColor, boltLife, { 0.0f, 0.0f, 0.0f }, Particle::Type::Lightning);
+                pushPlane(segmentCenter, {boltWidth, segmentLength * 1.30f, 1.0f}, angle - kPi * 0.5f, boltColor,
+                          boltLife, {0.0f, 0.0f, 0.0f}, Particle::Type::Lightning);
 
                 boltCursor.x += direction.x * segmentLength;
                 boltCursor.y += direction.y * segmentLength;
@@ -1690,28 +1716,36 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
                 const int pointIndex = 1 + (branch * (lightningSegments - 1)) / (branchCount > 0 ? branchCount : 1);
                 Vector3 branchCursor = mainBoltPoints[pointIndex];
                 const float branchSide = branch % 2 == 0 ? 1.0f : -1.0f;
-                float branchAngle = mainBoltAngles[pointIndex - 1] + branchSide * (0.35f + settings.lightningBranchSpread * (0.45f + 0.35f * distSparkTone(engine)));
-                const float branchTotalLength = size * lightningLength * settings.lightningBranchLength * (0.72f + 0.38f * distSparkTone(engine));
-                const float branchWidth = 0.022f * size * lightningPower * settings.lightningWidth * settings.lightningBranchWidth;
-                const float branchLife = (settings.randomizeLifetime ? distLightningLife(engine) : 0.10f) * lifeScale * 0.9f;
-                const Vector4 branchColor = tintColor(settings.lightningColor, 1.15f, 1.25f, 1.25f, 0.48f * lightningPower);
-                const Vector4 branchGlowColor = tintColor(settings.lightningGlowColor, 1.0f, 1.0f, 1.0f, settings.lightningGlowOpacity * lightningPower * 0.65f);
+                float branchAngle =
+                    mainBoltAngles[pointIndex - 1] +
+                    branchSide * (0.35f + settings.lightningBranchSpread * (0.45f + 0.35f * distSparkTone(engine)));
+                const float branchTotalLength =
+                    size * lightningLength * settings.lightningBranchLength * (0.72f + 0.38f * distSparkTone(engine));
+                const float branchWidth =
+                    0.022f * size * lightningPower * settings.lightningWidth * settings.lightningBranchWidth;
+                const float branchLife =
+                    (settings.randomizeLifetime ? distLightningLife(engine) : 0.10f) * lifeScale * 0.9f;
+                const Vector4 branchColor =
+                    tintColor(settings.lightningColor, 1.15f, 1.25f, 1.25f, 0.48f * lightningPower);
+                const Vector4 branchGlowColor = tintColor(settings.lightningGlowColor, 1.0f, 1.0f, 1.0f,
+                                                          settings.lightningGlowOpacity * lightningPower * 0.65f);
 
                 for (int segment = 0; segment < branchSegments; ++segment) {
                     if (settings.randomizeDirection) {
                         branchAngle += distAngle(engine) * (1.2f + settings.lightningBranchSpread);
                     }
                     const float segmentLength = branchTotalLength / static_cast<float>(branchSegments);
-                    const Vector3 direction = { std::cos(branchAngle), std::sin(branchAngle), 0.0f };
-                    const Vector3 segmentCenter = {
-                        branchCursor.x + direction.x * segmentLength * 0.5f,
-                        branchCursor.y + direction.y * segmentLength * 0.5f,
-                        branchCursor.z
-                    };
+                    const Vector3 direction = {std::cos(branchAngle), std::sin(branchAngle), 0.0f};
+                    const Vector3 segmentCenter = {branchCursor.x + direction.x * segmentLength * 0.5f,
+                                                   branchCursor.y + direction.y * segmentLength * 0.5f, branchCursor.z};
                     if (settings.lightningGlowOpacity > 0.001f) {
-                        pushPlane(segmentCenter, { branchWidth * settings.lightningGlowWidth, segmentLength * 1.34f, 1.0f }, branchAngle - kPi * 0.5f, branchGlowColor, branchLife * 1.15f, { 0.0f, 0.0f, 0.0f }, Particle::Type::Lightning);
+                        pushPlane(segmentCenter,
+                                  {branchWidth * settings.lightningGlowWidth, segmentLength * 1.34f, 1.0f},
+                                  branchAngle - kPi * 0.5f, branchGlowColor, branchLife * 1.15f, {0.0f, 0.0f, 0.0f},
+                                  Particle::Type::Lightning);
                     }
-                    pushPlane(segmentCenter, { branchWidth, segmentLength * 1.30f, 1.0f }, branchAngle - kPi * 0.5f, branchColor, branchLife, { 0.0f, 0.0f, 0.0f }, Particle::Type::Lightning);
+                    pushPlane(segmentCenter, {branchWidth, segmentLength * 1.30f, 1.0f}, branchAngle - kPi * 0.5f,
+                              branchColor, branchLife, {0.0f, 0.0f, 0.0f}, Particle::Type::Lightning);
                     branchCursor.x += direction.x * segmentLength;
                     branchCursor.y += direction.y * segmentLength;
                 }
@@ -1721,21 +1755,27 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
 
     // 交差する鋭い閃光。画面で一目わかる派手さ用。
     if (crossPower > 0.01f) {
-        pushPlane({ pos.x, pos.y + 0.02f * size, pos.z }, { 0.055f * size, 3.45f * size * crossPower, 1.0f }, settings.slashAngle - 0.72f, tintColor(settings.crossColor, 1.35f, 1.2f, 1.0f, 0.95f), 0.16f * lifeScale);
-        pushPlane({ pos.x, pos.y + 0.02f * size, pos.z }, { 0.050f * size, 2.55f * size * crossPower, 1.0f }, settings.slashAngle + 0.78f, tintColor(settings.crossColor, 0.76f, 0.96f, 1.0f, 0.70f), 0.14f * lifeScale);
-        pushPlane({ pos.x, pos.y + 0.03f * size, pos.z }, { 0.30f * size, 1.55f * size * crossPower, 1.0f }, settings.slashAngle + 0.04f, tintColor(settings.crossColor, 1.15f, 1.05f, 1.0f, 0.52f), 0.20f * lifeScale);
+        pushPlane({pos.x, pos.y + 0.02f * size, pos.z}, {0.055f * size, 3.45f * size * crossPower, 1.0f},
+                  settings.slashAngle - 0.72f, tintColor(settings.crossColor, 1.35f, 1.2f, 1.0f, 0.95f),
+                  0.16f * lifeScale);
+        pushPlane({pos.x, pos.y + 0.02f * size, pos.z}, {0.050f * size, 2.55f * size * crossPower, 1.0f},
+                  settings.slashAngle + 0.78f, tintColor(settings.crossColor, 0.76f, 0.96f, 1.0f, 0.70f),
+                  0.14f * lifeScale);
+        pushPlane({pos.x, pos.y + 0.03f * size, pos.z}, {0.30f * size, 1.55f * size * crossPower, 1.0f},
+                  settings.slashAngle + 0.04f, tintColor(settings.crossColor, 1.15f, 1.05f, 1.0f, 0.52f),
+                  0.20f * lifeScale);
     }
 
     for (int ringIndex = 0; ringIndex < 3; ++ringIndex) {
         Particle ring;
         ring.type = Particle::Type::Ring;
-        ring.transform.translate = { pos.x, pos.y + 0.04f * ringIndex, pos.z };
-        ring.transform.scale = { 0.18f * size * settings.ringPower, 0.18f * size * settings.ringPower, 1.0f };
-        ring.transform.rotate = { 0.0f, 0.0f, -0.35f + ringIndex * 0.38f };
-        ring.velocity = { 0.0f, 0.0f, 0.0f };
-        ring.color = ringIndex == 0 ? tintColor(settings.ringColor, 1.4f, 1.25f, 1.1f, 0.72f)
-            : ringIndex == 1 ? tintColor(settings.ringColor, 0.65f, 0.90f, 1.0f, 0.55f)
-            : tintColor(settings.ringColor, 1.0f, 1.0f, 1.0f, 0.42f);
+        ring.transform.translate = {pos.x, pos.y + 0.04f * ringIndex, pos.z};
+        ring.transform.scale = {0.18f * size * settings.ringPower, 0.18f * size * settings.ringPower, 1.0f};
+        ring.transform.rotate = {0.0f, 0.0f, -0.35f + ringIndex * 0.38f};
+        ring.velocity = {0.0f, 0.0f, 0.0f};
+        ring.color = ringIndex == 0   ? tintColor(settings.ringColor, 1.4f, 1.25f, 1.1f, 0.72f)
+                     : ringIndex == 1 ? tintColor(settings.ringColor, 0.65f, 0.90f, 1.0f, 0.55f)
+                                      : tintColor(settings.ringColor, 1.0f, 1.0f, 1.0f, 0.42f);
         ring.initialAlpha = ring.color.w;
         ring.lifeTime = 0.0f;
         ring.maxTime = (0.20f + 0.08f * ringIndex) * lifeScale;
@@ -1744,10 +1784,10 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
 
     Particle pillar;
     pillar.type = Particle::Type::Cylinder;
-    pillar.transform.translate = { pos.x, pos.y - 0.16f * size, pos.z };
-    pillar.transform.scale = { 0.42f * size, 1.0f * size * pillarPower, 0.42f * size };
-    pillar.transform.rotate = { 0.0f, 0.0f, 0.0f };
-    pillar.velocity = { 0.0f, 0.0f, 0.0f };
+    pillar.transform.translate = {pos.x, pos.y - 0.16f * size, pos.z};
+    pillar.transform.scale = {0.42f * size, 1.0f * size * pillarPower, 0.42f * size};
+    pillar.transform.rotate = {0.0f, 0.0f, 0.0f};
+    pillar.velocity = {0.0f, 0.0f, 0.0f};
     pillar.color = tintColor(settings.pillarColor, 0.45f, 0.85f, 1.0f, 0.34f * pillarPower);
     pillar.initialAlpha = pillar.color.w;
     pillar.lifeTime = 0.0f;
@@ -1765,32 +1805,26 @@ void ParticleManager::EmitHitEffect(const Vector3& pos, const HitEffectSettings&
         const float offsetX = settings.randomizePosition ? distOffset(engine) * size * scatterRadius : 0.0f;
         const float offsetY = settings.randomizePosition ? distOffset(engine) * size * scatterRadius : 0.0f;
         const float offsetZ = settings.randomizePosition ? distOffset(engine) * size * scatterRadius : 0.0f;
-        Vector3 sparkPos = {
-            pos.x + offsetX,
-            pos.y + offsetY,
-            pos.z + offsetZ
-        };
-        Vector3 sparkVelocity = {
-            std::cos(angle) * speed,
-            std::sin(angle) * speed * 0.35f,
-            std::sin(angle * 1.7f) * speed
-        };
+        Vector3 sparkPos = {pos.x + offsetX, pos.y + offsetY, pos.z + offsetZ};
+        Vector3 sparkVelocity = {std::cos(angle) * speed, std::sin(angle) * speed * 0.35f,
+                                 std::sin(angle * 1.7f) * speed};
         Vector4 sparkColor = (!settings.randomizeColor || tone < settings.blueRatio)
-            ? tintColor(settings.sparkColor, 1.05f, 1.0f, 1.0f, 0.88f)
-            : tintColor(settings.sparkSecondaryColor, 1.0f, 1.0f, 1.0f, 0.88f);
+                                 ? tintColor(settings.sparkColor, 1.05f, 1.0f, 1.0f, 0.88f)
+                                 : tintColor(settings.sparkSecondaryColor, 1.0f, 1.0f, 1.0f, 0.88f);
         const float sparkLife = (settings.randomizeLifetime ? distSparkLife(engine) : 0.205f) * lifeScale;
-        pushPlane(sparkPos, { (0.025f + 0.02f * tone) * size, (0.62f + 0.72f * tone) * size * sparkLength, 1.0f }, angle, sparkColor, sparkLife, sparkVelocity);
+        pushPlane(sparkPos, {(0.025f + 0.02f * tone) * size, (0.62f + 0.72f * tone) * size * sparkLength, 1.0f}, angle,
+                  sparkColor, sparkLife, sparkVelocity);
     }
 }
 
-void ParticleManager::Emit(const Vector3& pos, uint32_t count) {
+void ParticleManager::Emit(const Vector3 &pos, uint32_t count) {
     Emit(kDefaultParticleGroupName, pos, count);
 }
 
-void ParticleManager::Emit(const std::string& groupName, const Vector3& pos, uint32_t count) {
-    ParticleGroup& group = particleGroups_.contains(groupName)
-        ? particleGroups_.at(groupName)
-        : GetDefaultParticleGroup();
+// 発生数・位置・速度などから、新しいパーティクルを追加する。
+void ParticleManager::Emit(const std::string &groupName, const Vector3 &pos, uint32_t count) {
+    ParticleGroup &group =
+        particleGroups_.contains(groupName) ? particleGroups_.at(groupName) : GetDefaultParticleGroup();
 
     std::uniform_real_distribution<float> distRotate(-3.14159265f, 3.14159265f);
     std::uniform_real_distribution<float> distScale(0.4f, 1.5f);
@@ -1801,11 +1835,11 @@ void ParticleManager::Emit(const std::string& groupName, const Vector3& pos, uin
     if (group.particles.size() < kMaxParticles) {
         Particle cylinder;
         cylinder.type = Particle::Type::Cylinder;
-        cylinder.transform.scale = { 0.7f, 0.8f, 0.7f };
-        cylinder.transform.rotate = { 0.0f, distRotate(engine), 0.0f };
-        cylinder.transform.translate = { pos.x, pos.y - 0.05f, pos.z };
-        cylinder.velocity = { 0.0f, 0.0f, 0.0f };
-        cylinder.color = { 0.35f, 0.55f, 1.0f, 0.28f };
+        cylinder.transform.scale = {0.7f, 0.8f, 0.7f};
+        cylinder.transform.rotate = {0.0f, distRotate(engine), 0.0f};
+        cylinder.transform.translate = {pos.x, pos.y - 0.05f, pos.z};
+        cylinder.velocity = {0.0f, 0.0f, 0.0f};
+        cylinder.color = {0.35f, 0.55f, 1.0f, 0.28f};
         cylinder.initialAlpha = cylinder.color.w;
         cylinder.lifeTime = 0.0f;
         cylinder.maxTime = 0.45f;
@@ -1815,11 +1849,11 @@ void ParticleManager::Emit(const std::string& groupName, const Vector3& pos, uin
     if (group.particles.size() < kMaxParticles) {
         Particle ring;
         ring.type = Particle::Type::Ring;
-        ring.transform.scale = { 0.25f, 0.25f, 1.0f };
-        ring.transform.rotate = { 0.0f, 0.0f, distRotate(engine) };
+        ring.transform.scale = {0.25f, 0.25f, 1.0f};
+        ring.transform.rotate = {0.0f, 0.0f, distRotate(engine)};
         ring.transform.translate = pos;
-        ring.velocity = { 0.0f, 0.0f, 0.0f };
-        ring.color = { 1.0f, 0.9f, 0.45f, 0.75f };
+        ring.velocity = {0.0f, 0.0f, 0.0f};
+        ring.color = {1.0f, 0.9f, 0.45f, 0.75f};
         ring.initialAlpha = ring.color.w;
         ring.lifeTime = 0.0f;
         ring.maxTime = 0.35f;
@@ -1827,19 +1861,17 @@ void ParticleManager::Emit(const std::string& groupName, const Vector3& pos, uin
     }
 
     for (uint32_t i = 0; i < count; ++i) {
-        if (group.particles.size() >= kMaxParticles) return;
+        if (group.particles.size() >= kMaxParticles) {
+            return;
+        }
 
         Particle p;
         p.type = Particle::Type::Splash;
-        p.transform.scale = { 0.05f, distScale(engine), 1.0f };
-        p.transform.rotate = { 0.0f, 0.0f, distRotate(engine) };
-        p.transform.translate = {
-            pos.x + distOffset(engine),
-            pos.y + distOffset(engine),
-            pos.z + distOffset(engine)
-        };
-        p.velocity = { 0.0f, 0.0f, 0.0f };
-        p.color = { distColor(engine), distColor(engine), distColor(engine), 1.0f };
+        p.transform.scale = {0.05f, distScale(engine), 1.0f};
+        p.transform.rotate = {0.0f, 0.0f, distRotate(engine)};
+        p.transform.translate = {pos.x + distOffset(engine), pos.y + distOffset(engine), pos.z + distOffset(engine)};
+        p.velocity = {0.0f, 0.0f, 0.0f};
+        p.color = {distColor(engine), distColor(engine), distColor(engine), 1.0f};
         p.initialAlpha = p.color.w;
         p.lifeTime = 0.0f;
         p.maxTime = distTime(engine);
@@ -1847,90 +1879,95 @@ void ParticleManager::Emit(const std::string& groupName, const Vector3& pos, uin
     }
 }
 
-void ParticleManager::CreateParticleGroup(const std::string& groupName, uint32_t textureHandle) {
+// 同じテクスチャと描画方式を使う粒子のグループを登録する。
+void ParticleManager::CreateParticleGroup(const std::string &groupName, uint32_t textureHandle) {
     if (groupName.empty()) {
         return;
     }
 
-    ParticleGroup& group = particleGroups_[groupName];
+    ParticleGroup &group = particleGroups_[groupName];
     group.textureHandle = textureHandle != 0 ? textureHandle : textureHandle_;
 }
 
-void ParticleManager::SetTexture(const std::string& groupName, uint32_t textureHandle) {
+// パーティクルグループが使うテクスチャを切り替える。
+void ParticleManager::SetTexture(const std::string &groupName, uint32_t textureHandle) {
     if (groupName.empty()) {
         return;
     }
 
-    ParticleGroup& group = particleGroups_[groupName];
+    ParticleGroup &group = particleGroups_[groupName];
     group.textureHandle = textureHandle;
 }
 
-ParticleManager::ParticleGroup* ParticleManager::FindParticleGroup(const std::string& groupName) {
+ParticleManager::ParticleGroup *ParticleManager::FindParticleGroup(const std::string &groupName) {
     auto it = particleGroups_.find(groupName);
     return it == particleGroups_.end() ? nullptr : &it->second;
 }
 
-const ParticleManager::ParticleGroup* ParticleManager::FindParticleGroup(const std::string& groupName) const {
+const ParticleManager::ParticleGroup *ParticleManager::FindParticleGroup(const std::string &groupName) const {
     auto it = particleGroups_.find(groupName);
     return it == particleGroups_.end() ? nullptr : &it->second;
 }
 
-ParticleManager::ParticleGroup& ParticleManager::GetDefaultParticleGroup() {
-    ParticleGroup& group = particleGroups_[kDefaultParticleGroupName];
+// 標準の粒子グループを取得し、未作成なら準備する。
+ParticleManager::ParticleGroup &ParticleManager::GetDefaultParticleGroup() {
+    ParticleGroup &group = particleGroups_[kDefaultParticleGroupName];
     if (group.textureHandle == 0) {
         group.textureHandle = textureHandle_;
     }
     return group;
 }
 
-const ParticleManager::ParticleGroup& ParticleManager::GetDefaultParticleGroup() const {
+// 標準の粒子グループを取得し、未作成なら準備する。
+const ParticleManager::ParticleGroup &ParticleManager::GetDefaultParticleGroup() const {
     auto it = particleGroups_.find(kDefaultParticleGroupName);
     assert(it != particleGroups_.end());
     return it->second;
 }
 
-std::list<Particle>& ParticleManager::Particles() {
+std::list<Particle> &ParticleManager::Particles() {
     return GetDefaultParticleGroup().particles;
 }
 
-const std::list<Particle>& ParticleManager::Particles() const {
+const std::list<Particle> &ParticleManager::Particles() const {
     return GetDefaultParticleGroup().particles;
 }
 
-void ParticleManager::EmitLandingDust(const Vector3& pos) {
+// 着地地点へ土煙を発生させ、接地の手応えを伝える。
+void ParticleManager::EmitLandingDust(const Vector3 &pos) {
     // 既存の柔らかい雲描画を短い土煙へ流用し、発光スパークは出さない。
-    for (int i=0;i<12 && Particles().size()<kMaxParticles;++i) {
-        const float angle = static_cast<float>(i)*6.28318530718f/12;
+    for (int i = 0; i < 12 && Particles().size() < kMaxParticles; ++i) {
+        const float angle = static_cast<float>(i) * 6.28318530718f / 12;
         Particle puff{};
         puff.type = Particle::Type::StormCloud;
-        puff.transform.translate = {pos.x+std::cos(angle)*.35f,pos.y+.08f,pos.z+std::sin(angle)*.35f};
-        puff.transform.scale = {.65f,.35f,1};
-        puff.transform.rotate = {0,0,angle};
-        puff.velocity = {std::cos(angle)*.018f,.004f,std::sin(angle)*.018f};
-        puff.color = {.82f,.76f,.63f,.32f};
+        puff.transform.translate = {pos.x + std::cos(angle) * .35f, pos.y + .08f, pos.z + std::sin(angle) * .35f};
+        puff.transform.scale = {.65f, .35f, 1};
+        puff.transform.rotate = {0, 0, angle};
+        puff.velocity = {std::cos(angle) * .018f, .004f, std::sin(angle) * .018f};
+        puff.color = {.82f, .76f, .63f, .32f};
         puff.initialAlpha = puff.color.w;
         puff.maxTime = .55f;
         Particles().push_back(puff);
     }
 }
 
-void ParticleManager::EmitArrivalCloud(const Vector3& pos, bool bank) {
+// 到着演出の指定位置に、雲の粒子を発生させる。
+void ParticleManager::EmitArrivalCloud(const Vector3 &pos, bool bank) {
     // ビルボードを実空間へ置き、カメラの移動に伴う奥行きとモデルとの重なりを作る。
-    const int count=bank ? 8 : 2;
-    for (int i=0;i<count && Particles().size()<kMaxParticles;++i) {
-        const float angle=static_cast<float>(i)*6.28318530718f/static_cast<float>(count);
+    const int count = bank ? 8 : 2;
+    for (int i = 0; i < count && Particles().size() < kMaxParticles; ++i) {
+        const float angle = static_cast<float>(i) * 6.28318530718f / static_cast<float>(count);
         Particle cloud{};
-        cloud.type=Particle::Type::StormCloud;
-        const float radius=bank ? 4.0f : .75f;
-        cloud.transform.translate={pos.x+std::cos(angle)*radius,pos.y+1.2f,
-            pos.z+std::sin(angle)*radius};
-        const float size=bank ? 2.4f : .5f;
-        cloud.transform.scale={size,size*.65f,1};
-        cloud.transform.rotate={0,0,angle};
-        cloud.velocity={std::cos(angle)*.008f,.006f,std::sin(angle)*.008f};
-        cloud.color={.93f,.97f,1,bank ? .22f : .12f};
-        cloud.initialAlpha=cloud.color.w;
-        cloud.maxTime=bank ? 1.2f : .4f;
+        cloud.type = Particle::Type::StormCloud;
+        const float radius = bank ? 4.0f : .75f;
+        cloud.transform.translate = {pos.x + std::cos(angle) * radius, pos.y + 1.2f, pos.z + std::sin(angle) * radius};
+        const float size = bank ? 2.4f : .5f;
+        cloud.transform.scale = {size, size * .65f, 1};
+        cloud.transform.rotate = {0, 0, angle};
+        cloud.velocity = {std::cos(angle) * .008f, .006f, std::sin(angle) * .008f};
+        cloud.color = {.93f, .97f, 1, bank ? .22f : .12f};
+        cloud.initialAlpha = cloud.color.w;
+        cloud.maxTime = bank ? 1.2f : .4f;
         Particles().push_back(cloud);
     }
 }

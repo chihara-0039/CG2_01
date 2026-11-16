@@ -36,13 +36,13 @@ struct WeatherPreset {
     float particleLife = 4.0f;
     Vector4 particleColor = {1.0f, 1.0f, 1.0f, 1.0f};
     std::string impactEffect = "None"; ///< None / Rain / Snow
-    std::string stormPreset; ///< 空でなければ継続エフェクトプリセットを天候として再生する。
+    std::string stormPreset;           ///< 空でなければ継続エフェクトプリセットを天候として再生する。
 };
 
 // 天候プリセットの読み込み、保存、検索を担当するシングルトン。
 class WeatherPresetManager {
-public:
-    static WeatherPresetManager& GetInstance() {
+  public:
+    static WeatherPresetManager &GetInstance() {
         static WeatherPresetManager instance;
         return instance;
     }
@@ -52,20 +52,20 @@ public:
     // 現在のプリセット一覧をJSONファイルへ保存する。
     void SavePresets();
 
-    const std::vector<WeatherPreset>& GetPresets() const { return presets_; }
+    const std::vector<WeatherPreset> &GetPresets() const { return presets_; }
 
     // プリセットを名前で検索
-    const WeatherPreset* GetPresetByName(const std::string& name) const;
-    bool UpdatePreset(const WeatherPreset& preset);
-    void AddPreset(const WeatherPreset& preset);
+    const WeatherPreset *GetPresetByName(const std::string &name) const;
+    bool UpdatePreset(const WeatherPreset &preset);
+    void AddPreset(const WeatherPreset &preset);
 
     // デフォルトプリセットをいくつか追加する
     void CreateDefaultPresetsIfEmpty();
 
-private:
+  private:
     WeatherPresetManager() = default;
     ~WeatherPresetManager() = default;
-    
+
     std::vector<WeatherPreset> presets_;
     const std::string filepath_ = "Resources/presets/weather_presets.json";
 };

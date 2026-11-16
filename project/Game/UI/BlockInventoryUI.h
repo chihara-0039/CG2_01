@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <memory>
 #include <vector>
 #include "Sprite.h"
@@ -10,7 +10,7 @@
 
 // 配置可能ブロックの所持数、選択状態、使用要求を表示・操作するインベントリUI。
 class BlockInventoryUI {
-public:
+  public:
     // パネルの開閉アニメーション状態。
     enum class State {
         Closed,
@@ -27,16 +27,20 @@ public:
         Vector2 localPos; // パネル左上からの相対座標。
         Vector2 size;
         bool isAvailable = false;
-        int customId = 0; // 0: 通常ブロック, 1～5: カスタムパーツ
-        std::vector<std::unique_ptr<Sprite>> silhouetteSprites; // 3x3断面表示用のシルエット。
-        std::vector<std::unique_ptr<Sprite>> countSprites; // 所持数ドット表示用スプライト。
+        int customId = 0;                                       // 0: 通常ブロック, 1～5: カスタムパーツ
+        std::vector<std::unique_ptr<Sprite>> silhouetteSprites; // 3x3x3の立体セル表示。
+        std::vector<std::unique_ptr<Sprite>> countSprites;      // 所持数ドット表示用スプライト。
+        std::vector<std::unique_ptr<Sprite>> textSprites;
+        size_t textLength = 0;
     };
 
-public:
+  public:
     // UIスプライトとテクスチャ、参照するインベントリを初期化する。
-    void Initialize(DirectXCommon* dxCommon, SpriteCommon* spriteCommon, TextureManager* textureManager, BlockInventory* inventory);
+    void Initialize(DirectXCommon *dxCommon, SpriteCommon *spriteCommon, TextureManager *textureManager,
+                    BlockInventory *inventory);
     // 入力とゲーム状態に応じて、開閉・選択・使用要求を更新する。
-    void Update(Input* input, WinApp* winApp, bool isGamePlayMode, const StageMap* stageMap = nullptr);
+    void Update(Input *input, WinApp *winApp, bool isGamePlayMode, const StageMap *stageMap = nullptr,
+                bool canQuickPlace = true);
     void Draw();
     void Finalize();
 
@@ -59,24 +63,28 @@ public:
     State GetState() const { return state_; }
 
     // インベントリの開閉状態を切り替える。
+    void ResetForStage();
     void ToggleOpen();
     bool ConfirmSelection();
+    bool SelectShortcut(int digit);
+    static int ShortcutFor(BlockType type, int customId);
 
-private:
+  private:
     // マウス座標が指定矩形内に入っているかを判定する。
-    bool CheckClick(const Vector2& pos, const Vector2& size, float mouseX, float mouseY);
+    bool CheckClick(const Vector2 &pos, const Vector2 &size, float mouseX, float mouseY);
 
-private:
-    SpriteCommon* spriteCommon_ = nullptr;
-    TextureManager* textureManager_ = nullptr;
-    BlockInventory* inventory_ = nullptr;
-    const StageMap* stageMap_ = nullptr; // カスタムパーツ名や形状取得用の参照。
+  private:
+    SpriteCommon *spriteCommon_ = nullptr;
+    TextureManager *textureManager_ = nullptr;
+    BlockInventory *inventory_ = nullptr;
+    const StageMap *stageMap_ = nullptr; // カスタムパーツ名や形状取得用の参照。
 
     // パネル背景スプライト。
     std::unique_ptr<Sprite> panelSprite_;
     uint32_t panelTextureHandle_ = 0;
 
     // 選択中ボタンのフォーカス枠スプライト。
+    std::unique_ptr<Sprite> quickGuideSprite_;
     std::unique_ptr<Sprite> focusSprite_;
     uint32_t focusTextureHandle_ = 0;
 
@@ -93,18 +101,16 @@ private:
 
     float panelWidth_ = 320.0f;
     float panelHeight_ = 720.0f;
-    float tabWidth_ = 64.0f; // 開閉タブの幅。
+    float tabWidth_ = 64.0f;   // 開閉タブの幅。
     float arrowWidth_ = 45.0f; // 画面端に残す矢印部分の幅。
 
     bool prevMouseLeft_ = false;
+    bool legacyClosedUpdates_ = false;
 
-    // ダブルクリック判定用。
-    uint32_t lastClickTick_ = 0;
-    BlockType lastClickedType_ = BlockType::None;
     bool useRequested_ = false;
 
-public:
-    // ダブルクリックによる即時使用要求を取得し、同時に消費する。
+  public:
+    // 選択決定による即時使用要求を取得し、同時に消費する。
     bool ConsumeUseRequest() {
         bool req = useRequested_;
         useRequested_ = false;

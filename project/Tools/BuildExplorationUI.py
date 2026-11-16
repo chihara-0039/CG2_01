@@ -1,4 +1,5 @@
-﻿"""探索ステージの操作案内を生成する。描画中の文字はゲームに同梱するPNGを使う。"""
+﻿# 探索とスキャンの比較に使う案内画像を生成する。
+"""探索ステージの操作案内を生成する。描画中の文字はゲームに同梱するPNGを使う。"""
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 out=Path(__file__).resolve().parents[1]/'Resources/UI/PR1_01'

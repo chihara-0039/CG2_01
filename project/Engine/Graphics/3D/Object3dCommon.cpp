@@ -1,10 +1,11 @@
-#include "Object3dCommon.h"
+﻿#include "Object3dCommon.h"
 #include "Logger.h"
 #include <cassert>
 
 using namespace Microsoft::WRL;
 
-void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
+// 3Dオブジェクトの共有描画設定を準備し、初期値と必要なリソースを設定する。
+void Object3dCommon::Initialize(DirectXCommon *dxCommon) {
     assert(dxCommon);
     dxCommon_ = dxCommon;
 
@@ -25,8 +26,6 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
         OutputDebugStringA("CreateGraphicsPipeline: FAILED (PipelineState is NULL)\n");
     }
 
-   
-
     CreatePlayerHighlightPipeline();
     CreateSkinnedPipeline();
 
@@ -44,6 +43,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
     OutputDebugStringA("Object3dCommon::Initialize Finish\n");
 }
 
+// 3Dオブジェクトの共有描画設定に使うパイプラインと参照先をコマンドリストへ設定する。
 void Object3dCommon::PreDraw() {
     auto commandList = dxCommon_->GetCommandList();
 
@@ -53,7 +53,7 @@ void Object3dCommon::PreDraw() {
     }
 
     if (textureManager_) {
-        ID3D12DescriptorHeap* heaps[] = { textureManager_->GetSrvHeap() };
+        ID3D12DescriptorHeap *heaps[] = {textureManager_->GetSrvHeap()};
         commandList->SetDescriptorHeaps(1, heaps);
     }
 
@@ -62,6 +62,17 @@ void Object3dCommon::PreDraw() {
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
+void Object3dCommon::PreDrawSkydome() {
+    PreDraw();
+    dxCommon_->GetCommandList()->SetPipelineState(skydomePipelineState_.Get());
+}
+
+void Object3dCommon::PreDrawBook() {
+    PreDraw();
+    dxCommon_->GetCommandList()->SetPipelineState(bookPipelineState_.Get());
+}
+
+// デバッグ形状用の描画設定へ切り替える。
 void Object3dCommon::PreDrawDebugOverlay() {
     auto commandList = dxCommon_->GetCommandList();
 
@@ -71,7 +82,7 @@ void Object3dCommon::PreDrawDebugOverlay() {
     }
 
     if (textureManager_) {
-        ID3D12DescriptorHeap* heaps[] = { textureManager_->GetSrvHeap() };
+        ID3D12DescriptorHeap *heaps[] = {textureManager_->GetSrvHeap()};
         commandList->SetDescriptorHeaps(1, heaps);
     }
 
@@ -80,7 +91,7 @@ void Object3dCommon::PreDrawDebugOverlay() {
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
-
+// 壁越しのプレイヤー表示に必要な描画設定へ切り替える。
 void Object3dCommon::PreDrawPlayerHighlight() {
     auto commandList = dxCommon_->GetCommandList();
 
@@ -90,7 +101,7 @@ void Object3dCommon::PreDrawPlayerHighlight() {
     }
 
     if (textureManager_) {
-        ID3D12DescriptorHeap* heaps[] = { textureManager_->GetSrvHeap() };
+        ID3D12DescriptorHeap *heaps[] = {textureManager_->GetSrvHeap()};
         commandList->SetDescriptorHeaps(1, heaps);
     }
 
@@ -99,19 +110,23 @@ void Object3dCommon::PreDrawPlayerHighlight() {
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
+// 指定した光源情報を、描画用の既定値として保持する。
 void Object3dCommon::SetDefaultLight() {
     if (lightData_) {
-        lightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        lightData_->direction = { 0.0f, -1.0f, 0.0f };
+        lightData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
+        lightData_->direction = {0.0f, -1.0f, 0.0f};
         lightData_->intensity = 1.0f;
         lightData_->pointLightCount = 0;
-        lightData_->cameraPosition = { 0.0f, 0.0f, -10.0f };
+        lightData_->cameraPosition = {0.0f, 0.0f, -10.0f};
         lightData_->paddingLight = 0.0f;
-        lightData_->fogSettings = {}; lightData_->fogOrigin = {};
-        lightData_->fogDirection = {}; lightData_->fogScan = {};
+        lightData_->fogSettings = {};
+        lightData_->fogOrigin = {};
+        lightData_->fogDirection = {};
+        lightData_->fogScan = {};
     }
 }
 
+// シェーダーへ渡す定数・テクスチャの配置を定義する。
 void Object3dCommon::CreateRootSignature() {
     OutputDebugStringA("CreateRootSignature Start\n");
 
@@ -197,23 +212,28 @@ void Object3dCommon::CreateRootSignature() {
     descriptionRootSignature.pStaticSamplers = staticSamplers;
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
-    ID3DBlob* signatureBlob = nullptr;
-    ID3DBlob* errorBlob = nullptr;
+    ID3DBlob *signatureBlob = nullptr;
+    ID3DBlob *errorBlob = nullptr;
 
-    HRESULT hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+    HRESULT hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob,
+                                             &errorBlob);
     if (FAILED(hr)) {
         OutputDebugStringA("D3D12SerializeRootSignature Failed:\n");
-        if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+        if (errorBlob) {
+            OutputDebugStringA((char *)errorBlob->GetBufferPointer());
+        }
         assert(false);
     }
 
-    hr = dxCommon_->GetDevice()->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
+    hr = dxCommon_->GetDevice()->CreateRootSignature(0, signatureBlob->GetBufferPointer(),
+                                                     signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
     if (FAILED(hr)) {
         OutputDebugStringA("CreateRootSignature Failed\n");
         assert(false);
     }
 }
 
+// スキニング後の頂点を描画するパイプラインを作成する。
 void Object3dCommon::CreateSkinnedPipeline() {
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/SkinnedObject.VS.hlsl", L"vs_6_0");
     assert(vsBlob);
@@ -222,8 +242,8 @@ void Object3dCommon::CreateSkinnedPipeline() {
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = rootSignature_.Get();
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
 
     D3D12_BLEND_DESC blendDesc = {};
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
@@ -247,13 +267,12 @@ void Object3dCommon::CreateSkinnedPipeline() {
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT,  1, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"BLENDWEIGHT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_SINT, 1, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}};
     psoDesc.InputLayout.pInputElementDescs = inputElementDescs;
     psoDesc.InputLayout.NumElements = _countof(inputElementDescs);
 
@@ -261,6 +280,7 @@ void Object3dCommon::CreateSkinnedPipeline() {
     assert(SUCCEEDED(hr));
 }
 
+// 頂点形式・シェーダー・深度・合成方法をまとめた描画設定を作成する。
 void Object3dCommon::CreateGraphicsPipeline() {
     OutputDebugStringA("CreateGraphicsPipeline Start\n");
 
@@ -273,17 +293,17 @@ void Object3dCommon::CreateGraphicsPipeline() {
     assert(psBlob);
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = rootSignature_.Get();
-    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.InputLayout = {inputElementDescs, _countof(inputElementDescs)};
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
     psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     psoDesc.RasterizerState.FrontCounterClockwise = TRUE;
@@ -293,7 +313,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
     psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-    auto& target = psoDesc.BlendState.RenderTarget[0];
+    auto &target = psoDesc.BlendState.RenderTarget[0];
     target.BlendEnable = FALSE;
     target.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
@@ -314,20 +334,43 @@ void Object3dCommon::CreateGraphicsPipeline() {
         OutputDebugStringA("CreateGraphicsPipelineState Success!\n");
     }
 
+    auto bookDesc = psoDesc;
+    auto &bookBlend = bookDesc.BlendState.RenderTarget[0];
+    bookBlend.BlendEnable = TRUE;
+    bookBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    bookBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    bookBlend.BlendOp = D3D12_BLEND_OP_ADD;
+    bookBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+    bookBlend.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+    bookBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&bookDesc, IID_PPV_ARGS(&bookPipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // The sky is always background, regardless of its mesh radius or camera distance.
+    const auto skyVs = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Skydome.VS.hlsl", L"vs_6_0");
+    psoDesc.VS = {skyVs->GetBufferPointer(), skyVs->GetBufferSize()};
+    const auto cloudPs = dxCommon_->CompileShader(L"Resources/shaders/hlsl/CloudSea.PS.hlsl", L"ps_6_0");
+    psoDesc.PS = {cloudPs->GetBufferPointer(), cloudPs->GetBufferSize()};
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&skydomePipelineState_));
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
+    assert(SUCCEEDED(hr));
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+
     // ボーンやジョイントはモデル内部に存在するため、通常の深度判定では
     // キャラクター本体に隠れる。通常モデル用PSOを変えず、デバッグ形状だけ
     // 深度判定・深度書き込みを無効にした専用PSOで描画する。
     psoDesc.DepthStencilState.DepthEnable = FALSE;
     psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-        &psoDesc, IID_PPV_ARGS(&debugOverlayPipelineState_));
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&debugOverlayPipelineState_));
     if (FAILED(hr)) {
         OutputDebugStringA("CreateDebugOverlayPipelineState Failed!!\n");
         assert(false);
     }
 }
 
+// 影の深度マップへ形状を書き込む描画設定を作成する。
 void Object3dCommon::CreateShadowPipeline() {
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/ShadowMap.VS.hlsl", L"vs_6_0");
 
@@ -335,12 +378,12 @@ void Object3dCommon::CreateShadowPipeline() {
     psoDesc.pRootSignature = rootSignature_.Get();
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
-    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+    psoDesc.InputLayout = {inputElementDescs, _countof(inputElementDescs)};
 
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { nullptr, 0 };
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {nullptr, 0};
 
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
     psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -359,57 +402,58 @@ void Object3dCommon::CreateShadowPipeline() {
     dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&shadowPipelineState_));
 }
 
+// 光源の方向・色・強さをGPUへ渡す定数バッファを作成する。
 void Object3dCommon::CreateLightBuffer() {
     auto device = dxCommon_->GetDevice();
-    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
     D3D12_RESOURCE_DESC resDesc = {};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resDesc.Width = (sizeof(DirectionalLight) + 0xff) & ~0xff;
-    resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resDesc.SampleDesc.Count = 1;
 
-    device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&lightResource_));
-    lightResource_->Map(0, nullptr, (void**)&lightData_);
+    device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                    nullptr, IID_PPV_ARGS(&lightResource_));
+    lightResource_->Map(0, nullptr, (void **)&lightData_);
 }
 
+// 壁越しに位置を示すプレイヤー用の描画設定を作成する。
 void Object3dCommon::CreatePlayerHighlightPipeline() {
     OutputDebugStringA("CreatePlayerHighlightPipeline Start\n");
 
-    auto vsBlob = dxCommon_->CompileShader(
-        L"Resources/shaders/hlsl/Object3d.VS.hlsl",
-        L"vs_6_0"
-    );
+    auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3d.VS.hlsl", L"vs_6_0");
     assert(vsBlob);
 
-    auto psBlob = dxCommon_->CompileShader(
-        L"Resources/shaders/hlsl/Object3d.PS.hlsl",
-        L"ps_6_0"
-    );
+    auto psBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/PlayerOccluded.PS.hlsl", L"ps_6_0");
     assert(psBlob);
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = rootSignature_.Get();
-    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.InputLayout = {inputElementDescs, _countof(inputElementDescs)};
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
 
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
     psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     psoDesc.RasterizerState.FrontCounterClockwise = TRUE;
 
-    psoDesc.DepthStencilState.DepthEnable = FALSE;
+    psoDesc.DepthStencilState.DepthEnable = TRUE;
     psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-    auto& target = psoDesc.BlendState.RenderTarget[0];
+    auto &target = psoDesc.BlendState.RenderTarget[0];
     target.BlendEnable = TRUE;
     target.SrcBlend = D3D12_BLEND_SRC_ALPHA;
     target.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
@@ -425,10 +469,8 @@ void Object3dCommon::CreatePlayerHighlightPipeline() {
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
-    HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-        &psoDesc,
-        IID_PPV_ARGS(&playerHighlightPipelineState_)
-    );
+    HRESULT hr =
+        dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&playerHighlightPipelineState_));
 
     if (FAILED(hr)) {
         OutputDebugStringA("CreatePlayerHighlightPipeline Failed!!\n");
@@ -438,8 +480,8 @@ void Object3dCommon::CreatePlayerHighlightPipeline() {
     }
 }
 
-void Object3dCommon::CreateInstancedAlphaPipeline()
-{
+// 複数モデルを半透明でまとめて描く設定を作成する。
+void Object3dCommon::CreateInstancedAlphaPipeline() {
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.VS.hlsl", L"vs_6_0");
     assert(vsBlob);
 
@@ -447,16 +489,16 @@ void Object3dCommon::CreateInstancedAlphaPipeline()
     assert(psBlob);
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = instancedRootSignature_.Get();
-    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.InputLayout = {inputElementDescs, _countof(inputElementDescs)};
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
 
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
     psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -467,7 +509,7 @@ void Object3dCommon::CreateInstancedAlphaPipeline()
     psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-    auto& target = psoDesc.BlendState.RenderTarget[0];
+    auto &target = psoDesc.BlendState.RenderTarget[0];
     target.BlendEnable = TRUE;
     target.SrcBlend = D3D12_BLEND_SRC_ALPHA;
     target.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
@@ -483,10 +525,8 @@ void Object3dCommon::CreateInstancedAlphaPipeline()
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
-    HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-        &psoDesc,
-        IID_PPV_ARGS(&instancedAlphaPipelineState_)
-    );
+    HRESULT hr =
+        dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&instancedAlphaPipelineState_));
     assert(SUCCEEDED(hr));
 }
 
@@ -494,6 +534,7 @@ void Object3dCommon::CreateInstancedRootSignature() {
     instancedRootSignature_ = rootSignature_;
 }
 
+// 複数モデルをまとめて描くための頂点入力と描画設定を作成する。
 void Object3dCommon::CreateInstancedGraphicsPipeline() {
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Object3dInstanced.VS.hlsl", L"vs_6_0");
     assert(vsBlob);
@@ -502,16 +543,16 @@ void Object3dCommon::CreateInstancedGraphicsPipeline() {
     assert(psBlob);
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = instancedRootSignature_.Get();
-    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.InputLayout = {inputElementDescs, _countof(inputElementDescs)};
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
 
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
     psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -522,7 +563,7 @@ void Object3dCommon::CreateInstancedGraphicsPipeline() {
     psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-    auto& target = psoDesc.BlendState.RenderTarget[0];
+    auto &target = psoDesc.BlendState.RenderTarget[0];
     target.BlendEnable = FALSE;
     target.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
@@ -536,6 +577,7 @@ void Object3dCommon::CreateInstancedGraphicsPipeline() {
     assert(SUCCEEDED(hr));
 }
 
+// 複数モデルの影をまとめて深度マップへ描く設定を作成する。
 void Object3dCommon::CreateInstancedShadowPipeline() {
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/ShadowMapInstanced.VS.hlsl", L"vs_6_0");
     assert(vsBlob);
@@ -544,12 +586,12 @@ void Object3dCommon::CreateInstancedShadowPipeline() {
     psoDesc.pRootSignature = instancedRootSignature_.Get();
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
-    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+    psoDesc.InputLayout = {inputElementDescs, _countof(inputElementDescs)};
 
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { nullptr, 0 };
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {nullptr, 0};
 
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
     psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -565,12 +607,7 @@ void Object3dCommon::CreateInstancedShadowPipeline() {
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
-    HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&instancedShadowPipelineState_));
+    HRESULT hr =
+        dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&instancedShadowPipelineState_));
     assert(SUCCEEDED(hr));
 }
-
-
-
-
-
-

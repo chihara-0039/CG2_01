@@ -32,9 +32,9 @@
 //  リソースバリアで「書き込みモード↔読み込みモード」を切り替える。
 // ==============================================================
 class ShadowMap {
-public:
+  public:
     /// <summary>シャドウマップの幅 (ピクセル)。高いほど影が綺麗になる。</summary>
-    static const int kWidth  = 4096;
+    static const int kWidth = 4096;
     /// <summary>シャドウマップの高さ (ピクセル)。kWidth と同値を推奨。</summary>
     static const int kHeight = 4096;
 
@@ -42,7 +42,7 @@ public:
     //  Initialize : シャドウマップ用の深度テクスチャとビューを生成する。
     //  textureManager には SRV を登録し、GetSrvHandle() で取得できるようにする。
     // -------------------------------------------------------
-    void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager);
+    void Initialize(DirectXCommon *dxCommon, TextureManager *textureManager);
 
     // -------------------------------------------------------
     //  PreDraw : 影描画パスの開始。
@@ -53,19 +53,19 @@ public:
     //
     //  この後に DrawShadow() を呼び、PostDraw() で終了する。
     // -------------------------------------------------------
-    void PreDraw(ID3D12GraphicsCommandList* commandList);
+    void PreDraw(ID3D12GraphicsCommandList *commandList);
 
     // -------------------------------------------------------
     //  PostDraw : 影描画パスの終了。
     //  ・リソースバリアを DSV 書き込み → SRV 読み取りに遷移
     //  本描画パスで GetSrvHandle() をシェーダーに渡せる状態になる。
     // -------------------------------------------------------
-    void PostDraw(ID3D12GraphicsCommandList* commandList);
+    void PostDraw(ID3D12GraphicsCommandList *commandList);
 
     // ── ゲッター ─────────────────────────────────────────
 
     /// <summary>深度テクスチャリソース本体 (デバッグ・詳細設定用)</summary>
-    ID3D12Resource* GetResource() const { return resource_.Get(); }
+    ID3D12Resource *GetResource() const { return resource_.Get(); }
 
     /// <summary>
     /// DSV の CPU ハンドル。PreDraw() 内で DSV をセットするために使用。
@@ -79,7 +79,7 @@ public:
     /// </summary>
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandle() const { return srvHandle_; }
 
-private:
+  private:
     // ── GPU リソース ──────────────────────────────────────
 
     /// <summary>深度テクスチャリソース (DSV と SRV 両方で使い回す)</summary>
@@ -94,4 +94,3 @@ private:
     /// <summary>DSV 専用のディスクリプタヒープ (DSV だけを格納する)</summary>
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap_{};
 };
-

@@ -20,6 +20,7 @@ void MyGame::Draw() {
     runtime_->Draw();
 }
 
+// ゲーム本体が保持するオブジェクトとリソースを解放する。
 void MyGame::Finalize() {
     if (runtime_) {
         runtime_->Finalize();

@@ -374,6 +374,7 @@
     <ClInclude Include="Game\Scene\Skybox.h" />
     <ClInclude Include="Game\UI\GameplayUIManager.h" />
     <ClInclude Include="Game\UI\BlockInventoryUI.h" />
+    <ClInclude Include="Game\UI\InventoryNavigation.h" />
     <ClInclude Include="Game\Camera\GameplayCameraController.h" />
     <ClInclude Include="Game\Stage\StageEditorController.h" />
     <ClInclude Include="Engine\Math\MyMath.h" />
@@ -381,6 +382,7 @@
     <ClInclude Include="Engine\Graphics\3D\Object3dCommon.h" />
     <ClInclude Include="Engine\Graphics\Particle\ParticleManager.h" />
     <ClInclude Include="Game\Player\Player.h" />
+    <ClInclude Include="Game\Player\LadderTraversal.h" />
     <ClInclude Include="Engine\Graphics\2D\Sprite.h" />
     <ClInclude Include="Engine\Graphics\2D\SpriteCommon.h" />
     <ClInclude Include="Game\Scene\StageSelect.h" />

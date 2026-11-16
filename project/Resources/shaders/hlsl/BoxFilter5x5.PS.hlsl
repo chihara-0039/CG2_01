@@ -7,6 +7,7 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// 5×5の近傍画素を平均し、画像をぼかす。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
 

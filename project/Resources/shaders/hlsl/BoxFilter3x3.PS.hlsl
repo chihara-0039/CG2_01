@@ -7,6 +7,7 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// 3×3の近傍画素を平均し、画像をぼかす。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
 
@@ -16,15 +17,15 @@ PixelShaderOutput main(VertexShaderOutput input) {
     float32_t2 uvStepSize = float32_t2(rcp(float32_t(width)), rcp(float32_t(height)));
 
     static const float32_t kKernel3x3[3][3] = {
-        { 1.0f / 9.0f, 1.0f / 9.0f, 1.0f / 9.0f },
-        { 1.0f / 9.0f, 1.0f / 9.0f, 1.0f / 9.0f },
-        { 1.0f / 9.0f, 1.0f / 9.0f, 1.0f / 9.0f },
+        {1.0f / 9.0f, 1.0f / 9.0f, 1.0f / 9.0f},
+        {1.0f / 9.0f, 1.0f / 9.0f, 1.0f / 9.0f},
+        {1.0f / 9.0f, 1.0f / 9.0f, 1.0f / 9.0f},
     };
 
     static const float32_t2 kIndex3x3[3][3] = {
-        { { -1.0f, -1.0f }, { 0.0f, -1.0f }, { 1.0f, -1.0f } },
-        { { -1.0f,  0.0f }, { 0.0f,  0.0f }, { 1.0f,  0.0f } },
-        { { -1.0f,  1.0f }, { 0.0f,  1.0f }, { 1.0f,  1.0f } },
+        {{-1.0f, -1.0f}, {0.0f, -1.0f}, {1.0f, -1.0f}},
+        {{-1.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}},
+        {{-1.0f, 1.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}},
     };
 
     float32_t3 color = float32_t3(0.0f, 0.0f, 0.0f);

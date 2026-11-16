@@ -14,12 +14,14 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// 画面座標を種にして、ノイズ表示用の擬似乱数を求める。
 float32_t rand2dTo1d(float32_t2 value) {
     float32_t2 smallValue = sin(value);
     float32_t random = dot(smallValue, float32_t2(12.9898f, 78.233f));
     return frac(sin(random) * 43758.5453f);
 }
 
+// 画面座標と時刻からノイズを作り、入力画像へ適用する。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
 

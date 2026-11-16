@@ -1,3 +1,4 @@
+# 足場づくりの試験モードを起動し、確認用映像を録画する。
 param([ValidateSet('collision','undo','route')][string]$Shot='collision', [string]$Name='building', [string]$OutputDirectory='', [string]$Executable='', [string]$Ffmpeg='')
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent

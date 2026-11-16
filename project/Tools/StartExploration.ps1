@@ -1,3 +1,4 @@
+# 探索霧の比較モードを設定してゲームを起動する。
 param([switch]$Verify)
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $executable=Join-Path (Split-Path $projectRoot -Parent) 'generated\outputs\Release\CG2_01.exe'

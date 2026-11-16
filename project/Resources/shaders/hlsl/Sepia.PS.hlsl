@@ -7,6 +7,7 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// 入力色をセピア調の配色へ変換する。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
     output.color = gTexture.Sample(gSampler, input.texcoord);

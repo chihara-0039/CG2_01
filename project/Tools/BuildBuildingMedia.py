@@ -1,3 +1,4 @@
+# 足場づくりの紹介用に、撮影素材から映像を組み立てる。
 """同じ操作の変更前後と、別場面の取り消し・ゲーム進行を発表素材へまとめる。"""
 from pathlib import Path
 import argparse, subprocess, shutil, json

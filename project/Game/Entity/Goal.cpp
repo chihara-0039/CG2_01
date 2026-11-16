@@ -1,7 +1,8 @@
 #include "Goal.h"
-#include<cmath>
+#include <cmath>
 
-bool Goal::Check(const Vector3& pos, const Vector3& radius, const StageMap& map) {
+// プレイヤーとゴールの位置を比較し、到達範囲に入ったか判定する。
+bool Goal::Check(const Vector3 &pos, const Vector3 &radius, const StageMap &map) {
     // StageMap の整数座標はブロック中心。プレイヤーは足元基準のAABBとして、
     // 実際に重なっている全セルを調べる。角だけの点判定では、見た目では星に
     // 触れていても中心を取りこぼすことがあった。
@@ -16,7 +17,7 @@ bool Goal::Check(const Vector3& pos, const Vector3& radius, const StageMap& map)
     for (int gy = minY; gy <= maxY; ++gy) {
         for (int gz = minZ; gz <= maxZ; ++gz) {
             for (int gx = minX; gx <= maxX; ++gx) {
-                const MapCell* cell = map.GetCell(gx, gy, gz);
+                const MapCell *cell = map.GetCell(gx, gy, gz);
                 if (cell && cell->type == BlockType::Goal) {
                     return true;
                 }

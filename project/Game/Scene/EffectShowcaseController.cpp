@@ -6,8 +6,8 @@
 #include "ParticleManager.h"
 #include "externals/imgui/imgui.h"
 
-void EffectShowcaseController::SetPresets(
-    std::vector<std::string> presets, std::vector<std::string> stormPresets) {
+// 展示対象のプリセット一覧を更新し、選択範囲を整える。
+void EffectShowcaseController::SetPresets(std::vector<std::string> presets, std::vector<std::string> stormPresets) {
     presetNames_ = std::move(presets);
     stormPresetNames_ = std::move(stormPresets);
     if (presetNames_.empty()) {
@@ -17,27 +17,30 @@ void EffectShowcaseController::SetPresets(
     }
 }
 
+// エフェクト展示の選択位置と切り替え時間を初期状態へ戻す。
 void EffectShowcaseController::Reset() {
     selectedIndex_ = 0;
     timer_ = 0.0f;
     firstPlay_ = true;
 }
 
+// 選択番号が嵐のプリセットを指すか判定する。
 bool EffectShowcaseController::IsStormIndex(int index) const {
     if (index < 0 || index >= static_cast<int>(presetNames_.size())) {
         return false;
     }
     return std::find(stormPresetNames_.begin(), stormPresetNames_.end(), presetNames_[index]) !=
-        stormPresetNames_.end();
+           stormPresetNames_.end();
 }
 
 bool EffectShowcaseController::IsCurrentStorm() const {
     return IsStormIndex(selectedIndex_);
 }
 
-void EffectShowcaseController::SelectPreset(
-    int index, bool play, ParticleManager* particles, const Vector3& position,
-    const LoadPreset& loadStorm, const LoadPreset& loadHit, const SimpleAction& emitHit) {
+// 展示するエフェクトを選び、再生開始の状態へ切り替える。
+void EffectShowcaseController::SelectPreset(int index, bool play, ParticleManager *particles, const Vector3 &position,
+                                            const LoadPreset &loadStorm, const LoadPreset &loadHit,
+                                            const SimpleAction &emitHit) {
     if (presetNames_.empty()) {
         return;
     }
@@ -62,21 +65,37 @@ void EffectShowcaseController::SelectPreset(
     }
 }
 
-bool EffectShowcaseController::Update(
-    Input& input, ParticleManager* particles, const Vector3& position,
-    const LoadPreset& loadStorm, const LoadPreset& loadHit,
-    const SimpleAction& emitHit, const SimpleAction& refreshPresets) {
+// プリセット切り替えの入力と自動再生の時刻を進める。
+bool EffectShowcaseController::Update(Input &input, ParticleManager *particles, const Vector3 &position,
+                                      const LoadPreset &loadStorm, const LoadPreset &loadHit,
+                                      const SimpleAction &emitHit, const SimpleAction &refreshPresets) {
     if (firstPlay_) {
         firstPlay_ = false;
         SelectPreset(selectedIndex_, true, particles, position, loadStorm, loadHit, emitHit);
     }
-    if (input.TriggerKey(DIK_LEFT)) SelectPreset(selectedIndex_ - 1, true, particles, position, loadStorm, loadHit, emitHit);
-    if (input.TriggerKey(DIK_RIGHT)) SelectPreset(selectedIndex_ + 1, true, particles, position, loadStorm, loadHit, emitHit);
-    if (input.TriggerKey(DIK_SPACE)) SelectPreset(selectedIndex_, true, particles, position, loadStorm, loadHit, emitHit);
-    if (input.TriggerKey(DIK_A)) { autoPlay_ = !autoPlay_; timer_ = 0.0f; }
-    if (input.TriggerKey(DIK_R)) { refreshPresets(); Reset(); return false; }
+    if (input.TriggerKey(DIK_LEFT)) {
+        SelectPreset(selectedIndex_ - 1, true, particles, position, loadStorm, loadHit, emitHit);
+    }
+    if (input.TriggerKey(DIK_RIGHT)) {
+        SelectPreset(selectedIndex_ + 1, true, particles, position, loadStorm, loadHit, emitHit);
+    }
+    if (input.TriggerKey(DIK_SPACE)) {
+        SelectPreset(selectedIndex_, true, particles, position, loadStorm, loadHit, emitHit);
+    }
+    if (input.TriggerKey(DIK_A)) {
+        autoPlay_ = !autoPlay_;
+        timer_ = 0.0f;
+    }
+    if (input.TriggerKey(DIK_R)) {
+        refreshPresets();
+        Reset();
+        return false;
+    }
     if (input.TriggerKey(DIK_TAB)) {
-        if (particles) { particles->SetStormActive(false); particles->ClearParticles(); }
+        if (particles) {
+            particles->SetStormActive(false);
+            particles->ClearParticles();
+        }
         return true;
     }
 
@@ -90,33 +109,36 @@ bool EffectShowcaseController::Update(
     return false;
 }
 
-void EffectShowcaseController::NotifyImpact() { lightTimer_ = kLightDuration; }
-void EffectShowcaseController::TickLight(float deltaTime) { lightTimer_ = (std::max)(0.0f, lightTimer_ - deltaTime); }
-float EffectShowcaseController::GetLightRatio() const { return std::clamp(lightTimer_ / kLightDuration, 0.0f, 1.0f); }
+void EffectShowcaseController::NotifyImpact() {
+    lightTimer_ = kLightDuration;
+}
+void EffectShowcaseController::TickLight(float deltaTime) {
+    lightTimer_ = (std::max)(0.0f, lightTimer_ - deltaTime);
+}
+float EffectShowcaseController::GetLightRatio() const {
+    return std::clamp(lightTimer_ / kLightDuration, 0.0f, 1.0f);
+}
 
+// エフェクトの展示の設定と状態をGUIへ表示し、編集入力を反映する。
 void EffectShowcaseController::DrawImGui() const {
-    const ImGuiIO& io = ImGui::GetIO();
+    const ImGuiIO &io = ImGui::GetIO();
     const int count = static_cast<int>(presetNames_.size());
     const int safeIndex = count > 0 ? std::clamp(selectedIndex_, 0, count - 1) : 0;
-    const char* name = count > 0 ? presetNames_[safeIndex].c_str() : "No showcase presets";
+    const char *name = count > 0 ? presetNames_[safeIndex].c_str() : "No showcase presets";
 #ifdef NDEBUG
     const float headerX = 24.0f, headerWidth = io.DisplaySize.x - 48.0f;
     const float headerY = 20.0f;
 #else
-    const float hierarchyWidth =
-        std::clamp(io.DisplaySize.x * 0.15f, 240.0f, 300.0f);
-    const float inspectorWidth =
-        std::clamp(io.DisplaySize.x * 0.20f, 340.0f, 400.0f);
+    const float hierarchyWidth = std::clamp(io.DisplaySize.x * 0.15f, 240.0f, 300.0f);
+    const float inspectorWidth = std::clamp(io.DisplaySize.x * 0.20f, 340.0f, 400.0f);
     const float headerX = hierarchyWidth + 24.0f;
-    const float headerWidth =
-        io.DisplaySize.x - hierarchyWidth - inspectorWidth - 48.0f;
+    const float headerWidth = io.DisplaySize.x - hierarchyWidth - inspectorWidth - 48.0f;
     const float headerY = 58.0f;
 #endif
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav;
-    ImGui::SetNextWindowPos(
-        ImVec2(headerX, headerY),
-        ImGuiCond_Always);
+                                       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs |
+                                       ImGuiWindowFlags_NoNav;
+    ImGui::SetNextWindowPos(ImVec2(headerX, headerY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(headerWidth, 94.0f), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.72f);
     ImGui::Begin("Effect Showcase Header", nullptr, flags);

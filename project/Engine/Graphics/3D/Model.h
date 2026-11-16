@@ -24,7 +24,7 @@ struct ModelVertexData {
     Vector4 position; // ローカル座標 (xyz + w=1.0)
     Vector2 texcoord; // UV 座標 (0.0〜1.0)
     Vector3 normal;   // 法線ベクトル (正規化済み)
-    Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
 };
 
 // ==============================================================
@@ -50,7 +50,7 @@ struct ModelVertexData {
 //  Draw() では VertexBufferView をセットして DrawInstanced() を呼ぶ。
 // ==============================================================
 class Model {
-public:
+  public:
     // -------------------------------------------------------
     //  CreateFromOBJ : OBJ ファイルからモデルを生成するファクトリ関数。
     //  directoryPath : ファイルが置かれているディレクトリ (例: "Resources/Models/block")
@@ -58,52 +58,44 @@ public:
     //  戻り値        : 初期化済み Model の unique_ptr
     //  ※ テクスチャは OBJ に紐づく MTL ファイルから自動的に読み込まれる。
     // -------------------------------------------------------
-    static std::unique_ptr<Model> CreateFromOBJ(
-        DirectXCommon*     dxCommon,
-        const std::string& directoryPath,
-        const std::string& filename,
-        TextureManager*    textureManager);
+    static std::unique_ptr<Model> CreateFromOBJ(DirectXCommon *dxCommon, const std::string &directoryPath,
+                                                const std::string &filename, TextureManager *textureManager);
 
     // -------------------------------------------------------
     //  Initialize : OBJ ファイルを読み込んで GPU バッファを生成する。
     //  CreateFromOBJ() の内部で呼ばれる。
     // -------------------------------------------------------
-    void Initialize(
-        DirectXCommon*     dxCommon,
-        const std::string& directoryPath,
-        const std::string& filename,
-        TextureManager*    textureManager);
+    void Initialize(DirectXCommon *dxCommon, const std::string &directoryPath, const std::string &filename,
+                    TextureManager *textureManager);
 
     // -------------------------------------------------------
     //  InitializeFromVertices : 頂点配列から GPU バッファを生成する。
     //  OBJ ファイルを使わずに動的にメッシュを作りたい場合に使用。
     //  例: スキニングで CPU 側でスキニング計算した後の頂点を渡す。
     // -------------------------------------------------------
-    void InitializeFromVertices(
-        DirectXCommon*                    dxCommon,
-        const std::vector<ModelVertexData>& vertices,
-        uint32_t                          textureHandle);
+    void InitializeFromVertices(DirectXCommon *dxCommon, const std::vector<ModelVertexData> &vertices,
+                                uint32_t textureHandle);
 
     // -------------------------------------------------------
     //  UpdateVertexBuffer : 頂点データを GPU バッファに書き直す。
     //  スキニングのようにフレームごとに頂点が変わる場合に使用。
     //  InitializeFromVertices() で作ったバッファにのみ有効。
     // -------------------------------------------------------
-    void UpdateVertexBuffer(const std::vector<ModelVertexData>& vertices);
+    void UpdateVertexBuffer(const std::vector<ModelVertexData> &vertices);
 
     // -------------------------------------------------------
     //  Draw : 頂点バッファをセットして描画コマンドを積む。
     //  Object3dCommon::PreDraw() と Object3d の定数バッファバインドが
     //  事前に完了していることを前提とする。
     // -------------------------------------------------------
-    void Draw(ID3D12GraphicsCommandList* commandList);
+    void Draw(ID3D12GraphicsCommandList *commandList);
 
     // -------------------------------------------------------
     //  DrawInstanced : インスタンシング描画用。
     //  instanceCount 分だけ同一メッシュを 1 ドローコールで描く。
     //  インスタンスごとの変換行列は StructuredBuffer で渡す必要がある。
     // -------------------------------------------------------
-    void DrawInstanced(ID3D12GraphicsCommandList* commandList, UINT instanceCount);
+    void DrawInstanced(ID3D12GraphicsCommandList *commandList, UINT instanceCount);
 
     // ── ゲッター ─────────────────────────────────────────
 
@@ -116,26 +108,26 @@ public:
     /// <summary>インデックス数 (デバッグ・確認用)</summary>
     size_t GetIndexCount() const { return indices_.size(); }
 
-private:
+  private:
     // ── OBJ/MTL ファイルの読み込み ─────────────────────────
 
     /// <summary>OBJ ファイルを解析して vertices_ に頂点データを格納する</summary>
-    void LoadObjFile(const std::string& directoryPath, const std::string& filename);
+    void LoadObjFile(const std::string &directoryPath, const std::string &filename);
 
     // 未回収のOBJでも起動を継続するため、白い単位立方体を生成する。
     void CreateRecoveryBox();
 
     /// <summary>MTL ファイルを解析してテクスチャパスを取得する</summary>
-    void LoadMaterialFile(const std::string& directoryPath, const std::string& filename);
+    void LoadMaterialFile(const std::string &directoryPath, const std::string &filename);
 
     /// <summary>vertices_ の内容を GPU 頂点バッファに転送する</summary>
-    void CreateBuffers(DirectXCommon* dxCommon);
+    void CreateBuffers(DirectXCommon *dxCommon);
 
     // ── デフォルトテクスチャパス ─────────────────────────
     // MTLがない仮の文字モデルは白テクスチャで読みやすく描く。
     std::string textureFilePath_;
 
-private:
+  private:
     // ── メッシュデータ (CPU 側) ────────────────────────────
     std::vector<ModelVertexData> vertices_; // 頂点の配列 (OBJ 解析結果)
     std::vector<uint32_t> indices_;         // インデックスの配列 (OBJ 解析結果)
@@ -145,8 +137,8 @@ private:
     // アップロードヒープ上に確保された頂点バッファ。
     // Map したまま保持することで CPU からの書き換えを高速化している。
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW               vertexBufferView_{}; // バッファの場所・サイズ・ストライドを GPU に教えるビュー
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{}; // バッファの場所・サイズ・ストライドを GPU に教えるビュー
 
     Microsoft::WRL::ComPtr<ID3D12Resource> indexBuffer_;
-    D3D12_INDEX_BUFFER_VIEW                indexBufferView_{};
+    D3D12_INDEX_BUFFER_VIEW indexBufferView_{};
 };

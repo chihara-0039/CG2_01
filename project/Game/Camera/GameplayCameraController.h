@@ -2,7 +2,7 @@
 #include "Input.h"
 #include "Camera.h"
 #include "WinApp.h"
-#include"Player.h"
+#include "Player.h"
 #include "StageMap.h"
 
 /// <summary>
@@ -11,21 +11,45 @@
 /// カメラの位置と回転を自動計算・反映します。
 /// </summary>
 class GameplayCameraController {
-public:
+  public:
     /// <summary>
     /// カメラの角度とピッチの初期化を行います。
     /// </summary>
     void Initialize();
-    void ConfigureDiorama() { cameraDistance_=25; cameraHeight_=25; cameraPitch_=.65f; cameraAngle_=-.65f;
-        cameraFov_=.80f; referenceFov_=.80f; cameraPivot_={7.5f,2.5f,7.5f};
-        followPlayerMode_=false; currentStageIndex_=6; cameraDirty_=true; }
-    void ConfigureDioramaShot(const Vector3& pivot,float yaw,float pitch,float distance) {
-        ConfigureDiorama();cameraPivot_=pivot;cameraAngle_=yaw;cameraPitch_=pitch;
-        cameraDistance_=distance;cameraHeight_=distance;
+    // 箱庭を見回しやすいカメラの距離・角度・注視点を設定する。
+    void ConfigureDiorama() {
+        cameraDistance_ = 25;
+        cameraHeight_ = 25;
+        cameraPitch_ = .65f;
+        cameraAngle_ = -.65f;
+        cameraFov_ = .80f;
+        referenceFov_ = .80f;
+        cameraPivot_ = {7.5f, 2.5f, 7.5f};
+        followPlayerMode_ = false;
+        currentStageIndex_ = 6;
+        cameraDirty_ = true;
+    }
+    // 箱庭の撮影に使う、固定の構図と追従設定を適用する。
+    void ConfigureDioramaShot(const Vector3 &pivot, float yaw, float pitch, float distance) {
+        ConfigureDiorama();
+        cameraPivot_ = pivot;
+        cameraAngle_ = yaw;
+        cameraPitch_ = pitch;
+        cameraDistance_ = distance;
+        cameraHeight_ = distance;
     }
     // 探索ステージ用の近い追従視点。既存ステージのプリセットは変更しない。
-    void ConfigureExploration() { cameraDistance_=24; cameraHeight_=22; cameraPitch_=.62f; cameraAngle_=0;
-        cameraFov_=.9f; referenceFov_=.9f; followPlayerMode_=true; currentStageIndex_=1; cameraDirty_=true; }
+    void ConfigureExploration() {
+        cameraDistance_ = 24;
+        cameraHeight_ = 22;
+        cameraPitch_ = .62f;
+        cameraAngle_ = 0;
+        cameraFov_ = .9f;
+        referenceFov_ = .9f;
+        followPlayerMode_ = true;
+        currentStageIndex_ = 1;
+        cameraDirty_ = true;
+    }
 
     /// <summary>
     /// 毎フレームの入力情報からカメラ位置を計算・更新します。
@@ -33,7 +57,7 @@ public:
     /// <param name="input">入力管理オブジェクト</param>
     /// <param name="camera">操作対象のカメラ</param>
     /// <param name="winApp">ウィンドウ管理オブジェクト</param>
-    void Update(Input* input, Camera* camera, WinApp* winApp,Player*player);
+    void Update(Input *input, Camera *camera, WinApp *winApp, Player *player, bool placementMode = false);
 
     /// <summary>
     /// 現在のカメラ横回転角度（ラジアン）を取得します。
@@ -66,29 +90,42 @@ public:
     /// </summary>
     void SetPitch(float pitch) { cameraPitch_ = pitch; }
 
-    void SetFollowPlayerMode(bool follow) { followPlayerMode_ = follow; cameraDirty_ = true; }
+    void SetFollowPlayerMode(bool follow) {
+        followPlayerMode_ = follow;
+        cameraDirty_ = true;
+    }
+    // プレイヤー追従とステージ俯瞰を切り替え、注視点を調整する。
+    void TogglePlayerFollow(Player *player) {
+        SetFollowPlayerMode(!followPlayerMode_);
+        if (followPlayerMode_ && player) {
+            auto pivot = player->GetPosition();
+            pivot.y += .8f;
+            SetCameraPivot(pivot);
+        }
+    }
+
     bool IsFollowPlayerMode() const { return followPlayerMode_; }
-    void SetCameraPivot(const Vector3& pivot) { cameraPivot_ = pivot; cameraDirty_ = true; }
+    void SetCameraPivot(const Vector3 &pivot) {
+        cameraPivot_ = pivot;
+        cameraDirty_ = true;
+    }
 
     /// <summary>
     /// カメラ位置と角度をデフォルト状態にリセットし、即座に反映します。
     /// </summary>
-    void ResetCamera(Camera* camera,Player*player, const StageMap& stageMap, int stageIndex);
+    void ResetCamera(Camera *camera, Player *player, const StageMap &stageMap, int stageIndex);
 
     bool IsWallTransparencyEnabled() const { return enableWallTransparency_; }
 
-    float GetWallTransparencyAlpha() const {
-        return wallTransparencyAlpha_;
-    }
+    float GetWallTransparencyAlpha() const { return wallTransparencyAlpha_; }
 
-private:
-    void ApplyCamera(Camera* camera);
-private:
+  private:
+    void ApplyCamera(Camera *camera);
 
+  private:
     // カメラの極座標パラメータ
-    float cameraAngle_ = 0.0f; // 水平方向の回転角度
+    float cameraAngle_ = 0.0f;  // 水平方向の回転角度
     float cameraPitch_ = 0.75f; // 垂直方向の見下ろし角度
-
 
     //ズーム制限
     float minDistance_ = 18.0f;
@@ -102,13 +139,12 @@ private:
     float minFov_ = 0.25f;
     float maxFov_ = 1.0f;
 
-    Vector3 cameraPivot_ = { 4.0f, 9.0f, 4.5f };
+    Vector3 cameraPivot_ = {4.0f, 9.0f, 4.5f};
     float cameraDistance_ = 35.0f;
     float cameraHeight_ = 20.0f;
 
     bool cameraDirty_ = true;
 
-    
     float initialPivotYOffset_ = 8.0f;
     bool followPlayerMode_ = true;
 
@@ -131,6 +167,6 @@ private:
     //透過の強さ
     float wallTransparencyAlpha_ = 0.25f;
 
-    public:
-        int currentStageIndex_ = 0;
+  public:
+    int currentStageIndex_ = 0;
 };

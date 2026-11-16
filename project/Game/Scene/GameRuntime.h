@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <memory>
 #include <filesystem>
@@ -30,7 +30,7 @@
 #include "MapCursor.h"
 #include "StageMap.h"
 #include "StageRenderer.h"
-#include"PlayerBasePosition.h"
+#include "PlayerBasePosition.h"
 
 #include "GameplayUIManager.h"
 #include "BlockInventoryUI.h"
@@ -64,7 +64,7 @@
 /// ゲーム全体の更新順序を調整するオーケストレーター。
 /// 個別機能の実装と状態はControllerへ委譲し、このクラスは接続と実行順序を担当する。
 class GameRuntime {
-public:
+  public:
     void Initialize();
     void Update();
     void Draw();
@@ -78,26 +78,28 @@ public:
     void EnterStageSelectFromTitle();
     void SetTitleCloudsEnabled(bool enabled);
     void UpdateTitleDayNightCycle(float elapsedSeconds);
-    void SyncTitleCamera(const Vector3& position, const Vector3& rotation);
+    void SyncTitleCamera(const Vector3 &position, const Vector3 &rotation);
     SceneType GetCurrentSceneType() const;
 
-    Object3dCommon* GetObject3dCommon() const { return object3dCommon.get(); }
-    Input* GetInput() const { return input.get(); }
+    Object3dCommon *GetObject3dCommon() const { return object3dCommon.get(); }
+    Input *GetInput() const { return input.get(); }
     float GetEnvironmentTimeScale() const { return environmentTimeScale_; }
 
     void RunTitleScene();
     void RunStageSelectScene();
     void RunGameClearScene(bool celebrationReady);
+    int GetResultPageIndex() const;
+    bool IsResultAnimationVisible();
     void RunDebugViewScene();
     void RunStageEditorScene();
     void RunGamePlayScene();
     void RunGamePlayBlockPlaceScene();
-    void RunSkinningEditorScene(const SceneUpdateContext& context);
+    void RunSkinningEditorScene(const SceneUpdateContext &context);
     void RunEffectPreviewScene();
     void RunEffectShowcaseScene();
     void RunPostEffectShowcaseScene();
 
-private:
+  private:
     // 実行中の画面種別。SceneTypeとゲーム内部の更新分岐を対応付ける。
     enum class AppMode {
         Title,
@@ -131,21 +133,21 @@ private:
     };
 
     // エンジン基盤。生成と破棄はGameRuntimeLifecycle.cppへ集約している。
-    std::unique_ptr<WinApp>         winApp;
-    std::unique_ptr<DirectXCommon>  dxCommon;
-    std::unique_ptr<Input>          input;
-    std::unique_ptr<SrvManager>     srvManager;
+    std::unique_ptr<WinApp> winApp;
+    std::unique_ptr<DirectXCommon> dxCommon;
+    std::unique_ptr<Input> input;
+    std::unique_ptr<SrvManager> srvManager;
     std::unique_ptr<TextureManager> textureManager;
-    std::unique_ptr<SpriteCommon>   spriteCommon;
+    std::unique_ptr<SpriteCommon> spriteCommon;
     std::unique_ptr<Object3dCommon> object3dCommon;
-    std::unique_ptr<ParticleManager>particleManager;
+    std::unique_ptr<ParticleManager> particleManager;
 
     std::vector<std::unique_ptr<Object3d>> objectList;
-    std::vector<std::unique_ptr<Model>>    models;
+    std::vector<std::unique_ptr<Model>> models;
 
     // Blenderから読み込んだ通常ゲーム用レベルと、その有効状態。
     BlenderRuntimeLevel blenderRuntimeLevel_;
-    std::array<char, 260> blenderLevelPath_{ "Resources/Levels/game_level.json" };
+    std::array<char, 260> blenderLevelPath_{"Resources/Levels/game_level.json"};
     bool blenderStageActive_ = false;
     std::filesystem::file_time_type blenderLevelWriteTime_{};
     std::filesystem::file_time_type pendingBlenderLevelWriteTime_{};
@@ -154,37 +156,37 @@ private:
     bool blenderReloadDialogOpen_ = false;
     float blenderLevelChangeStableTime_ = 0.0f;
 
-    std::unique_ptr<Sprite>       sprite;
-    std::unique_ptr<Camera>       camera;
-    std::unique_ptr<StageRenderer>stageRenderer_;
-    std::unique_ptr<MapCursor>    mapCursor_;
-    std::unique_ptr<Player>       player_;
+    std::unique_ptr<Sprite> sprite;
+    std::unique_ptr<Camera> camera;
+    std::unique_ptr<StageRenderer> stageRenderer_;
+    std::unique_ptr<MapCursor> mapCursor_;
+    std::unique_ptr<Player> player_;
 
-    std::unique_ptr<Model>   terrainModel_;
-    std::unique_ptr<Object3d>terrainObject_;
-    std::unique_ptr<Object3d>effectShowcaseGround_;
-    std::unique_ptr<Model>   skydomeModel_;
-    std::unique_ptr<Object3d>skydomeObject_;
-    std::unique_ptr<Skybox>  skybox_;
+    std::unique_ptr<Model> terrainModel_;
+    std::unique_ptr<Object3d> terrainObject_;
+    std::unique_ptr<Object3d> effectShowcaseGround_;
+    std::unique_ptr<Model> skydomeModel_;
+    std::unique_ptr<Object3d> skydomeObject_;
+    std::unique_ptr<Skybox> skybox_;
     uint32_t skyboxTextureHandle_ = 0;
-    bool     showSkyboxCubemap_ = false;
+    bool showSkyboxCubemap_ = false;
 
-    std::unique_ptr<ShadowMap>    shadowMap_;
-    std::unique_ptr<LightCamera>  lightCamera_;
+    std::unique_ptr<ShadowMap> shadowMap_;
+    std::unique_ptr<LightCamera> lightCamera_;
 
     // シーン生成と現在シーンの管理。
     SceneFactory sceneFactory_;
-    SceneManager* sceneManager_ = nullptr;
-    std::unique_ptr<StageSelect>    stageSelect_;
+    SceneManager *sceneManager_ = nullptr;
+    std::unique_ptr<StageSelect> stageSelect_;
 
     std::unique_ptr<GameplayUIManager> gameplayUIManager_;
-    std::unique_ptr<BlockInventoryUI>  blockInventoryUI_;
-    std::unique_ptr<Sprite>            tutorialSprite_;
-    std::unique_ptr<Sprite>            placementTutorialSprite_;
-    std::unique_ptr<Sprite>            inventoryTutorialSprite_;
-    std::unique_ptr<Sprite>            controllerTutorialSprite_;
-    std::unique_ptr<Sprite>            controllerPlacementTutorialSprite_;
-    std::unique_ptr<Sprite>            controllerInventoryTutorialSprite_;
+    std::unique_ptr<BlockInventoryUI> blockInventoryUI_;
+    std::unique_ptr<Sprite> tutorialSprite_;
+    std::unique_ptr<Sprite> placementTutorialSprite_;
+    std::unique_ptr<Sprite> inventoryTutorialSprite_;
+    std::unique_ptr<Sprite> controllerTutorialSprite_;
+    std::unique_ptr<Sprite> controllerPlacementTutorialSprite_;
+    std::unique_ptr<Sprite> controllerInventoryTutorialSprite_;
 
     uint32_t objectiveGuideTexture_ = 0;
     uint32_t stageSelectGuideTexture_ = 0;
@@ -211,71 +213,71 @@ private:
     bool useRecoveryTransition_ = false;
 
     // 長期的な状態を持つ機能は専用Controllerへ委譲する。
-    GameplayCameraController  gameplayCameraController_;
-    StageEditorController     stageEditorController_;
-    SkinningEditorController  skinningEditor_;
-    PostProcessRenderer       postProcess_;
+    GameplayCameraController gameplayCameraController_;
+    StageEditorController stageEditorController_;
+    SkinningEditorController skinningEditor_;
+    PostProcessRenderer postProcess_;
     PostEffectShowcaseController postEffectShowcaseController_;
     EffectShowcaseController effectShowcaseController_;
-    bool                      skinningEditorInitialized_ = false;
-    bool                      postProcessInitialized_ = false;
+    bool skinningEditorInitialized_ = false;
+    bool postProcessInitialized_ = false;
 
-    BlockInventory           blockInventory_;
-    BubblePickupController   bubblePickupController_;
+    BlockInventory blockInventory_;
+    BubblePickupController bubblePickupController_;
     BlockPlacementController blockPlacementController_;
 
-    StageMap             stageMap_;
-    StageMap             backupMap_;
+    StageMap stageMap_;
+    StageMap backupMap_;
     StageRespawnController stageRespawnController_;
 
     PlayerBasePosition playerBasePosition_;
-
 
     // BGM音源と再生状態はController側が所有する。
     GameBgmController bgmController_;
 
     // フレームをまたいで保持するランタイム状態。
-    AppMode        currentMode_ = AppMode::DebugView;
-    AppMode        prevMode_ = AppMode::DebugView;
+    AppMode currentMode_ = AppMode::DebugView;
+    AppMode prevMode_ = AppMode::DebugView;
     DebugDrawFlags debugFlags_;
-    bool           isGoalReached_ = false;
-    float          goalCelebrationTimer_ = 0.0f;
-    float          gameClearTimer_ = 0.0f;
-    float          gameClearFireworkTimer_ = 0.0f;
-    bool           gameClearCelebrationStarted_ = false;
-    float          titleTimer_ = 0.0f;
-    float          gameplayDayNightTimer_ = 0.0f;
-    float          environmentTimeScale_ = 4.0f;
-    int            environmentTimeScaleIndex_ = 2;
-    bool           gameplayDayNightActive_ = false;
-    bool           titleDayNightActive_ = false;
-    Vector4        gameplaySkyTint_ = { 1.0f, 1.0f, 1.0f, 1.0f };
+    bool isGoalReached_ = false;
+    float goalCelebrationTimer_ = 0.0f;
+    float gameClearTimer_ = 0.0f;
+    float gameClearFireworkTimer_ = 0.0f;
+    bool gameClearCelebrationStarted_ = false;
+    float titleTimer_ = 0.0f;
+    float gameplayDayNightTimer_ = 0.0f;
+    float environmentTimeScale_ = 4.0f;
+    int environmentTimeScaleIndex_ = 2;
+    bool gameplayDayNightActive_ = false;
+    bool titleDayNightActive_ = false;
+    Vector4 gameplaySkyTint_ = {1.0f, 1.0f, 1.0f, 1.0f};
     std::chrono::steady_clock::time_point objectiveGuideStartedAt_{};
-    bool           objectiveGuideActive_ = false;
-    Vector3        goalGuideTarget_ = { 0.0f, 0.0f, 0.0f };
-    bool           hasGoalGuideTarget_ = false;
-    bool           isGamePaused_ = false;
-    bool           isGoalBlocked_ = false;
-    int            placeableBlockCount_ = 0;
-    float          totalTime_ = 0.0f;
+    bool objectiveGuideActive_ = false;
+    Vector3 goalGuideTarget_ = {0.0f, 0.0f, 0.0f};
+    bool hasGoalGuideTarget_ = false;
+    bool isGamePaused_ = false;
+    bool isGoalBlocked_ = false;
+    int placeableBlockCount_ = 0;
+    float totalTime_ = 0.0f;
     SceneFadePhase sceneFadePhase_ = SceneFadePhase::None;
-    SceneType      pendingSceneType_ = SceneType::DebugView;
-    float          sceneFadeAlpha_ = 0.0f;
-    float          sceneFadeHoldRemaining_ = 0.0f;
+    SceneType pendingSceneType_ = SceneType::DebugView;
+    float sceneFadeAlpha_ = 0.0f;
+    float sceneFadeHoldRemaining_ = 0.0f;
     std::chrono::steady_clock::time_point sceneFadeLastUpdate_{};
 
-    bool  useFirstPersonCamera_ = false;
+    bool useFirstPersonCamera_ = false;
     float fpsCameraYaw_ = 0.0f;
     float fpsCameraPitch_ = 0.0f;
     float fpsCameraFov_ = 0.9f;
     float placeRotationY_ = 0.0f;
+    bool placeMouseWasDown_ = false;
     float playerGlow_ = 0.0f;
-    float playerLightIntensity_ = 4.0f;
-    Vector4 playerLightColor_ = { 0.68f, 0.84f, 1.0f, 1.0f };
+    float playerLightIntensity_ = 1.6f;
+    Vector4 playerLightColor_ = {1.0f, 0.90f, 0.70f, 1.0f};
     float debugObjectEnvironmentCoefficient_ = 0.25f;
     float terrainEnvironmentCoefficient_ = 0.0f;
     float playerEnvironmentCoefficient_ = 0.0f;
-    Vector3 effectPreviewPosition_ = { 0.0f, 1.0f, 0.0f };
+    Vector3 effectPreviewPosition_ = {0.0f, 1.0f, 0.0f};
     float effectPreviewTimer_ = 0.0f;
     float effectPreviewInterval_ = 1.0f;
     bool effectPreviewAutoPlay_ = false;
@@ -287,11 +289,11 @@ private:
     int effectPreviewBurstCount_ = 1;
     float effectPreviewBurstRadius_ = 0.0f;
     ParticleManager::HitEffectSettings effectPreviewHitSettings_{};
-    std::array<char, 64> effectPresetNameBuffer_{ "CinematicFinisher" };
+    std::array<char, 64> effectPresetNameBuffer_{"CinematicFinisher"};
     std::vector<std::string> effectPresetNames_;
     int effectPresetSelectedIndex_ = -1;
     std::string effectPresetStatus_ = "Preset: not loaded";
-    std::array<char, 64> stormPresetNameBuffer_{ "Tempest Storm" };
+    std::array<char, 64> stormPresetNameBuffer_{"Tempest Storm"};
     std::vector<std::string> stormPresetNames_;
     std::vector<std::string> stormShowcasePresetNames_;
     int stormPresetSelectedIndex_ = -1;
@@ -302,7 +304,6 @@ private:
     StormEffectEditorController stormEffectEditor_;
     HitEffectEditorView hitEffectEditorView_;
     WeatherRuntimeController weatherRuntimeController_;
-
 
     // 以下は責務別cppから呼ばれる内部処理。公開APIには露出させない。
     void UpdateImGui();
@@ -334,27 +335,38 @@ private:
     void UpdateSharedCameraControls(bool isGuiCaptured);
     void UpdateBackgroundObjects();
     void UpdateParticleDebugVisibility();
-    void UpdateCurrentMode(const Matrix4x4& lightVP, bool isGuiCaptured);
-    void UpdatePlayerCameraAndTransform(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
+    void UpdateCurrentMode(const Matrix4x4 &lightVP, bool isGuiCaptured);
+    void UpdatePlayerCameraAndTransform(const Matrix4x4 &view, const Matrix4x4 &proj, const Matrix4x4 &lightVP);
     bool IsWindowInactive();
-    void UpdateDebugAndEffectObjects(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
-    void UpdateStagePresentation(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
+    void UpdateDebugAndEffectObjects(const Matrix4x4 &view, const Matrix4x4 &proj, const Matrix4x4 &lightVP);
+    void UpdateStagePresentation(const Matrix4x4 &view, const Matrix4x4 &proj, const Matrix4x4 &lightVP);
     bool ApplyRuntimePlayerSpawn();
     bool LoadBlenderStage(bool beginPlay);
     void UpdateBlenderLevelFileWatch();
     void SyncBlenderLevelWriteTime();
-    void UpdateRuntimeLevelObjects(const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP);
+    void UpdateRuntimeLevelObjects(const Matrix4x4 &view, const Matrix4x4 &proj, const Matrix4x4 &lightVP);
     void DrawRuntimeLevelObjects();
-    void DrawRuntimeLevelShadows(const Matrix4x4& lightVP);
+    void DrawRuntimeLevelShadows(const Matrix4x4 &lightVP);
     bool IsRuntimeLevelVisible() const;
-    void UpdateWeatherParticles(const Matrix4x4& view, const Matrix4x4& proj);
-    void ApplySceneLighting(const Vector3& lightDir);
+    void UpdateWeatherParticles(const Matrix4x4 &view, const Matrix4x4 &proj);
+    void ApplySceneLighting(const Vector3 &lightDir);
     void UpdateClearColorForFrame();
     void UpdateGameplayUserInterface();
     void RenderScene();
+    void RenderUi();
     void DrawCollisionDebugBoxes();
     void DrawSkyboxForFrame();
     bool IsPlayerHiddenByWall() const;
+    bool ShouldShowPlayerOcclusion() const;
+    bool showControlHelp_ = false;
+    bool rotationTrial_ = false;
+    int rotationResultPage_ = 4;
+    bool editorPlayTest_ = false;
+    int objectiveKeyTotal_ = 0;
+    int shownKeyCount_ = -1, shownKeyTotal_ = -1;
+    std::unique_ptr<Sprite> keyProgressSprite_;
+    void DrawPlayerOcclusionMarker();
+    std::unique_ptr<Sprite> playerOcclusionMarker_;
 
     void InitializeCaptureTools();
     void UpdateCaptureTools();
@@ -364,46 +376,45 @@ private:
     void BeginBuildTrial();
     void BeginDiorama();
     void UpdateDioramaCapture();
-    void UpdateDioramaDetail(const std::string& shot);
+    void UpdateDioramaDetail(const std::string &shot);
     void UpdateComplexCapture();
     void UpdateComplexRouteCapture();
     bool VerifyComplexParts();
-    bool complexChecksPassed_=false;
+    bool complexChecksPassed_ = false;
     void UpdateBuildTrial();
     void VerifyBuilding();
-    bool buildTrial_=false, buildCapture_=false, buildAction_=false;
-    bool dioramaCapture_=false;
-    int buildStep_=0;
-    bool buildReached_=false;
-    int buildStatus_=0;
-    std::array<std::unique_ptr<Sprite>,12> buildLabels_;
+    bool buildTrial_ = false, buildCapture_ = false, buildAction_ = false;
+    bool dioramaCapture_ = false;
+    int buildStep_ = 0;
+    bool buildReached_ = false;
+    int buildStatus_ = 0;
+    std::array<std::unique_ptr<Sprite>, 12> buildLabels_;
     std::chrono::steady_clock::time_point placementFeedbackUntil_{};
     int PlacementStatus(Placement::Reason reason) const;
-    std::array<std::unique_ptr<Sprite>,2> buildCounts_;
+    std::array<std::unique_ptr<Sprite>, 2> buildCounts_;
     FogExplorer fogExplorer_;
-    bool fogTrial_=false, showRecorder_=false;
-    bool comparisonActive_=false, comparisonRecordingStarted_=false, comparisonScanned_=false;
-    bool trialVerification_=false, verifyGround_=false, verifyScan_=false, verifyPause_=false, verifyLock_=false, verifyPickup_=false;
-    int verifyFrame_=0;
-    float verifyCooldown_=0;
-    int comparisonMode_=2;
+    bool fogTrial_ = false, showRecorder_ = false;
+    bool comparisonActive_ = false, comparisonRecordingStarted_ = false, comparisonScanned_ = false;
+    bool trialVerification_ = false, verifyGround_ = false, verifyScan_ = false, verifyPause_ = false,
+         verifyLock_ = false, verifyPickup_ = false;
+    int verifyFrame_ = 0;
+    float verifyCooldown_ = 0;
+    int comparisonMode_ = 2;
     std::chrono::steady_clock::time_point comparisonStarted_{}, fogUpdatedAt_{};
-    std::array<std::unique_ptr<Sprite>,5> fogLabels_;
+    std::array<std::unique_ptr<Sprite>, 5> fogLabels_;
     std::unique_ptr<Sprite> scanMeter_;
 
     void LoadEffectPresetNames();
-    bool SaveEffectPreset(const std::string& name);
-    bool LoadEffectPreset(const std::string& name);
+    bool SaveEffectPreset(const std::string &name);
+    bool LoadEffectPreset(const std::string &name);
     void DrawEffectPreviewEditorImGui();
     void DrawStormEffectEditorImGui();
     void DrawEffectShowcaseImGui();
     void DrawPostEffectShowcaseImGui();
     void LoadStormPresetNames();
-    bool SaveStormPreset(const std::string& name);
-    bool LoadStormPreset(const std::string& name);
+    bool SaveStormPreset(const std::string &name);
+    bool LoadStormPreset(const std::string &name);
     bool IsCurrentEffectStorm() const;
 
-    Object3d* CreateObject(Model* model, Vector3 initialPosition);
-
-
+    Object3d *CreateObject(Model *model, Vector3 initialPosition);
 };

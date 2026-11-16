@@ -1,3 +1,4 @@
+# 箱庭マップの足場と経路を検査する。
 """Check walking/climbing connectivity; this does not simulate human input."""
 from pathlib import Path
 from collections import deque
@@ -13,6 +14,7 @@ def valid(x,h,z):
     return (0<=x<16 and 0<=h<9 and 0<=z<16 and
             not solid(x,h+1,z) and not solid(x,h+2,z) and
             (solid(x,h,z) or ladder(x,h,z)))
+# 移動可能な足場を探索し、指定地点まで到達できるか調べる。
 def reachable():
     seen={(4,2,3)};q=deque(seen)
     while q:

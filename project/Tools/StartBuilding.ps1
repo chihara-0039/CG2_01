@@ -1,3 +1,4 @@
+# 足場づくりの試験モードを設定してゲームを起動する。
 param([switch]$Verify)
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent

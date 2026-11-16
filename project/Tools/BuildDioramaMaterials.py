@@ -1,3 +1,4 @@
+# 箱庭表現の地形に使う色・模様のテクスチャを生成する。
 """Deterministic original grass/stone/wood atlas and per-face cube meshes."""
 from pathlib import Path
 from PIL import Image,ImageDraw

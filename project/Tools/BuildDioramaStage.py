@@ -1,3 +1,4 @@
+# 箱庭の見た目と経路を確認するステージを生成する。
 """Original miniature ruin: two three-cell gaps and an elevated lookout."""
 from pathlib import Path
 

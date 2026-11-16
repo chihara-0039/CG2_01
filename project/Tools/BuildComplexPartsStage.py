@@ -1,3 +1,4 @@
+# 複雑なパーツの回収・配置を確認する試験ステージを生成する。
 """Original concave, mixed-height and hollow 3x3x3 part fixtures."""
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]

@@ -1,4 +1,5 @@
 16 8 16
+VISUAL_STYLE Miniature
 PRESET "Sunny (Default)"
 ENVIRONMENT 0.1 0.4 0.8 1 1 1 1 0.9 0.5 -1 0.5
 PART 1 2 0.9 0.3 0.3 L-SHIELD
