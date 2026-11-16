@@ -17,12 +17,12 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// マスクとしきい値を比較し、消去範囲と境界の色を合成する。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
 
-    float32_t mask = maskIndex == 0
-        ? gMaskTexture0.Sample(gSamplerLinear, input.texcoord).r
-        : gMaskTexture1.Sample(gSamplerLinear, input.texcoord).r;
+    float32_t mask = maskIndex == 0 ? gMaskTexture0.Sample(gSamplerLinear, input.texcoord).r
+                                    : gMaskTexture1.Sample(gSamplerLinear, input.texcoord).r;
 
     if (mask <= threshold) {
         discard;

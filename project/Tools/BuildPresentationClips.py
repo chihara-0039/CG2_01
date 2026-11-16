@@ -1,3 +1,4 @@
+# 紹介映像に使う撮影素材を、用途ごとのクリップへまとめる。
 """Presentation-only captions; engine recordings remain intact."""
 from pathlib import Path
 from PIL import Image,ImageDraw,ImageFont

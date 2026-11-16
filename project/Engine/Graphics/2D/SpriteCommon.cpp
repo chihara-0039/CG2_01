@@ -3,7 +3,8 @@
 
 using Microsoft::WRL::ComPtr;
 
-void SpriteCommon::Initialize(DirectXCommon* dxCommon) {
+// 2Dスプライトの共有描画設定を準備し、初期値と必要なリソースを設定する。
+void SpriteCommon::Initialize(DirectXCommon *dxCommon) {
     assert(dxCommon);
     dxCommon_ = dxCommon;
 
@@ -13,6 +14,7 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon) {
     CreateGraphicsPipeline();
 }
 
+// 2Dスプライトの共有描画設定に使うパイプラインと参照先をコマンドリストへ設定する。
 void SpriteCommon::PreDraw() {
     assert(dxCommon_);
     auto commandList = dxCommon_->GetCommandList();
@@ -21,6 +23,7 @@ void SpriteCommon::PreDraw() {
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
+// シェーダーへ渡す定数・テクスチャの配置を定義する。
 void SpriteCommon::CreateRootSignature() {
     HRESULT hr = S_FALSE;
 
@@ -71,15 +74,18 @@ void SpriteCommon::CreateRootSignature() {
     // シリアライズと作成
     Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
     Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
-    hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+    hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob,
+                                     &errorBlob);
     if (FAILED(hr)) {
-        OutputDebugStringA(reinterpret_cast<char*>(errorBlob->GetBufferPointer()));
+        OutputDebugStringA(reinterpret_cast<char *>(errorBlob->GetBufferPointer()));
         assert(false);
     }
-    hr = dxCommon_->GetDevice()->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
+    hr = dxCommon_->GetDevice()->CreateRootSignature(0, signatureBlob->GetBufferPointer(),
+                                                     signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
     assert(SUCCEEDED(hr));
 }
 
+// 頂点形式・シェーダー・深度・合成方法をまとめた描画設定を作成する。
 void SpriteCommon::CreateGraphicsPipeline() {
     auto device = dxCommon_->GetDevice();
     auto vsBlob = dxCommon_->CompileShader(L"Resources/shaders/hlsl/Sprite.VS.hlsl", L"vs_6_0");
@@ -88,16 +94,16 @@ void SpriteCommon::CreateGraphicsPipeline() {
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
         // 座標は float4 なので 4 * 4 = 16バイト
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         // そのため、次の要素はオフセット 16 から始まる必要があります
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
     psoDesc.pRootSignature = rootSignature_.Get();
-    psoDesc.InputLayout = { inputElementDescs, 2 };
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.InputLayout = {inputElementDescs, 2};
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;

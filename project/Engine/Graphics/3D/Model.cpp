@@ -8,13 +8,17 @@
 
 using namespace Microsoft::WRL;
 
-std::unique_ptr<Model> Model::CreateFromOBJ(DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename, TextureManager* textureManager) {
+// OBJを読み込み、描画可能なモデルとして返す。
+std::unique_ptr<Model> Model::CreateFromOBJ(DirectXCommon *dxCommon, const std::string &directoryPath,
+                                            const std::string &filename, TextureManager *textureManager) {
     std::unique_ptr<Model> model = std::make_unique<Model>();
     model->Initialize(dxCommon, directoryPath, filename, textureManager);
     return model;
 }
 
-void Model::Initialize(DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename, TextureManager* textureManager) {
+// 3Dモデルを準備し、初期値と必要なリソースを設定する。
+void Model::Initialize(DirectXCommon *dxCommon, const std::string &directoryPath, const std::string &filename,
+                       TextureManager *textureManager) {
     // OBJから頂点、法線、UV、インデックス、MTLのテクスチャパスを読み込む。
     LoadObjFile(directoryPath, filename);
 
@@ -33,7 +37,8 @@ void Model::Initialize(DirectXCommon* dxCommon, const std::string& directoryPath
     }
 }
 
-void Model::LoadObjFile(const std::string& directoryPath, const std::string& filename) {
+// OBJの位置・UV・法線・面を読み、頂点列へ展開する。
+void Model::LoadObjFile(const std::string &directoryPath, const std::string &filename) {
     textureFilePath_.clear();
     textureHandle_ = 0;
     const std::string fullPath = directoryPath + "/" + filename;
@@ -135,10 +140,9 @@ void Model::LoadObjFile(const std::string& directoryPath, const std::string& fil
         }
     }
 
-    const std::string report =
-        "Read Lines: " + std::to_string(lineCount) +
-        ", Parsed Vertices: " + std::to_string(vertices_.size()) +
-        ", Parsed Indices: " + std::to_string(indices_.size()) + "\n";
+    const std::string report = "Read Lines: " + std::to_string(lineCount) +
+                               ", Parsed Vertices: " + std::to_string(vertices_.size()) +
+                               ", Parsed Indices: " + std::to_string(indices_.size()) + "\n";
     OutputDebugStringA(report.c_str());
 
     if (vertices_.empty()) {
@@ -146,6 +150,7 @@ void Model::LoadObjFile(const std::string& directoryPath, const std::string& fil
     }
 }
 
+// モデル読み込み失敗時にも形状を確認できる代替ボックスを作る。
 void Model::CreateRecoveryBox() {
     // 左手座標系の頂点を直接作るため、OBJ用のZ反転は不要。
     // 素材が失われても衝突やシーン更新の処理はそのまま動作する。
@@ -153,18 +158,15 @@ void Model::CreateRecoveryBox() {
     indices_.clear();
     textureFilePath_.clear();
     textureHandle_ = 0; // TextureManagerの白テクスチャ
-    const Vector3 normals[6] = {
-        {0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, -1, 0}
-    };
+    const Vector3 normals[6] = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
     const Vector4 faces[6][4] = {
-        {{-.5f,-.5f,-.5f,1},{-.5f,.5f,-.5f,1},{.5f,.5f,-.5f,1},{.5f,-.5f,-.5f,1}},
-        {{.5f,-.5f,.5f,1},{.5f,.5f,.5f,1},{-.5f,.5f,.5f,1},{-.5f,-.5f,.5f,1}},
-        {{-.5f,-.5f,.5f,1},{-.5f,.5f,.5f,1},{-.5f,.5f,-.5f,1},{-.5f,-.5f,-.5f,1}},
-        {{.5f,-.5f,-.5f,1},{.5f,.5f,-.5f,1},{.5f,.5f,.5f,1},{.5f,-.5f,.5f,1}},
-        {{-.5f,.5f,-.5f,1},{-.5f,.5f,.5f,1},{.5f,.5f,.5f,1},{.5f,.5f,-.5f,1}},
-        {{-.5f,-.5f,.5f,1},{-.5f,-.5f,-.5f,1},{.5f,-.5f,-.5f,1},{.5f,-.5f,.5f,1}}
-    };
-    const Vector2 uv[4] = {{0,1}, {0,0}, {1,0}, {1,1}};
+        {{-.5f, -.5f, -.5f, 1}, {-.5f, .5f, -.5f, 1}, {.5f, .5f, -.5f, 1}, {.5f, -.5f, -.5f, 1}},
+        {{.5f, -.5f, .5f, 1}, {.5f, .5f, .5f, 1}, {-.5f, .5f, .5f, 1}, {-.5f, -.5f, .5f, 1}},
+        {{-.5f, -.5f, .5f, 1}, {-.5f, .5f, .5f, 1}, {-.5f, .5f, -.5f, 1}, {-.5f, -.5f, -.5f, 1}},
+        {{.5f, -.5f, -.5f, 1}, {.5f, .5f, -.5f, 1}, {.5f, .5f, .5f, 1}, {.5f, -.5f, .5f, 1}},
+        {{-.5f, .5f, -.5f, 1}, {-.5f, .5f, .5f, 1}, {.5f, .5f, .5f, 1}, {.5f, .5f, -.5f, 1}},
+        {{-.5f, -.5f, .5f, 1}, {-.5f, -.5f, -.5f, 1}, {.5f, -.5f, -.5f, 1}, {.5f, -.5f, .5f, 1}}};
+    const Vector2 uv[4] = {{0, 1}, {0, 0}, {1, 0}, {1, 1}};
     for (int face = 0; face < 6; ++face) {
         const uint32_t base = static_cast<uint32_t>(vertices_.size());
         for (int corner = 0; corner < 4; ++corner) {
@@ -175,15 +177,17 @@ void Model::CreateRecoveryBox() {
             vertices_.push_back(vertex);
         }
         // OBJのZ反転後と同じ巻き順にし、既存PSOのFrontCounterClockwiseに合わせる。
-        indices_.insert(indices_.end(), {base, base+2, base+1, base, base+3, base+2});
+        indices_.insert(indices_.end(), {base, base + 2, base + 1, base, base + 3, base + 2});
     }
 }
 
-void Model::CreateBuffers(DirectXCommon* dxCommon) {
+// モデル描画や変形に使う頂点・定数などのGPUバッファを確保する。
+void Model::CreateBuffers(DirectXCommon *dxCommon) {
     auto device = dxCommon->GetDevice();
     const UINT vertexBufferSize = static_cast<UINT>(sizeof(ModelVertexData) * vertices_.size());
 
-    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
     D3D12_RESOURCE_DESC resourceDesc = {};
     resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resourceDesc.Width = vertexBufferSize;
@@ -194,17 +198,17 @@ void Model::CreateBuffers(DirectXCommon* dxCommon) {
     resourceDesc.SampleDesc.Count = 1;
 
     // 頂点バッファをUpload Heapに作成し、CPUから直接書き込めるようにする。
-    HRESULT resultCode = device->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer_));
+    HRESULT resultCode =
+        device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+                                        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer_));
 
     if (FAILED(resultCode)) {
         assert(false && "Failed to create Vertex Buffer");
         return;
     }
 
-    ModelVertexData* mappedVertexBuffer = nullptr;
-    resultCode = vertexBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexBuffer));
+    ModelVertexData *mappedVertexBuffer = nullptr;
+    resultCode = vertexBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedVertexBuffer));
     if (SUCCEEDED(resultCode)) {
         std::copy(vertices_.begin(), vertices_.end(), mappedVertexBuffer);
         vertexBuffer_->Unmap(0, nullptr);
@@ -218,17 +222,17 @@ void Model::CreateBuffers(DirectXCommon* dxCommon) {
         const UINT indexBufferSize = static_cast<UINT>(sizeof(uint32_t) * indices_.size());
         resourceDesc.Width = indexBufferSize;
 
-        resultCode = device->CreateCommittedResource(
-            &heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&indexBuffer_));
+        resultCode =
+            device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+                                            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&indexBuffer_));
 
         if (FAILED(resultCode)) {
             assert(false && "Failed to create Index Buffer");
             return;
         }
 
-        uint32_t* mappedIndexBuffer = nullptr;
-        resultCode = indexBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexBuffer));
+        uint32_t *mappedIndexBuffer = nullptr;
+        resultCode = indexBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedIndexBuffer));
         if (SUCCEEDED(resultCode)) {
             std::copy(indices_.begin(), indices_.end(), mappedIndexBuffer);
             indexBuffer_->Unmap(0, nullptr);
@@ -240,7 +244,8 @@ void Model::CreateBuffers(DirectXCommon* dxCommon) {
     }
 }
 
-void Model::LoadMaterialFile(const std::string& directoryPath, const std::string& filename) {
+// MTLから色やテクスチャ参照を読み、モデルの材質へ反映する。
+void Model::LoadMaterialFile(const std::string &directoryPath, const std::string &filename) {
     const std::string fullPath = directoryPath + "/" + filename;
     std::ifstream file(fullPath);
     if (!file.is_open()) {
@@ -261,8 +266,10 @@ void Model::LoadMaterialFile(const std::string& directoryPath, const std::string
             // 元PCの絶対パスがMTLに残っている場合は、同梱画像のbasenameを使う。
             // バックスラッシュも正規化し、空白を含む日本語パスを途中で切らない。
             std::getline(lineStream >> std::ws, textureFilename);
-            for (char& character : textureFilename) {
-                if (character == '\\') character = '/';
+            for (char &character : textureFilename) {
+                if (character == '\\') {
+                    character = '/';
+                }
             }
             if (textureFilename.size() >= 2 && textureFilename.front() == '"' && textureFilename.back() == '"') {
                 textureFilename = textureFilename.substr(1, textureFilename.size() - 2);
@@ -279,7 +286,9 @@ void Model::LoadMaterialFile(const std::string& directoryPath, const std::string
     }
 }
 
-void Model::InitializeFromVertices(DirectXCommon* dxCommon, const std::vector<ModelVertexData>& vertices, uint32_t textureHandle) {
+// 渡された頂点列から描画用バッファと材質を準備する。
+void Model::InitializeFromVertices(DirectXCommon *dxCommon, const std::vector<ModelVertexData> &vertices,
+                                   uint32_t textureHandle) {
     // OBJを介さず、生成済み頂点データからModelを作る。スキニングや手続き型メッシュで使う。
     vertices_ = vertices;
     indices_.clear();
@@ -293,7 +302,8 @@ void Model::InitializeFromVertices(DirectXCommon* dxCommon, const std::vector<Mo
     CreateBuffers(dxCommon);
 }
 
-void Model::UpdateVertexBuffer(const std::vector<ModelVertexData>& vertices) {
+// 更新された頂点列を、描画で参照するバッファへ転送する。
+void Model::UpdateVertexBuffer(const std::vector<ModelVertexData> &vertices) {
     // 頂点数は変えず、中身だけ更新する用途。スキニング済み頂点の反映などで使う。
     if (vertices.size() != vertices_.size()) {
         OutputDebugStringA("Warning: Vertex count mismatch in UpdateVertexBuffer!\n");
@@ -306,15 +316,16 @@ void Model::UpdateVertexBuffer(const std::vector<ModelVertexData>& vertices) {
         return;
     }
 
-    ModelVertexData* mappedVertexBuffer = nullptr;
-    HRESULT resultCode = vertexBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexBuffer));
+    ModelVertexData *mappedVertexBuffer = nullptr;
+    HRESULT resultCode = vertexBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedVertexBuffer));
     if (SUCCEEDED(resultCode)) {
         std::copy(vertices_.begin(), vertices_.end(), mappedVertexBuffer);
         vertexBuffer_->Unmap(0, nullptr);
     }
 }
 
-void Model::Draw(ID3D12GraphicsCommandList* commandList) {
+// 3Dモデルの表示対象を選び、描画コマンドを記録する。
+void Model::Draw(ID3D12GraphicsCommandList *commandList) {
     // バッファがないモデルは描画できないため、何もせず戻る。
     if (!vertexBuffer_) {
         return;
@@ -329,7 +340,8 @@ void Model::Draw(ID3D12GraphicsCommandList* commandList) {
     }
 }
 
-void Model::DrawInstanced(ID3D12GraphicsCommandList* commandList, UINT instanceCount) {
+// 同じモデルを複数の変換でまとめて描き、描画呼び出しを減らす。
+void Model::DrawInstanced(ID3D12GraphicsCommandList *commandList, UINT instanceCount) {
     if (!vertexBuffer_ || instanceCount == 0) {
         return;
     }

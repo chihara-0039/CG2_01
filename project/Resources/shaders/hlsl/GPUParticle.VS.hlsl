@@ -1,12 +1,10 @@
-struct VertexShaderInput
-{
+struct VertexShaderInput {
     float4 position : POSITION0;
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL0;
 };
 
-struct VertexShaderOutput
-{
+struct VertexShaderOutput {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
     float4 color : COLOR0;
@@ -16,8 +14,7 @@ struct VertexShaderOutput
     nointerpolation float shape : TEXCOORD1;
 };
 
-struct Particle
-{
+struct Particle {
     float3 translate;
     float3 velocity;
     float3 scale;
@@ -26,8 +23,7 @@ struct Particle
     float4 color;
 };
 
-struct PerView
-{
+struct PerView {
     float4x4 viewProjection;
     float4x4 billboardMatrix;
 };
@@ -35,8 +31,8 @@ struct PerView
 StructuredBuffer<Particle> gParticles : register(t0);
 ConstantBuffer<PerView> gPerView : register(b0);
 
-VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID)
-{
+// GPU粒子の状態から頂点を変換し、描画用の座標と色を求める。
+VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID) {
     VertexShaderOutput output;
     Particle particle = gParticles[instanceId];
 

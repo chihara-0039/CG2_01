@@ -9,14 +9,14 @@
 #include "externals/imgui/imgui.h"
 
 namespace {
-constexpr const char* kEffectPresetPath = "Resources/presets/effect_presets.json";
-constexpr const char* kStormPresetPath = "Resources/presets/storm_effect_presets.json";
-constexpr const char* kStormShowcaseName = "Tempest Storm";
+constexpr const char *kEffectPresetPath = "Resources/presets/effect_presets.json";
+constexpr const char *kStormPresetPath = "Resources/presets/storm_effect_presets.json";
+constexpr const char *kStormShowcaseName = "Tempest Storm";
 
 // ImGuiの固定長入力欄へ、終端を保証してプリセット名を反映する。
-void CopyPresetName(std::array<char,64>& buffer,const std::string& name) {
+void CopyPresetName(std::array<char, 64> &buffer, const std::string &name) {
     buffer.fill('\0');
-    strncpy_s(buffer.data(),buffer.size(),name.c_str(),_TRUNCATE);
+    strncpy_s(buffer.data(), buffer.size(), name.c_str(), _TRUNCATE);
 }
 } // namespace
 
@@ -31,7 +31,8 @@ void GameRuntime::LoadStormPresetNames() {
     }
 }
 
-bool GameRuntime::SaveStormPreset(const std::string& name) {
+// 嵐の設定を、名前付きプリセットとして保存する。
+bool GameRuntime::SaveStormPreset(const std::string &name) {
     if (name.empty() || !particleManager) {
         stormPresetStatus_ = "Storm preset: invalid name";
         return false;
@@ -57,8 +58,9 @@ bool GameRuntime::SaveStormPreset(const std::string& name) {
     return true;
 }
 
-bool GameRuntime::LoadStormPreset(const std::string& name) {
-    if (!particleManager) { 
+// 指定した嵐の設定を読み、各パラメーターへ反映する。
+bool GameRuntime::LoadStormPreset(const std::string &name) {
+    if (!particleManager) {
         return false;
     }
 
@@ -77,6 +79,7 @@ bool GameRuntime::LoadStormPreset(const std::string& name) {
     return true;
 }
 
+// 保存済みエフェクトの名前を読み、エディタの選択肢を更新する。
 void GameRuntime::LoadEffectPresetNames() {
     LoadStormPresetNames();
 
@@ -90,7 +93,8 @@ void GameRuntime::LoadEffectPresetNames() {
     effectPresetStatus_ = result.status;
 }
 
-bool GameRuntime::SaveEffectPreset(const std::string& name) {
+// 現在のエフェクトを、種類に合うプリセットとして保存する。
+bool GameRuntime::SaveEffectPreset(const std::string &name) {
     EffectPresetStore::HitPreset preset;
     preset.settings = effectPreviewHitSettings_;
     preset.showGpuSphere = effectPreviewShowGPUParticleSphere_;
@@ -114,7 +118,8 @@ bool GameRuntime::SaveEffectPreset(const std::string& name) {
     return true;
 }
 
-bool GameRuntime::LoadEffectPreset(const std::string& name) {
+// 選択したプリセットを読み、エフェクト確認用の設定へ反映する。
+bool GameRuntime::LoadEffectPreset(const std::string &name) {
     EffectPresetStore::HitPreset preset;
     preset.settings = effectPreviewHitSettings_;
     preset.showGpuSphere = effectPreviewShowGPUParticleSphere_;
@@ -146,6 +151,7 @@ bool GameRuntime::LoadEffectPreset(const std::string& name) {
     return true;
 }
 
+// 現在選択しているエフェクトが嵐か判定する。
 bool GameRuntime::IsCurrentEffectStorm() const {
     if (currentMode_ == AppMode::EffectPreview) {
         return effectPreviewStormMode_;
@@ -153,6 +159,7 @@ bool GameRuntime::IsCurrentEffectStorm() const {
     return currentMode_ == AppMode::EffectShowcase && effectShowcaseController_.IsCurrentStorm();
 }
 
+// 現在の設定から、確認用のエフェクトを一度発生させる。
 void GameRuntime::EmitEffectPreviewBurst() {
     if (!particleManager) {
         return;
@@ -181,7 +188,8 @@ void GameRuntime::EmitEffectPreviewBurst() {
 
         ParticleManager::HitEffectSettings burstSettings = settings;
         if (burstSettings.randomizeAngle && burstSettings.angleRandomRange > 0.0f) {
-            std::uniform_real_distribution<float> angleOffset(-burstSettings.angleRandomRange, burstSettings.angleRandomRange);
+            std::uniform_real_distribution<float> angleOffset(-burstSettings.angleRandomRange,
+                                                              burstSettings.angleRandomRange);
             const float randomAngle = angleOffset(randomEngine);
             burstSettings.slashAngle += randomAngle;
             burstSettings.lightningDirection += randomAngle;
@@ -197,12 +205,14 @@ void GameRuntime::EmitEffectPreviewBurst() {
     }
 }
 
+// エフェクト確認中の入力・自動発生・表示状態を更新する。
 void GameRuntime::UpdateEffectPreview() {
     debugFlags_.showParticles = true;
     if (particleManager) {
-        particleManager->SetDrawGPUParticleSphere(effectPreviewStormMode_ ? false : effectPreviewShowGPUParticleSphere_);
+        particleManager->SetDrawGPUParticleSphere(effectPreviewStormMode_ ? false
+                                                                          : effectPreviewShowGPUParticleSphere_);
         if (effectPreviewStormMode_ && !particleManager->IsStormActive()) {
-            particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+            particleManager->SetStormActive(true, {effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z});
         } else if (!effectPreviewStormMode_ && particleManager->IsStormActive()) {
             particleManager->SetStormActive(false);
         }
@@ -212,7 +222,7 @@ void GameRuntime::UpdateEffectPreview() {
         if (effectPreviewStormMode_) {
             particleManager->SetStormActive(false);
             particleManager->ClearParticles();
-            particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+            particleManager->SetStormActive(true, {effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z});
         } else {
             EmitEffectPreviewBurst();
         }
@@ -230,6 +240,7 @@ void GameRuntime::UpdateEffectPreview() {
     }
 }
 
+// プリセット展示の選択と再生を進める。
 void GameRuntime::UpdateEffectShowcase() {
     debugFlags_.showParticles = true;
     debugFlags_.showSkybox = false;
@@ -239,15 +250,15 @@ void GameRuntime::UpdateEffectShowcase() {
 
     const bool returnToStageSelect = effectShowcaseController_.Update(
         *input, particleManager.get(), effectPreviewPosition_,
-        [this](const std::string& name) { LoadStormPreset(name); },
-        [this](const std::string& name) { LoadEffectPreset(name); },
-        [this]() { EmitEffectPreviewBurst(); },
+        [this](const std::string &name) { LoadStormPreset(name); },
+        [this](const std::string &name) { LoadEffectPreset(name); }, [this]() { EmitEffectPreviewBurst(); },
         [this]() { LoadEffectPresetNames(); });
     if (returnToStageSelect) {
         stageSelect_->Initialize(object3dCommon.get(), input.get());
         RequestSceneChange(SceneType::StageSelect);
     }
 }
+// ポストエフェクト展示の切り替えと時間変化を進める。
 void GameRuntime::UpdatePostEffectShowcase() {
     EnsurePostProcessInitialized();
     EnsureTerrainInitialized();

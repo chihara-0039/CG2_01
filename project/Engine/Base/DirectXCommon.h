@@ -7,6 +7,8 @@
 #include <string>
 #include <chrono>
 #include <unordered_map>
+#include <array>
+#include <vector>
 #include "SrvManager.h"
 #include "FrameRecorder.h"
 
@@ -44,14 +46,15 @@ class WinApp;
 //              ImGui のフォント SRV もここに入る。
 // ==============================================================
 class DirectXCommon {
-public:
+  public:
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-public:
-    FrameRecorder& Recorder() { return recorder_; }
+  public:
+    FrameRecorder &Recorder() { return recorder_; }
+    bool IsPerformanceCaptureActive() const { return !performancePath_.empty(); }
 
     DirectXCommon() = default;
-    ~DirectXCommon() = default;
+    ~DirectXCommon();
 
     // -------------------------------------------------------
     //  初期化
@@ -59,7 +62,7 @@ public:
     //  Device / SwapChain / 各ヒープ / Fence / DXC を作成する。
     //  呼び出しは必ずアプリ起動時に 1 回だけ。
     // -------------------------------------------------------
-    void Initialize(WinApp* winApp);
+    void Initialize(WinApp *winApp);
 
     // -------------------------------------------------------
     //  GPU の全コマンド処理完了を CPU 側で待機する。
@@ -77,9 +80,8 @@ public:
     void BeginImGui();
     void EndImGui();
 
-    D3D12_GPU_DESCRIPTOR_HANDLE RegisterImGuiTexture(
-        ID3D12Resource* textureResource,
-        const D3D12_RESOURCE_DESC& resourceDesc);
+    D3D12_GPU_DESCRIPTOR_HANDLE RegisterImGuiTexture(ID3D12Resource *textureResource,
+                                                     const D3D12_RESOURCE_DESC &resourceDesc);
 
     // -------------------------------------------------------
     //  描画前処理 (フレームの開始)
@@ -89,8 +91,12 @@ public:
     //  - ビューポートとシザー矩形をセット
     // -------------------------------------------------------
     void PreDraw(bool clearDepth = true);
+    // 次のフレームで描画先を消去する背景色を保持する。
     void SetClearColor(float r, float g, float b, float a = 1.0f) {
-        clearColor_[0] = r; clearColor_[1] = g; clearColor_[2] = b; clearColor_[3] = a;
+        clearColor_[0] = r;
+        clearColor_[1] = g;
+        clearColor_[2] = b;
+        clearColor_[3] = a;
     }
 
     // -------------------------------------------------------
@@ -116,65 +122,64 @@ public:
     //  戻り値   : コンパイル済みシェーダーバイナリ
     //             (PSO の BytecodeLength / pShaderBytecode に渡す)
     // -------------------------------------------------------
-    ComPtr<IDxcBlob> CompileShader(
-        const std::wstring& filePath,
-        const wchar_t* profile);
+    ComPtr<IDxcBlob> CompileShader(const std::wstring &filePath, const wchar_t *profile);
 
     // -------------------------------------------------------
     //  ゲッター
     // -------------------------------------------------------
 
     /// <summary>GPU リソース生成に使う論理デバイス</summary>
-    ID3D12Device* GetDevice() const { return device_.Get(); }
+    ID3D12Device *GetDevice() const { return device_.Get(); }
 
     /// <summary>Draw / Barrier / Clear などの命令を積む CommandList</summary>
-    ID3D12GraphicsCommandList* GetCommandList() const { return commandList_.Get(); }
+    ID3D12GraphicsCommandList *GetCommandList() const { return commandList_.Get(); }
 
     /// <summary>バックバッファ数 (常に 2: ダブルバッファリング)</summary>
     size_t GetBackBufferCount() const { return 2; }
 
     /// <summary>深度バッファの書き込み口 (ShadowMap の DSV 生成などに使う)</summary>
-    ID3D12DescriptorHeap* GetDsvHeap() const { return dsvDescriptorHeap_.Get(); }
-    ID3D12Resource* GetDepthStencilResource() const { return depthStencilResource_.Get(); }
+    ID3D12DescriptorHeap *GetDsvHeap() const { return dsvDescriptorHeap_.Get(); }
+    ID3D12Resource *GetDepthStencilResource() const { return depthStencilResource_.Get(); }
 
-private:
+  private:
     // -------------------------------------------------------
     //  Initialize() から呼ばれる内部初期化関数群
     //  (各処理を分割して見通しを良くしている)
     // -------------------------------------------------------
-    void InitializeDevice();          // DXGI Factory + Device の生成
-    void InitializeCommand();         // CommandQueue / CommandAllocator / CommandList
-    void InitializeSwapChain();       // ダブルバッファリング用 SwapChain
+    void InitializeDevice();           // DXGI Factory + Device の生成
+    void InitializeCommand();          // CommandQueue / CommandAllocator / CommandList
+    void InitializeSwapChain();        // ダブルバッファリング用 SwapChain
     void InitializeRenderTargetView(); // バックバッファの RTV を作成
     void InitializeDepthStencilView(); // 深度バッファと DSV を作成
-    void InitializeFence();           // GPU-CPU 同期用フェンス
-    void InitializeDXC();             // シェーダーコンパイラ (DXC) の初期化
-    void InitializeFixFPS();          // FPS 固定用の基準時刻を記録
+    void InitializeFence();            // GPU-CPU 同期用フェンス
+    void InitializeDXC();              // シェーダーコンパイラ (DXC) の初期化
+    void InitializeFixFPS();           // FPS 固定用の基準時刻を記録
+    void InitializePerformanceCapture();
 
     /// <summary>フレームの最後に 60FPS になるよう CPU をスリープさせる</summary>
     void UpdateFixFPS();
 
-private:
-    WinApp* winApp_ = nullptr;
-    float clearColor_[4] = { 0.1f, 0.25f, 0.5f, 1.0f };
+  private:
+    WinApp *winApp_ = nullptr;
+    float clearColor_[4] = {0.1f, 0.25f, 0.5f, 1.0f};
 
     // ── DirectX 主要オブジェクト ──────────────────────────
-    ComPtr<IDXGIFactory7>              dxgiFactory_;      // GPU の列挙と SwapChain 生成に使う
-    ComPtr<ID3D12Device>               device_;           // 論理 GPU デバイス (最重要)
-    ComPtr<ID3D12CommandQueue>         commandQueue_;     // コマンドリストを GPU に投入するキュー
-    ComPtr<ID3D12CommandAllocator>     commandAllocator_; // コマンドリストのメモリ確保器
-    ComPtr<ID3D12GraphicsCommandList>  commandList_;      // Draw 命令を積むリスト
-    ComPtr<IDXGISwapChain4>            swapChain_;        // 表示中↔描画中バッファの切り替え管理
+    ComPtr<IDXGIFactory7> dxgiFactory_;               // GPU の列挙と SwapChain 生成に使う
+    ComPtr<ID3D12Device> device_;                     // 論理 GPU デバイス (最重要)
+    ComPtr<ID3D12CommandQueue> commandQueue_;         // コマンドリストを GPU に投入するキュー
+    ComPtr<ID3D12CommandAllocator> commandAllocator_; // コマンドリストのメモリ確保器
+    ComPtr<ID3D12GraphicsCommandList> commandList_;   // Draw 命令を積むリスト
+    ComPtr<IDXGISwapChain4> swapChain_;               // 表示中↔描画中バッファの切り替え管理
 
     // ── RTV (Render Target View) ─────────────────────────
     // バックバッファ (2枚) を描画ターゲットとして扱うためのビュー
-    ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap_;    // RTV を格納するヒープ (棚)
-    ComPtr<ID3D12Resource>       swapChainResources_[2]; // バックバッファリソース本体
+    ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap_; // RTV を格納するヒープ (棚)
+    ComPtr<ID3D12Resource> swapChainResources_[2];   // バックバッファリソース本体
 
     // ── DSV (Depth Stencil View) ─────────────────────────
     // 深度テスト用。手前にあるオブジェクトが奥のものを隠すために使う。
-    ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;    // DSV を格納するヒープ
-    ComPtr<ID3D12Resource>       depthStencilResource_; // 深度バッファリソース本体
+    ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_; // DSV を格納するヒープ
+    ComPtr<ID3D12Resource> depthStencilResource_;    // 深度バッファリソース本体
 
     FrameRecorder recorder_;
 
@@ -187,18 +192,27 @@ private:
     // GPU がコマンドを処理し終えたことを CPU に通知するオブジェクト。
     // PostDraw でシグナル、WaitForGpu でウェイトする。
     ComPtr<ID3D12Fence> fence_;
-    uint64_t            fenceValue_ = 0;   // GPU に渡す単調増加カウンタ
-    HANDLE              fenceEvent_ = nullptr; // CPU 側のイベントハンドル
+    uint64_t fenceValue_ = 0;     // GPU に渡す単調増加カウンタ
+    HANDLE fenceEvent_ = nullptr; // CPU 側のイベントハンドル
 
     // ── DXC (DirectX Shader Compiler) ────────────────────
     // HLSL ファイルをランタイムでコンパイルする。
     // VS2022 付属のコンパイラより新しい機能 (SM 6.x) に対応している。
-    ComPtr<IDxcUtils>          dxcUtils_;
-    ComPtr<IDxcCompiler3>      dxcCompiler_;
+    ComPtr<IDxcUtils> dxcUtils_;
+    ComPtr<IDxcCompiler3> dxcCompiler_;
     std::unordered_map<std::wstring, ComPtr<IDxcBlob>> shaderBlobCache_;
     ComPtr<IDxcIncludeHandler> includeHandler_; // #include 解決に使う
 
     // ── FPS 固定 ─────────────────────────────────────────
     // 高速な PC でも 60fps に抑え、ゲームロジックの速度を均一にする。
     std::chrono::steady_clock::time_point reference_;
+    HANDLE frameTimer_ = nullptr;
+    bool legacyFramePacing_ = false;
+    std::wstring performancePath_;
+    std::chrono::steady_clock::time_point performanceFrameEnd_;
+    std::vector<std::array<double, 6>> performanceSamples_;
+    uint32_t performanceFrames_ = 0;
+    ComPtr<ID3D12QueryHeap> performanceQueries_;
+    ComPtr<ID3D12Resource> performanceReadback_;
+    uint64_t performanceFrequency_ = 0;
 };

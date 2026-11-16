@@ -3,7 +3,7 @@
 
 // プレイヤーが所持している配置可能ブロックの種類別・カスタム別個数を管理する。
 class BlockInventory {
-public:
+  public:
     // 全所持数を初期化する。initialCountは互換用に通常Wallへ反映する。
     void Initialize(int initialCount = 0);
 
@@ -23,11 +23,11 @@ public:
     bool HasBlock(BlockType type, int customId = 0) const;
     bool HasBlock() const; // 後方互換用。何か1つでも所持しているかを返す。
 
-private:
+  private:
     int wallCount_ = 0;
     int ladderCount_ = 0;
     int iceCount_ = 0;
     int movingCount_ = 0;
     int crumbleCount_ = 0;
-    int customCounts_[5] = { 0, 0, 0, 0, 0 }; // カスタムパーツID 1～5 の所持数
+    int customCounts_[5] = {0, 0, 0, 0, 0}; // カスタムパーツID 1～5 の所持数
 };

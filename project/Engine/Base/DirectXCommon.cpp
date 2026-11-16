@@ -16,20 +16,32 @@
 
 using namespace Microsoft::WRL;
 
+// 保持するGPU資源と参照を解放する。
+DirectXCommon::~DirectXCommon() {
+    if (frameTimer_) {
+        CloseHandle(frameTimer_);
+    }
+}
+
 namespace {
-std::filesystem::path MakeShaderCachePath(const std::filesystem::path& absolutePath, const wchar_t* profile) {
+// シェーダー名・設定から、コンパイル済みバイナリの保存先を決める。
+std::filesystem::path MakeShaderCachePath(const std::filesystem::path &absolutePath, const wchar_t *profile) {
     const std::wstring profileName = profile ? profile : L"unknown";
     // stashから戻した古いcsoは更新日時だけ新しくなる場合がある。
     // 本体と同じフォルダの共通ヘッダーの内容もキーへ含め、誤再利用を防ぐ。
     std::vector<std::filesystem::path> sources{absolutePath};
-    for (const auto& entry : std::filesystem::directory_iterator(absolutePath.parent_path())) {
-        if (entry.is_regular_file() && entry.path().extension() == L".hlsli") sources.push_back(entry.path());
+    for (const auto &entry : std::filesystem::directory_iterator(absolutePath.parent_path())) {
+        if (entry.is_regular_file() && entry.path().extension() == L".hlsli") {
+            sources.push_back(entry.path());
+        }
     }
     std::sort(sources.begin(), sources.end());
     std::wstring contentKey;
-    for (const auto& source : sources) {
+    for (const auto &source : sources) {
         std::ifstream input(source, std::ios::binary);
-        if (!input) throw std::runtime_error("Cannot read shader source for cache validation");
+        if (!input) {
+            throw std::runtime_error("Cannot read shader source for cache validation");
+        }
         const std::string content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
         contentKey += L"|" + source.filename().wstring() + L":" + std::to_wstring(std::hash<std::string>{}(content));
     }
@@ -39,7 +51,8 @@ std::filesystem::path MakeShaderCachePath(const std::filesystem::path& absoluteP
     return absolutePath.parent_path() / L"Compiled" / cacheName;
 }
 
-bool IsShaderCacheFresh(const std::filesystem::path& sourcePath, const std::filesystem::path& cachePath) {
+// ソースと依存ファイルの更新時刻を調べ、キャッシュを再利用できるか判定する。
+bool IsShaderCacheFresh(const std::filesystem::path &sourcePath, const std::filesystem::path &cachePath) {
     std::error_code ec;
     if (!std::filesystem::exists(cachePath, ec)) {
         return false;
@@ -58,7 +71,8 @@ bool IsShaderCacheFresh(const std::filesystem::path& sourcePath, const std::file
     return cacheTime >= sourceTime;
 }
 
-ComPtr<IDxcBlob> LoadCachedShaderBlob(IDxcUtils* dxcUtils, const std::filesystem::path& cachePath) {
+// キャッシュのバイナリを読み、DXCから扱えるシェーダーブロブへ戻す。
+ComPtr<IDxcBlob> LoadCachedShaderBlob(IDxcUtils *dxcUtils, const std::filesystem::path &cachePath) {
     ComPtr<IDxcBlobEncoding> cachedEncoding;
     HRESULT hr = dxcUtils->LoadFile(cachePath.wstring().c_str(), nullptr, &cachedEncoding);
     if (FAILED(hr)) {
@@ -70,7 +84,8 @@ ComPtr<IDxcBlob> LoadCachedShaderBlob(IDxcUtils* dxcUtils, const std::filesystem
     return cachedBlob;
 }
 
-void SaveCachedShaderBlob(const std::filesystem::path& cachePath, IDxcBlob* shaderBlob) {
+// コンパイル結果を保存し、次回起動のシェーダー生成を省く。
+void SaveCachedShaderBlob(const std::filesystem::path &cachePath, IDxcBlob *shaderBlob) {
     if (!shaderBlob) {
         return;
     }
@@ -86,13 +101,13 @@ void SaveCachedShaderBlob(const std::filesystem::path& cachePath, IDxcBlob* shad
         return;
     }
 
-    file.write(
-        static_cast<const char*>(shaderBlob->GetBufferPointer()),
-        static_cast<std::streamsize>(shaderBlob->GetBufferSize()));
+    file.write(static_cast<const char *>(shaderBlob->GetBufferPointer()),
+               static_cast<std::streamsize>(shaderBlob->GetBufferSize()));
 }
 }
 
-void DirectXCommon::Initialize(WinApp* winApp) {
+// DirectXのデバイス・描画先・同期を準備し、初期値と必要なリソースを設定する。
+void DirectXCommon::Initialize(WinApp *winApp) {
     assert(winApp);
     winApp_ = winApp;
 
@@ -104,6 +119,7 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     InitializeDepthStencilView();
     InitializeFence();
     InitializeDXC();
+    InitializePerformanceCapture();
 
 #ifdef USE_IMGUI
 
@@ -116,12 +132,9 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     // ImGuiの組み込みフォントは日本語グリフを持たないため、日本語UIが「?」になる。
     // Windows標準のメイリオを日本語グリフ範囲付きで読み込み、ダイアログやエディタを
     // UTF-8の日本語で表示できるようにする。
-    ImGuiIO& imguiIO = ImGui::GetIO();
-    ImFont* japaneseFont = imguiIO.Fonts->AddFontFromFileTTF(
-        "C:/Windows/Fonts/meiryo.ttc",
-        16.0f,
-        nullptr,
-        imguiIO.Fonts->GetGlyphRangesJapanese());
+    ImGuiIO &imguiIO = ImGui::GetIO();
+    ImFont *japaneseFont = imguiIO.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/meiryo.ttc", 16.0f, nullptr,
+                                                             imguiIO.Fonts->GetGlyphRangesJapanese());
 
     // Windows側でフォントが削除・変更されていても、ImGui自体は起動できるようにする。
     if (japaneseFont != nullptr) {
@@ -139,18 +152,16 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     assert(fontSrvIndex == 0);
 
     // 4. DX12バックエンドの初期化
-    ImGui_ImplDX12_Init(
-        device_.Get(),
-        2, // バックバッファ数
-        DXGI_FORMAT_R8G8B8A8_UNORM, // swapChainDesc.Formatと合わせる
-        imguiSrvManager_.GetDescriptorHeap(),
-        imguiSrvManager_.GetCPUDescriptorHandle(fontSrvIndex),
-        imguiSrvManager_.GetGPUDescriptorHandle(fontSrvIndex)
-    );
+    ImGui_ImplDX12_Init(device_.Get(),
+                        2,                          // バックバッファ数
+                        DXGI_FORMAT_R8G8B8A8_UNORM, // swapChainDesc.Formatと合わせる
+                        imguiSrvManager_.GetDescriptorHeap(), imguiSrvManager_.GetCPUDescriptorHandle(fontSrvIndex),
+                        imguiSrvManager_.GetGPUDescriptorHandle(fontSrvIndex));
 
 #endif
 }
 
+// 使用可能なGPUを探し、DirectX 12デバイスを作成する。
 void DirectXCommon::InitializeDevice() {
     // DXGIファクトリーの生成
 #ifdef ENABLE_D3D12_DEBUG_LAYER
@@ -168,10 +179,14 @@ void DirectXCommon::InitializeDevice() {
 
     // アダプターの列挙とデバイス生成
     ComPtr<IDXGIAdapter4> useAdapter = nullptr;
-    for (UINT i = 0; dxgiFactory_->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&useAdapter)) != DXGI_ERROR_NOT_FOUND; ++i) {
+    for (UINT i = 0; dxgiFactory_->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+                                                              IID_PPV_ARGS(&useAdapter)) != DXGI_ERROR_NOT_FOUND;
+         ++i) {
         DXGI_ADAPTER_DESC3 adapterDesc{};
         hr = useAdapter->GetDesc3(&adapterDesc);
-        if (FAILED(hr)) continue;
+        if (FAILED(hr)) {
+            continue;
+        }
 
         if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE)) {
             // D3D12デバイス生成を試みる
@@ -190,11 +205,12 @@ void DirectXCommon::InitializeDevice() {
     if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
         infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
         infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
-        // infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true); 
+        // infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
     }
 #endif
 }
 
+// 描画コマンドの記録・実行に使うキューとリストを作成する。
 void DirectXCommon::InitializeCommand() {
     D3D12_COMMAND_QUEUE_DESC queueDesc{};
     HRESULT hr = device_->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&commandQueue_));
@@ -203,10 +219,12 @@ void DirectXCommon::InitializeCommand() {
     hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator_));
     assert(SUCCEEDED(hr));
 
-    hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator_.Get(), nullptr, IID_PPV_ARGS(&commandList_));
+    hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator_.Get(), nullptr,
+                                    IID_PPV_ARGS(&commandList_));
     assert(SUCCEEDED(hr));
 }
 
+// ウィンドウへ表示するバックバッファと交換用スワップチェーンを作成する。
 void DirectXCommon::InitializeSwapChain() {
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
     swapChainDesc.Width = WinApp::kWindowWidth;
@@ -218,16 +236,13 @@ void DirectXCommon::InitializeSwapChain() {
     swapChainDesc.BufferCount = 2;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
-    HRESULT hr = dxgiFactory_->CreateSwapChainForHwnd(
-        commandQueue_.Get(),
-        winApp_->GetHwnd(),
-        &swapChainDesc,
-        nullptr,
-        nullptr,
-        reinterpret_cast<IDXGISwapChain1**>(swapChain_.GetAddressOf()));
+    HRESULT hr =
+        dxgiFactory_->CreateSwapChainForHwnd(commandQueue_.Get(), winApp_->GetHwnd(), &swapChainDesc, nullptr, nullptr,
+                                             reinterpret_cast<IDXGISwapChain1 **>(swapChain_.GetAddressOf()));
     assert(SUCCEEDED(hr));
 }
 
+// バックバッファを描画先として使うRTVを作成する。
 void DirectXCommon::InitializeRenderTargetView() {
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc{};
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -246,6 +261,7 @@ void DirectXCommon::InitializeRenderTargetView() {
     }
 }
 
+// 奥行き判定に必要な深度バッファとDSVを作成する。
 void DirectXCommon::InitializeDepthStencilView() {
     // DSV用ヒープ生成
     D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc{};
@@ -266,21 +282,25 @@ void DirectXCommon::InitializeDepthStencilView() {
     resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-    D3D12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_DEFAULT, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN,
+                                    1, 1};
     D3D12_CLEAR_VALUE clearValue{};
     clearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     clearValue.DepthStencil.Depth = 1.0f;
 
-    hr = device_->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue, IID_PPV_ARGS(&depthStencilResource_));
+    hr = device_->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+                                          D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue,
+                                          IID_PPV_ARGS(&depthStencilResource_));
     assert(SUCCEEDED(hr));
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
     dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-    device_->CreateDepthStencilView(depthStencilResource_.Get(), &dsvDesc, dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart());
+    device_->CreateDepthStencilView(depthStencilResource_.Get(), &dsvDesc,
+                                    dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart());
 }
 
+// CPUがGPUの完了を待つためのフェンスとイベントを作成する。
 void DirectXCommon::InitializeFence() {
     HRESULT hr = device_->CreateFence(fenceValue_, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_));
     assert(SUCCEEDED(hr));
@@ -288,6 +308,7 @@ void DirectXCommon::InitializeFence() {
     assert(fenceEvent_ != nullptr);
 }
 
+// HLSLコンパイラとインクルード処理を準備する。
 void DirectXCommon::InitializeDXC() {
     HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils_));
     assert(SUCCEEDED(hr));
@@ -297,6 +318,7 @@ void DirectXCommon::InitializeDXC() {
     assert(SUCCEEDED(hr));
 }
 
+// 記録済みコマンドの実行完了を待ち、使用中リソースの破棄を防ぐ。
 void DirectXCommon::WaitForGpu() {
     // 1. フェンス値を更新
     fenceValue_++;
@@ -312,7 +334,8 @@ void DirectXCommon::WaitForGpu() {
     }
 }
 
-ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, const wchar_t* profile) {
+// 利用可能なキャッシュを確認し、必要な場合だけHLSLをコンパイルする。
+ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring &filePath, const wchar_t *profile) {
     // 1. 絶対パスに事前変換する（これで相対インクルード解決が完全に保証されます）
     std::filesystem::path absolutePath = std::filesystem::absolute(filePath);
     std::wstring absFilePath = absolutePath.wstring();
@@ -367,24 +390,24 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
 
     std::vector<LPCWSTR> compileArgs = {
         absFilePath.c_str(),
-        L"-E", L"main",
-        L"-T", profile,
-        L"-Zi", L"-Qembed_debug",
+        L"-E",
+        L"main",
+        L"-T",
+        profile,
+        L"-Zi",
+        L"-Qembed_debug",
         L"-Od",
         L"-Zpr",
-        L"-I", absDirectoryPath.c_str(),     // -I 絶対パス (分離)
-        includeOptionCombined.c_str(),        // -I絶対パス (結合)
-        includeOptionCombinedRel.c_str(),     // -I相対パス (結合)
+        L"-I",
+        absDirectoryPath.c_str(),         // -I 絶対パス (分離)
+        includeOptionCombined.c_str(),    // -I絶対パス (結合)
+        includeOptionCombinedRel.c_str(), // -I相対パス (結合)
     };
 
     // 4. コンパイル実行
     ComPtr<IDxcResult> shaderResult = nullptr;
-    hr = dxcCompiler_->Compile(
-        &shaderSourceBuffer,
-        compileArgs.data(),
-        static_cast<UINT32>(compileArgs.size()),
-        includeHandler_.Get(),
-        IID_PPV_ARGS(&shaderResult));
+    hr = dxcCompiler_->Compile(&shaderSourceBuffer, compileArgs.data(), static_cast<UINT32>(compileArgs.size()),
+                               includeHandler_.Get(), IID_PPV_ARGS(&shaderResult));
 
     // コンパイル自体の失敗チェック
     if (FAILED(hr)) {
@@ -418,6 +441,7 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     return shaderBlob;
 }
 
+// DirectXのデバイス・描画先・同期に使うパイプラインと参照先をコマンドリストへ設定する。
 void DirectXCommon::PreDraw(bool clearDepth) {
     // バックバッファのインデックス取得
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
@@ -467,17 +491,12 @@ void DirectXCommon::PreDraw(bool clearDepth) {
 #else
     // Unity風ワークスペース:
     // 上Toolbar、左Hierarchy、中央Scene、右Inspector、下Console。
-    constexpr float hierarchyWidth =
-        static_cast<float>(WinApp::kWindowWidth) * 0.15f;
-    constexpr float inspectorWidth =
-        static_cast<float>(WinApp::kWindowWidth) * 0.20f;
+    constexpr float hierarchyWidth = static_cast<float>(WinApp::kWindowWidth) * 0.15f;
+    constexpr float inspectorWidth = static_cast<float>(WinApp::kWindowWidth) * 0.20f;
     constexpr float toolbarHeight = 38.0f;
-    constexpr float consoleHeight =
-        static_cast<float>(WinApp::kWindowHeight) * 0.32f;
-    constexpr float editorViewportWidth =
-        static_cast<float>(WinApp::kWindowWidth) - hierarchyWidth - inspectorWidth;
-    constexpr float editorViewportHeight =
-        static_cast<float>(WinApp::kWindowHeight) - toolbarHeight - consoleHeight;
+    constexpr float consoleHeight = static_cast<float>(WinApp::kWindowHeight) * 0.32f;
+    constexpr float editorViewportWidth = static_cast<float>(WinApp::kWindowWidth) - hierarchyWidth - inspectorWidth;
+    constexpr float editorViewportHeight = static_cast<float>(WinApp::kWindowHeight) - toolbarHeight - consoleHeight;
 
     D3D12_VIEWPORT viewport{};
     viewport.Width = editorViewportWidth;
@@ -491,16 +510,15 @@ void DirectXCommon::PreDraw(bool clearDepth) {
     D3D12_RECT scissorRect{};
     scissorRect.left = static_cast<LONG>(hierarchyWidth);
     scissorRect.top = static_cast<LONG>(toolbarHeight);
-    scissorRect.right =
-        static_cast<LONG>(hierarchyWidth + editorViewportWidth);
-    scissorRect.bottom =
-        static_cast<LONG>(toolbarHeight + editorViewportHeight);
+    scissorRect.right = static_cast<LONG>(hierarchyWidth + editorViewportWidth);
+    scissorRect.bottom = static_cast<LONG>(toolbarHeight + editorViewportHeight);
     commandList_->RSSetScissorRects(1, &scissorRect);
 #endif
 }
 
 // 描画の終了
 void DirectXCommon::PostDraw() {
+    const auto cpuSubmit = std::chrono::steady_clock::now();
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
 
     recorder_.Prepare(device_.Get(), commandList_.Get(), swapChainResources_[backBufferIndex].Get());
@@ -516,24 +534,28 @@ void DirectXCommon::PostDraw() {
     commandList_->ResourceBarrier(1, &barrier);
 
     // コマンドクローズ & 実行
+    if (performanceQueries_) {
+        commandList_->EndQuery(performanceQueries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 1);
+        commandList_->ResolveQueryData(performanceQueries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, 2,
+                                       performanceReadback_.Get(), 0);
+    }
     HRESULT hr = commandList_->Close();
     assert(SUCCEEDED(hr));
 
-	// コマンドリストをGPUに渡す
-    ID3D12CommandList* commandLists[] = { commandList_.Get() };
+    // コマンドリストをGPUに渡す
+    ID3D12CommandList *commandLists[] = {commandList_.Get()};
     commandQueue_->ExecuteCommandLists(1, commandLists);
 
     // フリップ
-    hr = swapChain_->Present(1, 0);
+    const auto presentStart = std::chrono::steady_clock::now();
+    hr = swapChain_->Present(legacyFramePacing_ ? 1 : 0, 0);
+    const auto presentEnd = std::chrono::steady_clock::now();
     if (FAILED(hr)) {
         const HRESULT removedReason = device_ ? device_->GetDeviceRemovedReason() : S_OK;
         char message[256]{};
-        std::snprintf(
-            message,
-            sizeof(message),
-            "DirectXCommon::PostDraw Present failed. HRESULT=0x%08lX, DeviceRemovedReason=0x%08lX\n",
-            static_cast<unsigned long>(hr),
-            static_cast<unsigned long>(removedReason));
+        std::snprintf(message, sizeof(message),
+                      "DirectXCommon::PostDraw Present failed. HRESULT=0x%08lX, DeviceRemovedReason=0x%08lX\n",
+                      static_cast<unsigned long>(hr), static_cast<unsigned long>(removedReason));
         OutputDebugStringA(message);
         return;
     }
@@ -544,12 +566,9 @@ void DirectXCommon::PostDraw() {
     if (FAILED(hr)) {
         const HRESULT removedReason = device_ ? device_->GetDeviceRemovedReason() : S_OK;
         char message[256]{};
-        std::snprintf(
-            message,
-            sizeof(message),
-            "DirectXCommon::PostDraw Signal failed. HRESULT=0x%08lX, DeviceRemovedReason=0x%08lX\n",
-            static_cast<unsigned long>(hr),
-            static_cast<unsigned long>(removedReason));
+        std::snprintf(message, sizeof(message),
+                      "DirectXCommon::PostDraw Signal failed. HRESULT=0x%08lX, DeviceRemovedReason=0x%08lX\n",
+                      static_cast<unsigned long>(hr), static_cast<unsigned long>(removedReason));
         OutputDebugStringA(message);
         return;
     }
@@ -560,6 +579,17 @@ void DirectXCommon::PostDraw() {
     }
 
     // 既存フェンスの完了後に読むため、録画用の追加GPU待ちは発生しない。
+    const auto fenceEnd = std::chrono::steady_clock::now();
+    double gpuMs = -1.0;
+    if (performanceReadback_) {
+        uint64_t *timestamps = nullptr;
+        const D3D12_RANGE readRange{0, 2 * sizeof(uint64_t)};
+        if (SUCCEEDED(performanceReadback_->Map(0, &readRange, reinterpret_cast<void **>(&timestamps)))) {
+            gpuMs = static_cast<double>(timestamps[1] - timestamps[0]) * 1000.0 / performanceFrequency_;
+            const D3D12_RANGE writtenRange{0, 0};
+            performanceReadback_->Unmap(0, &writtenRange);
+        }
+    }
     recorder_.SubmitCompletedFrame();
 
     // 次フレーム用にコマンドリセット
@@ -568,15 +598,105 @@ void DirectXCommon::PostDraw() {
     hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
     assert(SUCCEEDED(hr));
 
+    const auto limiterStart = std::chrono::steady_clock::now();
     UpdateFixFPS();
+    const auto frameEnd = std::chrono::steady_clock::now();
+    if (!performancePath_.empty()) {
+        auto milliseconds = [](auto duration) { return std::chrono::duration<double, std::milli>(duration).count(); };
+        if (++performanceFrames_ > 120) {
+            performanceSamples_.push_back({milliseconds(frameEnd - performanceFrameEnd_),
+                                           milliseconds(cpuSubmit - performanceFrameEnd_),
+                                           milliseconds(presentEnd - presentStart), milliseconds(fenceEnd - presentEnd),
+                                           milliseconds(frameEnd - limiterStart), gpuMs});
+        }
+        performanceFrameEnd_ = frameEnd;
+        if (performanceSamples_.size() == 600) {
+            const std::filesystem::path path(performancePath_);
+            std::filesystem::create_directories(path.parent_path());
+            std::ofstream csv(path);
+            csv << "frame_ms,cpu_update_draw_ms,present_ms,fence_wait_ms,limiter_ms,gpu_ms\n";
+            for (const auto &sample : performanceSamples_) {
+                for (size_t i = 0; i < sample.size(); ++i) {
+                    csv << sample[i] << (i + 1 == sample.size() ? '\n' : ',');
+                }
+            }
+            csv.close();
+            PostQuitMessage(0);
+        }
+    }
 }
 
+// 計測用のGPUクエリと読み戻しバッファを準備する。
+void DirectXCommon::InitializePerformanceCapture() {
+    wchar_t path[32768]{};
+    const DWORD length = GetEnvironmentVariableW(L"CG2_PERF_LOG", path, 32768);
+    if (length == 0 || length >= 32768) {
+        return;
+    }
+    performancePath_ = path;
+    performanceFrameEnd_ = std::chrono::steady_clock::now();
+    performanceSamples_.reserve(600);
+    D3D12_QUERY_HEAP_DESC query{};
+    query.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    query.Count = 2;
+    const auto queryResult = device_->CreateQueryHeap(&query, IID_PPV_ARGS(&performanceQueries_));
+    if (FAILED(queryResult) || FAILED(commandQueue_->GetTimestampFrequency(&performanceFrequency_)) ||
+        performanceFrequency_ == 0) {
+        performanceQueries_.Reset();
+        return;
+    }
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC resource{};
+    resource.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resource.Width = 2 * sizeof(uint64_t);
+    resource.Height = 1;
+    resource.DepthOrArraySize = 1;
+    resource.MipLevels = 1;
+    resource.SampleDesc.Count = 1;
+    resource.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &resource, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                nullptr, IID_PPV_ARGS(&performanceReadback_)))) {
+        performanceQueries_.Reset();
+    }
+}
+
+// フレーム間隔を一定に保つタイマーを準備する。
 void DirectXCommon::InitializeFixFPS() {
     reference_ = std::chrono::steady_clock::now();
+    wchar_t legacy[2]{};
+    legacyFramePacing_ = GetEnvironmentVariableW(L"CG2_LEGACY_FRAME_PACING", legacy, 2) == 1 && legacy[0] == L'1';
+    frameTimer_ = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    if (!frameTimer_) {
+        frameTimer_ = CreateWaitableTimerW(nullptr, FALSE, nullptr);
+    }
 }
 
+// フレームの残り時間を待ち、60Hzの更新間隔を保つ。
 void DirectXCommon::UpdateFixFPS() {
     using namespace std::chrono;
+    if (!legacyFramePacing_) {
+        // 60Hzのゲーム進行は保ち、1us sleepのタイマー丸めとVSyncとの二重待ちを避ける。
+        const auto period = duration_cast<steady_clock::duration>(duration<double>(1.0 / 60.0));
+        const auto deadline = reference_ + period;
+        const auto now = steady_clock::now();
+        const auto sleepTime = deadline - now - microseconds(400);
+        if (sleepTime > microseconds(0) && frameTimer_) {
+            LARGE_INTEGER due{};
+            due.QuadPart = -duration_cast<duration<int64_t, std::ratio<1, 10000000>>>(sleepTime).count();
+            if (SetWaitableTimer(frameTimer_, &due, 0, nullptr, nullptr, FALSE)) {
+                WaitForSingleObject(frameTimer_, INFINITE);
+            }
+        } else if (sleepTime > milliseconds(1)) {
+            std::this_thread::sleep_for(sleepTime);
+        }
+        while (steady_clock::now() < deadline) {
+            std::this_thread::yield();
+        }
+        const auto finished = steady_clock::now();
+        reference_ = finished > deadline + period ? finished : deadline;
+        return;
+    }
     const microseconds kMinTime(static_cast<int64_t>(1000000.0f / 60.0f));
     const microseconds kMinCheckTime(static_cast<int64_t>(1000000.0f / 65.0f));
 
@@ -593,15 +713,20 @@ void DirectXCommon::UpdateFixFPS() {
 
 // 描画の準備
 void DirectXCommon::BeginImGui() {
+    if (performanceQueries_) {
+        commandList_->EndQuery(performanceQueries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0);
+    }
 
 #ifdef USE_IMGUI
     // If ImGui context is not created, skip calling backend NewFrame
-    if (ImGui::GetCurrentContext() == nullptr) return;
+    if (ImGui::GetCurrentContext() == nullptr) {
+        return;
+    }
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
-    
-    ImGuiIO& io = ImGui::GetIO();
-    
+
+    ImGuiIO &io = ImGui::GetIO();
+
     // スワップチェーンのサイズ（1920x1080）と実際のウィンドウサイズが異なる場合（最大化など）、
     // ImGuiの内部解像度がズレるのを防ぐため、強制的に1920x1080の仮想解像度に固定する
     RECT rect;
@@ -622,7 +747,6 @@ void DirectXCommon::BeginImGui() {
 
     ImGui::NewFrame();
 #endif
-
 }
 
 // 描画の実行 (PostDrawの直前などで呼ぶ)
@@ -630,15 +754,19 @@ void DirectXCommon::EndImGui() {
 
 #ifdef USE_IMGUI
     // If ImGui context is not created, skip
-    if (ImGui::GetCurrentContext() == nullptr) return;
+    if (ImGui::GetCurrentContext() == nullptr) {
+        return;
+    }
 
     ImGui::Render();
 #ifdef NDEBUG
     // Releaseではエディタ用ImGuiの描画コマンドを一切GPUへ送らない。
     return;
 #endif
-    ImDrawData* draw_data = ImGui::GetDrawData();
-    if (draw_data == nullptr) return;
+    ImDrawData *draw_data = ImGui::GetDrawData();
+    if (draw_data == nullptr) {
+        return;
+    }
 
     // コマンドリストにImGuiの描画コマンドを積む前に、
     // ゲーム描画用に小さくしたビューポート（1280x720）をフル画面（1920x1080）に戻す！
@@ -658,7 +786,7 @@ void DirectXCommon::EndImGui() {
     scissorRect.bottom = WinApp::kWindowHeight;
     commandList_->RSSetScissorRects(1, &scissorRect);
 
-    ID3D12DescriptorHeap* heaps[] = { imguiSrvManager_.GetDescriptorHeap() };
+    ID3D12DescriptorHeap *heaps[] = {imguiSrvManager_.GetDescriptorHeap()};
     commandList_->SetDescriptorHeaps(1, heaps);
 
     ImGui_ImplDX12_RenderDrawData(draw_data, commandList_.Get());
@@ -666,9 +794,8 @@ void DirectXCommon::EndImGui() {
 }
 
 // DirectXCommon.h に Finalize() を追加するか、デストラクタで実行
-D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::RegisterImGuiTexture(
-    ID3D12Resource* textureResource,
-    const D3D12_RESOURCE_DESC& resourceDesc) {
+D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::RegisterImGuiTexture(ID3D12Resource *textureResource,
+                                                                const D3D12_RESOURCE_DESC &resourceDesc) {
 #ifdef USE_IMGUI
     if (!textureResource || imguiSrvManager_.GetUseCount() >= imguiSrvManager_.GetMaxCount()) {
         return {};
@@ -682,8 +809,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::RegisterImGuiTexture(
     srvDesc.Format = resourceDesc.Format;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-    if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
-        resourceDesc.DepthOrArraySize == 6) {
+    if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D && resourceDesc.DepthOrArraySize == 6) {
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
         srvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
         srvDesc.TextureCube.MostDetailedMip = 0;
@@ -706,6 +832,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::RegisterImGuiTexture(
 #endif
 }
 
+// ImGuiの描画バックエンドを終了し、所有リソースを解放する。
 void DirectXCommon::FinalizeImGui() {
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();

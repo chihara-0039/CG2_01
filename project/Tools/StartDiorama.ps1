@@ -1,4 +1,5 @@
-param([switch]$Capture,[ValidateSet('route','overview','rotation','undo','snow','complex','complexroute')][string]$Shot='route')
+# 箱庭表現の検証モードを設定してゲームを起動する。
+param([switch]$Capture,[ValidateSet('route','overview','rotation','undo','snow','complex','complexroute')][string]$Shot='route',[string]$Ffmpeg=$env:CG2_FFMPEG)
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $repoRoot=Split-Path $projectRoot -Parent
@@ -8,7 +9,8 @@ try {
  foreach($key in $keys){[Environment]::SetEnvironmentVariable($key,'')}
  $env:CG2_DIORAMA_SHOT=$Shot; $env:CG2_DIORAMA='1';$env:CG2_DIORAMA_CAPTURE=if($Capture){'1'}else{''}
  $env:CG2_CAPTURE_DIR=Join-Path $repoRoot 'generated/PR1_01/diorama/media'
- $env:CG2_FFMPEG='C:/GAME_SSD/game/Tools/FFmpeg/ffmpeg-9.0.2-full_build/bin/ffmpeg.exe'
+ if(!$Ffmpeg){$Ffmpeg=(Get-Command ffmpeg.exe -ErrorAction Stop).Source}
+ $env:CG2_FFMPEG=[IO.Path]::GetFullPath($Ffmpeg)
  $exe=Join-Path $repoRoot 'generated/outputs/Release/CG2_01.exe'
  if($Capture){
   $process=Start-Process -FilePath $exe -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru

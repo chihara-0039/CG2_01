@@ -1,3 +1,4 @@
+# 足場づくりの操作・進行を伝えるUI画像を生成する。
 from PIL import Image,ImageDraw,ImageFont
 from pathlib import Path
 p=Path(__file__).resolve().parents[1]/'Resources/UI/PR1_01'

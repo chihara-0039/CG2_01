@@ -14,273 +14,268 @@
 using json = nlohmann::json;
 
 namespace {
-    bool IsFiniteMatrix(const Matrix4x4& matrix) {
-        for (const auto& row : matrix.m) {
-            for (float value : row) {
-                if (!std::isfinite(value)) {
-                    return false;
-                }
+// 行列にNaNや無限大が含まれていないか検証する。
+bool IsFiniteMatrix(const Matrix4x4 &matrix) {
+    for (const auto &row : matrix.m) {
+        for (float value : row) {
+            if (!std::isfinite(value)) {
+                return false;
             }
         }
-        return true;
     }
+    return true;
+}
 
-    float SanitizeWeight(float weight) {
-        if (!std::isfinite(weight) || weight <= 0.0f) {
-            return 0.0f;
-        }
-        return weight;
+// 不正なスキニング重みを補正し、負値や非有限値を除く。
+float SanitizeWeight(float weight) {
+    if (!std::isfinite(weight) || weight <= 0.0f) {
+        return 0.0f;
     }
+    return weight;
+}
 
-    // 座標を行列で変換し、w 成分で透視除算する。
-    Vector3 TransformCoord(const Vector3& position, const Matrix4x4& matrix) {
-        float homogeneousW =
-            position.x * matrix.m[0][3] +
-            position.y * matrix.m[1][3] +
-            position.z * matrix.m[2][3] +
-            matrix.m[3][3];
-        if (std::abs(homogeneousW) < 1e-5f) {
-            homogeneousW = 1.0f;
-        }
-        return {
-            (position.x * matrix.m[0][0] + position.y * matrix.m[1][0] + position.z * matrix.m[2][0] + matrix.m[3][0]) / homogeneousW,
-            (position.x * matrix.m[0][1] + position.y * matrix.m[1][1] + position.z * matrix.m[2][1] + matrix.m[3][1]) / homogeneousW,
-            (position.x * matrix.m[0][2] + position.y * matrix.m[1][2] + position.z * matrix.m[2][2] + matrix.m[3][2]) / homogeneousW
-        };
+// 座標を行列で変換し、w 成分で透視除算する。
+Vector3 TransformCoord(const Vector3 &position, const Matrix4x4 &matrix) {
+    float homogeneousW =
+        position.x * matrix.m[0][3] + position.y * matrix.m[1][3] + position.z * matrix.m[2][3] + matrix.m[3][3];
+    if (std::abs(homogeneousW) < 1e-5f) {
+        homogeneousW = 1.0f;
     }
+    return {(position.x * matrix.m[0][0] + position.y * matrix.m[1][0] + position.z * matrix.m[2][0] + matrix.m[3][0]) /
+                homogeneousW,
+            (position.x * matrix.m[0][1] + position.y * matrix.m[1][1] + position.z * matrix.m[2][1] + matrix.m[3][1]) /
+                homogeneousW,
+            (position.x * matrix.m[0][2] + position.y * matrix.m[1][2] + position.z * matrix.m[2][2] + matrix.m[3][2]) /
+                homogeneousW};
+}
 
-    // 法線を行列の回転・スケール成分で変換し、単位ベクトルに戻す。
-    Vector3 TransformNormal(const Vector3& normal, const Matrix4x4& matrix) {
-        Vector3 transformedNormal = {
-            normal.x * matrix.m[0][0] + normal.y * matrix.m[1][0] + normal.z * matrix.m[2][0],
-            normal.x * matrix.m[0][1] + normal.y * matrix.m[1][1] + normal.z * matrix.m[2][1],
-            normal.x * matrix.m[0][2] + normal.y * matrix.m[1][2] + normal.z * matrix.m[2][2]
-        };
-        return Math::Normalize(transformedNormal);
+// 法線を行列の回転・スケール成分で変換し、単位ベクトルに戻す。
+Vector3 TransformNormal(const Vector3 &normal, const Matrix4x4 &matrix) {
+    Vector3 transformedNormal = {normal.x * matrix.m[0][0] + normal.y * matrix.m[1][0] + normal.z * matrix.m[2][0],
+                                 normal.x * matrix.m[0][1] + normal.y * matrix.m[1][1] + normal.z * matrix.m[2][1],
+                                 normal.x * matrix.m[0][2] + normal.y * matrix.m[1][2] + normal.z * matrix.m[2][2]};
+    return Math::Normalize(transformedNormal);
+}
+
+json ToJson(const Vector3 &value) {
+    return json::array({value.x, value.y, value.z});
+}
+
+json ToJson(const Quaternion &value) {
+    return json::array({value.x, value.y, value.z, value.w});
+}
+
+// 配列から3成分の値を取り出し、欠損時は既定値で補う。
+Vector3 ReadVector3(const json &value, const Vector3 &fallback) {
+    if (!value.is_array() || value.size() < 3) {
+        return fallback;
     }
+    return {value.at(0).get<float>(), value.at(1).get<float>(), value.at(2).get<float>()};
+}
 
-    json ToJson(const Vector3& value) {
-        return json::array({ value.x, value.y, value.z });
+// 配列から回転クォータニオンを読み、利用可能な値へ整える。
+Quaternion ReadQuaternion(const json &value, const Quaternion &fallback) {
+    if (!value.is_array() || value.size() < 4) {
+        return fallback;
     }
+    return {value.at(0).get<float>(), value.at(1).get<float>(), value.at(2).get<float>(), value.at(3).get<float>()};
+}
 
-    json ToJson(const Quaternion& value) {
-        return json::array({ value.x, value.y, value.z, value.w });
+void SortKeyframes(JointAnimation &animation) {
+    std::sort(animation.keyframes.begin(), animation.keyframes.end(),
+              [](const JointKeyframe &a, const JointKeyframe &b) { return a.time < b.time; });
+}
+
+float Clamp01(float value) {
+    return std::max(0.0f, std::min(1.0f, value));
+}
+
+float LerpFloat(float start, float end, float rate) {
+    return start + (end - start) * rate;
+}
+
+Vector3 LerpVector3(const Vector3 &start, const Vector3 &end, float rate) {
+    return {LerpFloat(start.x, end.x, rate), LerpFloat(start.y, end.y, rate), LerpFloat(start.z, end.z, rate)};
+}
+
+// 関節の基準姿勢から、アニメーションの初期キーフレームを作る。
+JointKeyframe MakeRestKeyframe(const Joint &joint) {
+    JointKeyframe pose;
+    pose.translation = joint.restTranslation;
+    pose.rotation = joint.restRotation;
+    pose.scale = joint.restScale;
+    pose.rotationQuat = joint.restRotationQuat;
+    pose.isQuaternion = joint.restIsQuaternion;
+    return pose;
+}
+
+// 前後のキーフレームから、指定時刻の関節姿勢を補間する。
+JointKeyframe SampleJointAnimation(const JointAnimation &animation, const JointKeyframe &restPose, float loopedTime) {
+    if (animation.keyframes.empty()) {
+        return restPose;
     }
-
-    Vector3 ReadVector3(const json& value, const Vector3& fallback) {
-        if (!value.is_array() || value.size() < 3) {
-            return fallback;
-        }
-        return {
-            value.at(0).get<float>(),
-            value.at(1).get<float>(),
-            value.at(2).get<float>()
-        };
+    if (animation.keyframes.size() == 1) {
+        return animation.keyframes.front();
     }
-
-    Quaternion ReadQuaternion(const json& value, const Quaternion& fallback) {
-        if (!value.is_array() || value.size() < 4) {
-            return fallback;
-        }
-        return {
-            value.at(0).get<float>(),
-            value.at(1).get<float>(),
-            value.at(2).get<float>(),
-            value.at(3).get<float>()
-        };
+    if (loopedTime <= animation.keyframes.front().time) {
+        return animation.keyframes.front();
     }
-
-    void SortKeyframes(JointAnimation& animation) {
-        std::sort(animation.keyframes.begin(), animation.keyframes.end(), [](const JointKeyframe& a, const JointKeyframe& b) {
-            return a.time < b.time;
-        });
-    }
-
-    float Clamp01(float value) {
-        return std::max(0.0f, std::min(1.0f, value));
-    }
-
-    float LerpFloat(float start, float end, float rate) {
-        return start + (end - start) * rate;
-    }
-
-    Vector3 LerpVector3(const Vector3& start, const Vector3& end, float rate) {
-        return {
-            LerpFloat(start.x, end.x, rate),
-            LerpFloat(start.y, end.y, rate),
-            LerpFloat(start.z, end.z, rate)
-        };
-    }
-
-    JointKeyframe MakeRestKeyframe(const Joint& joint) {
-        JointKeyframe pose;
-        pose.translation = joint.restTranslation;
-        pose.rotation = joint.restRotation;
-        pose.scale = joint.restScale;
-        pose.rotationQuat = joint.restRotationQuat;
-        pose.isQuaternion = joint.restIsQuaternion;
-        return pose;
-    }
-
-    JointKeyframe SampleJointAnimation(const JointAnimation& animation, const JointKeyframe& restPose, float loopedTime) {
-        if (animation.keyframes.empty()) {
-            return restPose;
-        }
-        if (animation.keyframes.size() == 1) {
-            return animation.keyframes.front();
-        }
-        if (loopedTime <= animation.keyframes.front().time) {
-            return animation.keyframes.front();
-        }
-        if (loopedTime >= animation.keyframes.back().time) {
-            return animation.keyframes.back();
-        }
-
-        for (size_t keyIndex = 0; keyIndex + 1 < animation.keyframes.size(); ++keyIndex) {
-            const auto& keyA = animation.keyframes[keyIndex];
-            const auto& keyB = animation.keyframes[keyIndex + 1];
-            if (loopedTime < keyA.time || loopedTime > keyB.time) {
-                continue;
-            }
-
-            float range = keyB.time - keyA.time;
-            float rate = range > 0.0f ? Clamp01((loopedTime - keyA.time) / range) : 0.0f;
-
-            JointKeyframe pose;
-            pose.time = loopedTime;
-            pose.translation = LerpVector3(keyA.translation, keyB.translation, rate);
-            pose.scale = LerpVector3(keyA.scale, keyB.scale, rate);
-            if (keyA.isQuaternion && keyB.isQuaternion) {
-                pose.rotationQuat = Math::Slerp(keyA.rotationQuat, keyB.rotationQuat, rate);
-                pose.rotation = Math::ToEuler(pose.rotationQuat);
-                pose.isQuaternion = true;
-            } else {
-                pose.rotation = LerpVector3(keyA.rotation, keyB.rotation, rate);
-                pose.rotationQuat = Math::MakeQuaternionFromEuler(pose.rotation);
-                pose.isQuaternion = false;
-            }
-            return pose;
-        }
-
+    if (loopedTime >= animation.keyframes.back().time) {
         return animation.keyframes.back();
     }
 
-    std::vector<JointKeyframe> SampleMotionPose(const MotionData& motion, const std::vector<Joint>& joints, float time) {
-        std::vector<JointKeyframe> pose(joints.size());
-        float duration = std::max(0.001f, motion.duration);
-        float loopedTime = std::fmod(time, duration);
-        if (loopedTime < 0.0f) {
-            loopedTime += duration;
+    for (size_t keyIndex = 0; keyIndex + 1 < animation.keyframes.size(); ++keyIndex) {
+        const auto &keyA = animation.keyframes[keyIndex];
+        const auto &keyB = animation.keyframes[keyIndex + 1];
+        if (loopedTime < keyA.time || loopedTime > keyB.time) {
+            continue;
         }
 
-        for (size_t jointIndex = 0; jointIndex < joints.size(); ++jointIndex) {
-            JointKeyframe restPose = MakeRestKeyframe(joints[jointIndex]);
-            if (jointIndex >= motion.jointAnimations.size()) {
-                pose[jointIndex] = restPose;
-                continue;
-            }
-            pose[jointIndex] = SampleJointAnimation(motion.jointAnimations[jointIndex], restPose, loopedTime);
+        float range = keyB.time - keyA.time;
+        float rate = range > 0.0f ? Clamp01((loopedTime - keyA.time) / range) : 0.0f;
+
+        JointKeyframe pose;
+        pose.time = loopedTime;
+        pose.translation = LerpVector3(keyA.translation, keyB.translation, rate);
+        pose.scale = LerpVector3(keyA.scale, keyB.scale, rate);
+        if (keyA.isQuaternion && keyB.isQuaternion) {
+            pose.rotationQuat = Math::Slerp(keyA.rotationQuat, keyB.rotationQuat, rate);
+            pose.rotation = Math::ToEuler(pose.rotationQuat);
+            pose.isQuaternion = true;
+        } else {
+            pose.rotation = LerpVector3(keyA.rotation, keyB.rotation, rate);
+            pose.rotationQuat = Math::MakeQuaternionFromEuler(pose.rotation);
+            pose.isQuaternion = false;
         }
         return pose;
     }
 
-    bool MotionNameContainsAny(const MotionData& motion, const std::vector<std::string>& hints) {
-        std::string name = motion.name;
-        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-
-        for (const auto& hint : hints) {
-            if (name.find(hint) != std::string::npos) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    int FindMotionIndexByHints(const std::vector<MotionData>& motions, const std::vector<std::string>& hints) {
-        for (size_t i = 0; i < motions.size(); ++i) {
-            if (MotionNameContainsAny(motions[i], hints)) {
-                return static_cast<int>(i);
-            }
-        }
-        return -1;
-    }
-
-    bool JointNameContainsAny(const Joint& joint, const std::vector<std::string>& hints) {
-        std::string name = joint.name;
-        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-
-        for (const auto& hint : hints) {
-            if (name.find(hint) != std::string::npos) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    int FindJointIndexByHints(const std::vector<Joint>& joints, const std::vector<std::string>& hints) {
-        for (size_t i = 0; i < joints.size(); ++i) {
-            if (JointNameContainsAny(joints[i], hints)) {
-                return static_cast<int>(i);
-            }
-        }
-        return -1;
-    }
-
-    MotionData CreateRestMotion(const std::vector<Joint>& joints, const std::string& name, float duration) {
-        MotionData motion;
-        motion.name = name;
-        motion.duration = duration;
-        motion.jointAnimations.resize(joints.size());
-
-        for (size_t i = 0; i < joints.size(); ++i) {
-            motion.jointAnimations[i].name = joints[i].name;
-            JointKeyframe pose = MakeRestKeyframe(joints[i]);
-            pose.time = 0.0f;
-            motion.jointAnimations[i].keyframes.push_back(pose);
-
-            pose.time = duration;
-            motion.jointAnimations[i].keyframes.push_back(pose);
-        }
-
-        return motion;
-    }
-
-    void AddEulerOffset(MotionData& motion, int jointIndex, size_t keyIndex, const Vector3& offset) {
-        if (jointIndex < 0 || jointIndex >= static_cast<int>(motion.jointAnimations.size())) {
-            return;
-        }
-        auto& keyframes = motion.jointAnimations[static_cast<size_t>(jointIndex)].keyframes;
-        if (keyIndex >= keyframes.size()) {
-            return;
-        }
-
-        auto& pose = keyframes[keyIndex];
-        pose.rotation.x += offset.x;
-        pose.rotation.y += offset.y;
-        pose.rotation.z += offset.z;
-        pose.rotationQuat = Math::MakeQuaternionFromEuler(pose.rotation);
-        pose.isQuaternion = false;
-    }
-
-    void AddTranslationOffset(MotionData& motion, int jointIndex, size_t keyIndex, const Vector3& offset) {
-        if (jointIndex < 0 || jointIndex >= static_cast<int>(motion.jointAnimations.size())) {
-            return;
-        }
-        auto& keyframes = motion.jointAnimations[static_cast<size_t>(jointIndex)].keyframes;
-        if (keyIndex >= keyframes.size()) {
-            return;
-        }
-
-        keyframes[keyIndex].translation.x += offset.x;
-        keyframes[keyIndex].translation.y += offset.y;
-        keyframes[keyIndex].translation.z += offset.z;
-    }
+    return animation.keyframes.back();
 }
 
+// モーションの指定時刻における全関節の姿勢を取り出す。
+std::vector<JointKeyframe> SampleMotionPose(const MotionData &motion, const std::vector<Joint> &joints, float time) {
+    std::vector<JointKeyframe> pose(joints.size());
+    float duration = std::max(0.001f, motion.duration);
+    float loopedTime = std::fmod(time, duration);
+    if (loopedTime < 0.0f) {
+        loopedTime += duration;
+    }
+
+    for (size_t jointIndex = 0; jointIndex < joints.size(); ++jointIndex) {
+        JointKeyframe restPose = MakeRestKeyframe(joints[jointIndex]);
+        if (jointIndex >= motion.jointAnimations.size()) {
+            pose[jointIndex] = restPose;
+            continue;
+        }
+        pose[jointIndex] = SampleJointAnimation(motion.jointAnimations[jointIndex], restPose, loopedTime);
+    }
+    return pose;
+}
+
+// モーション名が候補語のいずれかを含むか調べる。
+bool MotionNameContainsAny(const MotionData &motion, const std::vector<std::string> &hints) {
+    std::string name = motion.name;
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    for (const auto &hint : hints) {
+        if (name.find(hint) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 名前の候補語を使い、用途に合うモーションを探す。
+int FindMotionIndexByHints(const std::vector<MotionData> &motions, const std::vector<std::string> &hints) {
+    for (size_t i = 0; i < motions.size(); ++i) {
+        if (MotionNameContainsAny(motions[i], hints)) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+// 関節名が候補語のいずれかを含むか調べる。
+bool JointNameContainsAny(const Joint &joint, const std::vector<std::string> &hints) {
+    std::string name = joint.name;
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    for (const auto &hint : hints) {
+        if (name.find(hint) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 名前の候補語を使い、操作対象の関節を探す。
+int FindJointIndexByHints(const std::vector<Joint> &joints, const std::vector<std::string> &hints) {
+    for (size_t i = 0; i < joints.size(); ++i) {
+        if (JointNameContainsAny(joints[i], hints)) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+// スケルトンの基準姿勢を保つモーションを作る。
+MotionData CreateRestMotion(const std::vector<Joint> &joints, const std::string &name, float duration) {
+    MotionData motion;
+    motion.name = name;
+    motion.duration = duration;
+    motion.jointAnimations.resize(joints.size());
+
+    for (size_t i = 0; i < joints.size(); ++i) {
+        motion.jointAnimations[i].name = joints[i].name;
+        JointKeyframe pose = MakeRestKeyframe(joints[i]);
+        pose.time = 0.0f;
+        motion.jointAnimations[i].keyframes.push_back(pose);
+
+        pose.time = duration;
+        motion.jointAnimations[i].keyframes.push_back(pose);
+    }
+
+    return motion;
+}
+
+// キーフレームの回転へ、指定したオイラー角の補正を加える。
+void AddEulerOffset(MotionData &motion, int jointIndex, size_t keyIndex, const Vector3 &offset) {
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(motion.jointAnimations.size())) {
+        return;
+    }
+    auto &keyframes = motion.jointAnimations[static_cast<size_t>(jointIndex)].keyframes;
+    if (keyIndex >= keyframes.size()) {
+        return;
+    }
+
+    auto &pose = keyframes[keyIndex];
+    pose.rotation.x += offset.x;
+    pose.rotation.y += offset.y;
+    pose.rotation.z += offset.z;
+    pose.rotationQuat = Math::MakeQuaternionFromEuler(pose.rotation);
+    pose.isQuaternion = false;
+}
+
+// キーフレームの位置へ、指定した移動量を加える。
+void AddTranslationOffset(MotionData &motion, int jointIndex, size_t keyIndex, const Vector3 &offset) {
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(motion.jointAnimations.size())) {
+        return;
+    }
+    auto &keyframes = motion.jointAnimations[static_cast<size_t>(jointIndex)].keyframes;
+    if (keyIndex >= keyframes.size()) {
+        return;
+    }
+
+    keyframes[keyIndex].translation.x += offset.x;
+    keyframes[keyIndex].translation.y += offset.y;
+    keyframes[keyIndex].translation.z += offset.z;
+}
+}
+
+// 保持するGPU資源と参照を解放する。
 SkinnedModel::~SkinnedModel() {
     if (cpuSkinnedVertexBuffer_ && mappedSkinnedVertices_) {
         cpuSkinnedVertexBuffer_->Unmap(0, nullptr);
@@ -298,50 +293,46 @@ SkinnedModel::~SkinnedModel() {
     }
 }
 
-void SkinnedModel::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager) {
+// 関節と重みを持つモデルを準備し、初期値と必要なリソースを設定する。
+void SkinnedModel::Initialize(DirectXCommon *dxCommon, TextureManager *textureManager) {
     restPoseCaptured_ = false;
-    // 1. 
+    // 1.
     CreateHumanoidSkeleton();
 
-    // 2.  () 
+    // 2.  ()
     GenerateHumanoidMesh();
-    
-    // 3. 
+
+    // 3.
     SmoothWeights();
 
     BuildJointMetadata();
 
-    // 4. 
+    // 4.
     if (textureManager) {
         textureHandle_ = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
     }
 
-    // 5. 
+    // 5.
     CreateBuffers(dxCommon);
 
     // 6.  Model ()
     model_ = std::make_unique<Model>();
-    // model_ 
+    // model_
 
     // 7.  ()
     ResetPose();
     CaptureRestPose();
 }
 
-void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string& filePath, TextureManager* textureManager, bool explorerOutfit) {
+// glTFの関節・頂点・モーションを読み、変形と描画の準備をする。
+void SkinnedModel::InitializeFromGltf(DirectXCommon *dxCommon, const std::string &filePath,
+                                      TextureManager *textureManager, bool explorerOutfit) {
     restPoseCaptured_ = false;
     std::string texturePath;
-    
+
     // glTF
-    bool success = GltfLoader::LoadGltfModel(
-        dxCommon,
-        textureManager,
-        filePath,
-        skinnedVertices_,
-        joints_,
-        motions_,
-        texturePath
-    );
+    bool success =
+        GltfLoader::LoadGltfModel(dxCommon, textureManager, filePath, skinnedVertices_, joints_, motions_, texturePath);
 
     if (!success) {
         OutputDebugStringA("Failed to load glTF model. Falling back to default humanoid mesh.\n");
@@ -349,7 +340,9 @@ void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string
         return;
     }
 
-    if (explorerOutfit) AddExplorerOutfit();
+    if (explorerOutfit) {
+        AddExplorerOutfit();
+    }
     activeMotionIndex_ = motions_.empty() ? -1 : 0;
 
     if (textureManager && !texturePath.empty()) {
@@ -364,13 +357,14 @@ void SkinnedModel::InitializeFromGltf(DirectXCommon* dxCommon, const std::string
     CaptureRestPose();
 }
 
-bool SkinnedModel::SetJointLocalTransform(size_t jointIndex, const Vector3& translation,
-    const Vector3& rotation, const Vector3& scale) {
+// 関節番号を検証し、その関節のローカル姿勢を書き換える。
+bool SkinnedModel::SetJointLocalTransform(size_t jointIndex, const Vector3 &translation, const Vector3 &rotation,
+                                          const Vector3 &scale) {
     if (jointIndex >= joints_.size()) {
         return false;
     }
 
-    Joint& joint = joints_[jointIndex];
+    Joint &joint = joints_[jointIndex];
     joint.translation = translation;
     joint.rotation = rotation;
     joint.scale = scale;
@@ -378,9 +372,10 @@ bool SkinnedModel::SetJointLocalTransform(size_t jointIndex, const Vector3& tran
     return true;
 }
 
+// 関節の姿勢を、保存してある基準姿勢へ戻す。
 void SkinnedModel::ResetPose() {
     if (restPoseCaptured_) {
-        for (auto& joint : joints_) {
+        for (auto &joint : joints_) {
             joint.translation = joint.restTranslation;
             joint.rotation = joint.restRotation;
             joint.scale = joint.restScale;
@@ -391,21 +386,21 @@ void SkinnedModel::ResetPose() {
     }
 
     for (size_t i = 0; i < joints_.size(); ++i) {
-        joints_[i].scale = { 1.0f, 1.0f, 1.0f };
-        
+        joints_[i].scale = {1.0f, 1.0f, 1.0f};
 
         if (joints_[i].name == "LeftShoulder") {
-            joints_[i].rotation = { 0.0f, 0.0f, 1.3f };  // ()
+            joints_[i].rotation = {0.0f, 0.0f, 1.3f}; // ()
         } else if (joints_[i].name == "RightShoulder") {
-            joints_[i].rotation = { 0.0f, 0.0f, -1.3f }; // ()
+            joints_[i].rotation = {0.0f, 0.0f, -1.3f}; // ()
         } else {
-            joints_[i].rotation = { 0.0f, 0.0f, 0.0f };
+            joints_[i].rotation = {0.0f, 0.0f, 0.0f};
         }
         joints_[i].rotationQuat = Math::MakeQuaternionFromEuler(joints_[i].rotation);
         joints_[i].isQuaternion = false;
     }
 }
 
+// 手続き生成モデルで使う、人型の関節階層を作る。
 void SkinnedModel::CreateHumanoidSkeleton() {
     joints_.clear();
 
@@ -418,54 +413,50 @@ void SkinnedModel::CreateHumanoidSkeleton() {
 
     //  (5
     std::vector<JointDef> defs = {
-        { "Pelvis",        { 0.0f, 0.8f, 0.0f },    -1 }, // 0
-        { "Spine",         { 0.0f, 1.1f, 0.0f },     0 }, // 1
-        { "Head",          { 0.0f, 1.4f, 0.0f },     1 }, // 2
-        
-        { "LeftShoulder",  { -0.25f, 1.3f, 0.0f },   1 }, // 3
-        { "LeftElbow",     { -0.5f, 1.3f, 0.0f },    3 }, // 4
-        { "LeftHand",      { -0.7f, 1.3f, 0.0f },    4 }, // 5
-        
-        { "RightShoulder", { 0.25f, 1.3f, 0.0f },    1 }, // 6
-        { "RightElbow",    { 0.5f, 1.3f, 0.0f },     6 }, // 7
-        { "RightHand",     { 0.7f, 1.3f, 0.0f },     7 }, // 8
-        
-        { "LeftHip",       { -0.15f, 0.7f, 0.0f },   0 }, // 9
-        { "LeftKnee",      { -0.15f, 0.35f, 0.0f },  9 }, // 10
-        { "LeftFoot",      { -0.15f, 0.0f, 0.0f },   10 }, // 11
-        
-        { "RightHip",      { 0.15f, 0.7f, 0.0f },    0 }, // 12
-        { "RightKnee",     { 0.15f, 0.35f, 0.0f },  12 }, // 13
-        { "RightFoot",     { 0.15f, 0.0f, 0.0f },   13 }  // 14
+        {"Pelvis", {0.0f, 0.8f, 0.0f}, -1}, // 0
+        {"Spine", {0.0f, 1.1f, 0.0f}, 0},   // 1
+        {"Head", {0.0f, 1.4f, 0.0f}, 1},    // 2
+
+        {"LeftShoulder", {-0.25f, 1.3f, 0.0f}, 1}, // 3
+        {"LeftElbow", {-0.5f, 1.3f, 0.0f}, 3},     // 4
+        {"LeftHand", {-0.7f, 1.3f, 0.0f}, 4},      // 5
+
+        {"RightShoulder", {0.25f, 1.3f, 0.0f}, 1}, // 6
+        {"RightElbow", {0.5f, 1.3f, 0.0f}, 6},     // 7
+        {"RightHand", {0.7f, 1.3f, 0.0f}, 7},      // 8
+
+        {"LeftHip", {-0.15f, 0.7f, 0.0f}, 0},   // 9
+        {"LeftKnee", {-0.15f, 0.35f, 0.0f}, 9}, // 10
+        {"LeftFoot", {-0.15f, 0.0f, 0.0f}, 10}, // 11
+
+        {"RightHip", {0.15f, 0.7f, 0.0f}, 0},    // 12
+        {"RightKnee", {0.15f, 0.35f, 0.0f}, 12}, // 13
+        {"RightFoot", {0.15f, 0.0f, 0.0f}, 13}   // 14
     };
 
     joints_.resize(defs.size());
 
-
     for (size_t i = 0; i < defs.size(); ++i) {
         joints_[i].name = defs[i].name;
-        joints_[i].scale = { 1.0f, 1.0f, 1.0f };
-        joints_[i].rotation = { 0.0f, 0.0f, 0.0f };
+        joints_[i].scale = {1.0f, 1.0f, 1.0f};
+        joints_[i].rotation = {0.0f, 0.0f, 0.0f};
         joints_[i].parentIndex = defs[i].parentIndex;
         joints_[i].externalParentMatrix = Math::MakeIdentity4x4();
 
-        // ( translation) 
+        // ( translation)
         if (defs[i].parentIndex == -1) {
             joints_[i].translation = defs[i].globalPos;
         } else {
             int parentIdx = defs[i].parentIndex;
-            joints_[i].translation = {
-                defs[i].globalPos.x - defs[parentIdx].globalPos.x,
-                defs[i].globalPos.y - defs[parentIdx].globalPos.y,
-                defs[i].globalPos.z - defs[parentIdx].globalPos.z
-            };
+            joints_[i].translation = {defs[i].globalPos.x - defs[parentIdx].globalPos.x,
+                                      defs[i].globalPos.y - defs[parentIdx].globalPos.y,
+                                      defs[i].globalPos.z - defs[parentIdx].globalPos.z};
         }
     }
 
-
     for (size_t i = 0; i < joints_.size(); ++i) {
         Matrix4x4 localTrans = Math::MakeTranslateMatrix(joints_[i].translation);
-        //  localMatrix 
+        //  localMatrix
         joints_[i].localMatrix = localTrans;
 
         if (joints_[i].parentIndex == -1) {
@@ -482,16 +473,17 @@ void SkinnedModel::CreateHumanoidSkeleton() {
     BuildJointMetadata();
 }
 
+// 関節階層の参照情報を整理し、名前と親子関係を扱えるようにする。
 void SkinnedModel::BuildJointMetadata() {
     rootJointIndex_ = -1;
     jointIndexMap_.clear();
 
-    for (auto& joint : joints_) {
+    for (auto &joint : joints_) {
         joint.childIndices.clear();
     }
 
     for (size_t i = 0; i < joints_.size(); ++i) {
-        Joint& joint = joints_[i];
+        Joint &joint = joints_[i];
         jointIndexMap_[joint.name] = static_cast<int>(i);
 
         if (joint.parentIndex >= 0 && joint.parentIndex < static_cast<int>(joints_.size())) {
@@ -502,8 +494,9 @@ void SkinnedModel::BuildJointMetadata() {
     }
 }
 
+// 現在の関節変換を、復元用の基準姿勢として保存する。
 void SkinnedModel::CaptureRestPose() {
-    for (auto& joint : joints_) {
+    for (auto &joint : joints_) {
         joint.restTranslation = joint.translation;
         joint.restRotation = joint.rotation;
         joint.restScale = joint.scale;
@@ -513,88 +506,80 @@ void SkinnedModel::CaptureRestPose() {
     restPoseCaptured_ = true;
 }
 
+// 人型の各部位を生成し、関節に追従する頂点と重みを割り当てる。
 void SkinnedModel::GenerateHumanoidMesh() {
     skinnedVertices_.clear();
 
-    //  Cube 
+    //  Cube
     // Pelvis ()
-    AddCubeMesh({ 0.0f, 0.8f, 0.0f }, { 0.4f, 0.2f, 0.2f }, 0);
+    AddCubeMesh({0.0f, 0.8f, 0.0f}, {0.4f, 0.2f, 0.2f}, 0);
     // Spine ()
-    AddCubeMesh({ 0.0f, 1.1f, 0.0f }, { 0.5f, 0.4f, 0.22f }, 1);
+    AddCubeMesh({0.0f, 1.1f, 0.0f}, {0.5f, 0.4f, 0.22f}, 1);
     // Head ()
-    AddCubeMesh({ 0.0f, 1.45f, 0.0f }, { 0.2f, 0.2f, 0.2f }, 2);
+    AddCubeMesh({0.0f, 1.45f, 0.0f}, {0.2f, 0.2f, 0.2f}, 2);
 
+    AddCubeMesh({-0.375f, 1.3f, 0.0f}, {0.25f, 0.1f, 0.1f}, 3);
+    AddCubeMesh({-0.6f, 1.3f, 0.0f}, {0.2f, 0.08f, 0.08f}, 4);
+    AddCubeMesh({-0.725f, 1.3f, 0.0f}, {0.07f, 0.07f, 0.07f}, 5);
 
-    AddCubeMesh({ -0.375f, 1.3f, 0.0f }, { 0.25f, 0.1f, 0.1f }, 3);
-    AddCubeMesh({ -0.6f, 1.3f, 0.0f }, { 0.2f, 0.08f, 0.08f }, 4);
-    AddCubeMesh({ -0.725f, 1.3f, 0.0f }, { 0.07f, 0.07f, 0.07f }, 5);
+    AddCubeMesh({0.375f, 1.3f, 0.0f}, {0.25f, 0.1f, 0.1f}, 6);
+    AddCubeMesh({0.6f, 1.3f, 0.0f}, {0.2f, 0.08f, 0.08f}, 7);
+    AddCubeMesh({0.725f, 1.3f, 0.0f}, {0.07f, 0.07f, 0.07f}, 8);
 
+    AddCubeMesh({-0.15f, 0.525f, 0.0f}, {0.12f, 0.35f, 0.12f}, 9);
+    AddCubeMesh({-0.15f, 0.175f, 0.0f}, {0.1f, 0.35f, 0.1f}, 10);
+    AddCubeMesh({-0.15f, -0.05f, 0.05f}, {0.1f, 0.1f, 0.15f}, 11);
 
-    AddCubeMesh({ 0.375f, 1.3f, 0.0f }, { 0.25f, 0.1f, 0.1f }, 6);
-    AddCubeMesh({ 0.6f, 1.3f, 0.0f }, { 0.2f, 0.08f, 0.08f }, 7);
-    AddCubeMesh({ 0.725f, 1.3f, 0.0f }, { 0.07f, 0.07f, 0.07f }, 8);
-
-
-    AddCubeMesh({ -0.15f, 0.525f, 0.0f }, { 0.12f, 0.35f, 0.12f }, 9);
-    AddCubeMesh({ -0.15f, 0.175f, 0.0f }, { 0.1f, 0.35f, 0.1f }, 10);
-    AddCubeMesh({ -0.15f, -0.05f, 0.05f }, { 0.1f, 0.1f, 0.15f }, 11);
-
-
-    AddCubeMesh({ 0.15f, 0.525f, 0.0f }, { 0.12f, 0.35f, 0.12f }, 12);
-    AddCubeMesh({ 0.15f, 0.175f, 0.0f }, { 0.1f, 0.35f, 0.1f }, 13);
-    AddCubeMesh({ 0.15f, -0.05f, 0.05f }, { 0.1f, 0.1f, 0.15f }, 14);
+    AddCubeMesh({0.15f, 0.525f, 0.0f}, {0.12f, 0.35f, 0.12f}, 12);
+    AddCubeMesh({0.15f, 0.175f, 0.0f}, {0.1f, 0.35f, 0.1f}, 13);
+    AddCubeMesh({0.15f, -0.05f, 0.05f}, {0.1f, 0.1f, 0.15f}, 14);
 }
 
-void SkinnedModel::AddCubeMesh(const Vector3& center, const Vector3& size, int jointIndex) {
+// 指定した大きさと関節情報から、ボックス形状の頂点を追加する。
+void SkinnedModel::AddCubeMesh(const Vector3 &center, const Vector3 &size, int jointIndex) {
     float hx = size.x * 0.5f;
     float hy = size.y * 0.5f;
     float hz = size.z * 0.5f;
 
     Vector3 localVertices[8] = {
-        { center.x - hx, center.y - hy, center.z - hz }, // 0
-        { center.x + hx, center.y - hy, center.z - hz }, // 1
-        { center.x - hx, center.y + hy, center.z - hz }, // 2
-        { center.x + hx, center.y + hy, center.z - hz }, // 3
-        { center.x - hx, center.y - hy, center.z + hz }, // 4
-        { center.x + hx, center.y - hy, center.z + hz }, // 5
-        { center.x - hx, center.y + hy, center.z + hz }, // 6
-        { center.x + hx, center.y + hy, center.z + hz }  // 7
+        {center.x - hx, center.y - hy, center.z - hz}, // 0
+        {center.x + hx, center.y - hy, center.z - hz}, // 1
+        {center.x - hx, center.y + hy, center.z - hz}, // 2
+        {center.x + hx, center.y + hy, center.z - hz}, // 3
+        {center.x - hx, center.y - hy, center.z + hz}, // 4
+        {center.x + hx, center.y - hy, center.z + hz}, // 5
+        {center.x - hx, center.y + hy, center.z + hz}, // 6
+        {center.x + hx, center.y + hy, center.z + hz}  // 7
     };
 
     struct Face {
         int idx[4];
         Vector3 normal;
     };
-    Face faces[6] = {
-        { { 0, 2, 3, 1 }, { 0.0f, 0.0f, -1.0f } },
-        { { 1, 3, 7, 5 }, { 1.0f, 0.0f, 0.0f } },
-        { { 5, 7, 6, 4 }, { 0.0f, 0.0f, 1.0f } },
-        { { 4, 6, 2, 0 }, { -1.0f, 0.0f, 0.0f } },
-        { { 2, 6, 7, 3 }, { 0.0f, 1.0f, 0.0f } },
-        { { 4, 0, 1, 5 }, { 0.0f, -1.0f, 0.0f } }
-    };
+    Face faces[6] = {{{0, 2, 3, 1}, {0.0f, 0.0f, -1.0f}}, {{1, 3, 7, 5}, {1.0f, 0.0f, 0.0f}},
+                     {{5, 7, 6, 4}, {0.0f, 0.0f, 1.0f}},  {{4, 6, 2, 0}, {-1.0f, 0.0f, 0.0f}},
+                     {{2, 6, 7, 3}, {0.0f, 1.0f, 0.0f}},  {{4, 0, 1, 5}, {0.0f, -1.0f, 0.0f}}};
 
     for (int f = 0; f < 6; ++f) {
-        int indices[6] = {
-            faces[f].idx[0], faces[f].idx[1], faces[f].idx[2],
-            faces[f].idx[0], faces[f].idx[2], faces[f].idx[3]
-        };
+        int indices[6] = {faces[f].idx[0], faces[f].idx[1], faces[f].idx[2],
+                          faces[f].idx[0], faces[f].idx[2], faces[f].idx[3]};
 
-        Vector2 uvs[6] = {
-            { 0.0f, 1.0f }, { 1.0f, 1.0f }, { 1.0f, 0.0f },
-            { 0.0f, 1.0f }, { 1.0f, 0.0f }, { 0.0f, 0.0f }
-        };
+        Vector2 uvs[6] = {{0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f}};
 
         for (int i = 0; i < 6; ++i) {
             SkinnedVertexData v;
-            v.position = { localVertices[indices[i]].x, localVertices[indices[i]].y, localVertices[indices[i]].z, 1.0f };
+            v.position = {localVertices[indices[i]].x, localVertices[indices[i]].y, localVertices[indices[i]].z, 1.0f};
             v.normal = faces[f].normal;
             v.texcoord = uvs[i];
-            
+
             v.jointIndices[0] = jointIndex;
-            v.jointIndices[1] = 0; v.jointIndices[2] = 0; v.jointIndices[3] = 0;
+            v.jointIndices[1] = 0;
+            v.jointIndices[2] = 0;
+            v.jointIndices[3] = 0;
             v.weights[0] = 1.0f;
-            v.weights[1] = 0.0f; v.weights[2] = 0.0f; v.weights[3] = 0.0f;
+            v.weights[1] = 0.0f;
+            v.weights[2] = 0.0f;
+            v.weights[3] = 0.0f;
 
             skinnedVertices_.push_back(v);
         }
@@ -604,86 +589,118 @@ void SkinnedModel::AddCubeMesh(const Vector3& center, const Vector3& size, int j
 // 元の人体・骨格・モーションを保ち、装備を同じスキニング頂点列へ追加する。
 // 帽子はHead、荷物はSpine2に固定するため、歩行中も身体に追従する。
 void SkinnedModel::AddExplorerOutfit() {
-    auto joint = [&](const std::string& suffix) {
-        for (size_t i=0;i<joints_.size();++i)
-            if (joints_[i].name.ends_with(suffix)) return static_cast<int>(i);
+    auto joint = [&](const std::string &suffix) {
+        for (size_t i = 0; i < joints_.size(); ++i) {
+            if (joints_[i].name.ends_with(suffix)) {
+                return static_cast<int>(i);
+            }
+        }
         return -1;
     };
-    const int head=joint(":Head"), spine=joint(":Spine2");
+    const int head = joint(":Head"), spine = joint(":Spine2");
     // 対応していない別のモデルへ誤った座標で装備を追加しない。
-    if (head<0 || spine<0 || skinnedVertices_.empty()) return;
-    const Vector4 khaki{.61f,.47f,.25f,1}, leather{.22f,.12f,.065f,1};
-    const Vector4 olive{.24f,.31f,.16f,1}, skin{.81f,.58f,.39f,1};
-    for (auto& v:skinnedVertices_) {
-        const auto& name=joints_[v.jointIndices[0]].name;
-        if (name.find("Head")!=std::string::npos || name.find("Neck")!=std::string::npos || name.find("Hand")!=std::string::npos) v.color=skin;
-        else if(v.position.y<.22f) v.color=leather;
-        else if(v.position.y<.60f) v.color=olive;
-        else v.color=khaki;
+    if (head < 0 || spine < 0 || skinnedVertices_.empty()) {
+        return;
     }
-    auto box=[&](Vector3 c,Vector3 size,int bone,Vector4 color) {
-        const size_t start=skinnedVertices_.size(); AddCubeMesh(c,size,bone);
-        for(size_t i=start;i<skinnedVertices_.size();++i) skinnedVertices_[i].color=color;
+    const Vector4 khaki{.61f, .47f, .25f, 1}, leather{.22f, .12f, .065f, 1};
+    const Vector4 olive{.24f, .31f, .16f, 1}, skin{.81f, .58f, .39f, 1};
+    for (auto &v : skinnedVertices_) {
+        const auto &name = joints_[v.jointIndices[0]].name;
+        if (name.find("Head") != std::string::npos || name.find("Neck") != std::string::npos ||
+            name.find("Hand") != std::string::npos) {
+            v.color = skin;
+        } else if (v.position.y < .22f) {
+            v.color = leather;
+        } else if (v.position.y < .60f) {
+            v.color = olive;
+        } else {
+            v.color = khaki;
+        }
+    }
+    auto box = [&](Vector3 c, Vector3 size, int bone, Vector4 color) {
+        const size_t start = skinnedVertices_.size();
+        AddCubeMesh(c, size, bone);
+        for (size_t i = start; i < skinnedVertices_.size(); ++i) {
+            skinnedVertices_[i].color = color;
+        }
     };
-    auto cylinder=[&](Vector3 c,float radius,float height,float flatten,int bone,Vector4 color) {
-        constexpr int segments=20;
-        auto triangle=[&](Vector3 a,Vector3 b,Vector3 d,Vector3 normal) {
-            for(auto p:{a,b,d}) { SkinnedVertexData v{}; v.position={p.x,p.y,p.z,1}; v.normal=normal;
-                v.texcoord={.5f,.5f}; v.color=color; v.jointIndices[0]=bone; v.weights[0]=1; skinnedVertices_.push_back(v); }
+    auto cylinder = [&](Vector3 c, float radius, float height, float flatten, int bone, Vector4 color) {
+        constexpr int segments = 20;
+        auto triangle = [&](Vector3 a, Vector3 b, Vector3 d, Vector3 normal) {
+            for (auto p : {a, b, d}) {
+                SkinnedVertexData v{};
+                v.position = {p.x, p.y, p.z, 1};
+                v.normal = normal;
+                v.texcoord = {.5f, .5f};
+                v.color = color;
+                v.jointIndices[0] = bone;
+                v.weights[0] = 1;
+                skinnedVertices_.push_back(v);
+            }
         };
-        for(int i=0;i<segments;++i) {
-            const float a=i*6.2831853f/segments,b=(i+1)*6.2831853f/segments;
-            Vector3 p{c.x+radius*std::cos(a),c.y-height*.5f,c.z+radius*flatten*std::sin(a)};
-            Vector3 q{c.x+radius*std::cos(b),p.y,c.z+radius*flatten*std::sin(b)};
-            Vector3 r{p.x,c.y+height*.5f,p.z},s{q.x,r.y,q.z};
-            const Vector3 n{std::cos((a+b)*.5f),0,std::sin((a+b)*.5f)};
-            triangle(p,r,s,n); triangle(p,s,q,n);
-            triangle({c.x,r.y,c.z},s,r,{0,1,0}); triangle({c.x,p.y,c.z},p,q,{0,-1,0});
+        for (int i = 0; i < segments; ++i) {
+            const float a = i * 6.2831853f / segments, b = (i + 1) * 6.2831853f / segments;
+            Vector3 p{c.x + radius * std::cos(a), c.y - height * .5f, c.z + radius * flatten * std::sin(a)};
+            Vector3 q{c.x + radius * std::cos(b), p.y, c.z + radius * flatten * std::sin(b)};
+            Vector3 r{p.x, c.y + height * .5f, p.z}, s{q.x, r.y, q.z};
+            const Vector3 n{std::cos((a + b) * .5f), 0, std::sin((a + b) * .5f)};
+            triangle(p, r, s, n);
+            triangle(p, s, q, n);
+            triangle({c.x, r.y, c.z}, s, r, {0, 1, 0});
+            triangle({c.x, p.y, c.z}, p, q, {0, -1, 0});
         }
     };
     // 幅広のサファリハット、濃い帽子帯、正面の小さなランプ。
-    cylinder({0,1.60f,.015f},.48f,.035f,.86f,head,khaki);
-    cylinder({0,1.72f,.015f},.31f,.22f,.91f,head,khaki);
-    cylinder({0,1.64f,.015f},.315f,.055f,.91f,head,leather);
-    box({0,1.69f,-.28f},{.10f,.085f,.035f},head,{.95f,.83f,.48f,1});
+    cylinder({0, 1.60f, .015f}, .48f, .035f, .86f, head, khaki);
+    cylinder({0, 1.72f, .015f}, .31f, .22f, .91f, head, khaki);
+    cylinder({0, 1.64f, .015f}, .315f, .055f, .91f, head, leather);
+    box({0, 1.69f, -.28f}, {.10f, .085f, .035f}, head, {.95f, .83f, .48f, 1});
     // リュック本体、ふた、ポケット、肩紐、上部の寝袋。
-    box({0,.74f,.19f},{.32f,.32f,.21f},spine,olive);
-    box({0,.91f,.20f},{.35f,.07f,.24f},spine,leather);
-    box({0,.71f,.315f},{.19f,.16f,.045f},spine,khaki);
-    for(float x:{-.12f,.12f}) {
-        box({x,.77f,-.105f},{.035f,.27f,.035f},spine,leather);
-        box({x,.74f,.325f},{.028f,.27f,.025f},spine,leather);
+    box({0, .74f, .19f}, {.32f, .32f, .21f}, spine, olive);
+    box({0, .91f, .20f}, {.35f, .07f, .24f}, spine, leather);
+    box({0, .71f, .315f}, {.19f, .16f, .045f}, spine, khaki);
+    for (float x : {-.12f, .12f}) {
+        box({x, .77f, -.105f}, {.035f, .27f, .035f}, spine, leather);
+        box({x, .74f, .325f}, {.028f, .27f, .025f}, spine, leather);
     }
-    box({0,.99f,.23f},{.40f,.10f,.13f},spine,{.42f,.55f,.48f,1});
-    box({0,.59f,-.02f},{.32f,.045f,.23f},joint(":Hips"),leather);
+    box({0, .99f, .23f}, {.40f, .10f, .13f}, spine, {.42f, .55f, .48f, 1});
+    box({0, .59f, -.02f}, {.32f, .045f, .23f}, joint(":Hips"), leather);
 }
 
+// 近傍頂点の重みをならし、関節付近の変形を滑らかにする。
 void SkinnedModel::SmoothWeights() {
-    for (auto& v : skinnedVertices_) {
-        Vector3 pos = { v.position.x, v.position.y, v.position.z };
+    for (auto &v : skinnedVertices_) {
+        Vector3 pos = {v.position.x, v.position.y, v.position.z};
         int primaryJoint = v.jointIndices[0];
 
         if (primaryJoint == 1 && pos.y < 1.0f) {
             float dist = (pos.y - 0.8f) / 0.2f;
             float weightSpine = std::max(0.0f, std::min(1.0f, dist));
-            v.jointIndices[0] = 1; v.weights[0] = weightSpine;
-            v.jointIndices[1] = 0; v.weights[1] = 1.0f - weightSpine;
+            v.jointIndices[0] = 1;
+            v.weights[0] = weightSpine;
+            v.jointIndices[1] = 0;
+            v.weights[1] = 1.0f - weightSpine;
         } else if (primaryJoint == 0 && pos.y > 0.85f) {
             float dist = (pos.y - 0.8f) / 0.1f;
             float weightSpine = std::max(0.0f, std::min(1.0f, dist));
-            v.jointIndices[0] = 0; v.weights[0] = 1.0f - weightSpine;
-            v.jointIndices[1] = 1; v.weights[1] = weightSpine;
+            v.jointIndices[0] = 0;
+            v.weights[0] = 1.0f - weightSpine;
+            v.jointIndices[1] = 1;
+            v.weights[1] = weightSpine;
         }
     }
 }
 
-void SkinnedModel::Update(DirectXCommon* dxCommon) {
+// 再生中モーションから関節姿勢とスキニング用の行列を更新する。
+void SkinnedModel::Update(DirectXCommon *dxCommon) {
     (void)dxCommon;
     for (size_t i = 0; i < joints_.size(); ++i) {
         if (joints_[i].isQuaternion) {
-            joints_[i].localMatrix = Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotationQuat, joints_[i].translation);
+            joints_[i].localMatrix =
+                Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotationQuat, joints_[i].translation);
         } else {
-            joints_[i].localMatrix = Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotation, joints_[i].translation);
+            joints_[i].localMatrix =
+                Math::MakeAffineMatrix(joints_[i].scale, joints_[i].rotation, joints_[i].translation);
         }
         joints_[i].localMatrix = Math::Multiply(joints_[i].localMatrix, joints_[i].externalParentMatrix);
 
@@ -694,15 +711,14 @@ void SkinnedModel::Update(DirectXCommon* dxCommon) {
             joints_[i].globalMatrix = Math::Multiply(joints_[i].localMatrix, joints_[parentIdx].globalMatrix);
         }
     }
-    
+
     if (mappedPalette_ && !joints_.empty()) {
         for (size_t i = 0; i < joints_.size(); ++i) {
             Matrix4x4 skeletonSpaceMatrix = Math::Multiply(joints_[i].offsetMatrix, joints_[i].globalMatrix);
             if (!IsFiniteMatrix(skeletonSpaceMatrix)) {
                 skeletonSpaceMatrix = Math::MakeIdentity4x4();
             }
-            Matrix4x4 inverseTranspose =
-                Math::Transpose(Math::Inverse(skeletonSpaceMatrix));
+            Matrix4x4 inverseTranspose = Math::Transpose(Math::Inverse(skeletonSpaceMatrix));
             if (!IsFiniteMatrix(inverseTranspose)) {
                 inverseTranspose = Math::MakeIdentity4x4();
             }
@@ -718,7 +734,8 @@ void SkinnedModel::Update(DirectXCommon* dxCommon) {
     }
 }
 
-void SkinnedModel::DispatchSkinning(DirectXCommon* dxCommon) {
+// 関節行列をGPUへ渡し、コンピュートシェーダーで頂点を変形する。
+void SkinnedModel::DispatchSkinning(DirectXCommon *dxCommon) {
     if (!dxCommon || skinnedVertices_.empty()) {
         return;
     }
@@ -729,12 +746,12 @@ void SkinnedModel::DispatchSkinning(DirectXCommon* dxCommon) {
     if (!computeRootSignature_ || !computePipelineState_) {
         CreateComputeSkinningPipeline(dxCommon);
     }
-    if (!computeRootSignature_ || !computePipelineState_ || !skinnedVertexBuffer_ ||
-        !vertexBuffer_ || !influenceBuffer_ || !jointBuffer_ || !skinningInformationBuffer_) {
+    if (!computeRootSignature_ || !computePipelineState_ || !skinnedVertexBuffer_ || !vertexBuffer_ ||
+        !influenceBuffer_ || !jointBuffer_ || !skinningInformationBuffer_) {
         return;
     }
 
-    auto* commandList = dxCommon->GetCommandList();
+    auto *commandList = dxCommon->GetCommandList();
     TransitionSkinnedVertexBuffer(commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     commandList->SetComputeRootSignature(computeRootSignature_.Get());
@@ -757,14 +774,15 @@ void SkinnedModel::DispatchSkinning(DirectXCommon* dxCommon) {
     TransitionSkinnedVertexBuffer(commandList, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 }
 
+// 関節行列と重みを使い、CPU側で変形後の頂点を計算する。
 void SkinnedModel::UpdateCpuSkinnedVertices() {
     if (!mappedSkinnedVertices_) {
         return;
     }
 
     for (size_t vertexIndex = 0; vertexIndex < skinnedVertices_.size(); ++vertexIndex) {
-        const SkinnedVertexData& source = skinnedVertices_[vertexIndex];
-        ModelVertexData& destination = mappedSkinnedVertices_[vertexIndex];
+        const SkinnedVertexData &source = skinnedVertices_[vertexIndex];
+        ModelVertexData &destination = mappedSkinnedVertices_[vertexIndex];
         destination.texcoord = source.texcoord;
         destination.color = source.color;
 
@@ -774,14 +792,10 @@ void SkinnedModel::UpdateCpuSkinnedVertices() {
             continue;
         }
 
-        Vector3 skinnedPosition = { 0.0f, 0.0f, 0.0f };
-        Vector3 skinnedNormal = { 0.0f, 0.0f, 0.0f };
+        Vector3 skinnedPosition = {0.0f, 0.0f, 0.0f};
+        Vector3 skinnedNormal = {0.0f, 0.0f, 0.0f};
         float totalWeight = 0.0f;
-        const Vector3 sourcePosition = {
-            source.position.x,
-            source.position.y,
-            source.position.z
-        };
+        const Vector3 sourcePosition = {source.position.x, source.position.y, source.position.z};
 
         for (int influenceIndex = 0; influenceIndex < 4; ++influenceIndex) {
             const float weight = source.weights[influenceIndex];
@@ -789,13 +803,10 @@ void SkinnedModel::UpdateCpuSkinnedVertices() {
                 continue;
             }
 
-            const int jointIndex = std::clamp(
-                source.jointIndices[influenceIndex],
-                0,
-                static_cast<int>(joints_.size()) - 1);
-            const Matrix4x4 skinningMatrix = Math::Multiply(
-                joints_[jointIndex].offsetMatrix,
-                joints_[jointIndex].globalMatrix);
+            const int jointIndex =
+                std::clamp(source.jointIndices[influenceIndex], 0, static_cast<int>(joints_.size()) - 1);
+            const Matrix4x4 skinningMatrix =
+                Math::Multiply(joints_[jointIndex].offsetMatrix, joints_[jointIndex].globalMatrix);
             const Vector3 position = TransformCoord(sourcePosition, skinningMatrix);
             const Matrix4x4 normalMatrix = Math::Transpose(Math::Inverse(skinningMatrix));
             const Vector3 normal = TransformNormal(source.normal, normalMatrix);
@@ -816,21 +827,15 @@ void SkinnedModel::UpdateCpuSkinnedVertices() {
         }
 
         const float inverseWeight = 1.0f / totalWeight;
-        destination.position = {
-            skinnedPosition.x * inverseWeight,
-            skinnedPosition.y * inverseWeight,
-            skinnedPosition.z * inverseWeight,
-            1.0f
-        };
-        destination.normal = Math::Normalize({
-            skinnedNormal.x * inverseWeight,
-            skinnedNormal.y * inverseWeight,
-            skinnedNormal.z * inverseWeight
-        });
+        destination.position = {skinnedPosition.x * inverseWeight, skinnedPosition.y * inverseWeight,
+                                skinnedPosition.z * inverseWeight, 1.0f};
+        destination.normal = Math::Normalize(
+            {skinnedNormal.x * inverseWeight, skinnedNormal.y * inverseWeight, skinnedNormal.z * inverseWeight});
     }
 }
 
-void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
+// モデル描画や変形に使う頂点・定数などのGPUバッファを確保する。
+void SkinnedModel::CreateBuffers(DirectXCommon *dxCommon) {
     if (skinnedVertices_.empty()) {
         return;
     }
@@ -852,20 +857,24 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
     UINT sizeVB = static_cast<UINT>(sizeof(ModelVertexData) * skinnedVertices_.size());
     UINT sizeInfluence = static_cast<UINT>(sizeof(VertexInfluence) * skinnedVertices_.size());
 
-    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
     D3D12_RESOURCE_DESC resDesc = {};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resDesc.Width = sizeVB;
-    resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resDesc.SampleDesc.Count = 1;
 
-    HRESULT hr = device->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer_));
+    HRESULT hr =
+        device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                        nullptr, IID_PPV_ARGS(&vertexBuffer_));
 
     if (SUCCEEDED(hr)) {
-        ModelVertexData* vertMap = nullptr;
-        vertexBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&vertMap));
+        ModelVertexData *vertMap = nullptr;
+        vertexBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&vertMap));
         for (size_t i = 0; i < skinnedVertices_.size(); ++i) {
             vertMap[i].position = skinnedVertices_[i].position;
             vertMap[i].texcoord = skinnedVertices_[i].texcoord;
@@ -880,19 +889,17 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
     }
 
     resDesc.Width = sizeInfluence;
-    hr = device->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&influenceBuffer_));
+    hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                         nullptr, IID_PPV_ARGS(&influenceBuffer_));
 
     if (SUCCEEDED(hr)) {
-        VertexInfluence* influenceMap = nullptr;
-        influenceBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&influenceMap));
+        VertexInfluence *influenceMap = nullptr;
+        influenceBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&influenceMap));
         for (size_t i = 0; i < skinnedVertices_.size(); ++i) {
             float sanitizedWeights[4] = {};
             float totalWeight = 0.0f;
             for (int influenceIndex = 0; influenceIndex < 4; ++influenceIndex) {
-                sanitizedWeights[influenceIndex] =
-                    SanitizeWeight(skinnedVertices_[i].weights[influenceIndex]);
+                sanitizedWeights[influenceIndex] = SanitizeWeight(skinnedVertices_[i].weights[influenceIndex]);
                 totalWeight += sanitizedWeights[influenceIndex];
             }
             if (totalWeight <= 1.0e-6f) {
@@ -901,16 +908,12 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
             }
 
             for (int influenceIndex = 0; influenceIndex < 4; ++influenceIndex) {
-                influenceMap[i].weights[influenceIndex] =
-                    sanitizedWeights[influenceIndex] / totalWeight;
+                influenceMap[i].weights[influenceIndex] = sanitizedWeights[influenceIndex] / totalWeight;
                 // Compute Shaderへ範囲外のボーン番号を渡すとDevice Hungになる。
                 // 読み込み元が壊れていても必ず有効なパレット番号へ収める。
-                const int maximumJointIndex =
-                    (std::max)(0, static_cast<int>(joints_.size()) - 1);
-                influenceMap[i].jointIndices[influenceIndex] = std::clamp(
-                    skinnedVertices_[i].jointIndices[influenceIndex],
-                    0,
-                    maximumJointIndex);
+                const int maximumJointIndex = (std::max)(0, static_cast<int>(joints_.size()) - 1);
+                influenceMap[i].jointIndices[influenceIndex] =
+                    std::clamp(skinnedVertices_[i].jointIndices[influenceIndex], 0, maximumJointIndex);
             }
         }
         influenceBuffer_->Unmap(0, nullptr);
@@ -919,20 +922,16 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
         influenceBufferView_.SizeInBytes = sizeInfluence;
         influenceBufferView_.StrideInBytes = sizeof(VertexInfluence);
     }
-    
+
     // Create matrix palette buffer.
     if (!joints_.empty()) {
         UINT sizeJoints = static_cast<UINT>(sizeof(WellForGPU) * joints_.size());
         resDesc.Width = sizeJoints;
-        HRESULT paletteHr = device->CreateCommittedResource(
-            &heapProps,
-            D3D12_HEAP_FLAG_NONE,
-            &resDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&jointBuffer_));
+        HRESULT paletteHr =
+            device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&jointBuffer_));
         if (SUCCEEDED(paletteHr)) {
-            jointBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&mappedPalette_));
+            jointBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedPalette_));
             for (size_t i = 0; i < joints_.size(); ++i) {
                 mappedPalette_[i].skeletonSpaceMatrix = Math::MakeIdentity4x4();
                 mappedPalette_[i].skeletonSpaceInverseTransposeMatrix = Math::MakeIdentity4x4();
@@ -945,19 +944,12 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
     cpuSkinnedVertexDesc.Width = sizeVB;
     cpuSkinnedVertexDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    hr = device->CreateCommittedResource(
-        &heapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &cpuSkinnedVertexDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&cpuSkinnedVertexBuffer_));
+    hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &cpuSkinnedVertexDesc,
+                                         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                         IID_PPV_ARGS(&cpuSkinnedVertexBuffer_));
 
     if (SUCCEEDED(hr)) {
-        hr = cpuSkinnedVertexBuffer_->Map(
-            0,
-            nullptr,
-            reinterpret_cast<void**>(&mappedSkinnedVertices_));
+        hr = cpuSkinnedVertexBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedSkinnedVertices_));
     }
     if (SUCCEEDED(hr) && mappedSkinnedVertices_) {
         cpuSkinnedVertexBufferView_.BufferLocation = cpuSkinnedVertexBuffer_->GetGPUVirtualAddress();
@@ -975,13 +967,9 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
     D3D12_RESOURCE_DESC gpuSkinnedVertexDesc = resDesc;
     gpuSkinnedVertexDesc.Width = sizeVB;
     gpuSkinnedVertexDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    hr = device->CreateCommittedResource(
-        &defaultHeapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &gpuSkinnedVertexDesc,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        nullptr,
-        IID_PPV_ARGS(&skinnedVertexBuffer_));
+    hr = device->CreateCommittedResource(&defaultHeapProps, D3D12_HEAP_FLAG_NONE, &gpuSkinnedVertexDesc,
+                                         D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
+                                         IID_PPV_ARGS(&skinnedVertexBuffer_));
     if (SUCCEEDED(hr)) {
         skinnedVertexBufferState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         skinnedVertexBufferView_.BufferLocation = skinnedVertexBuffer_->GetGPUVirtualAddress();
@@ -994,31 +982,28 @@ void SkinnedModel::CreateBuffers(DirectXCommon* dxCommon) {
     D3D12_RESOURCE_DESC skinningInfoDesc = resDesc;
     skinningInfoDesc.Width = (sizeof(SkinningInformationForGPU) + 0xff) & ~0xff;
     skinningInfoDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-    hr = device->CreateCommittedResource(
-        &heapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &skinningInfoDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&skinningInformationBuffer_));
+    hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &skinningInfoDesc,
+                                         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                         IID_PPV_ARGS(&skinningInformationBuffer_));
 
     if (SUCCEEDED(hr)) {
-        skinningInformationBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&mappedSkinningInformation_));
+        skinningInformationBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedSkinningInformation_));
         mappedSkinningInformation_->numVertices = static_cast<uint32_t>(skinnedVertices_.size());
         mappedSkinningInformation_->numJoints = static_cast<uint32_t>(joints_.size());
     }
-    
+
     if (useGpuSkinning_ && !joints_.empty()) {
         CreateComputeSkinningPipeline(dxCommon);
     }
 }
 
-void SkinnedModel::CreateComputeSkinningPipeline(DirectXCommon* dxCommon) {
+// GPUでスキニングを計算するシェーダーと実行設定を作成する。
+void SkinnedModel::CreateComputeSkinningPipeline(DirectXCommon *dxCommon) {
     if (!dxCommon || computeRootSignature_ || computePipelineState_) {
         return;
     }
 
-    auto* device = dxCommon->GetDevice();
+    auto *device = dxCommon->GetDevice();
 
     D3D12_ROOT_PARAMETER rootParameters[5] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -1047,24 +1032,18 @@ void SkinnedModel::CreateComputeSkinningPipeline(DirectXCommon* dxCommon) {
 
     Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
     Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
-    HRESULT hr = D3D12SerializeRootSignature(
-        &rootSignatureDesc,
-        D3D_ROOT_SIGNATURE_VERSION_1,
-        &signatureBlob,
-        &errorBlob);
+    HRESULT hr =
+        D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
     if (FAILED(hr)) {
         if (errorBlob) {
-            OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
+            OutputDebugStringA(static_cast<const char *>(errorBlob->GetBufferPointer()));
         }
         assert(false);
         return;
     }
 
-    hr = device->CreateRootSignature(
-        0,
-        signatureBlob->GetBufferPointer(),
-        signatureBlob->GetBufferSize(),
-        IID_PPV_ARGS(&computeRootSignature_));
+    hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(),
+                                     IID_PPV_ARGS(&computeRootSignature_));
     assert(SUCCEEDED(hr));
 
     auto csBlob = dxCommon->CompileShader(L"Resources/shaders/hlsl/Skinning.CS.hlsl", L"cs_6_0");
@@ -1072,13 +1051,15 @@ void SkinnedModel::CreateComputeSkinningPipeline(DirectXCommon* dxCommon) {
 
     D3D12_COMPUTE_PIPELINE_STATE_DESC computePipelineStateDesc = {};
     computePipelineStateDesc.pRootSignature = computeRootSignature_.Get();
-    computePipelineStateDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
+    computePipelineStateDesc.CS = {csBlob->GetBufferPointer(), csBlob->GetBufferSize()};
 
     hr = device->CreateComputePipelineState(&computePipelineStateDesc, IID_PPV_ARGS(&computePipelineState_));
     assert(SUCCEEDED(hr));
 }
 
-void SkinnedModel::TransitionSkinnedVertexBuffer(ID3D12GraphicsCommandList* commandList, D3D12_RESOURCE_STATES stateAfter) {
+// 変形頂点バッファを、計算用または描画用の状態へ切り替える。
+void SkinnedModel::TransitionSkinnedVertexBuffer(ID3D12GraphicsCommandList *commandList,
+                                                 D3D12_RESOURCE_STATES stateAfter) {
     if (!commandList || !skinnedVertexBuffer_ || skinnedVertexBufferState_ == stateAfter) {
         return;
     }
@@ -1095,6 +1076,7 @@ void SkinnedModel::TransitionSkinnedVertexBuffer(ID3D12GraphicsCommandList* comm
     skinnedVertexBufferState_ = stateAfter;
 }
 
+// 動作確認用の関節回転を与え、スキニング結果を確認できるようにする。
 void SkinnedModel::ApplyTestAnimation(float time, float speed) {
     float t = time * speed;
     joints_[0].rotation.z = std::sin(t) * 0.02f;
@@ -1102,21 +1084,22 @@ void SkinnedModel::ApplyTestAnimation(float time, float speed) {
     joints_[1].rotation.y = std::sin(t) * 0.05f;
     joints_[9].rotation.x = std::sin(t) * 0.4f;
     joints_[12].rotation.x = -std::sin(t) * 0.4f;
-    joints_[10].rotation.x = (std::sin(t + 1.5f) + 1.0f) * 0.3f; 
+    joints_[10].rotation.x = (std::sin(t + 1.5f) + 1.0f) * 0.3f;
     joints_[13].rotation.x = (-std::sin(t + 1.5f) + 1.0f) * 0.3f;
     joints_[3].rotation.x = -std::sin(t) * 0.3f;
     joints_[6].rotation.x = std::sin(t) * 0.3f;
     joints_[4].rotation.x = (std::sin(t - 1.0f) - 1.0f) * 0.2f;
     joints_[7].rotation.x = (-std::sin(t - 1.0f) - 1.0f) * 0.2f;
 }
+// 指定モーションを時刻で補間し、全関節の姿勢へ反映する。
 void SkinnedModel::ApplyMotion(float time) {
-    const auto& activeMotion = MutableMotionData();
+    const auto &activeMotion = MutableMotionData();
     if (activeMotion.jointAnimations.empty()) {
         return;
     }
 
     if (restPoseCaptured_) {
-        for (auto& joint : joints_) {
+        for (auto &joint : joints_) {
             joint.translation = joint.restTranslation;
             joint.rotation = joint.restRotation;
             joint.scale = joint.restScale;
@@ -1125,11 +1108,9 @@ void SkinnedModel::ApplyMotion(float time) {
         }
     }
 
-    // Duration 
+    // Duration
     const float safeDuration =
-        (std::isfinite(activeMotion.duration) && activeMotion.duration > 0.0f)
-        ? activeMotion.duration
-        : 0.001f;
+        (std::isfinite(activeMotion.duration) && activeMotion.duration > 0.0f) ? activeMotion.duration : 0.001f;
     float loopedTime = std::fmod(time, safeDuration);
     if (loopedTime < 0.0f) {
         loopedTime += safeDuration;
@@ -1139,12 +1120,12 @@ void SkinnedModel::ApplyMotion(float time) {
         if (i >= activeMotion.jointAnimations.size()) {
             continue;
         }
-        const auto& jointAnim = activeMotion.jointAnimations[i];
+        const auto &jointAnim = activeMotion.jointAnimations[i];
         if (jointAnim.keyframes.empty()) {
             continue;
         }
 
-        auto& joint = joints_[i];
+        auto &joint = joints_[i];
 
         // 1
         if (jointAnim.keyframes.size() == 1) {
@@ -1156,9 +1137,8 @@ void SkinnedModel::ApplyMotion(float time) {
             continue;
         }
 
-
         if (loopedTime <= jointAnim.keyframes.front().time) {
-            const auto& first = jointAnim.keyframes.front();
+            const auto &first = jointAnim.keyframes.front();
             joint.translation = first.translation;
             joint.rotation = first.rotation;
             joint.scale = first.scale;
@@ -1167,9 +1147,8 @@ void SkinnedModel::ApplyMotion(float time) {
             continue;
         }
 
-
         if (loopedTime >= jointAnim.keyframes.back().time) {
-            const auto& last = jointAnim.keyframes.back();
+            const auto &last = jointAnim.keyframes.back();
             joint.translation = last.translation;
             joint.rotation = last.rotation;
             joint.scale = last.scale;
@@ -1178,21 +1157,16 @@ void SkinnedModel::ApplyMotion(float time) {
             continue;
         }
 
-
         for (size_t k = 0; k < jointAnim.keyframes.size() - 1; ++k) {
-            const auto& kfA = jointAnim.keyframes[k];
-            const auto& kfB = jointAnim.keyframes[k + 1];
+            const auto &kfA = jointAnim.keyframes[k];
+            const auto &kfB = jointAnim.keyframes[k + 1];
 
             if (loopedTime >= kfA.time && loopedTime <= kfB.time) {
                 float t = (loopedTime - kfA.time) / (kfB.time - kfA.time);
 
-
-                joint.translation = {
-                    kfA.translation.x + t * (kfB.translation.x - kfA.translation.x),
-                    kfA.translation.y + t * (kfB.translation.y - kfA.translation.y),
-                    kfA.translation.z + t * (kfB.translation.z - kfA.translation.z)
-                };
-
+                joint.translation = {kfA.translation.x + t * (kfB.translation.x - kfA.translation.x),
+                                     kfA.translation.y + t * (kfB.translation.y - kfA.translation.y),
+                                     kfA.translation.z + t * (kfB.translation.z - kfA.translation.z)};
 
                 if (kfA.isQuaternion && kfB.isQuaternion) {
                     joint.rotationQuat = Math::Slerp(kfA.rotationQuat, kfB.rotationQuat, t);
@@ -1200,31 +1174,28 @@ void SkinnedModel::ApplyMotion(float time) {
                     joint.isQuaternion = true;
                 } else {
                     //  ( Lerp)
-                    joint.rotation = {
-                        kfA.rotation.x + t * (kfB.rotation.x - kfA.rotation.x),
-                        kfA.rotation.y + t * (kfB.rotation.y - kfA.rotation.y),
-                        kfA.rotation.z + t * (kfB.rotation.z - kfA.rotation.z)
-                    };
+                    joint.rotation = {kfA.rotation.x + t * (kfB.rotation.x - kfA.rotation.x),
+                                      kfA.rotation.y + t * (kfB.rotation.y - kfA.rotation.y),
+                                      kfA.rotation.z + t * (kfB.rotation.z - kfA.rotation.z)};
                     joint.isQuaternion = false;
                 }
 
-                joint.scale = {
-                    kfA.scale.x + t * (kfB.scale.x - kfA.scale.x),
-                    kfA.scale.y + t * (kfB.scale.y - kfA.scale.y),
-                    kfA.scale.z + t * (kfB.scale.z - kfA.scale.z)
-                };
+                joint.scale = {kfA.scale.x + t * (kfB.scale.x - kfA.scale.x),
+                               kfA.scale.y + t * (kfB.scale.y - kfA.scale.y),
+                               kfA.scale.z + t * (kfB.scale.z - kfA.scale.z)};
                 break;
             }
         }
     }
 }
 
+// 2つのモーションの姿勢を混ぜ、切り替え時の急変を抑える。
 void SkinnedModel::ApplyMotionBlend(int fromMotionIndex, int toMotionIndex, float time, float blendRate) {
     if (motions_.empty()) {
         return;
     }
-    if (fromMotionIndex < 0 || fromMotionIndex >= static_cast<int>(motions_.size()) ||
-        toMotionIndex < 0 || toMotionIndex >= static_cast<int>(motions_.size())) {
+    if (fromMotionIndex < 0 || fromMotionIndex >= static_cast<int>(motions_.size()) || toMotionIndex < 0 ||
+        toMotionIndex >= static_cast<int>(motions_.size())) {
         ApplyMotion(time);
         return;
     }
@@ -1235,9 +1206,9 @@ void SkinnedModel::ApplyMotionBlend(int fromMotionIndex, int toMotionIndex, floa
 
     // Translation/Scale are linearly blended. Rotation uses Slerp after converting Euler poses to quaternions.
     for (size_t jointIndex = 0; jointIndex < joints_.size(); ++jointIndex) {
-        const auto& poseA = fromPose[jointIndex];
-        const auto& poseB = toPose[jointIndex];
-        auto& joint = joints_[jointIndex];
+        const auto &poseA = fromPose[jointIndex];
+        const auto &poseB = toPose[jointIndex];
+        auto &joint = joints_[jointIndex];
 
         joint.translation = LerpVector3(poseA.translation, poseB.translation, rate);
         joint.scale = LerpVector3(poseA.scale, poseB.scale, rate);
@@ -1250,7 +1221,7 @@ void SkinnedModel::ApplyMotionBlend(int fromMotionIndex, int toMotionIndex, floa
     }
 }
 
-
+// 歩行の周期に合わせた関節キーフレームを生成する。
 void SkinnedModel::GenerateWalkPreset() {
     ClearKeyframes();
 
@@ -1286,6 +1257,7 @@ void SkinnedModel::GenerateWalkPreset() {
     }
 }
 
+// 走行の周期に合わせた関節キーフレームを生成する。
 void SkinnedModel::GenerateRunPreset() {
     ClearKeyframes();
 
@@ -1316,7 +1288,7 @@ void SkinnedModel::GenerateRunPreset() {
         joints_[0].rotation.z = std::sin(angle) * 0.05f;
 
         // 2. 脊椎 (胸) の前傾姿勢(走る時は前につんのめる)
-        joints_[1].rotation.x = 0.18f; // 前傾
+        joints_[1].rotation.x = 0.18f;                    // 前傾
         joints_[1].rotation.y = -std::sin(angle) * 0.08f; // 上半身のひねり
 
         // 3. 足(太ももと膝)
@@ -1353,27 +1325,29 @@ void SkinnedModel::GenerateRunPreset() {
     }
 }
 
+// 跳躍中の姿勢を表す関節キーフレームを生成する。
 void SkinnedModel::GenerateJumpPreset() {
     if (motions_.empty()) {
-        motions_.push_back(MotionData{ "Jump", 0.8f, {} });
+        motions_.push_back(MotionData{"Jump", 0.8f, {}});
         activeMotionIndex_ = 0;
     }
 
     MotionData jumpMotion = CreateRestMotion(joints_, "Jump", 0.8f);
-    const int hips = FindJointIndexByHints(joints_, { "hips", "pelvis" });
-    const int spine = FindJointIndexByHints(joints_, { "spine" });
-    const int head = FindJointIndexByHints(joints_, { "head" });
-    const int leftArm = FindJointIndexByHints(joints_, { "leftarm", "left_arm", "leftshoulder", "left shoulder" });
-    const int rightArm = FindJointIndexByHints(joints_, { "rightarm", "right_arm", "rightshoulder", "right shoulder" });
-    const int leftForeArm = FindJointIndexByHints(joints_, { "leftforearm", "left_forearm", "leftelbow", "left elbow" });
-    const int rightForeArm = FindJointIndexByHints(joints_, { "rightforearm", "right_forearm", "rightelbow", "right elbow" });
-    const int leftUpLeg = FindJointIndexByHints(joints_, { "leftupleg", "left_up_leg", "lefthip", "left hip" });
-    const int rightUpLeg = FindJointIndexByHints(joints_, { "rightupleg", "right_up_leg", "righthip", "right hip" });
-    const int leftLeg = FindJointIndexByHints(joints_, { "leftleg", "left_leg", "leftknee", "left knee" });
-    const int rightLeg = FindJointIndexByHints(joints_, { "rightleg", "right_leg", "rightknee", "right knee" });
+    const int hips = FindJointIndexByHints(joints_, {"hips", "pelvis"});
+    const int spine = FindJointIndexByHints(joints_, {"spine"});
+    const int head = FindJointIndexByHints(joints_, {"head"});
+    const int leftArm = FindJointIndexByHints(joints_, {"leftarm", "left_arm", "leftshoulder", "left shoulder"});
+    const int rightArm = FindJointIndexByHints(joints_, {"rightarm", "right_arm", "rightshoulder", "right shoulder"});
+    const int leftForeArm = FindJointIndexByHints(joints_, {"leftforearm", "left_forearm", "leftelbow", "left elbow"});
+    const int rightForeArm =
+        FindJointIndexByHints(joints_, {"rightforearm", "right_forearm", "rightelbow", "right elbow"});
+    const int leftUpLeg = FindJointIndexByHints(joints_, {"leftupleg", "left_up_leg", "lefthip", "left hip"});
+    const int rightUpLeg = FindJointIndexByHints(joints_, {"rightupleg", "right_up_leg", "righthip", "right hip"});
+    const int leftLeg = FindJointIndexByHints(joints_, {"leftleg", "left_leg", "leftknee", "left knee"});
+    const int rightLeg = FindJointIndexByHints(joints_, {"rightleg", "right_leg", "rightknee", "right knee"});
 
-    const float times[] = { 0.0f, 0.12f, 0.28f, 0.55f, 0.8f };
-    for (auto& jointAnimation : jumpMotion.jointAnimations) {
+    const float times[] = {0.0f, 0.12f, 0.28f, 0.55f, 0.8f};
+    for (auto &jointAnimation : jumpMotion.jointAnimations) {
         if (jointAnimation.keyframes.empty()) {
             continue;
         }
@@ -1388,37 +1362,38 @@ void SkinnedModel::GenerateJumpPreset() {
     }
 
     // 0: 通常姿勢、1: 踏み込み、2: 蹴り上げ、3: 空中、4: 着地戻り。
-    AddTranslationOffset(jumpMotion, hips, 1, { 0.0f, -0.08f, 0.0f });
-    AddTranslationOffset(jumpMotion, hips, 2, { 0.0f, 0.10f, 0.0f });
-    AddTranslationOffset(jumpMotion, hips, 3, { 0.0f, 0.04f, 0.0f });
+    AddTranslationOffset(jumpMotion, hips, 1, {0.0f, -0.08f, 0.0f});
+    AddTranslationOffset(jumpMotion, hips, 2, {0.0f, 0.10f, 0.0f});
+    AddTranslationOffset(jumpMotion, hips, 3, {0.0f, 0.04f, 0.0f});
 
-    AddEulerOffset(jumpMotion, spine, 1, { 0.20f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, spine, 2, { -0.10f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, spine, 3, { 0.10f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, head, 1, { -0.06f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, spine, 1, {0.20f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, spine, 2, {-0.10f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, spine, 3, {0.10f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, head, 1, {-0.06f, 0.0f, 0.0f});
 
-    AddEulerOffset(jumpMotion, leftArm, 1, { -0.45f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, rightArm, 1, { -0.45f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, leftArm, 2, { 0.85f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, rightArm, 2, { 0.85f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, leftArm, 3, { 0.45f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, rightArm, 3, { 0.45f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, leftArm, 1, {-0.45f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, rightArm, 1, {-0.45f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, leftArm, 2, {0.85f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, rightArm, 2, {0.85f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, leftArm, 3, {0.45f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, rightArm, 3, {0.45f, 0.0f, 0.0f});
 
-    AddEulerOffset(jumpMotion, leftForeArm, 2, { 0.35f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, rightForeArm, 2, { 0.35f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, leftForeArm, 2, {0.35f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, rightForeArm, 2, {0.35f, 0.0f, 0.0f});
 
-    AddEulerOffset(jumpMotion, leftUpLeg, 1, { 0.55f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, rightUpLeg, 1, { 0.55f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, leftLeg, 1, { -0.55f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, rightLeg, 1, { -0.55f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, leftUpLeg, 3, { 0.22f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, rightUpLeg, 3, { 0.22f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, leftLeg, 3, { -0.25f, 0.0f, 0.0f });
-    AddEulerOffset(jumpMotion, rightLeg, 3, { -0.25f, 0.0f, 0.0f });
+    AddEulerOffset(jumpMotion, leftUpLeg, 1, {0.55f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, rightUpLeg, 1, {0.55f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, leftLeg, 1, {-0.55f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, rightLeg, 1, {-0.55f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, leftUpLeg, 3, {0.22f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, rightUpLeg, 3, {0.22f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, leftLeg, 3, {-0.25f, 0.0f, 0.0f});
+    AddEulerOffset(jumpMotion, rightLeg, 3, {-0.25f, 0.0f, 0.0f});
 
     MutableMotionData() = jumpMotion;
 }
 
+// プレイヤー用の歩行・走行・跳躍モーションが不足している場合に補う。
 void SkinnedModel::EnsureDefaultPlayerMotions() {
     if (joints_.empty()) {
         return;
@@ -1426,37 +1401,37 @@ void SkinnedModel::EnsureDefaultPlayerMotions() {
 
     const int previousActiveMotion = activeMotionIndex_;
 
-    if (motions_.size() == 1 &&
-        FindMotionIndexByHints(motions_, { "idle", "wait", "stand", "walk", "run", "sprint", "jump", "air", "fall", "climb", "ladder" }) < 0) {
+    if (motions_.size() == 1 && FindMotionIndexByHints(motions_, {"idle", "wait", "stand", "walk", "run", "sprint",
+                                                                  "jump", "air", "fall", "climb", "ladder"}) < 0) {
         motions_.front().name = "Walk";
     }
 
-    if (FindMotionIndexByHints(motions_, { "idle", "wait", "stand" }) < 0) {
+    if (FindMotionIndexByHints(motions_, {"idle", "wait", "stand"}) < 0) {
         motions_.push_back(CreateRestMotion(joints_, "Idle", 1.0f));
     }
 
-    int walkIndex = FindMotionIndexByHints(motions_, { "walk" });
+    int walkIndex = FindMotionIndexByHints(motions_, {"walk"});
     if (walkIndex < 0 && !motions_.empty()) {
         walkIndex = 0;
     }
 
-    if (FindMotionIndexByHints(motions_, { "run", "sprint" }) < 0 && walkIndex >= 0) {
+    if (FindMotionIndexByHints(motions_, {"run", "sprint"}) < 0 && walkIndex >= 0) {
         MotionData runMotion = motions_[static_cast<size_t>(walkIndex)];
         runMotion.name = "Run";
         const float sourceDuration = std::max(0.001f, runMotion.duration);
         const float targetDuration = std::max(0.35f, sourceDuration * 0.55f);
         const float timeScale = targetDuration / sourceDuration;
         runMotion.duration = targetDuration;
-        for (auto& jointAnimation : runMotion.jointAnimations) {
-            for (auto& keyframe : jointAnimation.keyframes) {
+        for (auto &jointAnimation : runMotion.jointAnimations) {
+            for (auto &keyframe : jointAnimation.keyframes) {
                 keyframe.time *= timeScale;
             }
         }
         motions_.push_back(runMotion);
     }
 
-    if (FindMotionIndexByHints(motions_, { "jump", "air", "fall" }) < 0) {
-        motions_.push_back(MotionData{ "Jump", 0.8f, {} });
+    if (FindMotionIndexByHints(motions_, {"jump", "air", "fall"}) < 0) {
+        motions_.push_back(MotionData{"Jump", 0.8f, {}});
         activeMotionIndex_ = static_cast<int>(motions_.size()) - 1;
         GenerateJumpPreset();
     }
@@ -1464,11 +1439,12 @@ void SkinnedModel::EnsureDefaultPlayerMotions() {
     if (previousActiveMotion >= 0 && previousActiveMotion < static_cast<int>(motions_.size())) {
         activeMotionIndex_ = previousActiveMotion;
     } else {
-        int idleIndex = FindMotionIndexByHints(motions_, { "idle", "wait", "stand" });
+        int idleIndex = FindMotionIndexByHints(motions_, {"idle", "wait", "stand"});
         activeMotionIndex_ = idleIndex >= 0 ? idleIndex : 0;
     }
 }
 
+// モーション内の最終キーフレームから再生時間を求める。
 float SkinnedModel::GetMotionDuration() const {
     if (activeMotionIndex_ >= 0 && activeMotionIndex_ < static_cast<int>(motions_.size())) {
         const float duration = motions_[activeMotionIndex_].duration;
@@ -1487,9 +1463,10 @@ void SkinnedModel::ClearKeyframes() {
     MutableMotionData().jointAnimations.clear();
 }
 
+// 対象関節のアニメーションへキーフレームを追加する。
 void SkinnedModel::AddKeyframe(float time) {
-    auto& motionData = MutableMotionData();
-    
+    auto &motionData = MutableMotionData();
+
     if (motionData.jointAnimations.empty()) {
         motionData.jointAnimations.resize(joints_.size());
         for (size_t i = 0; i < joints_.size(); ++i) {
@@ -1500,7 +1477,7 @@ void SkinnedModel::AddKeyframe(float time) {
         if (i >= motionData.jointAnimations.size()) {
             motionData.jointAnimations.resize(joints_.size());
         }
-        JointAnimation& jointAnimation = motionData.jointAnimations[i];
+        JointAnimation &jointAnimation = motionData.jointAnimations[i];
         if (jointAnimation.name.empty()) {
             jointAnimation.name = joints_[i].name;
         }
@@ -1513,9 +1490,9 @@ void SkinnedModel::AddKeyframe(float time) {
         kf.rotationQuat = joints_[i].rotationQuat;
         kf.isQuaternion = joints_[i].isQuaternion;
 
-        auto existing = std::find_if(jointAnimation.keyframes.begin(), jointAnimation.keyframes.end(), [time](const JointKeyframe& item) {
-            return std::abs(item.time - time) < 1.0e-4f;
-        });
+        auto existing =
+            std::find_if(jointAnimation.keyframes.begin(), jointAnimation.keyframes.end(),
+                         [time](const JointKeyframe &item) { return std::abs(item.time - time) < 1.0e-4f; });
         if (existing != jointAnimation.keyframes.end()) {
             *existing = kf;
         } else {
@@ -1525,9 +1502,10 @@ void SkinnedModel::AddKeyframe(float time) {
     }
 }
 
-bool SkinnedModel::SaveMotion(const std::string& filePath) {
+// 関節ごとのキーフレームをファイルへ保存する。
+bool SkinnedModel::SaveMotion(const std::string &filePath) {
     try {
-        const MotionData& motionData = MutableMotionData();
+        const MotionData &motionData = MutableMotionData();
 
         std::filesystem::path outputPath(filePath);
         if (outputPath.has_parent_path()) {
@@ -1543,29 +1521,24 @@ bool SkinnedModel::SaveMotion(const std::string& filePath) {
         root["motion"]["active"] = activeMotionIndex_;
 
         json jointsJson = json::array();
-        for (const auto& joint : joints_) {
-            jointsJson.push_back({
-                { "name", joint.name },
-                { "parent", joint.parentIndex }
-            });
+        for (const auto &joint : joints_) {
+            jointsJson.push_back({{"name", joint.name}, {"parent", joint.parentIndex}});
         }
         root["skeleton"]["joints"] = jointsJson;
 
         json animationsJson = json::array();
-        for (const auto& jointAnimation : motionData.jointAnimations) {
+        for (const auto &jointAnimation : motionData.jointAnimations) {
             json jointJson;
             jointJson["name"] = jointAnimation.name;
             jointJson["keyframes"] = json::array();
 
-            for (const auto& keyframe : jointAnimation.keyframes) {
-                jointJson["keyframes"].push_back({
-                    { "time", keyframe.time },
-                    { "translation", ToJson(keyframe.translation) },
-                    { "rotation", ToJson(keyframe.rotation) },
-                    { "scale", ToJson(keyframe.scale) },
-                    { "rotationQuat", ToJson(keyframe.rotationQuat) },
-                    { "isQuaternion", keyframe.isQuaternion }
-                });
+            for (const auto &keyframe : jointAnimation.keyframes) {
+                jointJson["keyframes"].push_back({{"time", keyframe.time},
+                                                  {"translation", ToJson(keyframe.translation)},
+                                                  {"rotation", ToJson(keyframe.rotation)},
+                                                  {"scale", ToJson(keyframe.scale)},
+                                                  {"rotationQuat", ToJson(keyframe.rotationQuat)},
+                                                  {"isQuaternion", keyframe.isQuaternion}});
             }
             animationsJson.push_back(jointJson);
         }
@@ -1579,13 +1552,14 @@ bool SkinnedModel::SaveMotion(const std::string& filePath) {
 
         file << root.dump(4);
         return true;
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         OutputDebugStringA(("SaveMotion failed: " + std::string(e.what()) + "\n").c_str());
         return false;
     }
 }
 
-bool SkinnedModel::LoadMotion(const std::string& filePath) {
+// 保存済みのモーションを読み、関節アニメーションへ復元する。
+bool SkinnedModel::LoadMotion(const std::string &filePath) {
     try {
         std::ifstream file(filePath);
         if (!file.is_open()) {
@@ -1596,7 +1570,7 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
         json root;
         file >> root;
 
-        const json& motionJson = root.contains("motion") ? root.at("motion") : root;
+        const json &motionJson = root.contains("motion") ? root.at("motion") : root;
 
         MotionData loadedMotion;
         loadedMotion.name = motionJson.value("name", std::filesystem::path(filePath).stem().string());
@@ -1607,7 +1581,7 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
         }
 
         if (motionJson.contains("joints") && motionJson.at("joints").is_array()) {
-            for (const auto& jointJson : motionJson.at("joints")) {
+            for (const auto &jointJson : motionJson.at("joints")) {
                 std::string jointName = jointJson.value("name", "");
                 auto jointIt = jointIndexMap_.find(jointName);
                 if (jointIt == jointIndexMap_.end()) {
@@ -1619,7 +1593,7 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
                     continue;
                 }
 
-                JointAnimation& jointAnimation = loadedMotion.jointAnimations[static_cast<size_t>(jointIndex)];
+                JointAnimation &jointAnimation = loadedMotion.jointAnimations[static_cast<size_t>(jointIndex)];
                 jointAnimation.name = jointName;
                 jointAnimation.keyframes.clear();
 
@@ -1627,13 +1601,17 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
                     continue;
                 }
 
-                for (const auto& keyframeJson : jointJson.at("keyframes")) {
+                for (const auto &keyframeJson : jointJson.at("keyframes")) {
                     JointKeyframe keyframe;
                     keyframe.time = keyframeJson.value("time", 0.0f);
-                    keyframe.translation = ReadVector3(keyframeJson.value("translation", json::array()), joints_[static_cast<size_t>(jointIndex)].translation);
-                    keyframe.rotation = ReadVector3(keyframeJson.value("rotation", json::array()), joints_[static_cast<size_t>(jointIndex)].rotation);
-                    keyframe.scale = ReadVector3(keyframeJson.value("scale", json::array()), joints_[static_cast<size_t>(jointIndex)].scale);
-                    keyframe.rotationQuat = ReadQuaternion(keyframeJson.value("rotationQuat", json::array()), joints_[static_cast<size_t>(jointIndex)].rotationQuat);
+                    keyframe.translation = ReadVector3(keyframeJson.value("translation", json::array()),
+                                                       joints_[static_cast<size_t>(jointIndex)].translation);
+                    keyframe.rotation = ReadVector3(keyframeJson.value("rotation", json::array()),
+                                                    joints_[static_cast<size_t>(jointIndex)].rotation);
+                    keyframe.scale = ReadVector3(keyframeJson.value("scale", json::array()),
+                                                 joints_[static_cast<size_t>(jointIndex)].scale);
+                    keyframe.rotationQuat = ReadQuaternion(keyframeJson.value("rotationQuat", json::array()),
+                                                           joints_[static_cast<size_t>(jointIndex)].rotationQuat);
                     keyframe.isQuaternion = keyframeJson.value("isQuaternion", false);
                     jointAnimation.keyframes.push_back(keyframe);
                 }
@@ -1653,13 +1631,14 @@ bool SkinnedModel::LoadMotion(const std::string& filePath) {
 
         ApplyMotion(0.0f);
         return true;
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         OutputDebugStringA(("LoadMotion failed: " + std::string(e.what()) + "\n").c_str());
         return false;
     }
 }
 
-MotionData& SkinnedModel::MutableMotionData() {
+// 指定モーションの編集可能なデータを取得する。
+MotionData &SkinnedModel::MutableMotionData() {
     if (motions_.empty()) {
         motions_.push_back(MotionData{"Motion_0", 2.0f, {}});
         activeMotionIndex_ = 0;
@@ -1670,8 +1649,9 @@ MotionData& SkinnedModel::MutableMotionData() {
     return motions_[activeMotionIndex_];
 }
 
-const MotionData& SkinnedModel::GetMotionData() const {
-    static const MotionData emptyMotion{ "Motion_0", 2.0f, {} };
+// 指定モーションの参照データを取得する。
+const MotionData &SkinnedModel::GetMotionData() const {
+    static const MotionData emptyMotion{"Motion_0", 2.0f, {}};
     if (motions_.empty()) {
         return emptyMotion;
     }
@@ -1681,17 +1661,19 @@ const MotionData& SkinnedModel::GetMotionData() const {
     return motions_[static_cast<size_t>(activeMotionIndex_)];
 }
 
+// モーション番号を検証し、再生対象を切り替える。
 void SkinnedModel::SetActiveMotionIndex(int index) {
     if (index >= 0 && index < static_cast<int>(motions_.size())) {
         activeMotionIndex_ = index;
     }
 }
 
-void SkinnedModel::SetActiveMotionName(const std::string& name) {
+void SkinnedModel::SetActiveMotionName(const std::string &name) {
     MutableMotionData().name = name.empty() ? "CustomMotion" : name;
 }
 
-void SkinnedModel::PlayAnimation(const std::string& animationName) {
+// 再生時刻とループ設定を反映し、現在のモーションを進める。
+void SkinnedModel::PlayAnimation(const std::string &animationName) {
     for (size_t i = 0; i < motions_.size(); ++i) {
         if (motions_[i].name == animationName) {
             activeMotionIndex_ = static_cast<int>(i);

@@ -6,6 +6,7 @@
 
 using json = nlohmann::json;
 
+// 天候プリセットをファイルから読み、利用可能な設定を復元する。
 void WeatherPresetManager::LoadPresets() {
     presets_.clear();
 
@@ -21,7 +22,7 @@ void WeatherPresetManager::LoadPresets() {
         try {
             file >> j;
             if (j.is_array()) {
-                for (const auto& item : j) {
+                for (const auto &item : j) {
                     WeatherPreset preset;
                     preset.name = item.value("name", "Unknown");
 
@@ -81,23 +82,23 @@ void WeatherPresetManager::LoadPresets() {
                     preset.particleColor.z = item.value("particleColor_b", 1.0f);
                     preset.particleColor.w = item.value("particleColor_a", 1.0f);
 
-                    const std::string inferredImpact = preset.name.find("Snow") != std::string::npos
-                        ? "Snow"
-                        : preset.particleEnabled ? "Rain" : "None";
+                    const std::string inferredImpact = preset.name.find("Snow") != std::string::npos ? "Snow"
+                                                       : preset.particleEnabled                      ? "Rain"
+                                                                                                     : "None";
                     preset.impactEffect = item.value("impactEffect", inferredImpact);
                     preset.stormPreset = item.value("stormPreset", "");
 
                     presets_.push_back(preset);
                 }
             }
-        }
-        catch (json::parse_error& e) {
+        } catch (json::parse_error &e) {
             std::cerr << "JSON Parse error: " << e.what() << std::endl;
             CreateDefaultPresetsIfEmpty();
         }
     }
 }
 
+// 編集した天候プリセットをファイルへ保存する。
 void WeatherPresetManager::SavePresets() {
     // ディレクトリが存在しなければ作成
     std::filesystem::path dir = std::filesystem::path(filepath_).parent_path();
@@ -106,14 +107,14 @@ void WeatherPresetManager::SavePresets() {
     }
 
     json j = json::array();
-    for (const auto& preset : presets_) {
+    for (const auto &preset : presets_) {
         json item;
         item["name"] = preset.name;
         item["clearColor_r"] = preset.clearColor.x;
         item["clearColor_g"] = preset.clearColor.y;
         item["clearColor_b"] = preset.clearColor.z;
         item["clearColor_a"] = preset.clearColor.w;
-        
+
         item["lightIntensity"] = preset.lightIntensity;
         item["lightColor_r"] = preset.lightColor.x;
         item["lightColor_g"] = preset.lightColor.y;
@@ -144,7 +145,7 @@ void WeatherPresetManager::SavePresets() {
         item["emitSize_x"] = preset.emitSize.x;
         item["emitSize_y"] = preset.emitSize.y;
         item["emitSize_z"] = preset.emitSize.z;
-        
+
         item["velocity_x"] = preset.velocity.x;
         item["velocity_y"] = preset.velocity.y;
         item["velocity_z"] = preset.velocity.z;
@@ -175,8 +176,9 @@ void WeatherPresetManager::SavePresets() {
     }
 }
 
-const WeatherPreset* WeatherPresetManager::GetPresetByName(const std::string& name) const {
-    for (const auto& preset : presets_) {
+// 名前に一致する天候プリセットを探す。
+const WeatherPreset *WeatherPresetManager::GetPresetByName(const std::string &name) const {
+    for (const auto &preset : presets_) {
         if (preset.name == name) {
             return &preset;
         }
@@ -184,8 +186,9 @@ const WeatherPreset* WeatherPresetManager::GetPresetByName(const std::string& na
     return nullptr;
 }
 
-bool WeatherPresetManager::UpdatePreset(const WeatherPreset& updatedPreset) {
-    for (auto& preset : presets_) {
+// 同名プリセットの内容を、編集後の設定へ置き換える。
+bool WeatherPresetManager::UpdatePreset(const WeatherPreset &updatedPreset) {
+    for (auto &preset : presets_) {
         if (preset.name == updatedPreset.name) {
             preset = updatedPreset;
             return true;
@@ -194,10 +197,11 @@ bool WeatherPresetManager::UpdatePreset(const WeatherPreset& updatedPreset) {
     return false;
 }
 
-void WeatherPresetManager::AddPreset(const WeatherPreset& preset) {
+void WeatherPresetManager::AddPreset(const WeatherPreset &preset) {
     presets_.push_back(preset);
 }
 
+// 保存された天候設定がない場合に、基本のプリセットを作成する。
 void WeatherPresetManager::CreateDefaultPresetsIfEmpty() {
     if (presets_.empty()) {
         {
@@ -227,9 +231,9 @@ void WeatherPresetManager::CreateDefaultPresetsIfEmpty() {
             rain.particleSize = {0.05f, 0.5f, 0.05f}; // 細長い
             rain.particleColor = {0.7f, 0.8f, 1.0f, 0.6f};
             rain.impactEffect = "Rain";
-            rain.skyColor = { 0.58f, 0.66f, 0.82f, 1.0f };
+            rain.skyColor = {0.58f, 0.66f, 0.82f, 1.0f};
             rain.skyBrightness = 0.62f;
-            rain.cloudColor = { 0.18f, 0.22f, 0.32f, 0.30f };
+            rain.cloudColor = {0.18f, 0.22f, 0.32f, 0.30f};
             rain.cloudDensity = 0.75f;
             presets_.push_back(rain);
         }
@@ -244,24 +248,24 @@ void WeatherPresetManager::CreateDefaultPresetsIfEmpty() {
             snow.particleTexture = "Resources/UI/inventory/white.png";
             snow.emitRate = 150.0f;
             snow.emitSize = {60.0f, 20.0f, 60.0f}; // 空間全体から発生
-            snow.velocity = {-1.0f, -3.0f, 0.5f}; // ふわふわ斜めに落ちる
+            snow.velocity = {-1.0f, -3.0f, 0.5f};  // ふわふわ斜めに落ちる
             snow.velocityRandom = {1.5f, 1.0f, 1.5f};
-            snow.particleSize = {0.3f, 0.3f, 0.3f}; 
+            snow.particleSize = {0.3f, 0.3f, 0.3f};
             snow.particleColor = {1.0f, 1.0f, 1.0f, 0.8f};
             snow.impactEffect = "Snow";
-            snow.skyColor = { 0.78f, 0.84f, 0.92f, 1.0f };
+            snow.skyColor = {0.78f, 0.84f, 0.92f, 1.0f};
             snow.skyBrightness = 0.92f;
-            snow.cloudColor = { 0.76f, 0.80f, 0.86f, 0.24f };
+            snow.cloudColor = {0.76f, 0.80f, 0.86f, 0.24f};
             presets_.push_back(snow);
         }
         {
             WeatherPreset tempest;
             tempest.name = "Tempest Storm";
-            tempest.clearColor = { 0.012f, 0.018f, 0.045f, 1.0f };
+            tempest.clearColor = {0.012f, 0.018f, 0.045f, 1.0f};
             tempest.lightIntensity = 0.18f;
-            tempest.lightColor = { 0.62f, 0.82f, 1.0f };
-            tempest.lightDirection = { 0.35f, -1.0f, 0.2f };
-            tempest.skyColor = { 0.12f, 0.17f, 0.30f, 1.0f };
+            tempest.lightColor = {0.62f, 0.82f, 1.0f};
+            tempest.lightDirection = {0.35f, -1.0f, 0.2f};
+            tempest.skyColor = {0.12f, 0.17f, 0.30f, 1.0f};
             tempest.skyBrightness = 0.28f;
             tempest.cloudEnabled = false;
             tempest.stormPreset = "Tempest Storm";

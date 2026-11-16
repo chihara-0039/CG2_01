@@ -1,103 +1,128 @@
-#include "GameClearScene.h"
-
+﻿#include "GameClearScene.h"
 #include "GameRuntime.h"
-
 #include <cmath>
+#include <cstring>
 
-void GameClearScene::Initialize(GameRuntime& game) {
+// 演出の用途に合わせたPCM波形を生成し、再生用の音声データへまとめる。
+Sound::SoundData GameClearScene::MakeSound(bool stamp) {
+    Sound::SoundData data{};
+    data.wfex.wFormatTag = WAVE_FORMAT_PCM;
+    data.wfex.nChannels = 1;
+    data.wfex.nSamplesPerSec = 44100;
+    data.wfex.wBitsPerSample = 16;
+    data.wfex.nBlockAlign = 2;
+    data.wfex.nAvgBytesPerSec = 88200;
+    const int count = static_cast<int>(44100 * (stamp ? .30f : .40f));
+    data.buffer.resize(count * 2);
+    uint32_t seed = 39;
+    float filtered = 0;
+    for (int i = 0; i < count; ++i) {
+        const float t = static_cast<float>(i) / 44100;
+        seed = seed * 1664525u + 1013904223u;
+        const float noise = static_cast<float>((seed >> 8) & 65535) / 32767.5f - 1;
+        filtered += .19f * (noise - filtered);
+        const float sample = stamp ? (.65f * std::sin(t * 590) * std::exp(-t * 35) + filtered * .7f * std::exp(-t * 55))
+                                   : (noise - filtered) * .18f * std::sin(t / .40f * 3.14159265f);
+        const int16_t value = static_cast<int16_t>(std::clamp(sample, -1.0f, 1.0f) * 23000);
+        std::memcpy(data.buffer.data() + i * 2, &value, 2);
+    }
+    return data;
+}
+// クリア手帳を準備し、初期値と必要なリソースを設定する。
+void GameClearScene::Initialize(GameRuntime &game) {
     game.OnSceneEntered(SceneType::GameClear);
-
-    Object3dCommon* object3dCommon = game.GetObject3dCommon();
-    letters_.clear();
-    letters_.reserve(text_.size());
-    for (size_t i = 0; i < text_.size(); ++i) {
-        Letter letter;
-        const std::string name(1, text_[i]);
-        letter.model = Model::CreateFromOBJ(
-            object3dCommon->GetDxCommon(), "Resources/Models/ClearText/" + name,
-            name + ".obj", object3dCommon->GetTextureManager());
-        letter.object = std::make_unique<Object3d>();
-        letter.object->Initialize(object3dCommon);
-        letter.object->SetModel(letter.model.get());
-        // 復旧用文字メッシュは正面向き。COURSEとCLEARの間に読みやすい空白を置く。
-        letter.object->SetRotation({ 0.0f, 0.0f, 0.0f });
-        letter.object->SetEnableLighting(false);
-        letter.position = { -6.4f + static_cast<float>(i) * 1.2f + (i >= 6 ? 0.8f : 0.0f), -10.0f, 0.0f };
-        letters_.push_back(std::move(letter));
+    elapsed_ = 0;
+    lastUpdate_ = std::chrono::steady_clock::now();
+    auto *common = game.GetObject3dCommon();
+    const int index = std::clamp(game.GetResultPageIndex(), 0, 6);
+    const std::string names[Count] = {"back",  "pages",     "report-" + std::to_string(index),
+                                      "cover", "cover-art", "map-" + std::to_string(index),
+                                      "ink",   "shadow",    "stamp"};
+    for (int i = 0; i < Count; ++i) {
+        models_[i] = Model::CreateFromOBJ(common->GetDxCommon(), "Resources/Models/Journal", names[i] + ".obj",
+                                          common->GetTextureManager());
+        objects_[i] = std::make_unique<Object3d>();
+        objects_[i]->Initialize(common);
+        objects_[i]->SetModel(models_[i].get());
+        objects_[i]->SetEnableLighting(false);
     }
-
-    timer_ = 0.0f;
-    backGuideModel_ = Model::CreateFromOBJ(object3dCommon->GetDxCommon(),
-        "Resources/Models/Recovery", "backGuide.obj", object3dCommon->GetTextureManager());
-    backGuideObject_ = std::make_unique<Object3d>();
-    backGuideObject_->Initialize(object3dCommon);
-    backGuideObject_->SetModel(backGuideModel_.get());
-    backGuideObject_->SetEnableLighting(false);
-    backGuideObject_->SetPosition({0.0f, -5.2f, 0.0f});
-    finishTimer_ = 0.0f;
-    animationFinished_ = false;
-    camera_.SetPosition({ 0.0f, 2.0f, -20.0f });
-    camera_.SetRotation({ 0.25f, 0.0f, 0.0f });
+    camera_.SetPosition({0, 1.8f, -18});
+    camera_.SetRotation({.10f, 0, 0});
+    camera_.SetFov(.56f);
     camera_.Update();
+    sound_.Initialize();
+    pageSound_ = MakeSound(false);
+    stampSound_ = MakeSound(true);
+    frame_ = JournalResult::Evaluate(0);
 }
-
-void GameClearScene::Update(GameRuntime& game, const SceneUpdateContext& context) {
-    (void)context;
-    timer_ += 1.0f;
-    bool allFinished = true;
-    for (size_t i = 0; i < letters_.size(); ++i) {
-        Letter& letter = letters_[i];
-        if (timer_ > static_cast<float>(i) * 12.0f) {
-            letter.visible = true;
-            if (letter.baseY < -3.0f) {
-                letter.baseY += 0.4f;
-                allFinished = false;
-            }
-            if (letter.bounceTime < 30.0f) {
-                letter.bounceTime += 1.0f;
-                letter.position.y = letter.baseY + std::sin(letter.bounceTime * 0.3f) * 0.8f;
-                allFinished = false;
-            } else {
-                letter.position.y = letter.baseY;
-            }
-        } else {
-            allFinished = false;
-        }
-
-        letter.object->SetPosition(letter.position);
-        letter.object->SetScale(letter.scale);
-        letter.object->SetCamera(camera_.GetViewMatrix(), camera_.GetProjectionMatrix());
-        letter.object->Update(Math::MakeIdentity4x4());
+// 手帳を開いて打刻する時刻・姿勢・効果音を進め、完了後の入力を受け付ける。
+void GameClearScene::Update(GameRuntime &game, const SceneUpdateContext &context) {
+    const auto now = std::chrono::steady_clock::now();
+    const float dt = std::clamp(std::chrono::duration<float>(now - lastUpdate_).count(), 0.0f, .05f);
+    lastUpdate_ = now;
+    const float previous = elapsed_;
+    if (game.IsResultAnimationVisible()) {
+        elapsed_ += dt;
     }
-
-    animationFinished_ = allFinished;
-    backGuideObject_->SetCamera(camera_.GetViewMatrix(), camera_.GetProjectionMatrix());
-    backGuideObject_->Update(Math::MakeIdentity4x4());
-    if (animationFinished_) {
-        finishTimer_ += 1.0f;
-        const float pulse = finishTimer_ < 10.0f
-            ? 1.0f + finishTimer_ * 0.05f
-            : (finishTimer_ < 20.0f ? 1.5f - (finishTimer_ - 10.0f) * 0.05f : 1.0f);
-        for (Letter& letter : letters_) {
-            letter.scale = { pulse, pulse, pulse };
-        }
+    if (JournalResult::Crossed(previous, elapsed_, .45f)) {
+        sound_.SoundPlay(pageSound_, .65f);
     }
-    game.RunGameClearScene(animationFinished_);
+    if (JournalResult::Crossed(previous, elapsed_, JournalResult::kImpact)) {
+        sound_.SoundPlay(stampSound_, .8f);
+    }
+    frame_ = JournalResult::Evaluate(elapsed_);
+    sound_.CleanupFinishedSoundEffects();
+    const Vector3 root{-3.2f * (1 - frame_.open), -9.5f * (1 - frame_.rise) + frame_.shake * .055f, 0};
+    for (auto &obj : objects_) {
+        obj->SetPosition(root);
+        obj->SetRotation({0, 0, frame_.shake * .006f});
+        obj->SetScale({1, 1, 1});
+        obj->SetColor({1, 1, 1, 1});
+    }
+    for (const int part : {Cover, CoverArt, Inside}) {
+        objects_[part]->SetRotation({0, frame_.open * 3.14159265359f, frame_.shake * .006f});
+    }
+    objects_[Ink]->SetPosition({root.x + 3.65f, root.y - 1.65f, -.055f});
+    objects_[Ink]->SetRotation({0, 0, -.13f});
+    const float distance = std::abs(frame_.stampZ + .36f);
+    const float spread = 1 + distance * .045f;
+    objects_[Shadow]->SetPosition({root.x + 3.65f, root.y - 1.65f, -.042f});
+    objects_[Shadow]->SetScale({spread, spread, 1});
+    objects_[Shadow]->SetColor({1, 1, 1, .7f / (1 + distance * .4f)});
+    objects_[Stamp]->SetPosition({root.x + 3.65f, root.y - 1.65f, frame_.stampZ + .04f * frame_.press});
+    objects_[Stamp]->SetRotation({0, 0, -.13f});
+    objects_[Stamp]->SetScale({1, 1, 1 - .12f * frame_.press});
+    for (auto &obj : objects_) {
+        obj->SetCamera(camera_.GetViewMatrix(), camera_.GetProjectionMatrix());
+        obj->Update(context.lightViewProjection);
+    }
+    game.RunGameClearScene(frame_.ready);
 }
-
-void GameClearScene::Draw(GameRuntime& game) {
+// クリア手帳の表示対象を選び、描画コマンドを記録する。
+void GameClearScene::Draw(GameRuntime &game) {
     (void)game;
-    for (Letter& letter : letters_) {
-        if (letter.visible && letter.object) {
-            letter.object->Draw();
-        }
+    for (const int part : {Back, Pages, Paper, Cover, CoverArt, Inside}) {
+        objects_[part]->Draw();
     }
-    if (animationFinished_ && backGuideObject_) backGuideObject_->Draw();
+    if (frame_.hand) {
+        objects_[Shadow]->Draw();
+    }
+    if (frame_.ink) {
+        objects_[Ink]->Draw();
+    }
+    if (frame_.hand) {
+        objects_[Stamp]->Draw();
+    }
 }
-
-void GameClearScene::Finalize(GameRuntime& game) {
+// クリア手帳が保持するオブジェクトとリソースを解放する。
+void GameClearScene::Finalize(GameRuntime &game) {
+    sound_.StopAllSoundEffects();
+    sound_.Finalize();
+    for (auto &obj : objects_) {
+        obj.reset();
+    }
+    for (auto &model : models_) {
+        model.reset();
+    }
     game.OnSceneExited(SceneType::GameClear);
-    letters_.clear();
-    backGuideObject_.reset();
-    backGuideModel_.reset();
 }

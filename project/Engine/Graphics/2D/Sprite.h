@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <wrl.h>
 #include <d3d12.h>
 #include "MyMath.h"
@@ -6,7 +6,7 @@
 
 // 2D UIやHUD表示に使う矩形スプライト。
 class Sprite {
-public:
+  public:
     // 1頂点分の位置とUV。
     struct VertexData {
         Vector4 position;
@@ -23,9 +23,9 @@ public:
         Matrix4x4 WVP;
     };
 
-public:
+  public:
     // 使用する共通描画設定とテクスチャを指定して初期化する。
-    void Initialize(SpriteCommon* spriteCommon, uint32_t textureHandle);
+    void Initialize(SpriteCommon *spriteCommon, uint32_t textureHandle);
 
     // 位置・サイズ・回転などの変更をGPUバッファへ反映する。
     void Update();
@@ -34,26 +34,36 @@ public:
     void Draw();
 
     // 画面上の表示位置を設定する。
-    void SetPosition(const Vector2& position) { position_ = position; transferNeeded_ = true; }
+    void SetPosition(const Vector2 &position) { position_ = position; }
     // Z軸回転角をラジアンで設定する。
-    void SetRotation(float rotation) { rotation_ = rotation; transferNeeded_ = true; }
+    void SetRotation(float rotation) { rotation_ = rotation; }
     // 表示サイズをピクセル基準で設定する。
-    void SetSize(const Vector2& size) { size_ = size; transferNeeded_ = true; }
-    void SetColor(const Vector4& color) { materialData_->color = color; }
+    void SetSize(const Vector2 &size) {
+        if (size_.x != size.x || size_.y != size.y) {
+            size_ = size;
+            transferNeeded_ = true;
+        }
+    }
+    void SetColor(const Vector4 &color) { materialData_->color = color; }
 
     // アンカーポイント。0.0～1.0で指定し、中心なら{0.5f, 0.5f}。
-    void SetAnchorPoint(const Vector2& anchor) { anchorPoint_ = anchor; transferNeeded_ = true; }
+    void SetAnchorPoint(const Vector2 &anchor) {
+        if (anchorPoint_.x != anchor.x || anchorPoint_.y != anchor.y) {
+            anchorPoint_ = anchor;
+            transferNeeded_ = true;
+        }
+    }
 
     // テクスチャの一部だけを表示するための切り抜き矩形をピクセル座標で指定する。
-    void SetTextureRect(const Vector2& position, const Vector2& size);
+    void SetTextureRect(const Vector2 &position, const Vector2 &size);
     // 描画に使うテクスチャを差し替える。
     void SetTexture(uint32_t textureHandle);
 
-    const Vector2& GetPosition() const { return position_; }
+    const Vector2 &GetPosition() const { return position_; }
     float GetRotation() const { return rotation_; }
-    const Vector2& GetSize() const { return size_; }
+    const Vector2 &GetSize() const { return size_; }
 
-private:
+  private:
     // 矩形描画用の頂点バッファを作成する。
     void CreateVertexBuffer();
     // 色情報を渡す定数バッファを作成する。
@@ -64,30 +74,34 @@ private:
     // サイズ、アンカー、切り抜き範囲をもとに頂点データを再計算する。
     void UpdateVertexData();
 
-private:
-    SpriteCommon* spriteCommon_ = nullptr;
+  private:
+    SpriteCommon *spriteCommon_ = nullptr;
     uint32_t textureHandle_ = 0;
 
     // 2Dトランスフォーム情報。
-    Vector2 position_ = { 0.0f, 0.0f };
+    Vector2 position_ = {0.0f, 0.0f};
     float rotation_ = 0.0f;
-    Vector2 size_ = { 100.0f, 100.0f };
-    Vector2 anchorPoint_ = { 0.0f, 0.0f };
+    Vector2 size_ = {100.0f, 100.0f};
+    Vector2 anchorPoint_ = {0.0f, 0.0f};
 
     // テクスチャ切り抜き情報。
-    Vector2 textureLeftTop_ = { 0.0f, 0.0f };
-    Vector2 textureSize_ = { 100.0f, 100.0f };
+    Vector2 textureLeftTop_ = {0.0f, 0.0f};
+    Vector2 textureSize_ = {100.0f, 100.0f};
 
     // CPU側の変更をGPUへ再転送する必要があるか。
     bool transferNeeded_ = true; // 頂点データの再転送が必要か
+
+    bool transformInitialized_ = false;
+    Vector2 lastPosition_{};
+    float lastRotation_ = 0.0f;
 
     // DirectXリソース。
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
-    Material* materialData_ = nullptr;
+    Material *materialData_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_;
-    TransformationMatrix* transformationMatrixData_ = nullptr;
+    TransformationMatrix *transformationMatrixData_ = nullptr;
 };

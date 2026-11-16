@@ -34,8 +34,8 @@ class ParticleManager;
 /// MyGame はこのクラスへ委譲することで、スキニング関連のメンバーをすべてここに集約する。
 /// </summary>
 class SkinningEditorController {
-public:
-    SkinningEditorController()  = default;
+  public:
+    SkinningEditorController() = default;
     ~SkinningEditorController() = default;
 
     // ========== 初期化 ==========
@@ -46,10 +46,7 @@ public:
     /// <param name="object3dCommon">Object3dCommon へのポインタ (非所有)</param>
     /// <param name="dxCommon">DirectXCommon へのポインタ (非所有)</param>
     /// <param name="textureManager">TextureManager へのポインタ (非所有)</param>
-    void Initialize(
-        Object3dCommon* object3dCommon,
-        DirectXCommon*  dxCommon,
-        TextureManager* textureManager);
+    void Initialize(Object3dCommon *object3dCommon, DirectXCommon *dxCommon, TextureManager *textureManager);
 
     // ========== 毎フレーム処理 ==========
 
@@ -62,21 +59,16 @@ public:
     /// <param name="camera">ビュー・プロジェクション行列の取得に使用する Camera</param>
     /// <param name="lightVP">影行列 (SkinnedObject の Update に渡す)</param>
     /// <param name="isGuiCaptured">ImGui がマウスをキャプチャしているか (クリック判定のガード用)</param>
-    void Update(
-        DirectXCommon*       dxCommon,
-        Input*               input,
-        Camera*              camera,
-        const Matrix4x4&     lightVP,
-        bool                 isGuiCaptured,
-        ParticleManager*     particleManager = nullptr);
+    void Update(DirectXCommon *dxCommon, Input *input, Camera *camera, const Matrix4x4 &lightVP, bool isGuiCaptured,
+                ParticleManager *particleManager = nullptr);
 
     /// <summary>グリッド線・スキニングメッシュ・スケルトンを描画する</summary>
     /// <param name="object3dCommon">スケルトン描画の PreDraw に使用</param>
     /// <param name="camera">スケルトン描画のビュー・プロジェクション行列</param>
-    void Draw(Object3dCommon* object3dCommon, Camera* camera);
+    void Draw(Object3dCommon *object3dCommon, Camera *camera);
 
     /// <summary>シャドウマップへの描画 (影を生成するため)</summary>
-    void DrawShadow(const Matrix4x4& lightVP);
+    void DrawShadow(const Matrix4x4 &lightVP);
 
     // ========== ImGui 描画 ==========
 
@@ -90,7 +82,7 @@ public:
     /// Draws a Unity-like model asset browser in the bottom Tools & Controls panel.
     /// Selecting an asset updates the 3D preview, and dragging/double-clicking can apply it to the player.
     /// </summary>
-    void DrawAssetBrowserPanel(Player* player, Model* defaultObjModel);
+    void DrawAssetBrowserPanel(Player *player, Model *defaultObjModel);
 
     /// <summary>
     /// 右パネル (Skinning Editor) に描画するサイドパネル UI。
@@ -99,26 +91,22 @@ public:
     /// <param name="camera">カメラプリセットボタンの操作対象</param>
     /// <param name="player">「ゲームに反映」ボタン押下時に更新するプレイヤー</param>
     /// <param name="defaultObjModel">インデックス 1 (OBJ プレイヤー) のモデル</param>
-    void DrawImGuiSidePanel(Camera* camera, Player* player, Model* defaultObjModel);
+    void DrawImGuiSidePanel(Camera *camera, Player *player, Model *defaultObjModel);
 
     /// <summary>DebugView のプレイヤーへ右手武器と左手 GPU パーティクルを追従させる。</summary>
-    void UpdateDebugViewAttachments(
-        SkinnedObject* target,
-        DirectXCommon* dxCommon,
-        Camera* camera,
-        const Matrix4x4& lightVP,
-        ParticleManager* particleManager);
+    void UpdateDebugViewAttachments(SkinnedObject *target, DirectXCommon *dxCommon, Camera *camera,
+                                    const Matrix4x4 &lightVP, ParticleManager *particleManager);
 
     /// <summary>DebugView 用の右手武器だけを描画する。</summary>
     void DrawDebugViewAttachments();
 
     /// <summary>DebugView の評価課題用装備設定を描画する。</summary>
-    void DrawDebugViewAttachmentImGui(SkinnedObject* target);
+    void DrawDebugViewAttachmentImGui(SkinnedObject *target);
 
     // ========== ゲッター ==========
 
     /// <summary>プレビュー用 SkinnedObject へのポインタを返す (非所有)</summary>
-    SkinnedObject* GetPreviewObject() const { return skinnedObject_.get(); }
+    SkinnedObject *GetPreviewObject() const { return skinnedObject_.get(); }
 
     /// <summary>プレビュー用 SkinnedObject が有効かどうか</summary>
     bool HasPreviewObject() const { return skinnedObject_ != nullptr; }
@@ -127,15 +115,15 @@ public:
     bool ConsumePlayRequest();
 
     /// <summary>エディタとゲームが共有するレベルJSONの保存先を返す。</summary>
-    const char* GetSceneFilePath() const { return sceneFilePath_; }
+    const char *GetSceneFilePath() const { return sceneFilePath_; }
 
     /// <summary>編集中のBOXをゲームと同じワールドAABBへ変換する。</summary>
     std::vector<WorldCollisionBox> BuildWorldCollisionBoxes() const;
 
     /// Blenderなど外部ツールが更新したレベルJSONを、開いている編集シーンへ再読込する。
-    bool ReloadExternalLevel(const std::string& filePath);
+    bool ReloadExternalLevel(const std::string &filePath);
 
-private:
+  private:
     // ========== 内部処理 ==========
 
     /// <summary>
@@ -162,17 +150,13 @@ private:
     /// インデックス 1: OBJ プレイヤー
     /// インデックス 2以降: glTF モデル
     /// </summary>
-    void ApplyModelToPlayer(Player* player, Model* defaultObjModel);
+    void ApplyModelToPlayer(Player *player, Model *defaultObjModel);
 
     /// <summary>手ジョイントの現在位置から評価課題用パーティクルを発生させる。</summary>
-    void UpdateHandParticleEmitter(ParticleManager* particleManager, SkinnedObject* target);
+    void UpdateHandParticleEmitter(ParticleManager *particleManager, SkinnedObject *target);
 
     /// <summary>Blender製の剣を右手ジョイントへ追従させる。</summary>
-    void UpdateEquippedWeapon(
-        SkinnedObject* target,
-        DirectXCommon* dxCommon,
-        Camera* camera,
-        const Matrix4x4& lightVP);
+    void UpdateEquippedWeapon(SkinnedObject *target, DirectXCommon *dxCommon, Camera *camera, const Matrix4x4 &lightVP);
 
     /// <summary>Resources/Models/weapon以下の装備モデルを一覧化する。</summary>
     void ScanWeaponModels();
@@ -204,22 +188,22 @@ private:
     /// 配置済みシーンオブジェクトの assetPath / position / rotation / scale を JSON に保存する。
     /// Model や Object3d 本体は保存せず、次回 Load 時に assetPath から再生成する。
     /// </summary>
-    bool SaveSceneObjects(const std::string& filePath);
+    bool SaveSceneObjects(const std::string &filePath);
 
     /// <summary>
     /// SaveSceneObjects で保存した JSON を読み込み、配置済みシーンオブジェクトを再構築する。
     /// 読み込み時に各 assetPath から Model と Object3d を作り直す。
     /// </summary>
-    bool LoadSceneObjects(const std::string& filePath);
+    bool LoadSceneObjects(const std::string &filePath);
 
     /// <summary>配置済みシーンオブジェクトを全削除し、選択状態も解除する。</summary>
     void ClearSceneObjects();
 
     // Loads a Blender-style level JSON and converts its MESH nodes into SceneObject entries.
-    bool LoadLevelDataIntoScene(const std::string& filePath);
-    bool AppendLevelObjectRecursive(const LevelObjectData& objectData);
+    bool LoadLevelDataIntoScene(const std::string &filePath);
+    bool AppendLevelObjectRecursive(const LevelObjectData &objectData);
 
-private:
+  private:
     /// <summary>
     /// SkinningEditor 内に配置された静的モデル1個分のデータ。
     ///
@@ -230,47 +214,47 @@ private:
     struct SceneObject {
         std::string name;      ///< Inspector に表示する名前。
         std::string assetPath; ///< 再読み込み時に Model を復元するための元アセットパス。
-        Transform transform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
-        bool disabled = false; ///< trueの場合、ゲーム側へ出さない配置物として扱う。
-        LevelColliderData collider; ///< Blenderレベルエディタから読み込んだ当たり判定情報。
-        LevelSpawnPointData spawnPoint; ///< Blender側で指定された出現地点情報。
+        Transform transform = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+        bool disabled = false;            ///< trueの場合、ゲーム側へ出さない配置物として扱う。
+        LevelColliderData collider;       ///< Blenderレベルエディタから読み込んだ当たり判定情報。
+        LevelSpawnPointData spawnPoint;   ///< Blender側で指定された出現地点情報。
         std::unique_ptr<Model> model;     ///< OBJ から生成したモデル。Object3d より長く生存させる。
         std::unique_ptr<Object3d> object; ///< 実際に描画・Transform更新を行うインスタンス。
     };
 
     // ========== 所有リソース ==========
 
-    std::unique_ptr<SkinnedObject>           skinnedObject_;  ///< スキニングプレビュー用オブジェクト (glTF)
-    std::unique_ptr<Model>                   debugCubeModel_; ///< スケルトン描画用のデバッグ立方体モデル
-    std::vector<std::unique_ptr<Object3d>>   gridLines_;      ///< 地面補助グリッド線のオブジェクト群
+    std::unique_ptr<SkinnedObject> skinnedObject_;     ///< スキニングプレビュー用オブジェクト (glTF)
+    std::unique_ptr<Model> debugCubeModel_;            ///< スケルトン描画用のデバッグ立方体モデル
+    std::vector<std::unique_ptr<Object3d>> gridLines_; ///< 地面補助グリッド線のオブジェクト群
 
     // OBJ モデルをプレビューするための Object3d と Model
     // isObjPreviewMode_ が true のとき skinnedObject_ の代わりにこちらを使う
-    std::unique_ptr<Object3d> objPreviewObject_;  ///< OBJ プレビュー用の Object3d
-    std::unique_ptr<Model>    objPreviewModel_;   ///< OBJ プレビュー用の Model
-    std::unique_ptr<Model>    appliedObjModel_;   ///< Player に適用した OBJ Model の寿命を保持する
-    bool                      isObjPreviewMode_ = false; ///< OBJ モード中かどうか
+    std::unique_ptr<Object3d> objPreviewObject_; ///< OBJ プレビュー用の Object3d
+    std::unique_ptr<Model> objPreviewModel_;     ///< OBJ プレビュー用の Model
+    std::unique_ptr<Model> appliedObjModel_;     ///< Player に適用した OBJ Model の寿命を保持する
+    bool isObjPreviewMode_ = false;              ///< OBJ モード中かどうか
 
     // ========== モデルリスト ==========
 
     std::vector<std::string> modelPaths_; ///< ファイルパス (OBJ/glTF は実際のパス, Default は識別子)
     std::vector<std::string> modelNames_; ///< UI 表示用のモデル名
-    std::string savedPreviewModelPath_; ///< 再起動後に復元するモデルパス。
+    std::string savedPreviewModelPath_;   ///< 再起動後に復元するモデルパス。
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> assetThumbnailHandles_; ///< ImGui 用ヒープにコピー済みのサムネイルハンドル
-    std::vector<bool> assetHasThumbnail_; ///< サムネイルが実在するかどうか
+    std::vector<bool> assetHasThumbnail_;                            ///< サムネイルが実在するかどうか
     std::unordered_map<uint32_t, D3D12_GPU_DESCRIPTOR_HANDLE> assetThumbnailCache_;
     // OBJ と glTF の境界インデックスを記録しておく (ChangePreviewModel での分岐に使用)
-    int objStartIndex_  = 1;  ///< OBJ ファイルが始まるインデックス (通常 1)
-    int gltfStartIndex_ = 0;  ///< glTF ファイルが始まるインデックス (スキャン後に確定)
-    int selectedModelIndex_   = 0; ///< 現在プレビュー中のモデルインデックス
+    int objStartIndex_ = 1;        ///< OBJ ファイルが始まるインデックス (通常 1)
+    int gltfStartIndex_ = 0;       ///< glTF ファイルが始まるインデックス (スキャン後に確定)
+    int selectedModelIndex_ = 0;   ///< 現在プレビュー中のモデルインデックス
     int activeGameModelIndex_ = 0; ///< ゲームに反映済みのモデルインデックス
-    int pendingModelIndex_ = -1; ///< 次フレーム先頭で安全に適用するモデル番号。
+    int pendingModelIndex_ = -1;   ///< 次フレーム先頭で安全に適用するモデル番号。
     char motionName_[128] = "CustomMotion";
     char motionPath_[256] = "Resources/Animations/custom_motion.json";
     std::string motionStatus_;
     bool hasCustomMotionFile_ = false;
-    int blendTargetMotionIndex_ = 0;  ///< Animation blend target selected by ImGui.
-    float blendDuration_ = 0.35f;     ///< Seconds used to interpolate into the target motion.
+    int blendTargetMotionIndex_ = 0;   ///< Animation blend target selected by ImGui.
+    float blendDuration_ = 0.35f;      ///< Seconds used to interpolate into the target motion.
     bool assetBrowserGridView_ = true; ///< True when the asset browser uses Unity-like tiles.
     int assetTileSize_ = 82;           ///< Pixel size used by model asset tiles.
     std::string assetBrowserStatus_;   ///< Short feedback text shown after browser actions.
@@ -282,15 +266,11 @@ private:
 
     // CG4加点要素「武器を手に持たせる」用の装備モデル。
     std::unique_ptr<SkinnedObject> equippedWeapon_;
-    Transform weaponAttachmentTransform_ = {
-        { 0.35f, 0.35f, 0.35f },
-        { 1.5707963f, 0.0f, 0.55f },
-        { 0.0f, 0.0f, 0.0f }
-    };
+    Transform weaponAttachmentTransform_ = {{0.35f, 0.35f, 0.35f}, {1.5707963f, 0.0f, 0.55f}, {0.0f, 0.0f, 0.0f}};
     // 武器モデル内で「握る位置」として扱うローカル座標。
     // モデル原点ではなく、この点が右手ジョイントへ一致するように取り付ける。
     // sword.glb の柄の中央を右手ジョイントへ合わせるローカル基準点。
-    Vector3 weaponGripPoint_ = { 0.0f, -0.25f, 0.0f };
+    Vector3 weaponGripPoint_ = {0.0f, -0.25f, 0.0f};
     bool showEquippedWeapon_ = true;
     bool usePreviewModelTexture_ = false;
     int weaponHandJointIndex_ = -1;
@@ -303,21 +283,21 @@ private:
     // Assets から配置した静的OBJの一覧。SkinningEditor中だけで編集・保存する簡易シーンデータ。
     std::vector<SceneObject> sceneObjects_;
     int selectedSceneObjectIndex_ = -1; ///< Scene Objects リストで選択中の配置物。-1 は未選択。
-    char sceneFilePath_[256] = "Resources/Levels/game_level.json"; ///< C++エディタとゲームが共有するJSON。
-    bool playRequest_ = false; ///< 保存成功後にMyGameへプレイ開始を通知する。
+    char sceneFilePath_[256] = "Resources/Levels/game_level.json";   ///< C++エディタとゲームが共有するJSON。
+    bool playRequest_ = false;                                       ///< 保存成功後にMyGameへプレイ開始を通知する。
     char levelDataPath_[256] = "Resources/Levels/sample_level.json"; ///< Blender-style level JSON path.
-    std::string loadedLevelName_; ///< Most recently imported Blender level name.
-    int levelLoadTotalNodes_ = 0; ///< Number of JSON nodes visited during the latest level import.
-    int levelLoadMeshNodes_ = 0; ///< Number of MESH nodes found during the latest level import.
-    int levelLoadPlacedObjects_ = 0; ///< Number of MESH nodes successfully converted into SceneObject entries.
-    int levelLoadFailedObjects_ = 0; ///< Number of MESH nodes that failed to load or had invalid paths.
+    std::string loadedLevelName_;                                    ///< Most recently imported Blender level name.
+    int levelLoadTotalNodes_ = 0;     ///< Number of JSON nodes visited during the latest level import.
+    int levelLoadMeshNodes_ = 0;      ///< Number of MESH nodes found during the latest level import.
+    int levelLoadPlacedObjects_ = 0;  ///< Number of MESH nodes successfully converted into SceneObject entries.
+    int levelLoadFailedObjects_ = 0;  ///< Number of MESH nodes that failed to load or had invalid paths.
     int levelLoadSkippedObjects_ = 0; ///< Number of non-MESH nodes skipped during traversal.
     std::vector<std::string> levelLoadMessages_; ///< Detailed import messages shown in the Inspector report.
-    std::string sceneEditorStatus_; ///< 保存/読込/配置などの結果を Inspector に表示する短いメッセージ。
+    std::string sceneEditorStatus_;              ///< 保存/読込/配置などの結果を Inspector に表示する短いメッセージ。
 
     // ========== 非所有ポインタ (依存参照) ==========
 
-    Object3dCommon* object3dCommon_  = nullptr; ///< Object3dCommon への参照 (所有しない)
-    DirectXCommon*  dxCommon_        = nullptr; ///< DirectXCommon への参照 (所有しない)
-    TextureManager* textureManager_  = nullptr; ///< TextureManager への参照 (所有しない)
+    Object3dCommon *object3dCommon_ = nullptr; ///< Object3dCommon への参照 (所有しない)
+    DirectXCommon *dxCommon_ = nullptr;        ///< DirectXCommon への参照 (所有しない)
+    TextureManager *textureManager_ = nullptr; ///< TextureManager への参照 (所有しない)
 };

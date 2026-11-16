@@ -1,3 +1,4 @@
+# 比較撮影の素材を読み、確認用の映像を作る。
 """エンジン録画の実映像を左右に並べ、発表用MP4/GIFを作る。"""
 from pathlib import Path
 import argparse, shutil, subprocess

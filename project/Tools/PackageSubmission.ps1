@@ -1,4 +1,5 @@
-﻿param(
+﻿# 実行に必要なファイルを集め、過去の提出物を残して新しいZIPを作る。
+param(
     [string]$RepositoryRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent),
     [string]$DesktopPath = [Environment]::GetFolderPath('Desktop')
 )

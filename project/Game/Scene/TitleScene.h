@@ -11,14 +11,14 @@
 
 // ゲーム起動時のタイトル画面を担当する正式なシーンクラス。
 class TitleScene final : public BaseScene {
-public:
-    void Initialize(GameRuntime& game) override;
-    void Update(GameRuntime& game, const SceneUpdateContext& context) override;
-    void Draw(GameRuntime& game) override;
-    void DrawBackground(GameRuntime& game) override;
-    void Finalize(GameRuntime& game) override;
+  public:
+    void Initialize(GameRuntime &game) override;
+    void Update(GameRuntime &game, const SceneUpdateContext &context) override;
+    void Draw(GameRuntime &game) override;
+    void DrawBackground(GameRuntime &game) override;
+    void Finalize(GameRuntime &game) override;
 
-private:
+  private:
     // 昼は0、夕暮れから増え、夜は1。星本体・軌跡・光源で同じ値を使う。
     float GetOrbitStarVisibility() const;
     std::unique_ptr<Model> titleModel_;
@@ -38,7 +38,7 @@ private:
     std::array<std::array<std::unique_ptr<Object3d>, kTrailCount>, 7> starTrails_;
     std::array<std::unique_ptr<Object3d>, 2> titleFlares_;
     Camera camera_;
-    Vector3 titlePosition_ = { 0.0f, -10.0f, 10.0f };
+    Vector3 titlePosition_ = {0.0f, -10.0f, 10.0f};
     Vector3 titleRotation_ = {};
     float spiralAngle_ = 0.0f;
     float pressSpaceTimer_ = 0.0f;

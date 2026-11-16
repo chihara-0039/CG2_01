@@ -1,3 +1,4 @@
+# 複雑なパーツを使う経路検証用ステージを生成する。
 """Build a playable route using an L deck and a carried stair/ladder assembly."""
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]

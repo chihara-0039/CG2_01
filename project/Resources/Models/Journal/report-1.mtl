@@ -1,0 +1,3 @@
+newmtl report-1
+Kd 1 1 1
+map_Kd report-1.png

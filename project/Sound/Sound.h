@@ -14,10 +14,8 @@
 #pragma comment(lib, "mfreadwrite.lib")
 #pragma comment(lib, "mfuuid.lib")
 
-
-class Sound
-{
-public:
+class Sound {
+  public:
     // 初期化
     void Initialize();
 
@@ -34,19 +32,17 @@ public:
         bool IsValid() const { return !buffer.empty() && wfex.nChannels != 0; }
     };
 
-
     // wav / mp4 などをまとめて読み込む
-    SoundData SoundLoadFile(const std::string& filename);
+    SoundData SoundLoadFile(const std::string &filename);
 
     // 音声データ解放
-    void SoundUnload(SoundData* soundData);
+    void SoundUnload(SoundData *soundData);
 
     // 音声再生
-    void SoundPlay(const SoundData& soundData, float volume = 1.0f);
+    void SoundPlay(const SoundData &soundData, float volume = 1.0f);
 
     // BGM再生
-    void BGMPlay(const SoundData& soundData, float volume = 0.5f);
-
+    void BGMPlay(const SoundData &soundData, float volume = 0.5f);
 
     //音源停止
     void BGMStop();
@@ -66,7 +62,7 @@ public:
     // 効果音の再生済みSourceVoiceを整理
     void CleanupFinishedSoundEffects();
 
-private:
+  private:
     // チャンクヘッダ
     struct ChunkHeader {
         char id[4];
@@ -85,23 +81,21 @@ private:
         WAVEFORMATEX fmt;
     };
 
-private:
+  private:
     // 文字列変換
-    std::wstring ConvertString(const std::string& str);
+    std::wstring ConvertString(const std::string &str);
 
-private:
+  private:
     Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
-    IXAudio2MasteringVoice* masterVoice = nullptr;
+    IXAudio2MasteringVoice *masterVoice = nullptr;
 
     // 読み込んだ音声データを保持しておく
     std::vector<SoundData> soundDatas;
 
     // 再生中のSourceVoiceを保持
-    std::vector<IXAudio2SourceVoice*> sourceVoices;
+    std::vector<IXAudio2SourceVoice *> sourceVoices;
 
     //現在再生中のBGM
-    IXAudio2SourceVoice* bgmSourceVoice = nullptr;
+    IXAudio2SourceVoice *bgmSourceVoice = nullptr;
     float bgmVolume_ = 0.5f;
-
 };
-

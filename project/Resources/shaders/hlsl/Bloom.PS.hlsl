@@ -3,13 +3,12 @@
 Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
-struct PixelShaderOutput
-{
+struct PixelShaderOutput {
     float4 color : SV_TARGET0;
 };
 
-float3 ExtractHighlight(float3 color)
-{
+// 入力色から高輝度部分を抽出し、ブルームへ渡す。
+float3 ExtractHighlight(float3 color) {
     const float luminance = dot(color, float3(0.2126f, 0.7152f, 0.0722f));
     const float peak = max(color.r, max(color.g, color.b));
     // Peak intensity also catches strongly emissive blue stars without making
@@ -21,8 +20,8 @@ float3 ExtractHighlight(float3 color)
     return color * mask;
 }
 
-PixelShaderOutput main(VertexShaderOutput input)
-{
+// 周辺の高輝度色を集め、元画像へブルームの光を重ねる。
+PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
     uint width;
     uint height;
@@ -35,12 +34,8 @@ PixelShaderOutput main(VertexShaderOutput input)
 
     // Closely packed 7x7 samples remove the visible square/grid pattern that a
     // sparse wide kernel produced around strong emissive objects.
-    [unroll]
-    for (int y = -3; y <= 3; ++y)
-    {
-        [unroll]
-        for (int x = -3; x <= 3; ++x)
-        {
+    [unroll] for (int y = -3; y <= 3; ++y) {
+        [unroll] for (int x = -3; x <= 3; ++x) {
             const float2 kernelPos = float2((float)x, (float)y);
             const float weight = exp(-dot(kernelPos, kernelPos) * 0.28f);
             const float2 uv = input.texcoord + kernelPos * texel * 3.25f;

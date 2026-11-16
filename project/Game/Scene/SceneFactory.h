@@ -6,6 +6,6 @@
 class BaseScene;
 
 class SceneFactory {
-public:
+  public:
     std::unique_ptr<BaseScene> CreateScene(SceneType type) const;
 };

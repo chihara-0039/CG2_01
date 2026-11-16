@@ -1,3 +1,4 @@
+# 比較対象を順に起動し、同じ条件で映像を記録する。
 param(
     [string]$Ffmpeg = '',
     [string]$OutputDirectory = '',

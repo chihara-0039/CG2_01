@@ -7,9 +7,10 @@
 namespace {
 
 class GameFinalizeGuard {
-public:
-    explicit GameFinalizeGuard(MyGame* game) : game_(game) {}
+  public:
+    explicit GameFinalizeGuard(MyGame *game) : game_(game) {}
 
+    // 例外や早期終了でもゲームの終了処理を実行する。
     ~GameFinalizeGuard() {
         if (game_ && active_) {
             game_->Finalize();
@@ -18,8 +19,8 @@ public:
 
     void Dismiss() { active_ = false; }
 
-private:
-    MyGame* game_ = nullptr;
+  private:
+    MyGame *game_ = nullptr;
     bool active_ = true;
 };
 
@@ -31,7 +32,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     try {
         game->Initialize();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         MessageBoxA(nullptr, e.what(), "Initialization Error", MB_ICONERROR | MB_OK);
         return -1;
     } catch (...) {
@@ -46,7 +47,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             game->Update();
             game->Draw();
         }
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         MessageBoxA(nullptr, e.what(), "Runtime Error", MB_ICONERROR | MB_OK);
         return -1;
     } catch (...) {

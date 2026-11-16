@@ -4,6 +4,10 @@
 #include "Camera.h"
 #include "Model.h"
 #include "Object3d.h"
+#include "Sound.h"
+#include "JournalResultTimeline.h"
+#include <array>
+#include <chrono>
 
 #include <memory>
 #include <string>
@@ -11,30 +15,32 @@
 
 // ゴール取得演出の後に表示する、花火付きの正式なクリアシーン。
 class GameClearScene final : public BaseScene {
-public:
-    void Initialize(GameRuntime& game) override;
-    void Update(GameRuntime& game, const SceneUpdateContext& context) override;
-    void Draw(GameRuntime& game) override;
-    void Finalize(GameRuntime& game) override;
+  public:
+    void Initialize(GameRuntime &game) override;
+    void Update(GameRuntime &game, const SceneUpdateContext &context) override;
+    void Draw(GameRuntime &game) override;
+    void Finalize(GameRuntime &game) override;
 
-private:
-    struct Letter {
-        std::unique_ptr<Model> model;
-        std::unique_ptr<Object3d> object;
-        Vector3 position = {};
-        Vector3 scale = { 1.0f, 1.0f, 1.0f };
-        float baseY = -10.0f;
-        float bounceTime = 0.0f;
-        bool visible = false;
+  private:
+    enum Part {
+        Back,
+        Pages,
+        Paper,
+        Cover,
+        CoverArt,
+        Inside,
+        Ink,
+        Shadow,
+        Stamp,
+        Count
     };
-
-    std::vector<Letter> letters_;
-    // SPACE/Aの既存2D案内とは別に、ステージ選択へ戻る操作を表示する。
-    std::unique_ptr<Model> backGuideModel_;
-    std::unique_ptr<Object3d> backGuideObject_;
+    std::array<std::unique_ptr<Model>, Count> models_;
+    std::array<std::unique_ptr<Object3d>, Count> objects_;
     Camera camera_;
-    float timer_ = 0.0f;
-    float finishTimer_ = 0.0f;
-    bool animationFinished_ = false;
-    const std::string text_ = "COURSECLEAR";
+    Sound sound_;
+    Sound::SoundData pageSound_{}, stampSound_{};
+    static Sound::SoundData MakeSound(bool stamp);
+    std::chrono::steady_clock::time_point lastUpdate_{};
+    float elapsed_ = 0;
+    JournalResult::Frame frame_{};
 };

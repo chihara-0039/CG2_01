@@ -1,0 +1,3 @@
+newmtl map-2
+Kd 1 1 1
+map_Kd map-2.png

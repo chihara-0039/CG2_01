@@ -1,6 +1,7 @@
 #include "StageSelection.h"
 #include <algorithm>
 
+// 選択数と移動方向から、範囲内の次のステージ番号を求める。
 int StageSelection::Move(int current, Direction direction, int stageCount) {
     if (stageCount <= 0) {
         return 0;
@@ -11,10 +12,7 @@ int StageSelection::Move(int current, Direction direction, int stageCount) {
         return current;
     }
     // 元の六面の回転操作を維持する。欠けた面への移動は現在位置に留める。
-    constexpr int table[6][4] = {
-        {4, 5, 3, 1}, {4, 5, 0, 2}, {4, 5, 1, 3},
-        {4, 5, 2, 0}, {2, 0, 3, 1}, {0, 2, 3, 1}
-    };
+    constexpr int table[6][4] = {{4, 5, 3, 1}, {4, 5, 0, 2}, {4, 5, 1, 3}, {4, 5, 2, 0}, {2, 0, 3, 1}, {0, 2, 3, 1}};
     if (stageCount <= 6) {
         const int next = table[current][column];
         return next < stageCount ? next : current;

@@ -14,7 +14,7 @@
 // ゲームのバックバッファだけを録画する。デスクトップ・マイクは取得しない。
 // GPUコピーは既存のフレームフェンスで完了を確認し、圧縮は別スレッドへ渡す。
 class FrameRecorder {
-public:
+  public:
     struct Options {
         int fps = 30;
         int outputWidth = 960;
@@ -24,10 +24,10 @@ public:
         std::string name; // 空なら日時を使う。比較撮影は方式名を指定できる。
     };
     ~FrameRecorder();
-    bool Start(const Options& options);
+    bool Start(const Options &options);
     void Stop(); // UIを止めず、残りの圧縮とGIF変換をワーカーで終える。
     void Finish();
-    void Prepare(ID3D12Device* device, ID3D12GraphicsCommandList* list, ID3D12Resource* target);
+    void Prepare(ID3D12Device *device, ID3D12GraphicsCommandList *list, ID3D12Resource *target);
     void SubmitCompletedFrame(); // Prepareを含むGPU命令の完了後に限って呼ぶ。
     void DrawImGui();
     bool IsRecording() const { return recording_; }
@@ -35,10 +35,14 @@ public:
     std::string Status() const;
     uint64_t Captured() const { return captured_; }
     uint64_t Dropped() const { return dropped_; }
-private:
-    struct Frame { uint64_t tick; std::vector<unsigned char> pixels; };
+
+  private:
+    struct Frame {
+        uint64_t tick;
+        std::vector<unsigned char> pixels;
+    };
     void Encode();
-    void SetStatus(const std::string& text);
+    void SetStatus(const std::string &text);
     Options options_;
     std::filesystem::path ffmpeg_, mp4_, gif_, log_;
     std::atomic<bool> recording_{false}, busy_{false};

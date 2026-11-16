@@ -30,13 +30,13 @@ struct Particle {
     Vector4 color;       // 色
     float initialAlpha = 1.0f;
     bool ambientCloud = false;
-    float lifeTime;      // 時間(現在)
-    float maxTime;       // (最大)
+    float lifeTime; // 時間(現在)
+    float maxTime;  // (最大)
 };
 
 // マネージャークラス
 class ParticleManager {
-public: // サブクラスなど
+  public: // サブクラスなど
     // 定数：最大パーティクル数
     static const uint32_t kMaxParticles = 4096; // 天候のために増やす
 
@@ -44,8 +44,8 @@ public: // サブクラスなど
     struct InstanceData {
         Matrix4x4 WVP;
         Vector4 color;
-        Vector4 lightColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-        Vector2 lightDirection = { 0.0f, -1.0f };
+        Vector4 lightColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        Vector2 lightDirection = {0.0f, -1.0f};
         float ambientLight = 1.0f;
         float shape = 0.0f;
     };
@@ -72,12 +72,12 @@ public: // サブクラスなど
     };
 
     struct GPUParticleEmitterSphere {
-        Vector3 translate = { 0.0f, 0.0f, 0.0f };
+        Vector3 translate = {0.0f, 0.0f, 0.0f};
         float radius = 1.0f;
-        uint32_t count = 10;       // 1回の射出で生成するParticle数
-        float frequency = 0.5f;    // 射出間隔（秒）
+        uint32_t count = 10;    // 1回の射出で生成するParticle数
+        float frequency = 0.5f; // 射出間隔（秒）
         float frequencyTime = 0.0f;
-        uint32_t emit = 0;         // CPU側で判定した「このフレーム射出するか」
+        uint32_t emit = 0; // CPU側で判定した「このフレーム射出するか」
         float particleScale = 1.0f;
         float padding[3] = {};
     };
@@ -95,21 +95,21 @@ public: // サブクラスなど
 
     struct WeatherEmitter {
         bool active = false;
-        Vector3 center = {0,0,0};
-        Vector3 size = {40, 20, 40};       // 発生範囲
-        float emitRate = 100.0f;           // 1秒あたりの発生数
+        Vector3 center = {0, 0, 0};
+        Vector3 size = {40, 20, 40}; // 発生範囲
+        float emitRate = 100.0f;     // 1秒あたりの発生数
         float emitTimer = 0.0f;
-        Vector3 velocity = {0, -5.0f, 0};  // 基本落下速度
+        Vector3 velocity = {0, -5.0f, 0};      // 基本落下速度
         Vector3 velocityRandom = {1, 0.5f, 1}; // 速度のばらつき
         Vector3 particleSize = {0.2f, 0.2f, 0.2f};
         float particleLife = 4.0f;
-        Vector4 color = {1,1,1,1};
+        Vector4 color = {1, 1, 1, 1};
         WeatherImpactEffect impactEffect = WeatherImpactEffect::None;
     };
 
     struct AmbientCloudEmitter {
         bool active = true;
-        Vector3 center = { 0.0f, 0.0f, 0.0f };
+        Vector3 center = {0.0f, 0.0f, 0.0f};
         float minimumHeight = 10.0f;
         float heightRange = 3.5f;
         float areaX = 35.0f;
@@ -118,12 +118,12 @@ public: // サブクラスなど
         float life = 24.0f;
         float size = 1.4f;
         float speed = 0.012f;
-        Vector4 color = { 0.72f, 0.78f, 0.90f, 0.22f };
+        Vector4 color = {0.72f, 0.78f, 0.90f, 0.22f};
         bool depthParallax = false;
         int wispsPerEmission = 3;
         float verticalScale = 1.0f;
-        Vector3 lightDirection = { 0.0f, -1.0f, 0.0f };
-        Vector3 lightColor = { 1.0f, 1.0f, 1.0f };
+        Vector3 lightDirection = {0.0f, -1.0f, 0.0f};
+        Vector3 lightColor = {1.0f, 1.0f, 1.0f};
         float lightIntensity = 1.0f;
         float ambientLight = 0.38f;
         float emitTimer = 0.0f;
@@ -181,18 +181,18 @@ public: // サブクラスなど
         bool randomizeScale = true;
         bool randomizeLifetime = true;
         bool randomizeColor = true;
-        Vector4 coreColor = { 0.78f, 0.92f, 1.0f, 1.0f };
-        Vector4 slashColor = { 0.55f, 0.85f, 1.0f, 1.0f };
-        Vector4 sparkColor = { 0.55f, 0.85f, 1.0f, 1.0f };
-        Vector4 sparkSecondaryColor = { 1.0f, 0.55f, 0.18f, 1.0f };
-        Vector4 ringColor = { 0.42f, 0.78f, 1.0f, 1.0f };
-        Vector4 crossColor = { 0.72f, 0.90f, 1.0f, 1.0f };
-        Vector4 pillarColor = { 0.35f, 0.68f, 1.0f, 1.0f };
-        Vector4 lightningColor = { 0.48f, 0.88f, 1.0f, 1.0f };
-        Vector4 lightningGlowColor = { 0.20f, 0.34f, 1.0f, 1.0f };
+        Vector4 coreColor = {0.78f, 0.92f, 1.0f, 1.0f};
+        Vector4 slashColor = {0.55f, 0.85f, 1.0f, 1.0f};
+        Vector4 sparkColor = {0.55f, 0.85f, 1.0f, 1.0f};
+        Vector4 sparkSecondaryColor = {1.0f, 0.55f, 0.18f, 1.0f};
+        Vector4 ringColor = {0.42f, 0.78f, 1.0f, 1.0f};
+        Vector4 crossColor = {0.72f, 0.90f, 1.0f, 1.0f};
+        Vector4 pillarColor = {0.35f, 0.68f, 1.0f, 1.0f};
+        Vector4 lightningColor = {0.48f, 0.88f, 1.0f, 1.0f};
+        Vector4 lightningGlowColor = {0.20f, 0.34f, 1.0f, 1.0f};
         // Legacy palette fields retained for loading older preset files.
-        Vector4 coolColor = { 0.55f, 0.85f, 1.0f, 1.0f };
-        Vector4 warmColor = { 1.0f, 0.55f, 0.18f, 1.0f };
+        Vector4 coolColor = {0.55f, 0.85f, 1.0f, 1.0f};
+        Vector4 warmColor = {1.0f, 0.55f, 0.18f, 1.0f};
     };
 
     struct StormEffectSettings {
@@ -202,7 +202,7 @@ public: // サブクラスなど
         float cloudEmitRate = 18.0f;
         float cloudLife = 8.0f;
         float cloudSize = 2.6f;
-        Vector4 cloudColor = { 0.018f, 0.024f, 0.060f, 0.38f };
+        Vector4 cloudColor = {0.018f, 0.024f, 0.060f, 0.38f};
         bool randomizeCloudPosition = true;
         bool randomizeCloudSize = true;
 
@@ -211,14 +211,14 @@ public: // サブクラスなど
         float rainEmitRate = 72.0f;
         float rainSpeed = 1.0f;
         float rainLength = 1.0f;
-        Vector4 rainColor = { 0.32f, 0.52f, 0.82f, 0.48f };
+        Vector4 rainColor = {0.32f, 0.52f, 0.82f, 0.48f};
         bool randomizeRainPosition = true;
         bool randomizeRainSpeed = true;
 
         float windEmitRate = 12.5f;
         float windSpeed = 1.0f;
         float windLength = 1.0f;
-        Vector4 windColor = { 0.46f, 0.68f, 0.90f, 0.25f };
+        Vector4 windColor = {0.46f, 0.68f, 0.90f, 0.25f};
 
         float lightningIntervalMin = 0.65f;
         float lightningIntervalMax = 2.10f;
@@ -250,8 +250,8 @@ public: // サブクラスなど
         float lightningBranchLength = 0.42f;
         float lightningBranchSpread = 0.85f;
         float lightningBranchWidth = 0.45f;
-        Vector4 lightningColor = { 0.62f, 0.82f, 1.0f, 1.0f };
-        Vector4 lightningGlowColor = { 0.18f, 0.30f, 1.0f, 1.0f };
+        Vector4 lightningColor = {0.62f, 0.82f, 1.0f, 1.0f};
+        Vector4 lightningGlowColor = {0.18f, 0.30f, 1.0f, 1.0f};
         float pointLightPower = 11.0f;
         bool randomizeLightningPosition = true;
         bool randomizeLightningInterval = true;
@@ -261,67 +261,63 @@ public: // サブクラスなど
         bool randomizeLightningBranchCount = true;
     };
 
-public: // メンバ関数
+  public: // メンバ関数
     // 初期化
-    void Initialize(DirectXCommon* dxCommon, TextureManager* textureManager);
+    void Initialize(DirectXCommon *dxCommon, TextureManager *textureManager);
 
     // 更新
-    void Update(float deltaTime, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const Vector3& playerPos, StageMap* stageMap = nullptr);
+    void Update(float deltaTime, const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix,
+                const Vector3 &playerPos, StageMap *stageMap = nullptr);
 
     // 描画
     void Draw();
 
     // パーティクル発生（エミッター）
     // pos: 発生位置, count: 発生数
-    void Emit(const Vector3& pos, uint32_t count);
-    void Emit(const std::string& groupName, const Vector3& pos, uint32_t count);
+    void Emit(const Vector3 &pos, uint32_t count);
+    void Emit(const std::string &groupName, const Vector3 &pos, uint32_t count);
 
     // 飛沫を生成する（ブロック衝突時など）
-    void EmitSplash(const Vector3& pos, const Vector4& color);
+    void EmitSplash(const Vector3 &pos, const Vector4 &color);
 
     // ステージ到着時の足元から広がる薄い土煙。
-    void EmitLandingDust(const Vector3& pos);
+    void EmitLandingDust(const Vector3 &pos);
 
     // 到着演出用。モデルの周囲に実空間の雲と短い航跡を作る。
-    void EmitArrivalCloud(const Vector3& pos, bool bank);
+    void EmitArrivalCloud(const Vector3 &pos, bool bank);
 
     // 評価課題用: ヒット時のフラッシュ・スパーク・衝撃波をまとめて生成する
-    void EmitHitEffect(const Vector3& pos);
-    void EmitHitEffect(const Vector3& pos, const HitEffectSettings& settings);
+    void EmitHitEffect(const Vector3 &pos);
+    void EmitHitEffect(const Vector3 &pos, const HitEffectSettings &settings);
 
     // クリア演出用: 色付きの火花が球状に広がり、重力で垂れる花火。
-    void EmitFireworkBurst(const Vector3& pos);
+    void EmitFireworkBurst(const Vector3 &pos);
 
-    void SetStormActive(bool active, const Vector3& center = { 0.0f, 0.0f, 0.0f });
-    void SetStormCenter(const Vector3& center) { stormCenter_ = center; }
+    void SetStormActive(bool active, const Vector3 &center = {0.0f, 0.0f, 0.0f});
+    void SetStormCenter(const Vector3 &center) { stormCenter_ = center; }
     void SetStormMinimumCloudHeight(float height) { stormMinimumCloudHeight_ = height; }
     bool IsStormActive() const { return stormActive_; }
     bool ConsumeStormLightningFlash();
-    const Vector3& GetStormLightningPosition() const { return stormLightningPosition_; }
+    const Vector3 &GetStormLightningPosition() const { return stormLightningPosition_; }
     float GetStormLightningPowerScale() const { return stormLightningPowerScale_; }
-    const StormEffectSettings& GetStormSettings() const { return stormSettings_; }
-    void SetStormSettings(const StormEffectSettings& settings) { stormSettings_ = settings; }
+    const StormEffectSettings &GetStormSettings() const { return stormSettings_; }
+    void SetStormSettings(const StormEffectSettings &settings) { stormSettings_ = settings; }
 
     // テクスチャ設定
     void SetTexture(uint32_t textureHandle) {
         textureHandle_ = textureHandle;
         GetDefaultParticleGroup().textureHandle = textureHandle;
     }
-    void SetTexture(const std::string& groupName, uint32_t textureHandle);
-    void CreateParticleGroup(const std::string& groupName, uint32_t textureHandle);
-    ParticleGroup* FindParticleGroup(const std::string& groupName);
-    const ParticleGroup* FindParticleGroup(const std::string& groupName) const;
+    void SetTexture(const std::string &groupName, uint32_t textureHandle);
+    void CreateParticleGroup(const std::string &groupName, uint32_t textureHandle);
+    ParticleGroup *FindParticleGroup(const std::string &groupName);
+    const ParticleGroup *FindParticleGroup(const std::string &groupName) const;
 
     void SetDrawGPUParticleSphere(bool draw) { drawGPUParticleSphere_ = draw; }
     bool GetDrawGPUParticleSphere() const { return drawGPUParticleSphere_; }
-    void SetGPUParticleEmitterPosition(const Vector3& position) {
-        gpuParticleEmitter_.translate = position;
-    }
-    void ConfigureGPUParticleEmitter(
-        float radius,
-        uint32_t count,
-        float frequency,
-        float particleScale = 1.0f) {
+    void SetGPUParticleEmitterPosition(const Vector3 &position) { gpuParticleEmitter_.translate = position; }
+    // GPU粒子の発生位置・方向・個数などの条件を設定する。
+    void ConfigureGPUParticleEmitter(float radius, uint32_t count, float frequency, float particleScale = 1.0f) {
         gpuParticleEmitter_.radius = radius;
         gpuParticleEmitter_.count = count;
         gpuParticleEmitter_.frequency = frequency;
@@ -329,23 +325,24 @@ public: // メンバ関数
     }
 
     // 天候エミッターの取得・設定
-    const WeatherEmitter& GetWeatherEmitter() const { return weatherEmitter_; }
-    const AmbientCloudEmitter& GetAmbientCloudEmitter() const { return ambientCloudEmitter_; }
-    void SetWeatherEmitter(const WeatherEmitter& emitter) { weatherEmitter_ = emitter; }
-    void SetAmbientCloudEmitter(const AmbientCloudEmitter& emitter) { ambientCloudEmitter_ = emitter; }
+    const WeatherEmitter &GetWeatherEmitter() const { return weatherEmitter_; }
+    const AmbientCloudEmitter &GetAmbientCloudEmitter() const { return ambientCloudEmitter_; }
+    void SetWeatherEmitter(const WeatherEmitter &emitter) { weatherEmitter_ = emitter; }
+    void SetAmbientCloudEmitter(const AmbientCloudEmitter &emitter) { ambientCloudEmitter_ = emitter; }
     void SetWeatherEmitterActive(bool active) { weatherEmitter_.active = active; }
     void SetAmbientCloudEmitterActive(bool active) { ambientCloudEmitter_.active = active; }
-    void SetAmbientCloudColor(const Vector4& color) { ambientCloudEmitter_.color = color; }
-    void SetAmbientCloudLighting(const Vector3& direction, const Vector3& color,
-        float intensity, float ambient) {
+    void SetAmbientCloudColor(const Vector4 &color) { ambientCloudEmitter_.color = color; }
+    // 雲へ適用する環境光を、天候と時間帯の値へ合わせる。
+    void SetAmbientCloudLighting(const Vector3 &direction, const Vector3 &color, float intensity, float ambient) {
         ambientCloudEmitter_.lightDirection = direction;
         ambientCloudEmitter_.lightColor = color;
         ambientCloudEmitter_.lightIntensity = intensity;
         ambientCloudEmitter_.ambientLight = ambient;
     }
 
+    // 残っている粒子を除き、次の演出へ持ち越さないようにする。
     void ClearParticles() {
-        for (auto& [name, group] : particleGroups_) {
+        for (auto &[name, group] : particleGroups_) {
             group.particles.clear();
         }
         planeInstanceCount_ = 0;
@@ -354,14 +351,14 @@ public: // メンバ関数
         cylinderInstanceCount_ = 0;
     }
 
-private: // 内部処理
+  private: // 内部処理
     void CreateRootSignature();
     void CreatePipelineState();
     void CreateMesh(); // 板ポリゴンの作成
     void CreateRingMesh();
     void CreateCylinderMesh();
-    void EmitStormRainSplash(const Vector3& pos, const Vector4& color);
-    void EmitSnowImpact(const Vector3& pos, const Vector4& color);
+    void EmitStormRainSplash(const Vector3 &pos, const Vector4 &color);
+    void EmitSnowImpact(const Vector3 &pos, const Vector4 &color);
     void CreateGPUParticleResources();
     void CreateGPUParticlePipeline();
     void InitializeGPUParticles();
@@ -369,14 +366,14 @@ private: // 内部処理
     void UpdateGPUParticles();
     void DrawGPUParticles();
     void TransitionGPUParticleResource(D3D12_RESOURCE_STATES stateAfter);
-    ParticleGroup& GetDefaultParticleGroup();
-    const ParticleGroup& GetDefaultParticleGroup() const;
-    std::list<Particle>& Particles();
-    const std::list<Particle>& Particles() const;
+    ParticleGroup &GetDefaultParticleGroup();
+    const ParticleGroup &GetDefaultParticleGroup() const;
+    std::list<Particle> &Particles();
+    const std::list<Particle> &Particles() const;
 
-private: // メンバ変数
-    DirectXCommon* dxCommon_ = nullptr;
-    TextureManager* textureManager_ = nullptr;
+  private: // メンバ変数
+    DirectXCommon *dxCommon_ = nullptr;
+    TextureManager *textureManager_ = nullptr;
 
     // DirectXリソース
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
@@ -414,9 +411,9 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticleEmitterResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> gpuParticlePerFrameResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> perViewResource_;
-    PerView* perViewData_ = nullptr;
-    GPUParticleEmitterSphere* gpuParticleEmitterData_ = nullptr;
-    GPUParticlePerFrame* gpuParticlePerFrameData_ = nullptr;
+    PerView *perViewData_ = nullptr;
+    GPUParticleEmitterSphere *gpuParticleEmitterData_ = nullptr;
+    GPUParticlePerFrame *gpuParticlePerFrameData_ = nullptr;
     GPUParticleEmitterSphere gpuParticleEmitter_{};
     GPUParticlePerFrame gpuParticlePerFrame_{};
     D3D12_RESOURCE_STATES gpuParticleResourceState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -426,25 +423,25 @@ private: // メンバ変数
     // インスタンシング用データ
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingBuffer_;
     D3D12_VERTEX_BUFFER_VIEW instancingBufferView_{};
-    InstanceData* instancingDataMapped_ = nullptr;
+    InstanceData *instancingDataMapped_ = nullptr;
     uint32_t planeInstanceCount_ = 0;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> cloudInstancingBuffer_;
     D3D12_VERTEX_BUFFER_VIEW cloudInstancingBufferView_{};
-    InstanceData* cloudInstancingDataMapped_ = nullptr;
+    InstanceData *cloudInstancingDataMapped_ = nullptr;
     uint32_t cloudInstanceCount_ = 0;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> ringInstancingBuffer_;
     D3D12_VERTEX_BUFFER_VIEW ringInstancingBufferView_{};
-    InstanceData* ringInstancingDataMapped_ = nullptr;
+    InstanceData *ringInstancingDataMapped_ = nullptr;
     uint32_t ringInstanceCount_ = 0;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> cylinderInstancingBuffer_;
     D3D12_VERTEX_BUFFER_VIEW cylinderInstancingBufferView_{};
-    InstanceData* cylinderInstancingDataMapped_ = nullptr;
+    InstanceData *cylinderInstancingDataMapped_ = nullptr;
     uint32_t cylinderInstanceCount_ = 0;
 
-    static constexpr const char* kDefaultParticleGroupName = "default";
+    static constexpr const char *kDefaultParticleGroupName = "default";
 
     // テクスチャハンドル
     uint32_t textureHandle_ = 0;
@@ -458,9 +455,9 @@ private: // メンバ変数
 
     bool stormActive_ = false;
     bool stormLightningFlash_ = false;
-    Vector3 stormCenter_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 stormCenter_ = {0.0f, 0.0f, 0.0f};
     float stormMinimumCloudHeight_ = 8.0f;
-    Vector3 stormLightningPosition_ = { 0.0f, 0.5f, 0.0f };
+    Vector3 stormLightningPosition_ = {0.0f, 0.5f, 0.0f};
     float stormLightningPowerScale_ = 1.0f;
     float stormCloudEmitTimer_ = 0.0f;
     float stormRainEmitTimer_ = 0.0f;
@@ -470,4 +467,3 @@ private: // メンバ変数
     int stormLightningBurstsRemaining_ = 0;
     StormEffectSettings stormSettings_{};
 };
-

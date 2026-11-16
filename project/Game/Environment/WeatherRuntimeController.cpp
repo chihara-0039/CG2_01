@@ -7,8 +7,9 @@
 #include "StageMap.h"
 #include "TextureManager.h"
 
-bool WeatherRuntimeController::Update(const UpdateContext& context) {
-    const WeatherPreset* preset = WeatherPresetManager::GetInstance().GetPresetByName(context.presetName);
+// 選択中の天候と地形に合わせ、雨・雪・嵐の発生条件を更新する。
+bool WeatherRuntimeController::Update(const UpdateContext &context) {
+    const WeatherPreset *preset = WeatherPresetManager::GetInstance().GetPresetByName(context.presetName);
     if (preset) {
         auto emitter = context.particles.GetWeatherEmitter();
         auto cloudEmitter = context.particles.GetAmbientCloudEmitter();
@@ -22,7 +23,7 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
 
         const float minimumCloudHeight = cachedStageTopSurfaceY_ + preset->cloudAltitudeOffset;
         cloudEmitter.active = preset->cloudEnabled && !usesStormPreset && !context.suppressPresetStorm;
-        cloudEmitter.center = { context.focusPosition.x, 0.0f, context.focusPosition.z };
+        cloudEmitter.center = {context.focusPosition.x, 0.0f, context.focusPosition.z};
         cloudEmitter.minimumHeight = minimumCloudHeight;
         cloudEmitter.heightRange = 3.5f;
         cloudEmitter.areaX = (std::max)(18.0f, preset->emitSize.x * 0.5f);
@@ -31,16 +32,22 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
         cloudEmitter.size = preset->cloudSize;
         cloudEmitter.color = preset->cloudColor;
         cloudEmitter.depthParallax = false;
-        if(context.presetName=="Diorama") {
+        if (context.presetName == "Diorama") {
             // A cloud sea below the miniature, with stable world-space parallax.
-            cloudEmitter.center={7.5f,0,24};
-            cloudEmitter.minimumHeight=-5; cloudEmitter.heightRange=3;
-            cloudEmitter.areaX=28; cloudEmitter.areaZ=16;
-            cloudEmitter.life=40; cloudEmitter.speed=.012f;
-            cloudEmitter.wispsPerEmission=4;cloudEmitter.verticalScale=1.2f;
-            cloudEmitter.color.w=.28f;
-            cloudEmitter.depthParallax=true;
-            if(startClouds)cloudEmitter.prewarmSeconds=30;
+            cloudEmitter.center = {7.5f, 0, 24};
+            cloudEmitter.minimumHeight = -5;
+            cloudEmitter.heightRange = 3;
+            cloudEmitter.areaX = 28;
+            cloudEmitter.areaZ = 16;
+            cloudEmitter.life = 40;
+            cloudEmitter.speed = .012f;
+            cloudEmitter.wispsPerEmission = 4;
+            cloudEmitter.verticalScale = 1.2f;
+            cloudEmitter.color.w = .16f;
+            cloudEmitter.depthParallax = true;
+            if (startClouds) {
+                cloudEmitter.prewarmSeconds = 30;
+            }
         }
 
         emitter.active = preset->particleEnabled && !usesStormPreset;
@@ -50,9 +57,9 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
                 if (context.loadStormPreset) {
                     context.loadStormPreset(preset->stormPreset);
                 }
-                context.particles.SetStormActive(true, { 0.0f, 0.0f, 0.0f });
+                context.particles.SetStormActive(true, {0.0f, 0.0f, 0.0f});
             }
-            context.particles.SetStormCenter({ context.focusPosition.x, 0.0f, context.focusPosition.z });
+            context.particles.SetStormCenter({context.focusPosition.x, 0.0f, context.focusPosition.z});
             context.particles.SetStormMinimumCloudHeight(minimumCloudHeight);
             stormActive_ = true;
         } else if (stormActive_ && !context.suppressPresetStorm) {
@@ -75,21 +82,21 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
             emitter.particleSize = preset->particleSize;
             emitter.particleLife = preset->particleLife;
             emitter.color = preset->particleColor;
-            emitter.impactEffect = preset->impactEffect == "Rain"
-                ? ParticleManager::WeatherImpactEffect::Rain
-                : preset->impactEffect == "Snow"
-                ? ParticleManager::WeatherImpactEffect::Snow
-                : ParticleManager::WeatherImpactEffect::None;
-            emitter.center = { 0.0f, 15.0f, 0.0f };
-            const auto* part=context.stage.GetCustomPart(1);
-            if(context.presetName=="Snowy" && part && part->name=="RUIN-BRIDGE") {
+            emitter.impactEffect = preset->impactEffect == "Rain"   ? ParticleManager::WeatherImpactEffect::Rain
+                                   : preset->impactEffect == "Snow" ? ParticleManager::WeatherImpactEffect::Snow
+                                                                    : ParticleManager::WeatherImpactEffect::None;
+            emitter.center = {0.0f, 15.0f, 0.0f};
+            const auto *part = context.stage.GetCustomPart(1);
+            if (context.presetName == "Snowy" && part && part->name == "RUIN-BRIDGE") {
                 // Fit the existing snow to the small diorama. Fall particles use
                 // per-frame velocities, whereas the saved preset is much faster.
-                emitter.center={0,8,0};emitter.size={24,10,24};
-                emitter.velocity={-.025f,-.035f,.005f};
-                emitter.velocityRandom={.02f,.01f,.01f};
-                emitter.particleSize={.12f,.12f,.12f};
-                emitter.particleLife=6;emitter.emitRate=100;
+                emitter.center = {0, 8, 0};
+                emitter.size = {24, 10, 24};
+                emitter.velocity = {-.025f, -.035f, .005f};
+                emitter.velocityRandom = {.02f, .01f, .01f};
+                emitter.particleSize = {.12f, .12f, .12f};
+                emitter.particleLife = 6;
+                emitter.emitRate = 100;
             }
         }
 
@@ -97,27 +104,24 @@ bool WeatherRuntimeController::Update(const UpdateContext& context) {
         context.particles.SetAmbientCloudEmitter(cloudEmitter);
     }
 
-    context.particles.Update(
-        1.0f / 60.0f,
-        context.view,
-        context.projection,
-        context.focusPosition,
-        &context.stage);
+    context.particles.Update(1.0f / 60.0f, context.view, context.projection, context.focusPosition, &context.stage);
     return context.particles.ConsumeStormLightningFlash();
 }
 
-void WeatherRuntimeController::StopStorm(ParticleManager& particles) {
+// 嵐の粒子や音・雷の状態を止め、次の天候へ持ち越さないようにする。
+void WeatherRuntimeController::StopStorm(ParticleManager &particles) {
     particles.SetStormActive(false);
     cachedStormPreset_.clear();
     stormActive_ = false;
 }
 
-float WeatherRuntimeController::FindHighestStageSurfaceY(const StageMap& stage) const {
+// 指定した水平位置の地形を調べ、天候粒子が当たる最上面を求める。
+float WeatherRuntimeController::FindHighestStageSurfaceY(const StageMap &stage) const {
     float highestSurface = 0.5f;
     for (int y = stage.GetHeight() - 1; y >= 0; --y) {
         for (int z = 0; z < stage.GetDepth(); ++z) {
             for (int x = 0; x < stage.GetWidth(); ++x) {
-                const MapCell* cell = stage.GetCell(x, y, z);
+                const MapCell *cell = stage.GetCell(x, y, z);
                 if (cell && cell->type != BlockType::None) {
                     return static_cast<float>(y) + 0.5f;
                 }

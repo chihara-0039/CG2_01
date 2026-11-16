@@ -1,4 +1,5 @@
-param([ValidateSet('arrival','fall','hit','title','arrival_transition')][string]$Shot='arrival')
+﻿# 指定された演出を自動起動し、録画の出力先を設定する。
+param([ValidateSet('arrival','fall','hit','title','arrival_transition','headlamp','occlusion','expedition','placement')][string]$Shot='arrival',[string]$Ffmpeg=$env:CG2_FFMPEG)
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $repoRoot=Split-Path $projectRoot -Parent
@@ -7,7 +8,7 @@ $saved=@{};foreach($key in $keys){$saved[$key]=[Environment]::GetEnvironmentVari
 try {
  $env:CG2_CINEMATIC_SHOT=$Shot
  $env:CG2_CAPTURE_DIR=Join-Path $repoRoot 'generated/cinematic-review/media'
- $env:CG2_FFMPEG='C:/GAME_SSD/game/Tools/FFmpeg/ffmpeg-9.0.2-full_build/bin/ffmpeg.exe'
+ if($Ffmpeg){$env:CG2_FFMPEG=[IO.Path]::GetFullPath($Ffmpeg)}
  $process=Start-Process -FilePath (Join-Path $repoRoot 'generated/outputs/Release/CG2_01.exe') -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
  if(!$process.WaitForExit(60000)){throw "Cinematic capture timed out: $($process.Id)"}
  if($process.ExitCode -ne 0){throw "Cinematic capture failed: $($process.ExitCode)"}

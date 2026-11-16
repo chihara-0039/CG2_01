@@ -1,3 +1,4 @@
+# Blender上でレベルの配置・衝突形状を編集し、JSONで読み書きする。
 bl_info = {
     "name": "CG2 C++ Engine Level Editor",
     "author": "CG2_01",
@@ -143,6 +144,7 @@ class CG2_OT_import_level(bpy.types.Operator, ImportHelper):
     filter_glob: bpy.props.StringProperty(default="*.json", options={'HIDDEN'})
     clear_scene: bpy.props.BoolProperty(name="Clear Current Scene", default=True)
 
+    # レベルJSONから親子構造・変換・衝突形状をBlenderへ読み込む。
     def execute(self, context):
         try:
             with open(self.filepath, "r", encoding="utf-8") as source:
@@ -209,12 +211,14 @@ class CG2_OT_export_level(bpy.types.Operator, ExportHelper):
     filename_ext = ".json"
     filter_glob: bpy.props.StringProperty(default="*.json", options={'HIDDEN'})
 
+    # 前回の保存先を初期値にして、ファイル選択を開始する。
     def invoke(self, context, event):
         saved_path = context.scene.get("cg2_level_path", "")
         if saved_path:
             self.filepath = saved_path
         return super().invoke(context, event)
 
+    # 配置オブジェクトと開始位置を、エンジンが読めるレベルJSONへ書き出す。
     def execute(self, context):
         root = {
             "name": str(context.scene.get("cg2_level_name", Path(self.filepath).stem)),
@@ -241,6 +245,7 @@ class CG2_OT_add_collider(bpy.types.Operator):
     bl_label = "Add / Fit BOX Collider"
     bl_options = {'REGISTER', 'UNDO'}
 
+    # 選択オブジェクトへ箱の衝突設定と初期サイズを追加する。
     def execute(self, context):
         obj = context.object
         if obj is None:
@@ -264,6 +269,7 @@ class CG2_OT_initialize_object_properties(bpy.types.Operator):
     bl_label = "Initialize CG2 Properties"
     bl_options = {'REGISTER', 'UNDO'}
 
+    # 選択オブジェクトへ、レベル出力に必要なプロパティの既定値を補う。
     def execute(self, context):
         obj = context.object
         if obj is None:
@@ -282,6 +288,7 @@ class _ColliderDrawer:
     handle = None
 
     @staticmethod
+    # シーンの衝突形状を線分へ展開し、3Dビューへ重ねて描く。
     def draw():
         vertices = []
         indices = []
@@ -313,6 +320,7 @@ class CG2_PT_level_editor(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'CG2 Level'
 
+    # レベルの読み書きと選択オブジェクトの設定をサイドパネルへ表示する。
     def draw(self, context):
         layout = self.layout
         layout.operator(CG2_OT_import_level.bl_idname, icon='IMPORT')
@@ -351,6 +359,7 @@ classes = (
 )
 
 
+# Blenderの操作クラスと衝突形状の描画コールバックを登録する。
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -358,6 +367,7 @@ def register():
         _ColliderDrawer.draw, (), 'WINDOW', 'POST_VIEW')
 
 
+# 描画コールバックと操作クラスの登録を解除する。
 def unregister():
     if _ColliderDrawer.handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_ColliderDrawer.handle, 'WINDOW')

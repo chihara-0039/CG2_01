@@ -1,3 +1,4 @@
+# 不足モデルと依存素材を収集し、モデル復元用の配布物を作る。
 """Build an offline pack of all recovered OBJ models and their material textures."""
 from pathlib import Path
 import argparse
@@ -65,6 +66,7 @@ Git側ではscene_transition_recoveryにOBJを追跡済みで、モデルOBJのi
 """
 
 
+# OBJ・材質・依存画像を集め、復元パックとして出力する。
 def build(output):
     models = sorted(RESOURCES.rglob("*.obj"))
     assert len(models) == 49, "Review the installer text if the model inventory changes"

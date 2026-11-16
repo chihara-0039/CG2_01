@@ -6,38 +6,39 @@
 #include "externals/imgui/imgui.h"
 
 namespace {
-void CopyPresetName(std::array<char, 64>& buffer, const std::string& name) {
+void CopyPresetName(std::array<char, 64> &buffer, const std::string &name) {
     buffer.fill('\0');
     strncpy_s(buffer.data(), buffer.size(), name.c_str(), _TRUNCATE);
 }
 }
 
-void HitEffectEditorView::Draw(Context& context) {
-    auto* particleManager = context.particles;
-    auto* camera = context.camera;
-    auto& effectPreviewPosition_ = context.previewPosition;
-    auto& effectPreviewAutoPlay_ = context.autoPlay;
-    auto& effectPreviewInterval_ = context.interval;
-    auto& effectPreviewShowGPUParticleSphere_ = context.showGpuSphere;
-    auto& effectPreviewMirrorSlash_ = context.mirrorSlash;
-    auto& effectPreviewStormMode_ = context.stormMode;
-    auto& effectPresetIncludeInShowcase_ = context.includeInShowcase;
-    auto& effectPreviewBurstCount_ = context.burstCount;
-    auto& effectPreviewBurstRadius_ = context.burstRadius;
-    auto& effectPreviewHitSettings_ = context.settings;
-    auto& effectPresetNameBuffer_ = context.presetNameBuffer;
-    auto& effectPresetNames_ = context.presetNames;
-    auto& effectPresetSelectedIndex_ = context.selectedPresetIndex;
-    auto& effectPresetStatus_ = context.status;
-    const auto& DrawStormEffectEditorImGui = context.drawStormEditor;
-    const auto& EmitEffectPreviewBurst = context.emitPreviewBurst;
-    const auto& LoadEffectPresetNames = context.reloadPresetNames;
-    const auto& SaveEffectPreset = context.savePreset;
-    const auto& LoadEffectPreset = context.loadPreset;
+// 衝撃エフェクトの各パラメーターと保存・読み込み操作をGUIへ表示する。
+void HitEffectEditorView::Draw(Context &context) {
+    auto *particleManager = context.particles;
+    auto *camera = context.camera;
+    auto &effectPreviewPosition_ = context.previewPosition;
+    auto &effectPreviewAutoPlay_ = context.autoPlay;
+    auto &effectPreviewInterval_ = context.interval;
+    auto &effectPreviewShowGPUParticleSphere_ = context.showGpuSphere;
+    auto &effectPreviewMirrorSlash_ = context.mirrorSlash;
+    auto &effectPreviewStormMode_ = context.stormMode;
+    auto &effectPresetIncludeInShowcase_ = context.includeInShowcase;
+    auto &effectPreviewBurstCount_ = context.burstCount;
+    auto &effectPreviewBurstRadius_ = context.burstRadius;
+    auto &effectPreviewHitSettings_ = context.settings;
+    auto &effectPresetNameBuffer_ = context.presetNameBuffer;
+    auto &effectPresetNames_ = context.presetNames;
+    auto &effectPresetSelectedIndex_ = context.selectedPresetIndex;
+    auto &effectPresetStatus_ = context.status;
+    const auto &DrawStormEffectEditorImGui = context.drawStormEditor;
+    const auto &EmitEffectPreviewBurst = context.emitPreviewBurst;
+    const auto &LoadEffectPresetNames = context.reloadPresetNames;
+    const auto &SaveEffectPreset = context.savePreset;
+    const auto &LoadEffectPreset = context.loadPreset;
     // ImGui の UI 要素を表示・更新する。
     ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Editor ]");
     int effectType = effectPreviewStormMode_ ? 1 : 0;
-    const char* effectTypes[] = { "Hit Effect", "Tempest Storm" };
+    const char *effectTypes[] = {"Hit Effect", "Tempest Storm"};
     // ImGui コンボ「Effect Type」で候補から選択する。
     if (ImGui::Combo("Effect Type", &effectType, effectTypes, IM_ARRAYSIZE(effectTypes))) {
         effectPreviewStormMode_ = effectType == 1;
@@ -45,7 +46,7 @@ void HitEffectEditorView::Draw(Context& context) {
             particleManager->SetStormActive(false);
             particleManager->ClearParticles();
             if (effectPreviewStormMode_) {
-                particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+                particleManager->SetStormActive(true, {effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z});
             }
         }
     }
@@ -65,11 +66,12 @@ void HitEffectEditorView::Draw(Context& context) {
     ImGui::SliderFloat("Interval", &effectPreviewInterval_, 0.2f, 3.0f);
 
     // ImGui ボタンを表示し、押されたら処理する。
-    if (ImGui::Button(effectPreviewStormMode_ ? "Restart Tempest Storm" : "Trigger Saber Hit", ImVec2(-1, 24)) && particleManager) {
+    if (ImGui::Button(effectPreviewStormMode_ ? "Restart Tempest Storm" : "Trigger Saber Hit", ImVec2(-1, 24)) &&
+        particleManager) {
         if (effectPreviewStormMode_) {
             particleManager->SetStormActive(false);
             particleManager->ClearParticles();
-            particleManager->SetStormActive(true, { effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z });
+            particleManager->SetStormActive(true, {effectPreviewPosition_.x, 0.0f, effectPreviewPosition_.z});
         } else {
             EmitEffectPreviewBurst();
         }
@@ -145,7 +147,7 @@ void HitEffectEditorView::Draw(Context& context) {
         ImGui::SliderFloat("Branch Spread", &effectPreviewHitSettings_.lightningBranchSpread, 0.0f, 1.57f);
         // ImGui スライダー「Branch Width」で小数値を調整する。
         ImGui::SliderFloat("Branch Width", &effectPreviewHitSettings_.lightningBranchWidth, 0.1f, 1.0f);
-        const char* lightningModes[] = { "Radial", "Slash Forward", "Slash Axis", "Custom" };
+        const char *lightningModes[] = {"Radial", "Slash Forward", "Slash Axis", "Custom"};
         // ImGui コンボ「Lightning Mode」で候補から選択する。
         ImGui::Combo("Lightning Mode", &effectPreviewHitSettings_.lightningMode, lightningModes, 4);
         if (effectPreviewHitSettings_.lightningMode == 3) {
@@ -229,9 +231,9 @@ void HitEffectEditorView::Draw(Context& context) {
             effectPreviewHitSettings_.corePower = 1.6f;
             effectPreviewHitSettings_.crossPower = 1.8f;
             effectPreviewHitSettings_.pillarPower = 1.2f;
-            effectPreviewHitSettings_.slashColor = { 0.42f, 0.78f, 1.0f, 1.0f };
-            effectPreviewHitSettings_.sparkColor = { 0.42f, 0.78f, 1.0f, 1.0f };
-            effectPreviewHitSettings_.crossColor = { 0.55f, 0.82f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.slashColor = {0.42f, 0.78f, 1.0f, 1.0f};
+            effectPreviewHitSettings_.sparkColor = {0.42f, 0.78f, 1.0f, 1.0f};
+            effectPreviewHitSettings_.crossColor = {0.55f, 0.82f, 1.0f, 1.0f};
             effectPreviewBurstCount_ = 1;
             effectPreviewBurstRadius_ = 0.0f;
         }
@@ -290,10 +292,10 @@ void HitEffectEditorView::Draw(Context& context) {
             effectPreviewHitSettings_.corePower = 2.25f;
             effectPreviewHitSettings_.crossPower = 2.65f;
             effectPreviewHitSettings_.pillarPower = 1.45f;
-            effectPreviewHitSettings_.slashColor = { 0.38f, 0.78f, 1.0f, 1.0f };
-            effectPreviewHitSettings_.sparkColor = { 0.38f, 0.78f, 1.0f, 1.0f };
-            effectPreviewHitSettings_.sparkSecondaryColor = { 1.0f, 0.48f, 0.10f, 1.0f };
-            effectPreviewHitSettings_.ringColor = { 0.38f, 0.78f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.slashColor = {0.38f, 0.78f, 1.0f, 1.0f};
+            effectPreviewHitSettings_.sparkColor = {0.38f, 0.78f, 1.0f, 1.0f};
+            effectPreviewHitSettings_.sparkSecondaryColor = {1.0f, 0.48f, 0.10f, 1.0f};
+            effectPreviewHitSettings_.ringColor = {0.38f, 0.78f, 1.0f, 1.0f};
             effectPreviewMirrorSlash_ = false;
             effectPreviewBurstCount_ = 4;
             effectPreviewBurstRadius_ = 0.28f;
@@ -331,10 +333,10 @@ void HitEffectEditorView::Draw(Context& context) {
             effectPreviewHitSettings_.lightningBranchWidth = 0.38f;
             effectPreviewHitSettings_.lightningMode = 2;
             effectPreviewHitSettings_.lightningDirectionSpread = 0.28f;
-            effectPreviewHitSettings_.lightningColor = { 0.40f, 0.86f, 1.0f, 1.0f };
-            effectPreviewHitSettings_.lightningGlowColor = { 0.24f, 0.28f, 1.0f, 1.0f };
-            effectPreviewHitSettings_.sparkColor = { 0.40f, 0.86f, 1.0f, 1.0f };
-            effectPreviewHitSettings_.sparkSecondaryColor = { 1.0f, 0.86f, 0.40f, 1.0f };
+            effectPreviewHitSettings_.lightningColor = {0.40f, 0.86f, 1.0f, 1.0f};
+            effectPreviewHitSettings_.lightningGlowColor = {0.24f, 0.28f, 1.0f, 1.0f};
+            effectPreviewHitSettings_.sparkColor = {0.40f, 0.86f, 1.0f, 1.0f};
+            effectPreviewHitSettings_.sparkSecondaryColor = {1.0f, 0.86f, 0.40f, 1.0f};
             effectPreviewMirrorSlash_ = false;
             effectPreviewBurstCount_ = 2;
             effectPreviewBurstRadius_ = 0.16f;
@@ -362,8 +364,8 @@ void HitEffectEditorView::Draw(Context& context) {
             effectPreviewHitSettings_.lightningSpread = 2.4f;
             effectPreviewHitSettings_.lightningPower = 0.75f;
             effectPreviewHitSettings_.lightningMode = 0;
-            effectPreviewHitSettings_.lightningColor = { 0.52f, 0.92f, 1.0f, 1.0f };
-            effectPreviewHitSettings_.ringColor = { 0.52f, 0.92f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.lightningColor = {0.52f, 0.92f, 1.0f, 1.0f};
+            effectPreviewHitSettings_.ringColor = {0.52f, 0.92f, 1.0f, 1.0f};
             effectPreviewBurstCount_ = 1;
             effectPreviewBurstRadius_ = 0.0f;
             EmitEffectPreviewBurst();
@@ -418,9 +420,10 @@ void HitEffectEditorView::Draw(Context& context) {
             LoadEffectPresetNames();
         }
 
-        const char* selectedPresetName = effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())
-            ? effectPresetNames_[effectPresetSelectedIndex_].c_str()
-            : "Select saved preset";
+        const char *selectedPresetName =
+            effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())
+                ? effectPresetNames_[effectPresetSelectedIndex_].c_str()
+                : "Select saved preset";
         // ImGui コンボ「Saved」の選択リストを開始する。
         if (ImGui::BeginCombo("Saved", selectedPresetName)) {
             for (int i = 0; i < static_cast<int>(effectPresetNames_.size()); ++i) {
@@ -440,7 +443,8 @@ void HitEffectEditorView::Draw(Context& context) {
         }
         // ImGui ボタン「Load Selected」を表示し、押されたら処理する。
         if (ImGui::Button("Load Selected", ImVec2(135, 24))) {
-            if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
+            if (effectPresetSelectedIndex_ >= 0 &&
+                effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
                 LoadEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
             } else {
                 effectPresetStatus_ = "Preset: nothing selected";
@@ -450,7 +454,8 @@ void HitEffectEditorView::Draw(Context& context) {
         ImGui::SameLine();
         // ImGui ボタン「Save Over」を表示し、押されたら処理する。
         if (ImGui::Button("Save Over", ImVec2(100, 24))) {
-            if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
+            if (effectPresetSelectedIndex_ >= 0 &&
+                effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
                 SaveEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
             } else {
                 SaveEffectPreset(effectPresetNameBuffer_.data());
@@ -466,7 +471,7 @@ void HitEffectEditorView::Draw(Context& context) {
         ImGui::DragFloat3("Position", &effectPreviewPosition_.x, 0.05f, -20.0f, 20.0f);
         // ImGui ボタン「Focus Camera」を表示し、押されたら処理する。
         if (ImGui::Button("Focus Camera", ImVec2(-1, 24))) {
-            camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
+            camera->ForceReset(effectPreviewPosition_, 4.0f, {0.25f, 0.0f, 0.0f});
         }
         // ImGui ボタン「Reset Tuning」を表示し、押されたら処理する。
         if (ImGui::Button("Reset Tuning", ImVec2(-1, 24))) {

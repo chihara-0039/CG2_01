@@ -1,7 +1,6 @@
 ﻿static const uint kMaxParticles = 1024;
 
-struct Particle
-{
+struct Particle {
     float3 translate;
     float3 velocity;
     float3 scale;
@@ -10,8 +9,7 @@ struct Particle
     float4 color;
 };
 
-struct EmitterSphere
-{
+struct EmitterSphere {
     float3 translate;
     float radius;
     uint count;
@@ -22,40 +20,33 @@ struct EmitterSphere
     float3 padding;
 };
 
-struct PerFrame
-{
+struct PerFrame {
     float time;
     float deltaTime;
 };
 
-float32_t rand3dTo1d(float32_t3 value)
-{
+// 3次元の種から、粒子ごとの擬似乱数を作る。
+float32_t rand3dTo1d(float32_t3 value) {
     float32_t3 dotDir = float32_t3(12.9898f, 78.233f, 37.719f);
     float32_t smallValue = sin(dot(value, dotDir));
     float32_t random = frac(smallValue * 143758.5453f);
     return random;
 }
 
-float32_t3 rand3dTo3d(float32_t3 value)
-{
-    return float32_t3(
-        rand3dTo1d(value),
-        rand3dTo1d(value + float32_t3(31.34f, 11.17f, 47.53f)),
-        rand3dTo1d(value + float32_t3(59.11f, 83.31f, 19.97f)));
+float32_t3 rand3dTo3d(float32_t3 value) {
+    return float32_t3(rand3dTo1d(value), rand3dTo1d(value + float32_t3(31.34f, 11.17f, 47.53f)),
+                      rand3dTo1d(value + float32_t3(59.11f, 83.31f, 19.97f)));
 }
 
-class RandomGenerator
-{
+class RandomGenerator {
     float32_t3 seed;
 
-    float32_t Generate1d()
-    {
+    float32_t Generate1d() {
         seed = rand3dTo3d(seed);
         return rand3dTo1d(seed);
     }
 
-    float32_t3 Generate3d()
-    {
+    float32_t3 Generate3d() {
         seed = rand3dTo3d(seed);
         return seed;
     }
@@ -67,25 +58,21 @@ RWStructuredBuffer<Particle> gParticles : register(u0);
 RWStructuredBuffer<int> gFreeListIndex : register(u1);
 RWStructuredBuffer<uint> gFreeList : register(u2);
 
-[numthreads(1, 1, 1)]
-void main(uint3 DTid : SV_DispatchThreadID)
-{
-    if (gEmitter.emit == 0)
-    {
+// 空きスロットを取得し、発生条件から新しいGPU粒子を初期化する。
+[numthreads(1, 1, 1)] void main(uint3 DTid : SV_DispatchThreadID) {
+    if (gEmitter.emit == 0) {
         return;
     }
 
     RandomGenerator generator;
     generator.seed = float32_t3(gPerFrame.time, gPerFrame.deltaTime, 0.0f);
 
-    for (uint countIndex = 0; countIndex < gEmitter.count; ++countIndex)
-    {
+    for (uint countIndex = 0; countIndex < gEmitter.count; ++countIndex) {
         int freeListIndex;
         // FreeListの末尾を1つ取り出す。複数threadでも重複しないようatomicで操作する。
         InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
 
-        if (freeListIndex < 0 || freeListIndex >= kMaxParticles)
-        {
+        if (freeListIndex < 0 || freeListIndex >= kMaxParticles) {
             // 空きが無かったので、先に減らしたFreeListIndexを戻す。
             int unused;
             InterlockedAdd(gFreeListIndex[0], 1, unused);
@@ -97,8 +84,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         float32_t3 randomDirection = generator.Generate3d() * 2.0f - 1.0f;
         float32_t3 randomOffset = randomDirection * gEmitter.radius;
-        float32_t scale =
-            (0.18f + generator.Generate1d() * 0.45f) * gEmitter.particleScale;
+        float32_t scale = (0.18f + generator.Generate1d() * 0.45f) * gEmitter.particleScale;
         float32_t3 velocity = normalize(randomDirection + float32_t3(0.1f, 0.9f, 0.0f));
         velocity *= 0.35f + generator.Generate1d() * 1.25f;
 

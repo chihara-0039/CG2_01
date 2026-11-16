@@ -14,12 +14,14 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// 深度値をビュー空間の距離へ戻し、輪郭判定に使う。
 float32_t ConvertViewZ(float32_t depth) {
     float32_t4 ndc = float32_t4(0.0f, 0.0f, depth, 1.0f);
     float32_t4 view = mul(ndc, projectionInverse);
     return view.z * rcp(view.w);
 }
 
+// 隣接する深度の差から、形状の輪郭を強調する。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
 
@@ -29,19 +31,19 @@ PixelShaderOutput main(VertexShaderOutput input) {
     float32_t2 uvStepSize = float32_t2(rcp(float32_t(width)), rcp(float32_t(height)));
 
     static const float32_t kPrewittHorizontalKernel[3][3] = {
-        { -1.0f / 6.0f, 0.0f, 1.0f / 6.0f },
-        { -1.0f / 6.0f, 0.0f, 1.0f / 6.0f },
-        { -1.0f / 6.0f, 0.0f, 1.0f / 6.0f },
+        {-1.0f / 6.0f, 0.0f, 1.0f / 6.0f},
+        {-1.0f / 6.0f, 0.0f, 1.0f / 6.0f},
+        {-1.0f / 6.0f, 0.0f, 1.0f / 6.0f},
     };
     static const float32_t kPrewittVerticalKernel[3][3] = {
-        { -1.0f / 6.0f, -1.0f / 6.0f, -1.0f / 6.0f },
-        {  0.0f,        0.0f,        0.0f },
-        {  1.0f / 6.0f, 1.0f / 6.0f, 1.0f / 6.0f },
+        {-1.0f / 6.0f, -1.0f / 6.0f, -1.0f / 6.0f},
+        {0.0f, 0.0f, 0.0f},
+        {1.0f / 6.0f, 1.0f / 6.0f, 1.0f / 6.0f},
     };
     static const float32_t2 kIndex3x3[3][3] = {
-        { { -1.0f, -1.0f }, { 0.0f, -1.0f }, { 1.0f, -1.0f } },
-        { { -1.0f,  0.0f }, { 0.0f,  0.0f }, { 1.0f,  0.0f } },
-        { { -1.0f,  1.0f }, { 0.0f,  1.0f }, { 1.0f,  1.0f } },
+        {{-1.0f, -1.0f}, {0.0f, -1.0f}, {1.0f, -1.0f}},
+        {{-1.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}},
+        {{-1.0f, 1.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}},
     };
 
     float32_t2 difference = float32_t2(0.0f, 0.0f);

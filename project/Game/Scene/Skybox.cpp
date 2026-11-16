@@ -3,7 +3,8 @@
 #include <cassert>
 #include <vector>
 
-void Skybox::Initialize(Object3dCommon* object3dCommon, uint32_t textureHandle) {
+// 空の背景を準備し、初期値と必要なリソースを設定する。
+void Skybox::Initialize(Object3dCommon *object3dCommon, uint32_t textureHandle) {
     assert(object3dCommon);
     object3dCommon_ = object3dCommon;
     textureHandle_ = textureHandle;
@@ -14,28 +15,32 @@ void Skybox::Initialize(Object3dCommon* object3dCommon, uint32_t textureHandle) 
     CreateMesh();
 
     // 2. 定数バッファ作成 (Transform)
-    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
     D3D12_RESOURCE_DESC resDesc = {};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resDesc.Width = (sizeof(TransformationMatrix) + 0xff) & ~0xff;
-    resDesc.Height = 1; 
-    resDesc.DepthOrArraySize = 1; 
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
     resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; 
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     resDesc.SampleDesc.Count = 1;
 
-    HRESULT hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&transformationResource_));
+    HRESULT hr =
+        device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                        nullptr, IID_PPV_ARGS(&transformationResource_));
     assert(SUCCEEDED(hr));
-    transformationResource_->Map(0, nullptr, (void**)&transformationData_);
+    transformationResource_->Map(0, nullptr, (void **)&transformationData_);
     transformationData_->WVP = Math::MakeIdentity4x4();
     transformationData_->World = Math::MakeIdentity4x4();
 
     // 3. 定数バッファ作成 (Material)
     resDesc.Width = (sizeof(Material) + 0xff) & ~0xff;
-    hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&materialResource_));
+    hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                         nullptr, IID_PPV_ARGS(&materialResource_));
     assert(SUCCEEDED(hr));
-    materialResource_->Map(0, nullptr, (void**)&materialData_);
-    materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    materialResource_->Map(0, nullptr, (void **)&materialData_);
+    materialData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
     materialData_->enableLighting = 0; // Skyboxはライティング不要
     materialData_->shininess = 0.0f;
     materialData_->metallic = 0.0f;
@@ -46,9 +51,10 @@ void Skybox::Initialize(Object3dCommon* object3dCommon, uint32_t textureHandle) 
     CreateGraphicsPipeline();
 
     // デフォルトスケールを設定 (十分に大きく、farClip内に収まるように)
-    transform_.scale = { 50.0f, 50.0f, 50.0f };
+    transform_.scale = {50.0f, 50.0f, 50.0f};
 }
 
+// パーティクル描画に使う基本形状の頂点を作成する。
 void Skybox::CreateMesh() {
     auto device = object3dCommon_->GetDxCommon()->GetDevice();
 
@@ -60,53 +66,59 @@ void Skybox::CreateMesh() {
     Vertex vertices[24];
 
     // 右面 (+X)
-    vertices[0].position = { 1.0f,  1.0f,  1.0f, 1.0f };
-    vertices[1].position = { 1.0f,  1.0f, -1.0f, 1.0f };
-    vertices[2].position = { 1.0f, -1.0f,  1.0f, 1.0f };
-    vertices[3].position = { 1.0f, -1.0f, -1.0f, 1.0f };
+    vertices[0].position = {1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[1].position = {1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[2].position = {1.0f, -1.0f, 1.0f, 1.0f};
+    vertices[3].position = {1.0f, -1.0f, -1.0f, 1.0f};
 
     // 左面 (-X)
-    vertices[4].position = { -1.0f,  1.0f, -1.0f, 1.0f };
-    vertices[5].position = { -1.0f,  1.0f,  1.0f, 1.0f };
-    vertices[6].position = { -1.0f, -1.0f, -1.0f, 1.0f };
-    vertices[7].position = { -1.0f, -1.0f,  1.0f, 1.0f };
+    vertices[4].position = {-1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[5].position = {-1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[6].position = {-1.0f, -1.0f, -1.0f, 1.0f};
+    vertices[7].position = {-1.0f, -1.0f, 1.0f, 1.0f};
 
     // 前面 (+Z)
-    vertices[8].position  = { -1.0f,  1.0f,  1.0f, 1.0f };
-    vertices[9].position  = {  1.0f,  1.0f,  1.0f, 1.0f };
-    vertices[10].position = { -1.0f, -1.0f,  1.0f, 1.0f };
-    vertices[11].position = {  1.0f, -1.0f,  1.0f, 1.0f };
+    vertices[8].position = {-1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[9].position = {1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[10].position = {-1.0f, -1.0f, 1.0f, 1.0f};
+    vertices[11].position = {1.0f, -1.0f, 1.0f, 1.0f};
 
     // 後面 (-Z)
-    vertices[12].position = {  1.0f,  1.0f, -1.0f, 1.0f };
-    vertices[13].position = { -1.0f,  1.0f, -1.0f, 1.0f };
-    vertices[14].position = {  1.0f, -1.0f, -1.0f, 1.0f };
-    vertices[15].position = { -1.0f, -1.0f, -1.0f, 1.0f };
+    vertices[12].position = {1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[13].position = {-1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[14].position = {1.0f, -1.0f, -1.0f, 1.0f};
+    vertices[15].position = {-1.0f, -1.0f, -1.0f, 1.0f};
 
     // 上面 (+Y)
-    vertices[16].position = {  1.0f,  1.0f,  1.0f, 1.0f };
-    vertices[17].position = { -1.0f,  1.0f,  1.0f, 1.0f };
-    vertices[18].position = {  1.0f,  1.0f, -1.0f, 1.0f };
-    vertices[19].position = { -1.0f,  1.0f, -1.0f, 1.0f };
+    vertices[16].position = {1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[17].position = {-1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[18].position = {1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[19].position = {-1.0f, 1.0f, -1.0f, 1.0f};
 
     // 下面 (-Y)
-    vertices[20].position = { -1.0f, -1.0f,  1.0f, 1.0f };
-    vertices[21].position = {  1.0f, -1.0f,  1.0f, 1.0f };
-    vertices[22].position = { -1.0f, -1.0f, -1.0f, 1.0f };
-    vertices[23].position = {  1.0f, -1.0f, -1.0f, 1.0f };
+    vertices[20].position = {-1.0f, -1.0f, 1.0f, 1.0f};
+    vertices[21].position = {1.0f, -1.0f, 1.0f, 1.0f};
+    vertices[22].position = {-1.0f, -1.0f, -1.0f, 1.0f};
+    vertices[23].position = {1.0f, -1.0f, -1.0f, 1.0f};
 
     // 頂点バッファ作成
-    D3D12_HEAP_PROPERTIES heapProps = { D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 1, 1 };
+    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
     D3D12_RESOURCE_DESC resDesc = {};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resDesc.Width = sizeof(vertices);
-    resDesc.Height = 1; resDesc.DepthOrArraySize = 1; resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; resDesc.SampleDesc.Count = 1;
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resDesc.SampleDesc.Count = 1;
 
-    HRESULT hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexResource_));
+    HRESULT hr =
+        device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                        nullptr, IID_PPV_ARGS(&vertexResource_));
     assert(SUCCEEDED(hr));
 
-    void* pVertexData = nullptr;
+    void *pVertexData = nullptr;
     vertexResource_->Map(0, nullptr, &pVertexData);
     memcpy(pVertexData, vertices, sizeof(vertices));
     vertexResource_->Unmap(0, nullptr);
@@ -128,10 +140,11 @@ void Skybox::CreateMesh() {
     }
 
     resDesc.Width = sizeof(indices);
-    hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&indexResource_));
+    hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                         nullptr, IID_PPV_ARGS(&indexResource_));
     assert(SUCCEEDED(hr));
 
-    void* pIndexData = nullptr;
+    void *pIndexData = nullptr;
     indexResource_->Map(0, nullptr, &pIndexData);
     memcpy(pIndexData, indices, sizeof(indices));
     indexResource_->Unmap(0, nullptr);
@@ -141,6 +154,7 @@ void Skybox::CreateMesh() {
     indexBufferView_.Format = DXGI_FORMAT_R16_UINT;
 }
 
+// 頂点形式・シェーダー・深度・合成方法をまとめた描画設定を作成する。
 void Skybox::CreateGraphicsPipeline() {
     auto device = object3dCommon_->GetDxCommon()->GetDevice();
 
@@ -149,14 +163,13 @@ void Skybox::CreateGraphicsPipeline() {
     assert(vsBlob && psBlob);
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}};
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = object3dCommon_->GetRootSignature();
-    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.InputLayout = {inputElementDescs, _countof(inputElementDescs)};
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
 
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
     psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -179,6 +192,7 @@ void Skybox::CreateGraphicsPipeline() {
     assert(SUCCEEDED(hr));
 }
 
+// カメラと背景色を反映し、空を描くための変換定数を更新する。
 void Skybox::Update() {
     Matrix4x4 worldMatrix = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
     Matrix4x4 wvpMatrix = Math::Multiply(worldMatrix, Math::Multiply(viewMatrix_, projectionMatrix_));
@@ -187,20 +201,21 @@ void Skybox::Update() {
     transformationData_->World = worldMatrix;
 }
 
-void Skybox::Update(const Vector3& cameraPosition) {
+void Skybox::Update(const Vector3 &cameraPosition) {
     transform_.translate = cameraPosition;
     Update();
 }
 
+// 空の背景の表示対象を選び、描画コマンドを記録する。
 void Skybox::Draw() {
     auto commandList = object3dCommon_->GetDxCommon()->GetCommandList();
-    TextureManager* textureManager = object3dCommon_->GetTextureManager();
+    TextureManager *textureManager = object3dCommon_->GetTextureManager();
 
     if (!textureManager) {
         return;
     }
 
-    ID3D12DescriptorHeap* heaps[] = { textureManager->GetSrvHeap() };
+    ID3D12DescriptorHeap *heaps[] = {textureManager->GetSrvHeap()};
     commandList->SetDescriptorHeaps(1, heaps);
 
     commandList->SetPipelineState(pipelineState_.Get());

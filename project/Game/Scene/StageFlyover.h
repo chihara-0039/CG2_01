@@ -6,8 +6,12 @@ namespace StageFlyover {
 constexpr float kOrbitDuration = 4.8f;
 constexpr float kLandingDuration = 1.2f;
 constexpr float kDuration = kOrbitDuration + kLandingDuration;
-struct Pose { Vector3 position; Vector3 rotation; float fov; };
-Pose Evaluate(float seconds, const Vector3& center, float radius, const Pose& destination);
+struct Pose {
+    Vector3 position;
+    Vector3 rotation;
+    float fov;
+};
+Pose Evaluate(float seconds, const Vector3 &center, float radius, const Pose &destination);
 }
 
 // 到着演出は物理移動と分離し、着地時にスポーン位置へ正確に戻す。
@@ -27,6 +31,6 @@ struct Frame {
     bool finished;
     bool playerVisible;
 };
-Frame Evaluate(float seconds, const Vector3& center, float radius,
-    const Vector3& spawn, const StageFlyover::Pose& destination, const Vector3& spawnRotation = {});
+Frame Evaluate(float seconds, const Vector3 &center, float radius, const Vector3 &spawn,
+               const StageFlyover::Pose &destination, const Vector3 &spawnRotation = {});
 }

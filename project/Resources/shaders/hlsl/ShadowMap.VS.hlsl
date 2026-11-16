@@ -1,5 +1,4 @@
-struct VertexShaderOutput
-{
+struct VertexShaderOutput {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL0;
@@ -7,8 +6,7 @@ struct VertexShaderOutput
     float3 worldPosition : POSITION1;
 };
 
-struct TransformationMatrix
-{
+struct TransformationMatrix {
     float4x4 WVP;
     float4x4 World;
     float4x4 lightViewProjection;
@@ -16,18 +14,16 @@ struct TransformationMatrix
 
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
 
-struct VertexShaderInput
-{
+struct VertexShaderInput {
     float4 position : POSITION0;
 };
 
-struct ShaderVertexOutput
-{
+struct ShaderVertexOutput {
     float4 position : SV_POSITION;
 };
 
-VertexShaderOutput main(VertexShaderInput input)
-{
+// 頂点を光源の投影空間へ変換し、影の深度を記録できるようにする。
+VertexShaderOutput main(VertexShaderInput input) {
     VertexShaderOutput output;
     // ★重要：WVPではなく「World行列 × ライト行列」を直接計算して使う
     float4x4 lightWVP = mul(gTransformationMatrix.World, gTransformationMatrix.lightViewProjection);

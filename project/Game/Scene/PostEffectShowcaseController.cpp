@@ -12,8 +12,8 @@ namespace {
 struct PostEffectBinding {
     BYTE key;
     int mode;
-    const char* keyLabel;
-    const char* effectName;
+    const char *keyLabel;
+    const char *effectName;
 };
 
 constexpr PostEffectBinding kBindings[] = {
@@ -29,8 +29,9 @@ constexpr PostEffectBinding kBindings[] = {
     {DIK_0, 11, "0", "Random"},
 };
 
-const char* GetEffectName(int mode) {
-    for (const PostEffectBinding& binding : kBindings) {
+// ポストエフェクトの番号を、画面に表示する名前へ変換する。
+const char *GetEffectName(int mode) {
+    for (const PostEffectBinding &binding : kBindings) {
         if (binding.mode == mode) {
             return binding.effectName;
         }
@@ -39,12 +40,13 @@ const char* GetEffectName(int mode) {
 }
 } // namespace
 
-void PostEffectShowcaseController::Reset(PostProcessRenderer& postProcess) {
+void PostEffectShowcaseController::Reset(PostProcessRenderer &postProcess) {
     ReturnToNormal(postProcess);
 }
 
-bool PostEffectShowcaseController::Update(
-    Input& input, ParticleManager* particleManager, PostProcessRenderer& postProcess) {
+// 表示する画面効果を切り替え、ディゾルブなどの時間変化を進める。
+bool PostEffectShowcaseController::Update(Input &input, ParticleManager *particleManager,
+                                          PostProcessRenderer &postProcess) {
     postProcess.SetEnabled(true);
 
     // 画面空間エフェクトを評価しやすくするため、パーティクル演出を停止する。
@@ -57,7 +59,7 @@ bool PostEffectShowcaseController::Update(
     if (input.TriggerKey(DIK_N)) {
         ReturnToNormal(postProcess);
     }
-    for (const PostEffectBinding& binding : kBindings) {
+    for (const PostEffectBinding &binding : kBindings) {
         if (!input.TriggerKey(binding.key)) {
             continue;
         }
@@ -79,13 +81,13 @@ bool PostEffectShowcaseController::Update(
     return input.TriggerKey(DIK_TAB);
 }
 
-void PostEffectShowcaseController::UpdateGameplay(
-    Input& input, PostProcessRenderer& postProcess) {
+// 通常プレイ中に使うポストエフェクトの切り替え入力を処理する。
+void PostEffectShowcaseController::UpdateGameplay(Input &input, PostProcessRenderer &postProcess) {
     postProcess.SetEnabled(true);
     if (input.TriggerKey(DIK_N)) {
         ReturnToNormal(postProcess);
     }
-    for (const PostEffectBinding& binding : kBindings) {
+    for (const PostEffectBinding &binding : kBindings) {
         if (!input.TriggerKey(binding.key)) {
             continue;
         }
@@ -106,7 +108,8 @@ void PostEffectShowcaseController::UpdateGameplay(
     UpdateDissolve(postProcess);
 }
 
-void PostEffectShowcaseController::StartDissolve(PostProcessRenderer& postProcess) {
+// ディゾルブの開始値と経過時間を設定し、画面遷移を始める。
+void PostEffectShowcaseController::StartDissolve(PostProcessRenderer &postProcess) {
     dissolvePlaying_ = true;
     returnToNormalNextFrame_ = false;
     dissolveThreshold_ = 0.0f;
@@ -114,7 +117,8 @@ void PostEffectShowcaseController::StartDissolve(PostProcessRenderer& postProces
     postProcess.SetPostEffectMode(10);
 }
 
-void PostEffectShowcaseController::UpdateDissolve(PostProcessRenderer& postProcess) {
+// 経過時間に合わせて、ディゾルブのしきい値を進める。
+void PostEffectShowcaseController::UpdateDissolve(PostProcessRenderer &postProcess) {
     if (returnToNormalNextFrame_) {
         ReturnToNormal(postProcess);
         return;
@@ -134,7 +138,8 @@ void PostEffectShowcaseController::UpdateDissolve(PostProcessRenderer& postProce
     postProcess.SetDissolveThreshold(dissolveThreshold_);
 }
 
-void PostEffectShowcaseController::ReturnToNormal(PostProcessRenderer& postProcess) {
+// 一時的な画面効果を解除し、通常の描画設定へ戻す。
+void PostEffectShowcaseController::ReturnToNormal(PostProcessRenderer &postProcess) {
     dissolvePlaying_ = false;
     returnToNormalNextFrame_ = false;
     dissolveThreshold_ = 0.0f;
@@ -142,52 +147,48 @@ void PostEffectShowcaseController::ReturnToNormal(PostProcessRenderer& postProce
     postProcess.SetPostEffectMode(0);
 }
 
-void PostEffectShowcaseController::DrawGameplayImGui(
-    const PostProcessRenderer& postProcess) const {
-    const ImGuiIO& io = ImGui::GetIO();
-    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav;
+// 通常プレイのポストエフェクト設定を、デバッグGUIへ表示する。
+void PostEffectShowcaseController::DrawGameplayImGui(const PostProcessRenderer &postProcess) const {
+    const ImGuiIO &io = ImGui::GetIO();
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs |
+                                       ImGuiWindowFlags_NoNav;
     constexpr float width = 360.0f;
 #ifdef NDEBUG
     const float sceneRight = io.DisplaySize.x;
     const float gameplayHeaderY = 18.0f;
 #else
     // Inspectorの左端をシーンビュー右端として扱い、HUDをパネルの裏へ入れない。
-    const float inspectorWidth =
-        std::clamp(io.DisplaySize.x * 0.20f, 340.0f, 400.0f);
+    const float inspectorWidth = std::clamp(io.DisplaySize.x * 0.20f, 340.0f, 400.0f);
     const float sceneRight = io.DisplaySize.x - inspectorWidth;
     const float gameplayHeaderY = 56.0f;
 #endif
-    ImGui::SetNextWindowPos(
-        ImVec2(sceneRight - width - 18.0f, gameplayHeaderY), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(sceneRight - width - 18.0f, gameplayHeaderY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(width, 74.0f), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.68f);
     ImGui::Begin("CG5 Gameplay PostEffect", nullptr, flags);
     ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.36f, 1.0f), "CG5 PostEffect: %s",
-        GetEffectName(postProcess.GetPostEffectMode()));
+                       GetEffectName(postProcess.GetPostEffectMode()));
     ImGui::TextUnformatted("N: Normal  1: Grayscale  9: Full Dissolve  2-0: Extra");
     ImGui::End();
 }
 
-void PostEffectShowcaseController::DrawImGui(const PostProcessRenderer& postProcess) const {
-    const ImGuiIO& io = ImGui::GetIO();
-    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav;
+// 画面効果の展示の設定と状態をGUIへ表示し、編集入力を反映する。
+void PostEffectShowcaseController::DrawImGui(const PostProcessRenderer &postProcess) const {
+    const ImGuiIO &io = ImGui::GetIO();
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs |
+                                       ImGuiWindowFlags_NoNav;
 
 #ifdef NDEBUG
     const float headerX = 24.0f;
     const float headerWidth = io.DisplaySize.x - 48.0f;
     const float headerY = 20.0f;
 #else
-    const float hierarchyWidth =
-        std::clamp(io.DisplaySize.x * 0.15f, 240.0f, 300.0f);
-    const float inspectorWidth =
-        std::clamp(io.DisplaySize.x * 0.20f, 340.0f, 400.0f);
+    const float hierarchyWidth = std::clamp(io.DisplaySize.x * 0.15f, 240.0f, 300.0f);
+    const float inspectorWidth = std::clamp(io.DisplaySize.x * 0.20f, 340.0f, 400.0f);
     const float headerX = hierarchyWidth + 24.0f;
-    const float headerWidth =
-        io.DisplaySize.x - hierarchyWidth - inspectorWidth - 48.0f;
+    const float headerWidth = io.DisplaySize.x - hierarchyWidth - inspectorWidth - 48.0f;
     const float headerY = 58.0f;
 #endif
 

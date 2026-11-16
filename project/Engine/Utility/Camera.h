@@ -37,7 +37,7 @@ class Input;
 //  Object3d::SetCamera() などに渡す。
 // ==============================================================
 class Camera {
-public:
+  public:
     Camera();
 
     // -------------------------------------------------------
@@ -53,19 +53,19 @@ public:
     /// ビュー行列 (World → Camera 空間への変換行列)。
     /// Object3d::SetCamera() や ShadowMap の lightVP などに渡す。
     /// </summary>
-    const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }
+    const Matrix4x4 &GetViewMatrix() const { return viewMatrix_; }
 
     /// <summary>
     /// プロジェクション行列 (Camera → クリップ空間への変換行列)。
     /// FOV・アスペクト比・Near/Far クリップを元に計算される。
     /// </summary>
-    const Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }
+    const Matrix4x4 &GetProjectionMatrix() const { return projectionMatrix_; }
 
     /// <summary>ワールド空間でのカメラ位置 (スペキュラー計算などに使用)</summary>
-    const Vector3& GetPosition() const { return transform_.translate; }
+    const Vector3 &GetPosition() const { return transform_.translate; }
 
     /// <summary>カメラのオイラー角回転 (ラジアン)</summary>
-    const Vector3& GetRotation() const { return transform_.rotate; }
+    const Vector3 &GetRotation() const { return transform_.rotate; }
 
     /// <summary>現在の垂直視野角を取得する</summary>
     float GetFov() const { return fov_; }
@@ -75,10 +75,10 @@ public:
     // ── セッター ─────────────────────────────────────────
 
     /// <summary>カメラのワールド位置を直接セット</summary>
-    void SetPosition(const Vector3& pos) { transform_.translate = pos; }
+    void SetPosition(const Vector3 &pos) { transform_.translate = pos; }
 
     /// <summary>カメラの回転をオイラー角 (ラジアン) でセット</summary>
-    void SetRotation(const Vector3& rot) { transform_.rotate = rot; }
+    void SetRotation(const Vector3 &rot) { transform_.rotate = rot; }
 
     /// <summary>垂直方向の視野角 (Field of View) をラジアンでセット。デフォルト約 45°</summary>
     void SetFov(float fov) { fov_ = fov; }
@@ -87,7 +87,7 @@ public:
     /// カメラが注視する点 (Orbit の中心)。
     /// distance_ と組み合わせてカメラ位置を自動計算する。
     /// </summary>
-    void SetTarget(const Vector3& target) { target_ = target; }
+    void SetTarget(const Vector3 &target) { target_ = target; }
 
     /// <summary>注視点 (target_) からのカメラ距離 (ズーム量)</summary>
     void SetDistance(float distance) { distance_ = distance; }
@@ -103,7 +103,7 @@ public:
     //  スキニングエディタに切り替えた瞬間など、
     //  カメラをモデル正面に強制的に戻したいときに使う。
     // -------------------------------------------------------
-    void ForceReset(const Vector3& target, float distance, const Vector3& rotation);
+    void ForceReset(const Vector3 &target, float distance, const Vector3 &rotation);
 
     // -------------------------------------------------------
     //  UpdateBlenderStyle : Blender 風カメラ操作の更新。
@@ -112,24 +112,20 @@ public:
     //  isGuiCaptured が true のとき (ImGui 上でクリック中) は
     //  カメラ操作を無効化してウィンドウ操作を優先する。
     // -------------------------------------------------------
-    void UpdateBlenderStyle(
-        const class Input* input,
-        bool isGuiCaptured,
-        HWND hwnd,
-        bool invertOrbit = false);
+    void UpdateBlenderStyle(const class Input *input, bool isGuiCaptured, HWND hwnd, bool invertOrbit = false);
 
     /// <summary>ImGui にカメラパラメータを表示・編集するウィジェットを描画する</summary>
     void DrawImGui();
 
-private:
+  private:
     // ── カメラのトランスフォーム ───────────────────────────
-    Transform transform_;        // position / rotation / scale (scale は未使用)
+    Transform transform_; // position / rotation / scale (scale は未使用)
 
     // ── プロジェクション設定 ──────────────────────────────
-    float fov_         = 0.785f; // 垂直 FOV ≒ 45° (π/4 rad)
+    float fov_ = 0.785f;               // 垂直 FOV ≒ 45° (π/4 rad)
     float aspectRatio_ = 16.0f / 9.0f; // 画面の縦横比
-    float nearClip_    = 0.1f;   // これより手前は描画しない (Near クリップ面)
-    float farClip_     = 1000.0f;// これより奥は描画しない (Far クリップ面)
+    float nearClip_ = 0.1f;            // これより手前は描画しない (Near クリップ面)
+    float farClip_ = 1000.0f;          // これより奥は描画しない (Far クリップ面)
 
     // ── 計算済み行列 ──────────────────────────────────────
     // Update() のたびに再計算される。毎フレーム GetXxxMatrix() で取得すること。
@@ -139,6 +135,6 @@ private:
     // ── Orbit カメラ制御用 ────────────────────────────────
     // カメラは target_ を中心に distance_ 離れた球面上に配置される。
     // transform_.rotate でカメラの仰角・水平角を制御する。
-    Vector3 target_   = { 8.0f, 0.0f, 8.0f }; // 注視点 (ステージ中心付近がデフォルト)
-    float   distance_ = 20.0f;                 // 注視点からのカメラ距離
+    Vector3 target_ = {8.0f, 0.0f, 8.0f}; // 注視点 (ステージ中心付近がデフォルト)
+    float distance_ = 20.0f;              // 注視点からのカメラ距離
 };

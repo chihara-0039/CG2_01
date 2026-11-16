@@ -4,14 +4,14 @@
 #include <cstdlib>
 #include <cstring>
 
-void Input::Initialize(WinApp* winApp) {
+// キーボード・マウス・パッドの入力を準備し、初期値と必要なリソースを設定する。
+void Input::Initialize(WinApp *winApp) {
     winApp_ = winApp;
     HRESULT resultCode;
 
     // DirectInput 本体を生成する。キーボードとマウスはこのオブジェクトから作る。
-    resultCode = DirectInput8Create(
-        winApp->GetHInstance(), DIRECTINPUT_VERSION, IID_IDirectInput8,
-        reinterpret_cast<void**>(directInput_.GetAddressOf()), nullptr);
+    resultCode = DirectInput8Create(winApp->GetHInstance(), DIRECTINPUT_VERSION, IID_IDirectInput8,
+                                    reinterpret_cast<void **>(directInput_.GetAddressOf()), nullptr);
     assert(SUCCEEDED(resultCode));
 
     if (directInput_) {
@@ -24,8 +24,8 @@ void Input::Initialize(WinApp* winApp) {
         assert(SUCCEEDED(resultCode));
 
         // ゲームウィンドウが前面にある間だけ、他アプリと共存する形で入力を受け取る。
-        resultCode = keyboard_->SetCooperativeLevel(
-            winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+        resultCode =
+            keyboard_->SetCooperativeLevel(winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
         assert(SUCCEEDED(resultCode));
 
         // マウスデバイスを生成する。
@@ -46,6 +46,7 @@ void Input::Initialize(WinApp* winApp) {
     std::memset(keyPre_, 0, sizeof(keyPre_));
 }
 
+// 前フレームの状態を保存し、各入力機器の最新状態と使用中の機器を取得する。
 void Input::Update() {
     HRESULT resultCode;
 
@@ -96,7 +97,7 @@ void Input::Update() {
     gamePadState_.connected = (xinputResult == ERROR_SUCCESS);
 
     if (gamePadState_.connected) {
-        const XINPUT_GAMEPAD& gamePad = xinputState.Gamepad;
+        const XINPUT_GAMEPAD &gamePad = xinputState.Gamepad;
         gamePadState_.buttons = gamePad.wButtons;
         gamePadState_.leftStickX = NormalizeStickAxis(gamePad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
         gamePadState_.leftStickY = NormalizeStickAxis(gamePad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
@@ -115,9 +116,8 @@ void Input::Update() {
         gamePadState_.rightTrigger = 0.0f;
     }
 
-    bool keyboardMouseActive =
-        mouseState_.x != 0 || mouseState_.y != 0 || mouseState_.wheel != 0 ||
-        mouseState_.buttons[0] || mouseState_.buttons[1] || mouseState_.buttons[2];
+    bool keyboardMouseActive = mouseState_.x != 0 || mouseState_.y != 0 || mouseState_.wheel != 0 ||
+                               mouseState_.buttons[0] || mouseState_.buttons[1] || mouseState_.buttons[2];
     for (const BYTE keyState : key_) {
         if ((keyState & 0x80) != 0) {
             keyboardMouseActive = true;
@@ -125,13 +125,11 @@ void Input::Update() {
         }
     }
 
-    const bool gamePadActive = gamePadState_.connected &&
-        (gamePadState_.buttons != 0 ||
-         std::abs(gamePadState_.leftStickX) > 0.15f ||
-         std::abs(gamePadState_.leftStickY) > 0.15f ||
-         std::abs(gamePadState_.rightStickX) > 0.15f ||
-         std::abs(gamePadState_.rightStickY) > 0.15f ||
-         gamePadState_.leftTrigger > 0.05f ||
+    const bool gamePadActive =
+        gamePadState_.connected &&
+        (gamePadState_.buttons != 0 || std::abs(gamePadState_.leftStickX) > 0.15f ||
+         std::abs(gamePadState_.leftStickY) > 0.15f || std::abs(gamePadState_.rightStickX) > 0.15f ||
+         std::abs(gamePadState_.rightStickY) > 0.15f || gamePadState_.leftTrigger > 0.05f ||
          gamePadState_.rightTrigger > 0.05f);
 
     if (gamePadActive) {
@@ -154,11 +152,11 @@ bool Input::PushControllerButton(WORD button) const {
 }
 
 bool Input::TriggerControllerButton(WORD button) const {
-    return gamePadState_.connected &&
-        (gamePadState_.buttons & button) != 0 &&
-        (gamePadState_.prevButtons & button) == 0;
+    return gamePadState_.connected && (gamePadState_.buttons & button) != 0 &&
+           (gamePadState_.prevButtons & button) == 0;
 }
 
+// スティックの生値を正規化し、中央付近の微小入力を除く。
 float Input::NormalizeStickAxis(SHORT value, SHORT deadZone) const {
     const int absoluteValue = std::abs(static_cast<int>(value));
     if (absoluteValue <= deadZone) {
@@ -167,11 +165,11 @@ float Input::NormalizeStickAxis(SHORT value, SHORT deadZone) const {
 
     // デッドゾーンを除いた残りの範囲を -1.0 から 1.0 に正規化する。
     const float sign = value < 0 ? -1.0f : 1.0f;
-    const float normalizedValue = static_cast<float>(absoluteValue - deadZone) /
-        static_cast<float>(32767 - deadZone);
+    const float normalizedValue = static_cast<float>(absoluteValue - deadZone) / static_cast<float>(32767 - deadZone);
     return sign * std::clamp(normalizedValue, 0.0f, 1.0f);
 }
 
+// トリガーの生値を0～1に変換し、押し始めの誤入力を除く。
 float Input::NormalizeTrigger(BYTE value) const {
     if (value <= XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
         return 0.0f;
@@ -179,5 +177,5 @@ float Input::NormalizeTrigger(BYTE value) const {
 
     // トリガー閾値を越えた分だけを 0.0 から 1.0 に正規化する。
     return static_cast<float>(value - XINPUT_GAMEPAD_TRIGGER_THRESHOLD) /
-        static_cast<float>(255 - XINPUT_GAMEPAD_TRIGGER_THRESHOLD);
+           static_cast<float>(255 - XINPUT_GAMEPAD_TRIGGER_THRESHOLD);
 }

@@ -12,6 +12,7 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// 画面中心からの距離で明るさを調整し、周辺を落とす。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
     output.color = gTexture.Sample(gSampler, input.texcoord);

@@ -4,43 +4,49 @@
 
 #include <cassert>
 
-SceneManager* SceneManager::GetInstance() {
+SceneManager *SceneManager::GetInstance() {
     static SceneManager instance;
     return &instance;
 }
 
-void SceneManager::Initialize(const SceneFactory* sceneFactory, SceneType initialScene, GameRuntime& game) {
+// 現在のシーンを準備し、初期値と必要なリソースを設定する。
+void SceneManager::Initialize(const SceneFactory *sceneFactory, SceneType initialScene, GameRuntime &game) {
     assert(sceneFactory);
     sceneFactory_ = sceneFactory;
     ChangeScene(initialScene, game);
 }
 
-void SceneManager::Update(GameRuntime& game, const SceneUpdateContext& context) {
+// 現在のシーンに、そのフレームの更新処理を委譲する。
+void SceneManager::Update(GameRuntime &game, const SceneUpdateContext &context) {
     if (currentScene_) {
         currentScene_->Update(game, context);
     }
 }
 
-void SceneManager::Draw(GameRuntime& game) {
+// 現在のシーンの表示対象を選び、描画コマンドを記録する。
+void SceneManager::Draw(GameRuntime &game) {
     if (currentScene_) {
         currentScene_->Draw(game);
     }
 }
 
-void SceneManager::DrawBackground(GameRuntime& game) {
+// 現在のシーンに背景だけの描画を委譲する。
+void SceneManager::DrawBackground(GameRuntime &game) {
     if (currentScene_) {
         currentScene_->DrawBackground(game);
     }
 }
 
-void SceneManager::Finalize(GameRuntime& game) {
+// 現在のシーンが保持するオブジェクトとリソースを解放する。
+void SceneManager::Finalize(GameRuntime &game) {
     if (currentScene_) {
         currentScene_->Finalize(game);
         currentScene_.reset();
     }
 }
 
-void SceneManager::ChangeScene(SceneType nextScene, GameRuntime& game) {
+// 現在のシーンを終了し、次のシーンの初期化へ切り替える。
+void SceneManager::ChangeScene(SceneType nextScene, GameRuntime &game) {
     assert(sceneFactory_);
 
     if (currentScene_ && currentSceneType_ == nextScene) {

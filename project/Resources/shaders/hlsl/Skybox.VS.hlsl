@@ -6,6 +6,7 @@ struct TransformationMatrix {
 };
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
 
+// 空の頂点をカメラへ合わせ、キューブマップの参照方向を渡す。
 VertexShaderOutput main(VertexShaderInput input) {
     VertexShaderOutput output;
     // 遠景表現のため、射影変換後のz値をwに置換して常に最遠(z=w)になるようにする

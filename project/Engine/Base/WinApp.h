@@ -5,11 +5,11 @@
 
 // Win32ウィンドウの生成、メッセージ処理、破棄を担当するアプリ基盤クラス。
 class WinApp {
-public:
+  public:
     // Win32から呼び出されるウィンドウプロシージャ。
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
-public:
+  public:
     // 定数（クライアント領域のサイズ - ゲームの解像度）
     static constexpr int32_t kClientWidth = 1280;
     static constexpr int32_t kClientHeight = 720;
@@ -32,7 +32,7 @@ public:
     int32_t GetWidth() const { return kClientWidth; }
     int32_t GetHeight() const { return kClientHeight; }
 
-private:
+  private:
     // 生成済みウィンドウのハンドル。
     HWND hwnd_ = nullptr;
     // 登録したウィンドウクラス情報。

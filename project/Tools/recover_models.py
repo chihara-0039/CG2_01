@@ -1,3 +1,4 @@
+# 不足するモデルとテクスチャを調べ、必要な代替形状を復元する。
 """Lost OBJ recovery: create simple, triangulated meshes without external packages.
 
 Existing non-recovery models are never overwritten. All coordinates are authored
@@ -40,6 +41,7 @@ class Mesh:
         self.lines = [MARKER]
         self.vertex_count = 0
 
+    # 3点から法線を求め、三角形の頂点と参照を追加する。
     def triangle(self, a, b, c, uv=((0,0),(1,0),(1,1))):
         ab = [b[i]-a[i] for i in range(3)]
         ac = [c[i]-a[i] for i in range(3)]
@@ -56,6 +58,7 @@ class Mesh:
         self.lines.append("f " + " ".join(f"{i}/{i}/{i}" for i in indices))
         self.vertex_count += 3
 
+    # 中心と大きさから6面の箱を作り、三角形へ分割する。
     def box(self, center=(0,0,0), size=(1,1,1), texture=None):
         x,y,z = center
         w,h,depth = (v/2 for v in size)
@@ -96,6 +99,7 @@ class Mesh:
             self.triangle(a,b,c,uv[:3])
             self.triangle(a,c,d,(uv[0],uv[2],uv[3]))
 
+    # 文字のビットマップを小さな箱へ展開し、立体文字を作る。
     def text(self, text, height=1.4):
         pixel = height/7
         width = (len(text)*6-1)*pixel
@@ -106,6 +110,7 @@ class Mesh:
                         self.box(((index*6+column+.5)*pixel-width/2,
                                   (3-row)*pixel, 0), (pixel*.94,pixel*.94,.12))
 
+    # 保存した日本語タイトルの三角形を読み、文字モデルへ追加する。
     def japanese_title(self, height=1.5):
         # 輪郭から作ったベベル・側面・裏面を持つ一体の立体文字。
         # 生成済み三角形を保存し、通常の再生成にはフォントや外部ライブラリを不要にする。
@@ -114,7 +119,9 @@ class Mesh:
         for triangle in data["triangles"]:
             self.triangle(*triangle)
 
+    # 緯度と経度で球面を分割し、三角形のメッシュを作る。
     def sphere(self, radius=.5, rings=8, sectors=16):
+        # 緯度と経度の番号から、球面上の座標を求める。
         def point(row,col):
             latitude = math.pi*row/rings
             longitude = math.tau*col/sectors
@@ -127,6 +134,7 @@ class Mesh:
                 self.triangle(a,c,b,(ua,uc,ub))
                 self.triangle(a,d,c,(ua,ud,uc))
 
+    # 星の輪郭と厚みから、表裏と側面の三角形を追加する。
     def star(self):
         points = [(math.cos(math.pi/2+i*math.pi/5)*(.5 if i%2==0 else .22),
                    math.sin(math.pi/2+i*math.pi/5)*(.5 if i%2==0 else .22)) for i in range(10)]
@@ -138,6 +146,7 @@ class Mesh:
             self.triangle((a[0],a[1],-.12),(b[0],b[1],.12),(a[0],a[1],.12))
 
 
+# モデル名に応じて代替形状を選び、必要なメッシュを生成する。
 def make_model(name):
     mesh = Mesh()
     if name == "title": mesh.japanese_title()
@@ -177,6 +186,7 @@ def make_model(name):
     return mesh
 
 
+# 材質と既知の参照先から、復元対象のモデル一覧を集める。
 def targets():
     # MTL-only folders include dynamic editor candidates as well as game models.
     result = {p.with_suffix(".obj") for p in ROOT.rglob("*.mtl")}
@@ -218,6 +228,7 @@ def restore_missing_textures(write=False):
     return checked, restored
 
 
+# OBJの頂点・UV・法線・面を数え、参照の整合性を調べる。
 def validate(path):
     counts = {"v":0,"vt":0,"vn":0,"f":0}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -240,6 +251,7 @@ def validate(path):
     return counts["f"]
 
 
+# 復元対象を検証し、書き込み指定時だけ不足する素材を生成する。
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write",action="store_true",help="Generate only missing or marked recovery models")

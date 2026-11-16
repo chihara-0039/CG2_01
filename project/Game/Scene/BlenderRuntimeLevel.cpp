@@ -14,12 +14,10 @@
 
 namespace {
 /// <summary>行ベクトル規約の行列を使い、ローカル座標をワールド座標へ変換する。</summary>
-Vector3 TransformPoint(const Vector3& point, const Matrix4x4& matrix) {
-    return {
-        point.x * matrix.m[0][0] + point.y * matrix.m[1][0] + point.z * matrix.m[2][0] + matrix.m[3][0],
-        point.x * matrix.m[0][1] + point.y * matrix.m[1][1] + point.z * matrix.m[2][1] + matrix.m[3][1],
-        point.x * matrix.m[0][2] + point.y * matrix.m[1][2] + point.z * matrix.m[2][2] + matrix.m[3][2]
-    };
+Vector3 TransformPoint(const Vector3 &point, const Matrix4x4 &matrix) {
+    return {point.x * matrix.m[0][0] + point.y * matrix.m[1][0] + point.z * matrix.m[2][0] + matrix.m[3][0],
+            point.x * matrix.m[0][1] + point.y * matrix.m[1][1] + point.z * matrix.m[2][1] + matrix.m[3][1],
+            point.x * matrix.m[0][2] + point.y * matrix.m[1][2] + point.z * matrix.m[2][2] + matrix.m[3][2]};
 }
 } // namespace
 
@@ -27,16 +25,16 @@ Vector3 TransformPoint(const Vector3& point, const Matrix4x4& matrix) {
 BlenderRuntimeLevel::BlenderRuntimeLevel() = default;
 BlenderRuntimeLevel::~BlenderRuntimeLevel() = default;
 
-void BlenderRuntimeLevel::Initialize(
-    Object3dCommon* object3dCommon,
-    DirectXCommon* dxCommon,
-    TextureManager* textureManager) {
+// 外部レベルを準備し、初期値と必要なリソースを設定する。
+void BlenderRuntimeLevel::Initialize(Object3dCommon *object3dCommon, DirectXCommon *dxCommon,
+                                     TextureManager *textureManager) {
     object3dCommon_ = object3dCommon;
     dxCommon_ = dxCommon;
     textureManager_ = textureManager;
 }
 
-bool BlenderRuntimeLevel::Load(const std::string& filePath) {
+// 外部レベルのオブジェクト・開始位置・衝突形状を読み込む。
+bool BlenderRuntimeLevel::Load(const std::string &filePath) {
     // 再読み込み時に古いレベル情報が混ざらないよう、最初に全状態を破棄する。
     objects_.clear();
     collisionBoxes_.clear();
@@ -53,22 +51,20 @@ bool BlenderRuntimeLevel::Load(const std::string& filePath) {
     }
 
     bool loadedAnyNode = false;
-    for (const LevelObjectData& objectData : levelData.objects) {
+    for (const LevelObjectData &objectData : levelData.objects) {
         loadedAnyNode = AppendObjectRecursive(objectData) || loadedAnyNode;
     }
 
-    status_ = "Blender level: " + levelData.name +
-        " (objects=" + std::to_string(objects_.size()) +
-        ", colliders=" + std::to_string(collisionBoxes_.size()) +
-        ", playerSpawn=" + (hasPlayerSpawn_ ? "yes" : "no") + ")";
+    status_ = "Blender level: " + levelData.name + " (objects=" + std::to_string(objects_.size()) +
+              ", colliders=" + std::to_string(collisionBoxes_.size()) +
+              ", playerSpawn=" + (hasPlayerSpawn_ ? "yes" : "no") + ")";
     return loadedAnyNode || hasPlayerSpawn_ || !collisionBoxes_.empty();
 }
 
-void BlenderRuntimeLevel::Update(
-    const Matrix4x4& view,
-    const Matrix4x4& projection,
-    const Matrix4x4& lightViewProjection) {
-    for (RuntimeObject& runtimeObject : objects_) {
+// 外部レベルの各モデルへ、現在のカメラと光源の行列を渡す。
+void BlenderRuntimeLevel::Update(const Matrix4x4 &view, const Matrix4x4 &projection,
+                                 const Matrix4x4 &lightViewProjection) {
+    for (RuntimeObject &runtimeObject : objects_) {
         if (!runtimeObject.object) {
             continue;
         }
@@ -77,37 +73,38 @@ void BlenderRuntimeLevel::Update(
     }
 }
 
+// 外部レベルの表示対象を選び、描画コマンドを記録する。
 void BlenderRuntimeLevel::Draw() {
-    for (RuntimeObject& runtimeObject : objects_) {
+    for (RuntimeObject &runtimeObject : objects_) {
         if (runtimeObject.object) {
             runtimeObject.object->Draw();
         }
     }
 }
 
-void BlenderRuntimeLevel::DrawShadow(const Matrix4x4& lightViewProjection) {
-    for (RuntimeObject& runtimeObject : objects_) {
+// 光源側のカメラから、形状を影の深度マップへ描画する。
+void BlenderRuntimeLevel::DrawShadow(const Matrix4x4 &lightViewProjection) {
+    for (RuntimeObject &runtimeObject : objects_) {
         if (runtimeObject.object) {
             runtimeObject.object->DrawShadow(lightViewProjection);
         }
     }
 }
 
-bool BlenderRuntimeLevel::AppendObjectRecursive(const LevelObjectData& objectData) {
+// 親の変換を引き継ぎながら、外部レベルの子オブジェクトを再帰的に追加する。
+bool BlenderRuntimeLevel::AppendObjectRecursive(const LevelObjectData &objectData) {
     bool registeredAnyData = false;
 
     // disabledは描画・物理・スポーンのすべてをまとめて無効化する。
     if (!objectData.disabled) {
         // 空文字は旧データとの互換用としてBOX扱いにする。
-        if (objectData.collider.enabled &&
-            (objectData.collider.type.empty() || objectData.collider.type == "BOX")) {
+        if (objectData.collider.enabled && (objectData.collider.type.empty() || objectData.collider.type == "BOX")) {
             collisionBoxes_.push_back(MakeWorldCollisionBox(objectData.transform, objectData.collider));
             registeredAnyData = true;
         }
 
         // 複数のPlayerスポーンがある場合は、階層を先頭から走査して最初の一個を採用する。
-        if (!hasPlayerSpawn_ && objectData.spawnPoint.enabled &&
-            IsPlayerSpawnType(objectData.spawnPoint.type)) {
+        if (!hasPlayerSpawn_ && objectData.spawnPoint.enabled && IsPlayerSpawnType(objectData.spawnPoint.type)) {
             playerSpawn_ = objectData.transform.translate;
             hasPlayerSpawn_ = true;
             registeredAnyData = true;
@@ -120,11 +117,8 @@ bool BlenderRuntimeLevel::AppendObjectRecursive(const LevelObjectData& objectDat
             if (!modelPath.empty() && path.extension() == ".obj" && std::filesystem::exists(path)) {
                 RuntimeObject runtimeObject;
                 runtimeObject.transform = objectData.transform;
-                runtimeObject.model = Model::CreateFromOBJ(
-                    dxCommon_,
-                    path.parent_path().generic_string(),
-                    path.filename().generic_string(),
-                    textureManager_);
+                runtimeObject.model = Model::CreateFromOBJ(dxCommon_, path.parent_path().generic_string(),
+                                                           path.filename().generic_string(), textureManager_);
 
                 if (runtimeObject.model) {
                     runtimeObject.object = std::make_unique<Object3d>();
@@ -141,13 +135,14 @@ bool BlenderRuntimeLevel::AppendObjectRecursive(const LevelObjectData& objectDat
     }
 
     // LevelDataLoaderが親Transformを子へ合成済みなので、ここでは階層を平坦化して所有する。
-    for (const LevelObjectData& child : objectData.children) {
+    for (const LevelObjectData &child : objectData.children) {
         registeredAnyData = AppendObjectRecursive(child) || registeredAnyData;
     }
     return registeredAnyData;
 }
 
-std::string BlenderRuntimeLevel::ResolveModelPath(const std::string& fileName) {
+// レベル側のモデル参照を、実際に読み込めるファイルパスへ解決する。
+std::string BlenderRuntimeLevel::ResolveModelPath(const std::string &fileName) {
     if (fileName.empty()) {
         return {};
     }
@@ -163,7 +158,7 @@ std::string BlenderRuntimeLevel::ResolveModelPath(const std::string& fileName) {
         std::filesystem::path("Resources/Models") / (stem + ".obj"),
         std::filesystem::path("Resources/Models") / stem / fileName,
     };
-    for (const std::filesystem::path& candidate : candidates) {
+    for (const std::filesystem::path &candidate : candidates) {
         if (std::filesystem::exists(candidate)) {
             return candidate.generic_string();
         }
@@ -171,41 +166,33 @@ std::string BlenderRuntimeLevel::ResolveModelPath(const std::string& fileName) {
     return fileName;
 }
 
+// オブジェクトの種類名がプレイヤー開始位置を表すか判定する。
 bool BlenderRuntimeLevel::IsPlayerSpawnType(std::string type) {
-    std::transform(type.begin(), type.end(), type.begin(), [](unsigned char character) {
-        return static_cast<char>(std::tolower(character));
-    });
-    return type.empty() || type == "player" || type == "playerstart" ||
-        type == "player_start" || type == "player spawn" || type == "playerspawn";
+    std::transform(type.begin(), type.end(), type.begin(),
+                   [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    return type.empty() || type == "player" || type == "playerstart" || type == "player_start" ||
+           type == "player spawn" || type == "playerspawn";
 }
 
-WorldCollisionBox BlenderRuntimeLevel::MakeWorldCollisionBox(
-    const Transform& transform,
-    const LevelColliderData& collider) {
-    const Matrix4x4 world = Math::MakeAffineMatrix(
-        transform.scale,
-        transform.rotate,
-        transform.translate);
-    const Vector3 halfSize = {
-        std::abs(collider.size.x) * 0.5f,
-        std::abs(collider.size.y) * 0.5f,
-        std::abs(collider.size.z) * 0.5f
-    };
+// ローカルの当たり判定へ変換を適用し、ワールド座標の箱を作る。
+WorldCollisionBox BlenderRuntimeLevel::MakeWorldCollisionBox(const Transform &transform,
+                                                             const LevelColliderData &collider) {
+    const Matrix4x4 world = Math::MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+    const Vector3 halfSize = {std::abs(collider.size.x) * 0.5f, std::abs(collider.size.y) * 0.5f,
+                              std::abs(collider.size.z) * 0.5f};
 
     WorldCollisionBox result;
     const float highest = (std::numeric_limits<float>::max)();
-    result.minimum = { highest, highest, highest };
-    result.maximum = { -highest, -highest, -highest };
+    result.minimum = {highest, highest, highest};
+    result.maximum = {-highest, -highest, -highest};
 
     // 回転後のBOXを現在のAABB物理へ安全に渡すため、全8頂点を包む範囲を求める。
     for (int zSign = -1; zSign <= 1; zSign += 2) {
         for (int ySign = -1; ySign <= 1; ySign += 2) {
             for (int xSign = -1; xSign <= 1; xSign += 2) {
-                const Vector3 localPoint = {
-                    collider.center.x + halfSize.x * static_cast<float>(xSign),
-                    collider.center.y + halfSize.y * static_cast<float>(ySign),
-                    collider.center.z + halfSize.z * static_cast<float>(zSign)
-                };
+                const Vector3 localPoint = {collider.center.x + halfSize.x * static_cast<float>(xSign),
+                                            collider.center.y + halfSize.y * static_cast<float>(ySign),
+                                            collider.center.z + halfSize.z * static_cast<float>(zSign)};
                 const Vector3 worldPoint = TransformPoint(localPoint, world);
                 result.minimum.x = (std::min)(result.minimum.x, worldPoint.x);
                 result.minimum.y = (std::min)(result.minimum.y, worldPoint.y);

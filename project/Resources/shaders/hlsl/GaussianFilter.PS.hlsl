@@ -7,6 +7,7 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// 中心からの距離に対応する、ガウスぼかしの重みを求める。
 float32_t Gauss(float32_t x, float32_t y, float32_t sigma) {
     static const float32_t kPi = 3.14159265f;
     float32_t exponent = -((x * x) + (y * y)) * rcp(2.0f * sigma * sigma);
@@ -14,6 +15,7 @@ float32_t Gauss(float32_t x, float32_t y, float32_t sigma) {
     return exp(exponent) * rcp(denominator);
 }
 
+// 周辺画素へガウス重みを付け、滑らかなぼかしを求める。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
 
@@ -23,9 +25,9 @@ PixelShaderOutput main(VertexShaderOutput input) {
     float32_t2 uvStepSize = float32_t2(rcp(float32_t(width)), rcp(float32_t(height)));
 
     static const float32_t2 kIndex3x3[3][3] = {
-        { { -1.0f, -1.0f }, { 0.0f, -1.0f }, { 1.0f, -1.0f } },
-        { { -1.0f,  0.0f }, { 0.0f,  0.0f }, { 1.0f,  0.0f } },
-        { { -1.0f,  1.0f }, { 0.0f,  1.0f }, { 1.0f,  1.0f } },
+        {{-1.0f, -1.0f}, {0.0f, -1.0f}, {1.0f, -1.0f}},
+        {{-1.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}},
+        {{-1.0f, 1.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}},
     };
 
     float32_t3 color = float32_t3(0.0f, 0.0f, 0.0f);

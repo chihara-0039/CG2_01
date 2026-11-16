@@ -13,6 +13,7 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// 中心からの方向へ複数回サンプリングし、放射状のぼかしを作る。
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
 

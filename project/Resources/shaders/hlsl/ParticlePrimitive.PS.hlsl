@@ -1,5 +1,4 @@
-struct VertexShaderOutput
-{
+struct VertexShaderOutput {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
     float4 color : COLOR0;
@@ -8,18 +7,16 @@ struct VertexShaderOutput
 Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
-struct PixelShaderOutput
-{
+struct PixelShaderOutput {
     float4 color : SV_TARGET0;
 };
 
-PixelShaderOutput main(VertexShaderOutput input)
-{
+// 粒子の形状・材質に合わせて色と透明度を求める。
+PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
     output.color = gTexture.Sample(gSampler, input.texcoord) * input.color;
 
-    if (output.color.a <= 0.001f)
-    {
+    if (output.color.a <= 0.001f) {
         discard;
     }
 

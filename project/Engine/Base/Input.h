@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <Windows.h>
 #include <wrl.h>
 #include <dinput.h> // DirectInput のヘッダー
@@ -37,13 +37,14 @@ enum class ActiveInputDevice {
 };
 
 class Input {
-public:
+    friend class InputTestPlayback; // Isolated CPU physics verification; never overrides the live input instance.
+  public:
     // COM オブジェクトを安全に扱うための別名。
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-public:
+  public:
     // DirectInput と XInput の入力デバイスを初期化する。
-    void Initialize(WinApp* winApp);
+    void Initialize(WinApp *winApp);
 
     // キーボード、マウス、ゲームパッドの状態を1フレーム分更新する。
     void Update();
@@ -56,10 +57,10 @@ public:
     bool TriggerKey(BYTE keyNumber) const;
 
     // 直近のマウス状態を取得する。
-    const MouseState& GetMouseState() const { return mouseState_; }
+    const MouseState &GetMouseState() const { return mouseState_; }
 
     // 直近のゲームパッド状態を取得する。
-    const GamePadState& GetGamePadState() const { return gamePadState_; }
+    const GamePadState &GetGamePadState() const { return gamePadState_; }
 
     // Xbox コントローラーが接続されているかを返す。
     bool IsGamePadConnected() const { return gamePadState_.connected; }
@@ -74,11 +75,11 @@ public:
     ActiveInputDevice GetActiveInputDevice() const { return activeInputDevice_; }
     bool IsUsingGamePad() const { return activeInputDevice_ == ActiveInputDevice::GamePad; }
 
-private:
+  private:
     float NormalizeStickAxis(SHORT value, SHORT deadZone) const;
     float NormalizeTrigger(BYTE value) const;
 
-    WinApp* winApp_ = nullptr;
+    WinApp *winApp_ = nullptr;
 
     ComPtr<IDirectInput8> directInput_;
     ComPtr<IDirectInputDevice8> keyboard_;

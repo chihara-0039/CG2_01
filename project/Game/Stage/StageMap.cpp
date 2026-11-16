@@ -6,12 +6,94 @@
 #include <algorithm>
 #include <cmath>
 #include <Windows.h>
+#include <stdexcept>
+#include <new>
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
 #endif
 
+bool StageMap::IsValidSize(int width, int height, int depth) {
+    return width > 0 && height > 0 && depth > 0 && width <= kMaxDimension && height <= kMaxDimension &&
+           depth <= kMaxDimension && static_cast<size_t>(width) * height * depth <= kMaxCells;
+}
+
+// 既存セルを残したままグリッドを広げ、確保失敗時は元のマップを保持する。
+bool StageMap::Expand(int width, int height, int depth) {
+    if (!IsValidSize(width, height, depth) || width < width_ || height < height_ || depth < depth_) {
+        return false;
+    }
+    if (width == width_ && height == height_ && depth == depth_) {
+        return true;
+    }
+    // 確保失敗時は元のマップを変更しない。
+    try {
+        std::vector<MapCell> expanded(static_cast<size_t>(width) * height * depth);
+        for (int y = 0; y < height_; ++y) {
+            for (int z = 0; z < depth_; ++z) {
+                for (int x = 0; x < width_; ++x) {
+                    expanded[x + z * width + y * width * depth] = cells_[ToIndex(x, y, z)];
+                }
+            }
+        }
+        cells_.swap(expanded);
+    } catch (const std::bad_alloc &) {
+        return false;
+    }
+    width_ = width;
+    height_ = height;
+    depth_ = depth;
+    needsRebuild_ = true;
+    return true;
+}
+
+// 編集した回転領域を再検証し、不正なら変更前の定義へ戻す。
+bool StageMap::UpdateRotationRegion(int index, const RotationRegion &r) {
+    if (index < 0 || index >= static_cast<int>(rotationRegions_.size())) {
+        return false;
+    }
+    const auto previous = rotationRegions_;
+    rotationRegions_.erase(rotationRegions_.begin() + index);
+    if (!AddRotationRegion(r)) {
+        rotationRegions_ = previous;
+        return false;
+    }
+    rotationRegions_.pop_back();
+    rotationRegions_.insert(rotationRegions_.begin() + index, r);
+    return true;
+}
+
+// 範囲・重複・操作台の位置を検証し、有効な回転領域だけを追加する。
+bool StageMap::AddRotationRegion(const RotationRegion &r) {
+    if (r.size < 3 || r.size > 31 || r.size % 2 == 0 || r.x < 0 || r.z < 0 || r.x > width_ - r.size ||
+        r.z > depth_ - r.size || !GetCell(r.control)) {
+        return false;
+    }
+    const auto inside = [&](const RotationRegion &a, const Int3 &p) {
+        return p.x >= a.x && p.x < a.x + a.size && p.z >= a.z && p.z < a.z + a.size;
+    };
+    if (inside(r, r.control)) {
+        return false;
+    }
+    if (r.alternate.x != -1 && (!GetCell(r.alternate) || inside(r, r.alternate))) {
+        return false;
+    }
+    for (const auto &a : rotationRegions_) {
+        if ((r.x < a.x + a.size && r.x + r.size > a.x && r.z < a.z + a.size && r.z + r.size > a.z) ||
+            inside(a, r.control) || inside(r, a.control) || (r.alternate.x != -1 && inside(a, r.alternate)) ||
+            (a.alternate.x != -1 && inside(r, a.alternate))) {
+            return false;
+        }
+    }
+    rotationRegions_.push_back(r);
+    return true;
+}
+
+// ステージのセルとギミックを準備し、初期値と必要なリソースを設定する。
 void StageMap::Initialize(int width, int height, int depth) {
+    if (!IsValidSize(width, height, depth)) {
+        throw std::invalid_argument("Stage grid exceeds the supported size");
+    }
     // ステージの3次元グリッドサイズを決め、全セルを確保する。
     assert(width > 0);
     assert(height > 0);
@@ -20,15 +102,16 @@ void StageMap::Initialize(int width, int height, int depth) {
     width_ = width;
     height_ = height;
     depth_ = depth;
+    visualStyle_ = "Auto";
+    rotationRegions_.clear();
 
-    cells_.resize(width_ * height_ * depth_);
+    cells_.resize(static_cast<size_t>(width_) * height_ * depth_);
 
     // ステージ読み込み時に、前ステージのギミック状態が残らないようにリセットする。
     isPSwitchActive_ = false;
     isOnState_ = true;
     needsRebuild_ = false;
     accumulatedTime_ = 0.0f;
-
 
     Clear();
 
@@ -54,7 +137,9 @@ void StageMap::Initialize(int width, int height, int depth) {
     // エディタで最初から使えるカスタムブロックのプリセット形状を用意する。
     // Slot 1: L-SHIELD (L字の壁足場パーツ)
     customParts_[0].name = "L-SHIELD";
-    customParts_[0].colorR = 0.9f; customParts_[0].colorG = 0.3f; customParts_[0].colorB = 0.3f; // スタイリッシュ赤
+    customParts_[0].colorR = 0.9f;
+    customParts_[0].colorG = 0.3f;
+    customParts_[0].colorB = 0.3f; // スタイリッシュ赤
     customParts_[0].cells[0][0][0].type = BlockType::Wall;
     customParts_[0].cells[0][0][1].type = BlockType::Wall;
     customParts_[0].cells[0][0][2].type = BlockType::Wall;
@@ -63,7 +148,9 @@ void StageMap::Initialize(int width, int height, int depth) {
 
     // Slot 2: T-BRIDGE (T字足場パーツ)
     customParts_[1].name = "T-BRIDGE";
-    customParts_[1].colorR = 0.9f; customParts_[1].colorG = 0.8f; customParts_[1].colorB = 0.2f; // ゴールド黄色
+    customParts_[1].colorR = 0.9f;
+    customParts_[1].colorG = 0.8f;
+    customParts_[1].colorB = 0.2f; // ゴールド黄色
     customParts_[1].cells[0][0][1].type = BlockType::Wall;
     customParts_[1].cells[1][0][1].type = BlockType::Wall;
     customParts_[1].cells[2][0][0].type = BlockType::Wall;
@@ -72,7 +159,9 @@ void StageMap::Initialize(int width, int height, int depth) {
 
     // Slot 3: LADDER-WALL (ハシゴ付き壁)
     customParts_[2].name = "LADDER-WALL";
-    customParts_[2].colorR = 0.2f; customParts_[2].colorG = 0.7f; customParts_[2].colorB = 0.9f; // ライトブルー
+    customParts_[2].colorR = 0.2f;
+    customParts_[2].colorG = 0.7f;
+    customParts_[2].colorB = 0.9f; // ライトブルー
     customParts_[2].cells[0][0][1].type = BlockType::Wall;
     customParts_[2].cells[1][0][1].type = BlockType::Wall;
     customParts_[2].cells[2][0][1].type = BlockType::Wall;
@@ -82,28 +171,33 @@ void StageMap::Initialize(int width, int height, int depth) {
 
     // Slot 4 & 5: 空白のカスタム用スロット
     customParts_[3].name = "MY PART A";
-    customParts_[3].colorR = 0.4f; customParts_[3].colorG = 0.9f; customParts_[3].colorB = 0.4f; // ライムグリーン
+    customParts_[3].colorR = 0.4f;
+    customParts_[3].colorG = 0.9f;
+    customParts_[3].colorB = 0.4f;                         // ライムグリーン
     customParts_[3].cells[0][0][0].type = BlockType::Wall; // 1マスだけ
 
     customParts_[4].name = "MY PART B";
-    customParts_[4].colorR = 0.8f; customParts_[4].colorG = 0.4f; customParts_[4].colorB = 0.9f; // パープル
+    customParts_[4].colorR = 0.8f;
+    customParts_[4].colorG = 0.4f;
+    customParts_[4].colorB = 0.9f;                           // パープル
     customParts_[4].cells[0][0][0].type = BlockType::Ladder; // 1マスだけ
 }
 
-void StageMap::Update(float deltaTime, const Vector3& playerPos)
-{
+// 移動床・敵・崩れる床など、セルに属するギミックの時間と状態を進める。
+void StageMap::Update(float deltaTime, const Vector3 &playerPos) {
     // ステージ全体で共有する経過時間。時間制ブロックなどの周期演出に使う。
     accumulatedTime_ += deltaTime;
 
     // 時間制ブロックは variant の十の位をグループ、 一の位を出現順として扱う。
     // まず各グループに存在する出現順を集め、ステージごとに必要な周期を求められるようにする。
     std::vector<int> groupOrders[10];
-    for (const auto& cell : cells_) {
+    for (const auto &cell : cells_) {
         if (cell.type == BlockType::TimedBlock) {
             int group = cell.variant / 10;
             int order = cell.variant % 10;
             if (group >= 1 && group < 10) {
-                if (std::find(groupOrders[group].begin(), groupOrders[group].end(), order) == groupOrders[group].end()) {
+                if (std::find(groupOrders[group].begin(), groupOrders[group].end(), order) ==
+                    groupOrders[group].end()) {
                     groupOrders[group].push_back(order);
                 }
             }
@@ -120,31 +214,32 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
     for (int y = 0; y < height_; ++y) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
-                MapCell& cell = cells_[ToIndex(x, y, z)];
+                MapCell &cell = cells_[ToIndex(x, y, z)];
 
                 if (cell.type == BlockType::TimedBlock) {
                     // 同じグループ内で、order の小さいブロックから順に出現させる。
                     int group = cell.variant / 10;
                     int order = cell.variant % 10;
                     if (group >= 1 && group < 10 && !groupOrders[group].empty()) {
-                        const auto& orders = groupOrders[group];
+                        const auto &orders = groupOrders[group];
 
-                        float kAppearDelay = 1.2f;       // 1.2秒間隔で次のブロックが出現
-                        float kActiveDuration = 3.0f;    // 3.0秒間表示する
-                        float kRestDuration = 1.5f;      // 全て消えた後のインターバル
+                        float kAppearDelay = 1.2f;    // 1.2秒間隔で次のブロックが出現
+                        float kActiveDuration = 3.0f; // 3.0秒間表示する
+                        float kRestDuration = 1.5f;   // 全て消えた後のインターバル
 
                         // グループ内の最後のブロックが消えた後、少し待ってから最初に戻る。
-                        float cycleDuration = static_cast<float>(orders.size() - 1) * kAppearDelay + kActiveDuration + kRestDuration;
+                        float cycleDuration =
+                            static_cast<float>(orders.size() - 1) * kAppearDelay + kActiveDuration + kRestDuration;
 
                         // このブロックの出現順インデックスを取得
                         auto it = std::find(orders.begin(), orders.end(), order);
                         size_t idx = std::distance(orders.begin(), it);
 
-						// 出現時間と消滅時間を計算
+                        // 出現時間と消滅時間を計算
                         float appearTime = static_cast<float>(idx) * kAppearDelay;
                         float disappearTime = appearTime + kActiveDuration;
 
-						// 現在の経過時間を周期内に収める
+                        // 現在の経過時間を周期内に収める
                         float localCycleTime = std::fmod(accumulatedTime_, cycleDuration);
                         if (localCycleTime >= appearTime && localCycleTime < disappearTime) {
                             cell.isSolid = true;
@@ -187,9 +282,8 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                         cell.colorG = 1.0f - r;
                         cell.colorB = 1.0f - r;
                         cell.opacity = 1.0f - r; // ★追加：乗っている間は徐々に透明（フェードアウト）にする
-                    }
-                    else {
-                        cell.opacity = 0.0f;     // ★追加：完全に消えている間は透明度 0
+                    } else {
+                        cell.opacity = 0.0f; // ★追加：完全に消えている間は透明度 0
                     }
                     cell.isCrumbling = false;
                 }
@@ -238,78 +332,55 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
                 // --- 敵3 (EnemyChaser): プレイヤー追尾 (一定範囲内のみ) ---
                 if (cell.type == BlockType::EnemyChaser) {
                     // スポーン地点から一定範囲内にプレイヤーが入ると追尾し、遠ざかると初期位置へ戻る。
-                    Vector3 spawnPos = { static_cast<float>(x), static_cast<float>(y), static_cast<float>(z) };
-                    Vector3 currentPos = {
-                        spawnPos.x + cell.currentOffsetX,
-                        spawnPos.y + cell.currentOffsetY,
-                        spawnPos.z + cell.currentOffsetZ
-                    };
-                    Vector3 toPlayer = {
-                        playerPos.x - currentPos.x,
-                        playerPos.y - currentPos.y,
-                        playerPos.z - currentPos.z
-                    };
-                    float distanceToPlayer = std::sqrt(
-                        toPlayer.x * toPlayer.x +
-                        toPlayer.y * toPlayer.y +
-                        toPlayer.z * toPlayer.z);
+                    Vector3 spawnPos = {static_cast<float>(x), static_cast<float>(y), static_cast<float>(z)};
+                    Vector3 currentPos = {spawnPos.x + cell.currentOffsetX, spawnPos.y + cell.currentOffsetY,
+                                          spawnPos.z + cell.currentOffsetZ};
+                    Vector3 toPlayer = {playerPos.x - currentPos.x, playerPos.y - currentPos.y,
+                                        playerPos.z - currentPos.z};
+                    float distanceToPlayer =
+                        std::sqrt(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y + toPlayer.z * toPlayer.z);
 
-					// プレイヤーがスポーン位置からどれくらい離れているかを計算
-                    float playerDistanceFromSpawn = std::sqrt(
-                        (playerPos.x - spawnPos.x) * (playerPos.x - spawnPos.x) +
-                        (playerPos.y - spawnPos.y) * (playerPos.y - spawnPos.y) +
-                        (playerPos.z - spawnPos.z) * (playerPos.z - spawnPos.z)
-                    );
+                    // プレイヤーがスポーン位置からどれくらい離れているかを計算
+                    float playerDistanceFromSpawn = std::sqrt((playerPos.x - spawnPos.x) * (playerPos.x - spawnPos.x) +
+                                                              (playerPos.y - spawnPos.y) * (playerPos.y - spawnPos.y) +
+                                                              (playerPos.z - spawnPos.z) * (playerPos.z - spawnPos.z));
 
-					// プレイヤーがスポーン位置から8マス以内にいる場合のみ追尾する
+                    // プレイヤーがスポーン位置から8マス以内にいる場合のみ追尾する
                     if (playerDistanceFromSpawn < 8.0f && distanceToPlayer > 0.05f) {
                         float speed = 1.2f; // 秒速 1.2 マス
-                        Vector3 directionToPlayer = {
-                            toPlayer.x / distanceToPlayer,
-                            toPlayer.y / distanceToPlayer,
-                            toPlayer.z / distanceToPlayer
-                        };
-                        Vector3 nextPos = {
-                            currentPos.x + directionToPlayer.x * (speed * deltaTime),
-                            currentPos.y + directionToPlayer.y * (speed * deltaTime),
-                            currentPos.z + directionToPlayer.z * (speed * deltaTime)
-                        };
+                        Vector3 directionToPlayer = {toPlayer.x / distanceToPlayer, toPlayer.y / distanceToPlayer,
+                                                     toPlayer.z / distanceToPlayer};
+                        Vector3 nextPos = {currentPos.x + directionToPlayer.x * (speed * deltaTime),
+                                           currentPos.y + directionToPlayer.y * (speed * deltaTime),
+                                           currentPos.z + directionToPlayer.z * (speed * deltaTime)};
 
                         // スポーン位置からの最大追尾距離を 8 マスに制限
-                        Vector3 nextOffset = {
-                            nextPos.x - spawnPos.x,
-                            nextPos.y - spawnPos.y,
-                            nextPos.z - spawnPos.z
-                        };
-						// 8 マス以上離れないように制限する
+                        Vector3 nextOffset = {nextPos.x - spawnPos.x, nextPos.y - spawnPos.y, nextPos.z - spawnPos.z};
+                        // 8 マス以上離れないように制限する
                         float offsetDistanceFromSpawn = std::sqrt(
-                            nextOffset.x * nextOffset.x +
-                            nextOffset.y * nextOffset.y +
-                            nextOffset.z * nextOffset.z);
+                            nextOffset.x * nextOffset.x + nextOffset.y * nextOffset.y + nextOffset.z * nextOffset.z);
                         if (offsetDistanceFromSpawn > 8.0f) {
-                            nextOffset = {
-                                nextOffset.x / offsetDistanceFromSpawn * 8.0f,
-                                nextOffset.y / offsetDistanceFromSpawn * 8.0f,
-                                nextOffset.z / offsetDistanceFromSpawn * 8.0f
-                            };
+                            nextOffset = {nextOffset.x / offsetDistanceFromSpawn * 8.0f,
+                                          nextOffset.y / offsetDistanceFromSpawn * 8.0f,
+                                          nextOffset.z / offsetDistanceFromSpawn * 8.0f};
                         }
                         cell.currentOffsetX = nextOffset.x;
                         cell.currentOffsetY = nextOffset.y;
                         cell.currentOffsetZ = nextOffset.z;
-                    }
-                    else {
+                    } else {
                         // プレイヤーが遠い場合は、ゆっくり初期位置に戻る
                         float returnSpeed = 1.0f;
-                        float currentOffsetDistance = std::sqrt(
-                            cell.currentOffsetX * cell.currentOffsetX +
-                            cell.currentOffsetY * cell.currentOffsetY +
-                            cell.currentOffsetZ * cell.currentOffsetZ);
+                        float currentOffsetDistance = std::sqrt(cell.currentOffsetX * cell.currentOffsetX +
+                                                                cell.currentOffsetY * cell.currentOffsetY +
+                                                                cell.currentOffsetZ * cell.currentOffsetZ);
                         if (currentOffsetDistance > 0.05f) {
-                            cell.currentOffsetX -= (cell.currentOffsetX / currentOffsetDistance) * returnSpeed * deltaTime;
-                            cell.currentOffsetY -= (cell.currentOffsetY / currentOffsetDistance) * returnSpeed * deltaTime;
-                            cell.currentOffsetZ -= (cell.currentOffsetZ / currentOffsetDistance) * returnSpeed * deltaTime;
-                        }
-                        else {
+                            cell.currentOffsetX -=
+                                (cell.currentOffsetX / currentOffsetDistance) * returnSpeed * deltaTime;
+                            cell.currentOffsetY -=
+                                (cell.currentOffsetY / currentOffsetDistance) * returnSpeed * deltaTime;
+                            cell.currentOffsetZ -=
+                                (cell.currentOffsetZ / currentOffsetDistance) * returnSpeed * deltaTime;
+                        } else {
                             cell.currentOffsetX = 0.0f;
                             cell.currentOffsetY = 0.0f;
                             cell.currentOffsetZ = 0.0f;
@@ -322,40 +393,38 @@ void StageMap::Update(float deltaTime, const Vector3& playerPos)
 }
 
 // ステージデータをファイルに保存する。SaveToFile はステージサイズを最初に書き出すため、LoadFromFile が最初にこの3値を読んでグリッドを確保する。
-void StageMap::SaveToFile(const std::string& filename) {
+void StageMap::SaveToFile(const std::string &filename) {
     std::ofstream ofs(filename);
-    if (!ofs.is_open()) return;
+    if (!ofs.is_open()) {
+        return;
+    }
 
     // 1行目は必ずステージサイズにする。LoadFromFile が最初にこの3値を読んでグリッドを確保する。
     ofs << width_ << " " << height_ << " " << depth_ << "\n";
+    ofs << "VISUAL_STYLE " << visualStyle_ << "\n";
+    for (const auto &r : rotationRegions_) {
+        ofs << "ROTATION " << r.x << ' ' << r.z << ' ' << r.size << ' ' << r.control.x << ' ' << r.control.y << ' '
+            << r.control.z << ' ' << r.alternate.x << ' ' << r.alternate.y << ' ' << r.alternate.z << '\n';
+    }
 
     // ステージごとの見た目を再現するため、天候プリセットとライト設定も保存する。
     ofs << "PRESET \"" << weatherPresetName_ << "\"\n";
-    ofs << "ENVIRONMENT "
-        << clearColor_.x << " " << clearColor_.y << " " << clearColor_.z << " " << clearColor_.w << " "
-        << lightIntensity_ << " "
-        << lightColor_.x << " " << lightColor_.y << " " << lightColor_.z << " "
+    ofs << "ENVIRONMENT " << clearColor_.x << " " << clearColor_.y << " " << clearColor_.z << " " << clearColor_.w
+        << " " << lightIntensity_ << " " << lightColor_.x << " " << lightColor_.y << " " << lightColor_.z << " "
         << lightDirection_.x << " " << lightDirection_.y << " " << lightDirection_.z << "\n";
-
-
 
     // カスタムブロック定義を書き出す。
     // PART はスロット全体の見た目、PARTCELL は 3x3x3 内の実セル構成を表す。
-    for (const auto& part : customParts_) {
-        ofs << "PART " << part.id << " "
-            << static_cast<int>(part.baseType) << " "
-            << part.colorR << " "
-            << part.colorG << " "
-            << part.colorB << " "
-            << part.name << "\n";
+    for (const auto &part : customParts_) {
+        ofs << "PART " << part.id << " " << static_cast<int>(part.baseType) << " " << part.colorR << " " << part.colorG
+            << " " << part.colorB << " " << part.name << "\n";
 
         // アセンブリの各セルで None でないものを書き出す
         for (int y = 0; y < 3; ++y) {
             for (int z = 0; z < 3; ++z) {
                 for (int x = 0; x < 3; ++x) {
                     if (part.cells[y][z][x].type != BlockType::None) {
-                        ofs << "PARTCELL " << part.id << " "
-                            << x << " " << y << " " << z << " "
+                        ofs << "PARTCELL " << part.id << " " << x << " " << y << " " << z << " "
                             << static_cast<int>(part.cells[y][z][x].type) << "\n";
                     }
                 }
@@ -367,27 +436,27 @@ void StageMap::SaveToFile(const std::string& filename) {
     for (int y = 0; y < height_; ++y) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
-                const MapCell* cell = GetCell(x, y, z);
-                if (cell->type == BlockType::None) continue; // 空ブロックは保存しない
+                const MapCell *cell = GetCell(x, y, z);
+                if (cell->type == BlockType::None) {
+                    continue; // 空ブロックは保存しない
+                }
 
                 int saveVariant = cell->variant;
                 if (cell->type == BlockType::MovingFloor) {
                     // MovingFloor は移動先オフセットを variant にパックして保存する。
                     // +10 しているのは負のオフセットも 0 以上の値として扱うため。
-                    saveVariant = (cell->moveOffset.x + 10) | ((cell->moveOffset.y + 10) << 8) | ((cell->moveOffset.z + 10) << 16);
+                    saveVariant = (cell->moveOffset.x + 10) | ((cell->moveOffset.y + 10) << 8) |
+                                  ((cell->moveOffset.z + 10) << 16);
                 }
 
-				// 座標、ブロック種別、回転角度、variant を保存する。
-                ofs << x << " " << y << " " << z << " "
-                    << static_cast<int>(cell->type) << " "
-                    << cell->rotationX << " " << cell->rotationY << " "
-                    << saveVariant << "\n";
+                // 座標、ブロック種別、回転角度、variant を保存する。
+                ofs << x << " " << y << " " << z << " " << static_cast<int>(cell->type) << " " << cell->rotationX << " "
+                    << cell->rotationY << " " << saveVariant << "\n";
 
-				// ドアブロックの場合、ドア先座標を保存する。
+                // ドアブロックの場合、ドア先座標を保存する。
                 if (cell->type == BlockType::Door) {
-                    ofs << cell->doorTargetIndex.x << " "
-                        << cell->doorTargetIndex.y << " "
-                        << cell->doorTargetIndex.z << "\n"; // ドア先座標の後に改行を出力して安全に読み込めるようにする
+                    ofs << cell->doorTargetIndex.x << " " << cell->doorTargetIndex.y << " " << cell->doorTargetIndex.z
+                        << "\n"; // ドア先座標の後に改行を出力して安全に読み込めるようにする
                 }
             }
         }
@@ -396,43 +465,102 @@ void StageMap::SaveToFile(const std::string& filename) {
 }
 
 // ステージファイルを読み込む。LoadFromFile はステージサイズを最初に読み込むため、Initialize() でグリッドを確保する。
-void StageMap::LoadFromFile(const std::string& filename) {
+bool StageMap::LoadFromFile(const std::string &filename) {
+    StageMap candidate;
+    try {
+        if (!candidate.ParseFromFile(filename)) {
+            return false;
+        }
+    } catch (const std::exception &) {
+        return false;
+    }
+    *this = std::move(candidate);
+    return true;
+}
+
+// マップの各設定とセルを検証しながら、読み込み候補へ復元する。
+bool StageMap::ParseFromFile(const std::string &filename) {
     std::ifstream ifs(filename);
-    if (!ifs.is_open()) return;
+    if (!ifs.is_open()) {
+        return false;
+    }
 
     // 最初の行からステージサイズを復元し、そのサイズでセル配列を作り直す。
     std::string firstLine;
-    if (!std::getline(ifs, firstLine)) return;
+    if (!std::getline(ifs, firstLine)) {
+        return false;
+    }
+    if (firstLine.rfind("\xEF\xBB\xBF", 0) == 0) {
+        firstLine.erase(0, 3);
+    }
 
-	// 1行目の "width height depth" を読み込む
+    // 1行目の "width height depth" を読み込む
     std::stringstream ss(firstLine);
     int w, h, d;
-    if (!(ss >> w >> h >> d)) return;
+    if (!(ss >> w >> h >> d)) {
+        return false;
+    }
+    if (!IsValidSize(w, h, d)) {
+        return false;
+    }
     Initialize(w, h, d);
 
     // 環境設定をデフォルト値に初期化（ファイルに記述がない場合用）
-    clearColor_ = { 0.1f, 0.25f, 0.5f, 1.0f };
+    clearColor_ = {0.1f, 0.25f, 0.5f, 1.0f};
     lightIntensity_ = 1.0f;
-    lightColor_ = { 0.9f, 0.9f, 0.9f };
-    lightDirection_ = { 0.5f, -1.0f, 0.5f };
+    lightColor_ = {0.9f, 0.9f, 0.9f};
+    lightDirection_ = {0.5f, -1.0f, 0.5f};
 
     // PARTCELL があるスロットだけプリセット形状を消して、ファイル側の定義で上書きする。
-    bool partCleared[5] = { false, false, false, false, false };
+    bool partCleared[5] = {false, false, false, false, false};
 
     std::string line;
     while (std::getline(ifs, line)) {
-        if (line.empty()) continue;
+        if (line.empty()) {
+            continue;
+        }
 
-		// 行の先頭トークンを取得して、行の種類を判定する。
+        // 行の先頭トークンを取得して、行の種類を判定する。
         std::stringstream lineSS(line);
         std::string token;
         lineSS >> token;
+        if (token.empty() || token[0] == '#') {
+            continue;
+        }
+
+        if (token == "ROTATION") {
+            RotationRegion r;
+            if (!(lineSS >> r.x >> r.z >> r.size >> r.control.x >> r.control.y >> r.control.z)) {
+                return false;
+            }
+            lineSS >> std::ws;
+            if (!lineSS.eof() && !(lineSS >> r.alternate.x >> r.alternate.y >> r.alternate.z)) {
+                return false;
+            }
+            if (!AddRotationRegion(r)) {
+                return false;
+            }
+            continue;
+        }
+        if (token == "VISUAL_STYLE") {
+            std::string style;
+            lineSS >> style;
+            if (style == "Auto" || style == "Classic" || style == "Miniature") {
+                visualStyle_ = style;
+            } else {
+                return false;
+            }
+            continue;
+        }
 
         if (token == "PART") {
             // カスタムブロックのスロット情報。色や名前など、UI と描画に使う設定を復元する。
             int id, baseTypeVal;
             float r, g, b;
-            lineSS >> id >> baseTypeVal >> r >> g >> b;
+            if (!(lineSS >> id >> baseTypeVal >> r >> g >> b) || id < 1 || id > 5 || baseTypeVal < 0 ||
+                baseTypeVal > 26 || !std::isfinite(r) || !std::isfinite(g) || !std::isfinite(b)) {
+                return false;
+            }
             std::string name;
             std::getline(lineSS, name);
             // 先頭のスペースを除去
@@ -440,9 +568,9 @@ void StageMap::LoadFromFile(const std::string& filename) {
                 name = name.substr(1);
             }
 
-			// パーツスロットの範囲内であれば復元する
+            // パーツスロットの範囲内であれば復元する
             if (id >= 1 && id <= (int)customParts_.size()) {
-                auto& part = customParts_[id - 1];
+                auto &part = customParts_[id - 1];
                 part.id = id;
                 part.baseType = static_cast<BlockType>(baseTypeVal);
                 part.colorR = r;
@@ -453,11 +581,15 @@ void StageMap::LoadFromFile(const std::string& filename) {
         } else if (token == "PARTCELL") {
             // カスタムブロックの内部セル情報。3x3x3 のどこに何のブロックがあるかを復元する。
             int id, lx, ly, lz, typeVal;
-			// 互換性重視のパース設計：
-            if (lineSS >> id >> lx >> ly >> lz >> typeVal) {
+            // 互換性重視のパース設計：
+            if (!(lineSS >> id >> lx >> ly >> lz >> typeVal) || id < 1 || id > 5 || lx < 0 || lx > 2 || ly < 0 ||
+                ly > 2 || lz < 0 || lz > 2 || typeVal < 0 || typeVal > 26) {
+                return false;
+            }
+            {
                 // 座標が 0～2 の範囲内であることを確認してから配置する
                 if (id >= 1 && id <= (int)customParts_.size()) {
-                    auto& part = customParts_[id - 1];
+                    auto &part = customParts_[id - 1];
 
                     // ファイルにアセンブリセル情報があるスロットのみ、初回出現時に元のプリセット形状をクリアして適用
                     if (!partCleared[id - 1]) {
@@ -471,13 +603,13 @@ void StageMap::LoadFromFile(const std::string& filename) {
                         partCleared[id - 1] = true;
                     }
 
-					// 座標が 0～2 の範囲内であることを確認してから配置する
+                    // 座標が 0～2 の範囲内であることを確認してから配置する
                     if (lx >= 0 && lx < 3 && ly >= 0 && ly < 3 && lz >= 0 && lz < 3) {
                         part.cells[ly][lz][lx].type = static_cast<BlockType>(typeVal);
                     }
                 }
             }
-			// ステージの見た目を再現するため、天候プリセット名とライト設定も復元する。
+            // ステージの見た目を再現するため、天候プリセット名とライト設定も復元する。
         } else if (token == "PRESET") {
             // 天候プリセット名は空白を含められるようにダブルクォート付きで保存している。
             std::string presetName;
@@ -487,41 +619,60 @@ void StageMap::LoadFromFile(const std::string& filename) {
             size_t end = presetName.rfind('\"');
             if (start != std::string::npos && end != std::string::npos && start < end) {
                 weatherPresetName_ = presetName.substr(start + 1, end - start - 1);
+            } else {
+                return false;
             }
-		// 天候プリセット名を復元したら、ステージの見た目を再現するために ApplyWeatherPreset を呼ぶ。
+            // 天候プリセット名を復元したら、ステージの見た目を再現するために ApplyWeatherPreset を呼ぶ。
         } else if (token == "ENVIRONMENT") {
             // 背景色、ライト強度、ライト色、ライト方向を復元する。
-            lineSS >> clearColor_.x >> clearColor_.y >> clearColor_.z >> clearColor_.w
-                   >> lightIntensity_
-                   >> lightColor_.x >> lightColor_.y >> lightColor_.z
-                   >> lightDirection_.x >> lightDirection_.y >> lightDirection_.z;
+            lineSS >> clearColor_.x >> clearColor_.y >> clearColor_.z >> clearColor_.w >> lightIntensity_ >>
+                lightColor_.x >> lightColor_.y >> lightColor_.z >> lightDirection_.x >> lightDirection_.y >>
+                lightDirection_.z;
+            if (!lineSS || !std::isfinite(clearColor_.x) || !std::isfinite(clearColor_.y) ||
+                !std::isfinite(clearColor_.z) || !std::isfinite(clearColor_.w) || !std::isfinite(lightIntensity_) ||
+                !std::isfinite(lightColor_.x) || !std::isfinite(lightColor_.y) || !std::isfinite(lightColor_.z) ||
+                !std::isfinite(lightDirection_.x) || !std::isfinite(lightDirection_.y) ||
+                !std::isfinite(lightDirection_.z)) {
+                return false;
+            }
         } else {
             // 通常のブロック配置行（token は x 座標）
-            int x = std::stoi(token);
+            size_t consumed = 0;
+            int x = std::stoi(token, &consumed);
+            if (consumed != token.size()) {
+                return false;
+            }
             int y, z, typeVal;
             float rotX, rotY;
             int variant = 0;
 
             // 互換性重視の完璧なパース設計：
             // 残りパラメータが 5個（y z typeVal rotX rotY）以上あればパース成功
-            if (lineSS >> y >> z >> typeVal >> rotX >> rotY) {
+            if (!(lineSS >> y >> z >> typeVal >> rotX >> rotY) || !GetCell(x, y, z) || typeVal < 0 || typeVal > 26 ||
+                !std::isfinite(rotX) || !std::isfinite(rotY)) {
+                return false;
+            }
+            {
                 // さらに variant があれば読み込む（なければデフォルトの0を使用）
-                lineSS >> variant;
+                lineSS >> std::ws;
+                if (!lineSS.eof() && !(lineSS >> variant)) {
+                    return false;
+                }
 
-				// 座標がステージ内にあるか確認してから配置する
+                // 座標がステージ内にあるか確認してから配置する
                 BlockType type = static_cast<BlockType>(typeVal);
                 SetBlock(x, y, z, type, variant);
-                MapCell* cell = GetCell(x, y, z);
-				// 角度を復元する
+                MapCell *cell = GetCell(x, y, z);
+                // 角度を復元する
                 if (cell) {
                     cell->rotationX = rotX;
                     cell->rotationY = rotY;
 
                     // ドアの追加データ
                     if (cell->type == BlockType::Door) {
-                        ifs >> cell->doorTargetIndex.x
-                            >> cell->doorTargetIndex.y
-                            >> cell->doorTargetIndex.z;
+                        if (!(ifs >> cell->doorTargetIndex.x >> cell->doorTargetIndex.y >> cell->doorTargetIndex.z)) {
+                            return false;
+                        }
                         // 改行を消費
                         std::string dummy;
                         std::getline(ifs, dummy);
@@ -530,14 +681,18 @@ void StageMap::LoadFromFile(const std::string& filename) {
             }
         }
     }
+    if (ifs.bad()) {
+        return false;
+    }
     ifs.close();
     RebuildMovingFloorList();
     RebuildEnemyList();
+    return true;
 }
 
 // ステージ全体を初期化する（全セルを None に置き換える）
 void StageMap::Clear() {
-    for (MapCell& cell : cells_) {
+    for (MapCell &cell : cells_) {
         cell = MapCell{};
         cell.type = BlockType::None;
         cell.variant = 0;
@@ -556,19 +711,16 @@ void StageMap::Clear() {
 
 // 指定された座標がステージ内にあるかどうかを判定する
 bool StageMap::IsInside(int x, int y, int z) const {
-    return
-        x >= 0 && x < width_ &&
-        y >= 0 && y < height_ &&
-        z >= 0 && z < depth_;
+    return x >= 0 && x < width_ && y >= 0 && y < height_ && z >= 0 && z < depth_;
 }
 
 // Int3 版の IsInside
-bool StageMap::IsInside(const Int3& index) const {
+bool StageMap::IsInside(const Int3 &index) const {
     return IsInside(index.x, index.y, index.z);
 }
 
 // セルのインデックスを 1 次元配列に変換する
-const MapCell* StageMap::GetCell(int x, int y, int z) const {
+const MapCell *StageMap::GetCell(int x, int y, int z) const {
     if (!IsInside(x, y, z)) {
         return nullptr;
     }
@@ -576,12 +728,12 @@ const MapCell* StageMap::GetCell(int x, int y, int z) const {
 }
 
 // Int3 版の GetCell
-const MapCell* StageMap::GetCell(const Int3& index) const {
+const MapCell *StageMap::GetCell(const Int3 &index) const {
     return GetCell(index.x, index.y, index.z);
 }
 
 // Mutable 版の GetCell
-MapCell* StageMap::GetCell(int x, int y, int z) {
+MapCell *StageMap::GetCell(int x, int y, int z) {
     if (!IsInside(x, y, z)) {
         return nullptr;
     }
@@ -589,7 +741,7 @@ MapCell* StageMap::GetCell(int x, int y, int z) {
 }
 
 // Int3 版の GetCell
-MapCell* StageMap::GetCell(const Int3& index) {
+MapCell *StageMap::GetCell(const Int3 &index) {
     return GetCell(index.x, index.y, index.z);
 }
 
@@ -599,7 +751,7 @@ bool StageMap::SetBlock(int x, int y, int z, BlockType type, int variant) {
         return false;
     }
 
-	// 指定座標のブロックを新しいタイプとバリアントで置き換える
+    // 指定座標のブロックを新しいタイプとバリアントで置き換える
     cells_[ToIndex(x, y, z)] = MakeCell(type, variant);
     RebuildMovingFloorList();
     RebuildEnemyList();
@@ -607,7 +759,7 @@ bool StageMap::SetBlock(int x, int y, int z, BlockType type, int variant) {
 }
 
 // Int3 版の SetBlock
-bool StageMap::SetBlock(const Int3& index, BlockType type, int variant) {
+bool StageMap::SetBlock(const Int3 &index, BlockType type, int variant) {
     return SetBlock(index.x, index.y, index.z, type, variant);
 }
 
@@ -617,7 +769,7 @@ bool StageMap::RemoveBlock(int x, int y, int z) {
         return false;
     }
 
-	// 指定座標のブロックを None に置き換える
+    // 指定座標のブロックを None に置き換える
     cells_[ToIndex(x, y, z)] = MakeCell(BlockType::None, 0);
     RebuildMovingFloorList();
     RebuildEnemyList();
@@ -626,7 +778,7 @@ bool StageMap::RemoveBlock(int x, int y, int z) {
 }
 
 // Int3 版の RemoveBlock
-bool StageMap::RemoveBlock(const Int3& index) {
+bool StageMap::RemoveBlock(const Int3 &index) {
     return RemoveBlock(index.x, index.y, index.z);
 }
 
@@ -634,9 +786,8 @@ bool StageMap::RemoveBlock(const Int3& index) {
 void StageMap::SetPSwitchActive(int switchId) {
     isPSwitchActive_ = true;
     needsRebuild_ = true;
-    for (auto& cell : cells_) {
-        if ((cell.type == BlockType::PSwitch || cell.type == BlockType::PBlock) &&
-            cell.variant == switchId) {
+    for (auto &cell : cells_) {
+        if ((cell.type == BlockType::PSwitch || cell.type == BlockType::PBlock) && cell.variant == switchId) {
             cell.isSolid = false;
             cell.isHidden = true;
         }
@@ -649,7 +800,7 @@ void StageMap::SetPSwitchActive(int switchId) {
 // PSwitch の状態をリセットする（再構築なし）
 void StageMap::ResetPSwitchStateNoRebuild() {
     isPSwitchActive_ = false;
-    for (auto& cell : cells_) {
+    for (auto &cell : cells_) {
         if (cell.type == BlockType::PSwitch) {
             cell.isSolid = false;
             cell.isHidden = false;
@@ -666,7 +817,7 @@ void StageMap::ResetPSwitchStateNoRebuild() {
 // ステージ全体の ON/OFF 状態を切り替える
 void StageMap::ToggleOnState() {
     isOnState_ = !isOnState_;
-    for (auto& cell : cells_) {
+    for (auto &cell : cells_) {
         if (cell.type == BlockType::OnBlock) {
             cell.isSolid = isOnState_;
         } else if (cell.type == BlockType::OffBlock) {
@@ -676,12 +827,13 @@ void StageMap::ToggleOnState() {
     needsRebuild_ = true;
 }
 
+// ステージのセルとギミックの設定と状態をGUIへ表示し、編集入力を反映する。
 void StageMap::DrawImGui() {
 #ifdef USE_IMGUI
     ImGui::Text("Size: %d x %d x %d", width_, height_, depth_);
 
     // 固定位置のセルの情報など（デバッグ用）
-    const MapCell* cell = GetCell(2, 1, 0);
+    const MapCell *cell = GetCell(2, 1, 0);
     if (cell) {
         ImGui::Text("Cell(2,1,0) type = %d", static_cast<int>(cell->type));
         ImGui::Text("Cell(2,1,0) solid = %s", cell->isSolid ? "true" : "false");
@@ -690,29 +842,27 @@ void StageMap::DrawImGui() {
 }
 
 // ★ 追加：動く足場とのワールド座標（AABBボックス型）当たり判定の実装
-const MapCell* StageMap::GetIntersectingMovingFloor(
-    float pX, float pY, float pZ,
-    float rX, float rY, float rZ
-) const {
-    for (const auto& ref : movingFloors_) {
-        const MapCell* cell = GetCell(ref.x, ref.y, ref.z);
+const MapCell *StageMap::GetIntersectingMovingFloor(float pX, float pY, float pZ, float rX, float rY, float rZ) const {
+    for (const auto &ref : movingFloors_) {
+        const MapCell *cell = GetCell(ref.x, ref.y, ref.z);
         if (!cell || cell->type != BlockType::MovingFloor) {
             continue;
         }
 
-		// 動く足場の中心座標を計算（セルの中心 + 現在のオフセット）
+        // 動く足場の中心座標を計算（セルの中心 + 現在のオフセット）
         float floorCenterX = static_cast<float>(ref.x) + cell->currentOffsetX;
-        float floorCenterY = static_cast<float>(ref.y) + 0.5f + cell->currentOffsetY;
+        // The rendered mesh and static grid both use the integer cell centre.
+        float floorCenterY = static_cast<float>(ref.y) + cell->currentOffsetY;
         float floorCenterZ = static_cast<float>(ref.z) + cell->currentOffsetZ;
 
-		// プレイヤーの中心座標を計算（AABBの中心）
+        // プレイヤーの中心座標を計算（AABBの中心）
         float playerCenterX = pX;
         float playerCenterY = pY + rY;
         float playerCenterZ = pZ;
 
         float blockSize = 0.5f;
 
-		// AABB（軸平行境界ボックス）同士の交差判定
+        // AABB（軸平行境界ボックス）同士の交差判定
         if (std::abs(playerCenterX - floorCenterX) < (rX + blockSize) &&
             std::abs(playerCenterY - floorCenterY) < (rY + blockSize) &&
             std::abs(playerCenterZ - floorCenterZ) < (rZ + blockSize)) {
@@ -723,64 +873,70 @@ const MapCell* StageMap::GetIntersectingMovingFloor(
     return nullptr;
 }
 
-void StageMap::RemoveConnectedKeyBlocks(int x, int y, int z)
-{
-    // マップの範囲外なら処理を抜ける
-    if (x < 0 || x >= width_ || y < 0 || y >= height_ || z < 0 || z >= depth_) {
+// 接続している鍵ブロックをたどり、まとめて解放する。
+void StageMap::RemoveConnectedKeyBlocks(int x, int y, int z) {
+    std::vector<Int3> pending;
+    auto enqueue = [&](int cx, int cy, int cz) {
+        auto *cell = GetCell(cx, cy, cz);
+        if (!cell || cell->type != BlockType::KeyBlock) {
+            return;
+        }
+        cell->type = BlockType::None;
+        cell->isSolid = false;
+        pending.push_back({cx, cy, cz});
+    };
+    enqueue(x, y, z);
+    if (pending.empty()) {
         return;
     }
-
-    // 指定座標のセルを取得
-    MapCell* cell = GetCell(x, y, z);
-
-    // セルが存在しない、または「鍵ブロック」でなければ処理を抜ける
-    // (既に None になっている場合もここで止まるため、無限ループを防げます)
-    if (!cell || cell->type != BlockType::KeyBlock) {
-        return;
+    needsRebuild_ = true;
+    // Mark on enqueue, so every connected cell is processed exactly once without recursion.
+    while (!pending.empty()) {
+        const auto cell = pending.back();
+        pending.pop_back();
+        enqueue(cell.x + 1, cell.y, cell.z);
+        enqueue(cell.x - 1, cell.y, cell.z);
+        enqueue(cell.x, cell.y + 1, cell.z);
+        enqueue(cell.x, cell.y - 1, cell.z);
+        enqueue(cell.x, cell.y, cell.z + 1);
+        enqueue(cell.x, cell.y, cell.z - 1);
     }
-
-    // 自身のブロックを消去する
-    cell->type = BlockType::None;
-    cell->isSolid = false;
-
-    // 上下左右前後の6方向に対して、同じ処理を芋づる式に呼び出す（再帰呼び出し）
-    RemoveConnectedKeyBlocks(x + 1, y, z); // 右
-    RemoveConnectedKeyBlocks(x - 1, y, z); // 左
-    RemoveConnectedKeyBlocks(x, y + 1, z); // 上
-    RemoveConnectedKeyBlocks(x, y - 1, z); // 下
-    RemoveConnectedKeyBlocks(x, y, z + 1); // 前
-    RemoveConnectedKeyBlocks(x, y, z - 1); // 後
 }
 
-Int3 StageMap::FindPairedDoor(int srcX, int srcY, int srcZ) const
-{
-    const MapCell* srcCell = GetCell(srcX, srcY, srcZ);
-    // そもそも指定座標がドアではない、または存在しない場合は元の座標を返す
-    if (!srcCell || srcCell->type != BlockType::Door) {
-        return { srcX, srcY, srcZ };
+// 明示された接続先と扉番号を調べ、対応する移動先を探す。
+Int3 StageMap::FindPairedDoor(int srcX, int srcY, int srcZ) const {
+    const Int3 source{srcX, srcY, srcZ};
+    const auto *src = GetCell(srcX, srcY, srcZ);
+    if (!src || src->type != BlockType::Door) {
+        return source;
     }
-
-    // 入ったドアの番号（ID）
-    int targetDoorId = srcCell->variant;
-
-    // マップ全体をループして、同じドア番号を持つ「別の座標のドア」を探す
+    const auto target = src->doorTargetIndex;
+    const auto *linked = GetCell(target);
+    // Reciprocal links distinguish authored pairs from legacy default/self coordinates.
+    if ((target.x != srcX || target.y != srcY || target.z != srcZ) && linked && linked->type == BlockType::Door &&
+        linked->doorTargetIndex.x == srcX && linked->doorTargetIndex.y == srcY && linked->doorTargetIndex.z == srcZ) {
+        return target;
+    }
+    Int3 candidate = source;
+    bool found = false;
     for (int y = 0; y < height_; ++y) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
-                // 自分自身の座標はスキップ
-                if (x == srcX && y == srcY && z == srcZ) continue;
-
-                const MapCell* cell = GetCell(x, y, z);
-                // 同じ種類のブロック（Door）かつ、同じ識別番号（variant）のセルが見つかった場合
-                if (cell && cell->type == BlockType::Door && cell->variant == targetDoorId) {
-                    return { x, y, z }; // 相方の座標を返す
+                if (x == srcX && y == srcY && z == srcZ) {
+                    continue;
+                }
+                const auto *cell = GetCell(x, y, z);
+                if (cell && cell->type == BlockType::Door && cell->variant == src->variant) {
+                    if (found) {
+                        return source;
+                    } // Ambiguous IDs must not choose an arbitrary exit.
+                    candidate = {x, y, z};
+                    found = true;
                 }
             }
         }
     }
-
-    // 万が一、相方のドアが見つからなかった（1つしか配置していない）場合はワープさせず元の座標を返す
-    return { srcX, srcY, srcZ };
+    return candidate;
 }
 
 // 座標 (x, y, z) を 1 次元配列のインデックスに変換する
@@ -796,57 +952,57 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
 
     switch (type) {
     case BlockType::None:
-    cell.isSolid = false;
-    break;
+        cell.isSolid = false;
+        break;
 
     case BlockType::Ground:
     case BlockType::Wall:
     case BlockType::Star:
     case BlockType::CrumblingFloor:
     case BlockType::IceBlock:
-    case BlockType::KeyBlock:    // 鍵ブロックは通り抜けられない
+    case BlockType::KeyBlock: // 鍵ブロックは通り抜けられない
     case BlockType::PBlock:
     case BlockType::TransparentBlock:
-    cell.isSolid = true;
-    break;
+        cell.isSolid = true;
+        break;
 
     case BlockType::MovingFloor:
-    cell.isSolid = true;
-    if (variant == 0) {
-        cell.moveOffset = { 0, 0, 3 }; // デフォルト Z 軸に 3 マス
-    } else {
-        int dx = (variant & 0xFF) - 10;
-        int dy = ((variant >> 8) & 0xFF) - 10;
-        int dz = ((variant >> 16) & 0xFF) - 10;
-        if (dx >= -10 && dx <= 10 && dy >= -10 && dy <= 10 && dz >= -10 && dz <= 10) {
-            cell.moveOffset = { dx, dy, dz };
+        cell.isSolid = true;
+        if (variant == 0) {
+            cell.moveOffset = {0, 0, 3}; // デフォルト Z 軸に 3 マス
         } else {
-            cell.moveOffset = { 0, 0, 3 };
+            int dx = (variant & 0xFF) - 10;
+            int dy = ((variant >> 8) & 0xFF) - 10;
+            int dz = ((variant >> 16) & 0xFF) - 10;
+            if (dx >= -10 && dx <= 10 && dy >= -10 && dy <= 10 && dz >= -10 && dz <= 10) {
+                cell.moveOffset = {dx, dy, dz};
+            } else {
+                cell.moveOffset = {0, 0, 3};
+            }
         }
-    }
-    break;
+        break;
 
     case BlockType::BubblePickup:
     case BlockType::Goal:
     case BlockType::PlayerStart:
     case BlockType::Door:
     case BlockType::PSwitch:
-    case BlockType::Key:         // 鍵は通り抜けられる
-    case BlockType::Checkpoint:  // 🌟 追加：中間地点は通り抜けられる
-    case BlockType::TimedBlock:  // 🌟 追加：時間差ブロック（最初は消えている）
-    cell.isSolid = false;
-    break;
+    case BlockType::Key:        // 鍵は通り抜けられる
+    case BlockType::Checkpoint: // 🌟 追加：中間地点は通り抜けられる
+    case BlockType::TimedBlock: // 🌟 追加：時間差ブロック（最初は消えている）
+        cell.isSolid = false;
+        break;
 
     case BlockType::OnBlock:
         // ON状態なら実体化（true）、OFF状態ならすり抜ける（false）
-        cell.isSolid = isOnState_; 
+        cell.isSolid = isOnState_;
         break;
 
     case BlockType::OffBlock:
         // OFF状態なら実体化（true）、ON状態ならすり抜ける（false）
-        cell.isSolid = !isOnState_; 
+        cell.isSolid = !isOnState_;
         break;
-        
+
     case BlockType::OnOffSwitch:
         // スイッチ自体は叩く必要があるので常に当たり判定を持たせる
         cell.isSolid = false;
@@ -857,8 +1013,7 @@ MapCell StageMap::MakeCell(BlockType type, int variant) {
 }
 
 // PSwitch の状態をリセットする（再構築あり）
-void StageMap::ResetPSwitchState()
-{
+void StageMap::ResetPSwitchState() {
     isPSwitchActive_ = false;
 }
 
@@ -869,9 +1024,9 @@ void StageMap::RebuildMovingFloorList() {
     for (int y = 0; y < height_; ++y) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
-                const MapCell* cell = GetCell(x, y, z);
+                const MapCell *cell = GetCell(x, y, z);
                 if (cell && cell->type == BlockType::MovingFloor) {
-                    movingFloors_.push_back({ x, y, z });
+                    movingFloors_.push_back({x, y, z});
                 }
             }
         }
@@ -885,11 +1040,10 @@ void StageMap::RebuildEnemyList() {
     for (int y = 0; y < height_; ++y) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
-                const MapCell* cell = GetCell(x, y, z);
-                if (cell && (cell->type == BlockType::EnemyWalker || 
-                             cell->type == BlockType::EnemyFlyer || 
+                const MapCell *cell = GetCell(x, y, z);
+                if (cell && (cell->type == BlockType::EnemyWalker || cell->type == BlockType::EnemyFlyer ||
                              cell->type == BlockType::EnemyChaser)) {
-                    enemies_.push_back({ x, y, z });
+                    enemies_.push_back({x, y, z});
                 }
             }
         }

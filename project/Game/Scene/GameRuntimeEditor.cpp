@@ -25,79 +25,140 @@ struct EditorLayout {
 };
 
 // ゲーム表示領域を確保しながら、現在のウィンドウに合うパネル寸法を求める。
-EditorLayout MakeEditorLayout(const ImVec2& displaySize) {
+EditorLayout MakeEditorLayout(const ImVec2 &displaySize) {
     EditorLayout layout;
-    const float width=(std::max)(displaySize.x,1.0f), height=(std::max)(displaySize.y,1.0f);
+    const float width = (std::max)(displaySize.x, 1.0f), height = (std::max)(displaySize.y, 1.0f);
     const float leftPanel = std::clamp(width * 0.15f, 240.0f, 300.0f);
     const float rightPanel = std::clamp(width * 0.20f, 340.0f, 400.0f);
     const float toolbarHeight = 38.0f;
-    float bottomPanel=std::clamp(height*0.32f,280.0f,420.0f);
+    float bottomPanel = std::clamp(height * 0.32f, 280.0f, 420.0f);
     if (height < 820.0f) {
         bottomPanel = std::clamp(height * 0.28f, 220.0f, 320.0f);
     }
-    layout.leftPanelWidth=leftPanel;
-    layout.rightPanelWidth=rightPanel;
-    layout.toolbarHeight=toolbarHeight;
-    layout.bottomPanelHeight=bottomPanel;
-    layout.viewportX=leftPanel;
-    layout.viewportY=toolbarHeight;
-    layout.viewportWidth=(std::max)(480.0f,width-leftPanel-rightPanel);
-    layout.viewportHeight=(std::max)(300.0f,height-toolbarHeight-bottomPanel);
-    layout.sidePanelHeight=(std::max)(300.0f,height-toolbarHeight);
+    layout.leftPanelWidth = leftPanel;
+    layout.rightPanelWidth = rightPanel;
+    layout.toolbarHeight = toolbarHeight;
+    layout.bottomPanelHeight = bottomPanel;
+    layout.viewportX = leftPanel;
+    layout.viewportY = toolbarHeight;
+    layout.viewportWidth = (std::max)(480.0f, width - leftPanel - rightPanel);
+    layout.viewportHeight = (std::max)(300.0f, height - toolbarHeight - bottomPanel);
+    layout.sidePanelHeight = (std::max)(300.0f, height - toolbarHeight);
     return layout;
 }
 
 // プリセット名を固定長入力バッファへ安全にコピーする。
-void CopyPresetName(std::array<char,64>& buffer,const std::string& name){ buffer.fill('\0'); strncpy_s(buffer.data(),buffer.size(),name.c_str(),_TRUNCATE); }
+void CopyPresetName(std::array<char, 64> &buffer, const std::string &name) {
+    buffer.fill('\0');
+    strncpy_s(buffer.data(), buffer.size(), name.c_str(), _TRUNCATE);
+}
 
 // ポストエフェクト番号をUI表示名へ変換する。
-const char* GetPostEffectShowcaseName(int mode) {
-    switch(mode){case 1:return "Grayscale";case 2:return "Sepia";case 3:return "Vignetting";case 4:return "BoxFilter 3x3";case 5:return "BoxFilter 5x5";case 6:return "GaussianFilter / Smoothing";case 7:return "LuminanceBasedOutline";case 8:return "DepthBasedOutline";case 9:return "RadialBlur";case 10:return "Dissolve";case 11:return "Random";default:return "Normal";}
+const char *GetPostEffectShowcaseName(int mode) {
+    switch (mode) {
+    case 1:
+        return "Grayscale";
+    case 2:
+        return "Sepia";
+    case 3:
+        return "Vignetting";
+    case 4:
+        return "BoxFilter 3x3";
+    case 5:
+        return "BoxFilter 5x5";
+    case 6:
+        return "GaussianFilter / Smoothing";
+    case 7:
+        return "LuminanceBasedOutline";
+    case 8:
+        return "DepthBasedOutline";
+    case 9:
+        return "RadialBlur";
+    case 10:
+        return "Dissolve";
+    case 11:
+        return "Random";
+    default:
+        return "Normal";
+    }
 }
 } // namespace
 
 #ifndef NDEBUG
+// 嵐の発生・雨・雷などを調整するGUIを表示する。
 void GameRuntime::DrawStormEffectEditorImGui() {
     if (particleManager) {
         stormEffectEditor_.Draw(*particleManager, effectPreviewPosition_);
     }
 }
 
+// エフェクト確認に必要な設定と保存操作をGUIへまとめる。
 void GameRuntime::DrawEffectPreviewEditorImGui() {
-    HitEffectEditorView::Context context{
-        particleManager.get(), camera.get(), effectPreviewPosition_,
-        effectPreviewAutoPlay_, effectPreviewInterval_, effectPreviewShowGPUParticleSphere_,
-        effectPreviewMirrorSlash_, effectPreviewStormMode_, effectPresetIncludeInShowcase_,
-        effectPreviewBurstCount_, effectPreviewBurstRadius_, effectPreviewHitSettings_,
-        effectPresetNameBuffer_, effectPresetNames_, effectPresetSelectedIndex_, effectPresetStatus_,
-        [this]() { DrawStormEffectEditorImGui(); },
-        [this]() { EmitEffectPreviewBurst(); },
-        [this]() { LoadEffectPresetNames(); },
-        [this](const std::string& name) { return SaveEffectPreset(name); },
-        [this](const std::string& name) { return LoadEffectPreset(name); }
-    };
+    HitEffectEditorView::Context context{particleManager.get(),
+                                         camera.get(),
+                                         effectPreviewPosition_,
+                                         effectPreviewAutoPlay_,
+                                         effectPreviewInterval_,
+                                         effectPreviewShowGPUParticleSphere_,
+                                         effectPreviewMirrorSlash_,
+                                         effectPreviewStormMode_,
+                                         effectPresetIncludeInShowcase_,
+                                         effectPreviewBurstCount_,
+                                         effectPreviewBurstRadius_,
+                                         effectPreviewHitSettings_,
+                                         effectPresetNameBuffer_,
+                                         effectPresetNames_,
+                                         effectPresetSelectedIndex_,
+                                         effectPresetStatus_,
+                                         [this]() { DrawStormEffectEditorImGui(); },
+                                         [this]() { EmitEffectPreviewBurst(); },
+                                         [this]() { LoadEffectPresetNames(); },
+                                         [this](const std::string &name) { return SaveEffectPreset(name); },
+                                         [this](const std::string &name) { return LoadEffectPreset(name); }};
     hitEffectEditorView_.Draw(context);
 }
 
+// モード選択・階層・各種エディタのパネルを構築する。
 void GameRuntime::UpdateImGui() {
-    ImGuiIO& io        = ImGui::GetIO();
+    ImGuiIO &io = ImGui::GetIO();
     const EditorLayout layout = MakeEditorLayout(io.DisplaySize);
     camera->SetAspectRatio(layout.viewportWidth / layout.viewportHeight);
 
     // Unity風の上部ツールバー。主要モードへ常に同じ位置から移動できる。
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, layout.toolbarHeight), ImGuiCond_Always);
-    ImGui::Begin(
-        "Main Toolbar", nullptr,
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+    ImGui::Begin("Main Toolbar", nullptr,
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
+                     ImGuiWindowFlags_NoTitleBar);
     ImGui::TextUnformatted("CG2 Engine");
     ImGui::SameLine();
     if (ImGui::Button("Scene")) {
+        if (editorPlayTest_) {
+            stageMap_ = backupMap_;
+            stageRenderer_->BuildFromStageMap(stageMap_);
+            editorPlayTest_ = false;
+            stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+        }
         RequestSceneChange(SceneType::StageEditor);
     }
     ImGui::SameLine();
     if (ImGui::Button("Play")) {
+        if (currentMode_ == AppMode::StageEditor) {
+            backupMap_ = stageMap_;
+            editorPlayTest_ = true;
+            playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
+            stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+            player_->Respawn();
+            blockInventory_.Initialize(0);
+            blockInventoryUI_->ResetForStage();
+            blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+            bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+            isGoalReached_ = false;
+            isGoalBlocked_ = false;
+            isGamePaused_ = false;
+            RefreshGoalGuideTarget();
+            gameplayCameraController_.ResetCamera(camera.get(), player_.get(), stageMap_, 7);
+        }
         RequestSceneChange(SceneType::GamePlay);
     }
     ImGui::SameLine();
@@ -111,10 +172,8 @@ void GameRuntime::UpdateImGui() {
     ImGui::End();
 
     // 左列はHierarchyとシーン共通設定。
-    ImGui::SetNextWindowPos(
-        ImVec2(0, layout.toolbarHeight), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(
-        ImVec2(layout.leftPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(0, layout.toolbarHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(layout.leftPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(1.0f);
     ImGui::Begin("Hierarchy", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
@@ -125,41 +184,25 @@ void GameRuntime::UpdateImGui() {
     }
     ImGui::Separator();
 
-    const char* environmentSpeedNames[] = { "1x", "2x", "4x", "8x", "16x" };
-    constexpr float environmentSpeedValues[] = { 1.0f, 2.0f, 4.0f, 8.0f, 16.0f };
-    if (ImGui::Combo(
-            "Environment Speed",
-            &environmentTimeScaleIndex_,
-            environmentSpeedNames,
-            IM_ARRAYSIZE(environmentSpeedNames))) {
+    const char *environmentSpeedNames[] = {"1x", "2x", "4x", "8x", "16x"};
+    constexpr float environmentSpeedValues[] = {1.0f, 2.0f, 4.0f, 8.0f, 16.0f};
+    if (ImGui::Combo("Environment Speed", &environmentTimeScaleIndex_, environmentSpeedNames,
+                     IM_ARRAYSIZE(environmentSpeedNames))) {
         environmentTimeScale_ = environmentSpeedValues[environmentTimeScaleIndex_];
     }
     ImGui::TextDisabled("Day/night and weather preview only");
     ImGui::Separator();
 
-    const bool isStageToolMode = (currentMode_ == AppMode::StageEditor ||
-                                  currentMode_ == AppMode::GamePlay_BlockPlace);
-
+    const bool isStageToolMode = (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay_BlockPlace);
 
     if (ImGui::CollapsingHeader("Hierarchy / Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
         const SceneType selectableScenes[] = {
-            SceneType::DebugView,
-            SceneType::StageEditor,
-            SceneType::GamePlay,
-            SceneType::SkinningEditor,
-            SceneType::EffectPreview,
-            SceneType::EffectShowcase,
+            SceneType::DebugView,          SceneType::StageEditor,   SceneType::GamePlay,
+            SceneType::SkinningEditor,     SceneType::EffectPreview, SceneType::EffectShowcase,
             SceneType::PostEffectShowcase,
         };
-        const char* modeNames[] = {
-            "DebugView",
-            "StageEditor",
-            "GamePlay",
-            "SkinningEditor",
-            "EffectPreview",
-            "EffectShowcase",
-            "PostEffectShowcase"
-        };
+        const char *modeNames[] = {"DebugView",     "StageEditor",    "GamePlay",          "SkinningEditor",
+                                   "EffectPreview", "EffectShowcase", "PostEffectShowcase"};
         int modeIndex = 0;
         const SceneType currentSceneType = GetCurrentSceneType();
         for (int i = 0; i < static_cast<int>(std::size(selectableScenes)); ++i) {
@@ -178,18 +221,17 @@ void GameRuntime::UpdateImGui() {
             ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
         } else {
 
-            ImGui::Checkbox("Show 3D Objects",      &debugFlags_.show3DObjects);
-            ImGui::Checkbox("Show Terrain",          &debugFlags_.showTerrain);
-            ImGui::Checkbox("Show Skybox",           &debugFlags_.showSkybox);
+            ImGui::Checkbox("Show 3D Objects", &debugFlags_.show3DObjects);
+            ImGui::Checkbox("Show Terrain", &debugFlags_.showTerrain);
+            ImGui::Checkbox("Show Skybox", &debugFlags_.showSkybox);
             ImGui::Checkbox("Show Skybox (Cubemap)", &showSkyboxCubemap_);
             if (currentMode_ == AppMode::DebugView) {
                 ImGui::Checkbox("Show Sprite", &debugFlags_.showSprite);
             }
-            ImGui::Checkbox("Show Particles",        &debugFlags_.showParticles);
+            ImGui::Checkbox("Show Particles", &debugFlags_.showParticles);
             ImGui::Checkbox("Show Collision Boxes (F3)", &debugFlags_.showCollisionBoxes);
         }
     }
-
 
     if (postProcessInitialized_) {
         postProcess_.DrawImGui();
@@ -205,8 +247,7 @@ void GameRuntime::UpdateImGui() {
         std::error_code directoryError;
         const std::filesystem::path externalLevelDirectory = "Resources/Levels";
         if (std::filesystem::exists(externalLevelDirectory, directoryError) && !directoryError) {
-            for (const auto& entry :
-                 std::filesystem::directory_iterator(externalLevelDirectory, directoryError)) {
+            for (const auto &entry : std::filesystem::directory_iterator(externalLevelDirectory, directoryError)) {
                 if (directoryError) {
                     break;
                 }
@@ -219,15 +260,11 @@ void GameRuntime::UpdateImGui() {
 
         ImGui::TextUnformatted("Saved External Levels:");
         if (ImGui::BeginListBox("##ExternalLevelList", ImVec2(-FLT_MIN, 90.0f))) {
-            for (const std::filesystem::path& levelFile : externalLevelFiles) {
+            for (const std::filesystem::path &levelFile : externalLevelFiles) {
                 const std::string levelPath = levelFile.generic_string();
                 const bool selected = levelPath == blenderLevelPath_.data();
                 if (ImGui::Selectable(levelFile.filename().string().c_str(), selected)) {
-                    strncpy_s(
-                        blenderLevelPath_.data(),
-                        blenderLevelPath_.size(),
-                        levelPath.c_str(),
-                        _TRUNCATE);
+                    strncpy_s(blenderLevelPath_.data(), blenderLevelPath_.size(), levelPath.c_str(), _TRUNCATE);
 
                     // 一覧で別ファイルを選んだだけでは読み込まず、Load操作を待つ。
                     blenderStageActive_ = false;
@@ -242,10 +279,7 @@ void GameRuntime::UpdateImGui() {
             ImGui::EndListBox();
         }
 
-        const bool pathChanged = ImGui::InputText(
-            "Level JSON",
-            blenderLevelPath_.data(),
-            blenderLevelPath_.size());
+        const bool pathChanged = ImGui::InputText("Level JSON", blenderLevelPath_.data(), blenderLevelPath_.size());
         if (pathChanged && blenderStageActive_) {
             // パスを入力しただけでは読み込まない。次のLoad操作まで現在の外部レベルを外す。
             blenderStageActive_ = false;
@@ -284,18 +318,15 @@ void GameRuntime::UpdateImGui() {
         ImGui::TextDisabled("External changes are detected after loading.");
     }
 
-
     if (ImGui::CollapsingHeader("Camera Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Use First-Person Camera", &useFirstPersonCamera_);
-        if (currentMode_ == AppMode::StageEditor &&
-            ImGui::Button("Frame Stage / Player", ImVec2(-FLT_MIN, 0.0f))) {
-            const Vector3 focus =
-                player_ ? player_->GetPosition() : Vector3{ 8.0f, 1.0f, 8.0f };
-            camera->ForceReset(focus, 18.0f, { 0.35f, 0.0f, 0.0f });
+        if (currentMode_ == AppMode::StageEditor && ImGui::Button("Frame Stage / Player", ImVec2(-FLT_MIN, 0.0f))) {
+            const Vector3 focus = player_ ? player_->GetPosition() : Vector3{8.0f, 1.0f, 8.0f};
+            camera->ForceReset(focus, 18.0f, {0.35f, 0.0f, 0.0f});
         }
         if (useFirstPersonCamera_) {
-            ImGui::SliderFloat("FPS Yaw",   &fpsCameraYaw_,   -6.28f, 6.28f);
-            ImGui::SliderFloat("FPS Pitch", &fpsCameraPitch_, -1.4f,  1.4f);
+            ImGui::SliderFloat("FPS Yaw", &fpsCameraYaw_, -6.28f, 6.28f);
+            ImGui::SliderFloat("FPS Pitch", &fpsCameraPitch_, -1.4f, 1.4f);
         }
         camera->DrawImGui();
 
@@ -320,11 +351,9 @@ void GameRuntime::UpdateImGui() {
     }
 
     if (currentMode_ == AppMode::EffectPreview) {
-        ImGui::SetNextWindowPos(
-            ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
-            ImGuiCond_Always);
-        ImGui::SetNextWindowSize(
-            ImVec2(layout.rightPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
+                                ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(layout.rightPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(1.0f);
         ImGui::Begin("Effect Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         DrawEffectPreviewEditorImGui();
@@ -332,11 +361,8 @@ void GameRuntime::UpdateImGui() {
     }
 
     // 下部はシーンビューと同じ幅のコンソール／タイムライン／操作パネル。
-    ImGui::SetNextWindowPos(
-        ImVec2(layout.viewportX, io.DisplaySize.y - layout.bottomPanelHeight),
-        ImGuiCond_Always);
-    ImGui::SetNextWindowSize(
-        ImVec2(layout.viewportWidth, layout.bottomPanelHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(layout.viewportX, io.DisplaySize.y - layout.bottomPanelHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(layout.viewportWidth, layout.bottomPanelHeight), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(1.0f);
     ImGui::Begin("Tools & Controls", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
@@ -419,7 +445,7 @@ void GameRuntime::UpdateImGui() {
             effectPreviewHitSettings_.corePower = 1.6f;
             effectPreviewHitSettings_.crossPower = 1.8f;
             effectPreviewHitSettings_.pillarPower = 1.2f;
-            effectPreviewHitSettings_.coolColor = { 0.42f, 0.78f, 1.0f, 1.0f };
+            effectPreviewHitSettings_.coolColor = {0.42f, 0.78f, 1.0f, 1.0f};
             effectPreviewBurstCount_ = 1;
             effectPreviewBurstRadius_ = 0.0f;
         }
@@ -474,8 +500,8 @@ void GameRuntime::UpdateImGui() {
             effectPreviewHitSettings_.corePower = 2.25f;
             effectPreviewHitSettings_.crossPower = 2.65f;
             effectPreviewHitSettings_.pillarPower = 1.45f;
-            effectPreviewHitSettings_.coolColor = { 0.38f, 0.78f, 1.0f, 1.0f };
-            effectPreviewHitSettings_.warmColor = { 1.0f, 0.48f, 0.10f, 1.0f };
+            effectPreviewHitSettings_.coolColor = {0.38f, 0.78f, 1.0f, 1.0f};
+            effectPreviewHitSettings_.warmColor = {1.0f, 0.48f, 0.10f, 1.0f};
             effectPreviewMirrorSlash_ = false;
             effectPreviewBurstCount_ = 4;
             effectPreviewBurstRadius_ = 0.28f;
@@ -492,9 +518,10 @@ void GameRuntime::UpdateImGui() {
             LoadEffectPresetNames();
         }
 
-        const char* selectedPresetName = effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())
-            ? effectPresetNames_[effectPresetSelectedIndex_].c_str()
-            : "Select saved preset";
+        const char *selectedPresetName =
+            effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())
+                ? effectPresetNames_[effectPresetSelectedIndex_].c_str()
+                : "Select saved preset";
         if (ImGui::BeginCombo("Saved Presets", selectedPresetName)) {
             for (int i = 0; i < static_cast<int>(effectPresetNames_.size()); ++i) {
                 bool selected = effectPresetSelectedIndex_ == i;
@@ -509,7 +536,8 @@ void GameRuntime::UpdateImGui() {
             ImGui::EndCombo();
         }
         if (ImGui::Button("Load Selected", ImVec2(120, 24))) {
-            if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
+            if (effectPresetSelectedIndex_ >= 0 &&
+                effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
                 LoadEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
             } else {
                 effectPresetStatus_ = "Preset: nothing selected";
@@ -517,7 +545,8 @@ void GameRuntime::UpdateImGui() {
         }
         ImGui::SameLine();
         if (ImGui::Button("Save Over", ImVec2(120, 24))) {
-            if (effectPresetSelectedIndex_ >= 0 && effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
+            if (effectPresetSelectedIndex_ >= 0 &&
+                effectPresetSelectedIndex_ < static_cast<int>(effectPresetNames_.size())) {
                 SaveEffectPreset(effectPresetNames_[effectPresetSelectedIndex_]);
             } else {
                 SaveEffectPreset(effectPresetNameBuffer_.data());
@@ -529,7 +558,7 @@ void GameRuntime::UpdateImGui() {
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.25f, 1.0f), "[ Spawn Transform ]");
         ImGui::DragFloat3("Position", &effectPreviewPosition_.x, 0.05f, -20.0f, 20.0f);
         if (ImGui::Button("Focus Camera", ImVec2(160, 24))) {
-            camera->ForceReset(effectPreviewPosition_, 4.0f, { 0.25f, 0.0f, 0.0f });
+            camera->ForceReset(effectPreviewPosition_, 4.0f, {0.25f, 0.0f, 0.0f});
         }
         ImGui::Separator();
         ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.35f, 1.0f), "[ Detail ]");
@@ -568,12 +597,7 @@ void GameRuntime::UpdateImGui() {
         const int collectedCount = bubblePickupController_.GetCollectedCount();
         const int totalPickupCount = bubblePickupController_.GetTotalPickupCount();
         const int remainingPickupCount = bubblePickupController_.GetRemainingPickupCount();
-        ImGui::TextColored(
-            ImVec4(0.3f, 0.9f, 1.0f, 1.0f),
-            "Bubbles: %d / %d",
-            collectedCount,
-            totalPickupCount
-        );
+        ImGui::TextColored(ImVec4(0.3f, 0.9f, 1.0f, 1.0f), "Bubbles: %d / %d", collectedCount, totalPickupCount);
 
         ImGui::NextColumn();
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Player Debug ]");
@@ -605,11 +629,10 @@ void GameRuntime::UpdateImGui() {
 
         ImGui::NextColumn();
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Stage Map Data ]");
-        const Int3& cursor = mapCursor_->GetIndex();
+        const Int3 &cursor = mapCursor_->GetIndex();
         ImGui::Text("Cursor: X:%d Y:%d Z:%d", cursor.x, cursor.y, cursor.z);
-        ImGui::Text("Block: %s (ID:%d)",
-            BlockTypeToString(stageEditorController_.GetSelectedBlockType()),
-            stageEditorController_.GetSelectedBlockType());
+        ImGui::Text("Block: %s (ID:%d)", BlockTypeToString(stageEditorController_.GetSelectedBlockType()),
+                    stageEditorController_.GetSelectedBlockType());
         ImGui::Text("Stock: %d", blockInventory_.GetBlockCount());
         ImGui::Columns(1);
 
@@ -625,7 +648,7 @@ void GameRuntime::UpdateImGui() {
 
         ImGui::NextColumn();
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ Placement State ]");
-        const Int3& cursor = mapCursor_->GetIndex();
+        const Int3 &cursor = mapCursor_->GetIndex();
         ImGui::Text("Cursor: X:%d Y:%d Z:%d", cursor.x, cursor.y, cursor.z);
         if (blockInventoryUI_) {
             ImGui::Text("Selected: %s", BlockTypeToString(blockInventoryUI_->GetSelectedBlockType()));
@@ -634,19 +657,16 @@ void GameRuntime::UpdateImGui() {
         ImGui::Columns(1);
 
     } else if (currentMode_ == AppMode::EffectShowcase) {
-        const auto& showcaseNames = effectShowcaseController_.GetPresetNames();
+        const auto &showcaseNames = effectShowcaseController_.GetPresetNames();
         const int presetCount = static_cast<int>(showcaseNames.size());
-        const int safeIndex = presetCount > 0
-            ? std::clamp(effectShowcaseController_.GetSelectedIndex(), 0, presetCount - 1)
-            : 0;
-        const char* presetName = presetCount > 0
-            ? showcaseNames[safeIndex].c_str()
-            : "No showcase presets";
+        const int safeIndex =
+            presetCount > 0 ? std::clamp(effectShowcaseController_.GetSelectedIndex(), 0, presetCount - 1) : 0;
+        const char *presetName = presetCount > 0 ? showcaseNames[safeIndex].c_str() : "No showcase presets";
 
         ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "[ Effect Showcase ]");
         ImGui::Text("Preset: %02d / %02d  %s", presetCount > 0 ? safeIndex + 1 : 0, presetCount, presetName);
         ImGui::Text("LEFT / RIGHT : Select    SPACE : Replay    A : Auto Play [%s]    TAB : Game",
-            effectShowcaseController_.IsAutoPlayEnabled() ? "ON" : "OFF");
+                    effectShowcaseController_.IsAutoPlayEnabled() ? "ON" : "OFF");
         ImGui::Text("MMB Drag : Orbit    Shift + MMB : Pan    Mouse Wheel : Zoom");
 
     } else if (currentMode_ == AppMode::PostEffectShowcase) {
@@ -685,7 +705,7 @@ void GameRuntime::UpdateImGui() {
             ImGui::SliderFloat("Terrain", &terrainEnvironmentCoefficient_, 0.0f, 1.0f);
             ImGui::SliderFloat("Player", &playerEnvironmentCoefficient_, 0.0f, 1.0f);
 
-            for (auto& obj : objectList) {
+            for (auto &obj : objectList) {
                 if (obj) {
                     obj->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
                 }
@@ -706,11 +726,9 @@ void GameRuntime::UpdateImGui() {
     ImGui::End(); // 下パネルここまで
 
     if (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_ && skinningEditor_.HasPreviewObject()) {
-        ImGui::SetNextWindowPos(
-            ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
-            ImGuiCond_Always);
-        ImGui::SetNextWindowSize(
-            ImVec2(layout.rightPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
+                                ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(layout.rightPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(1.0f);
         ImGui::Begin("Skinning Editor", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         skinningEditor_.DrawImGuiSidePanel(camera.get(), player_.get(), models[2].get());
@@ -718,16 +736,12 @@ void GameRuntime::UpdateImGui() {
     }
 
     const bool hasDedicatedInspector =
-        currentMode_ == AppMode::StageEditor ||
-        currentMode_ == AppMode::EffectPreview ||
-        (currentMode_ == AppMode::SkinningEditor &&
-         skinningEditorInitialized_ && skinningEditor_.HasPreviewObject());
+        currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::EffectPreview ||
+        (currentMode_ == AppMode::SkinningEditor && skinningEditorInitialized_ && skinningEditor_.HasPreviewObject());
     if (!hasDedicatedInspector) {
-        ImGui::SetNextWindowPos(
-            ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
-            ImGuiCond_Always);
-        ImGui::SetNextWindowSize(
-            ImVec2(layout.rightPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - layout.rightPanelWidth, layout.toolbarHeight),
+                                ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(layout.rightPanelWidth, layout.sidePanelHeight), ImGuiCond_Always);
         ImGui::Begin("Inspector", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "[ Inspector ]");
         ImGui::Text("Mode: %d", static_cast<int>(currentMode_));
@@ -737,4 +751,3 @@ void GameRuntime::UpdateImGui() {
     }
 }
 #endif // !NDEBUG
-

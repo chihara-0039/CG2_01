@@ -8,7 +8,8 @@
 using namespace Microsoft::WRL;
 
 namespace {
-void LogSoundError(const char* message, HRESULT result = S_OK) {
+// 音声処理の失敗箇所と結果コードをログへ残す。
+void LogSoundError(const char *message, HRESULT result = S_OK) {
     OutputDebugStringA("[Sound] ");
     OutputDebugStringA(message);
     if (FAILED(result)) {
@@ -24,7 +25,8 @@ float ClampVolume(float volume) {
 }
 }
 
-std::wstring Sound::ConvertString(const std::string& str) {
+// 音声ファイルの参照先を、Windows API用の文字列へ変換する。
+std::wstring Sound::ConvertString(const std::string &str) {
     if (str.empty()) {
         return std::wstring();
     }
@@ -47,6 +49,7 @@ std::wstring Sound::ConvertString(const std::string& str) {
     return result;
 }
 
+// 音声の読み込みと再生を準備し、初期値と必要なリソースを設定する。
 void Sound::Initialize() {
     HRESULT result;
 
@@ -75,6 +78,7 @@ void Sound::Initialize() {
     }
 }
 
+// 音声の読み込みと再生が保持するオブジェクトとリソースを解放する。
 void Sound::Finalize() {
 
     // BGMを先に停止
@@ -93,7 +97,7 @@ void Sound::Finalize() {
     xAudio2.Reset();
 
     // 音声データ解放
-    for (SoundData& soundData : soundDatas) {
+    for (SoundData &soundData : soundDatas) {
         SoundUnload(&soundData);
     }
     soundDatas.clear();
@@ -105,8 +109,8 @@ void Sound::Finalize() {
     }
 }
 
-
-Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
+// 音声ファイルを読み、形式情報と再生用のサンプルを保持する。
+Sound::SoundData Sound::SoundLoadFile(const std::string &filename) {
     HRESULT result;
 
     // returnする為の音声データ
@@ -151,11 +155,7 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
         return soundData;
     }
 
-    result = pReader->SetCurrentMediaType(
-        (DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,
-        nullptr,
-        pPCMType.Get()
-    );
+    result = pReader->SetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, nullptr, pPCMType.Get());
     assert(SUCCEEDED(result));
     if (FAILED(result)) {
         LogSoundError("Failed to set current media type.", result);
@@ -164,10 +164,7 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
 
     // 実際にセットされたメディアタイプを取得
     ComPtr<IMFMediaType> pOutType;
-    result = pReader->GetCurrentMediaType(
-        (DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,
-        &pOutType
-    );
+    result = pReader->GetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, &pOutType);
     assert(SUCCEEDED(result));
     if (FAILED(result)) {
         LogSoundError("Failed to get current media type.", result);
@@ -175,13 +172,9 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
     }
 
     // Waveフォーマットを取得
-    WAVEFORMATEX* waveFormat = nullptr;
+    WAVEFORMATEX *waveFormat = nullptr;
     UINT32 waveFormatSize = 0;
-    result = MFCreateWaveFormatExFromMFMediaType(
-        pOutType.Get(),
-        &waveFormat,
-        &waveFormatSize
-    );
+    result = MFCreateWaveFormatExFromMFMediaType(pOutType.Get(), &waveFormat, &waveFormatSize);
     assert(SUCCEEDED(result));
     if (FAILED(result) || waveFormat == nullptr) {
         LogSoundError("Failed to create WAVEFORMATEX from media type.", result);
@@ -202,14 +195,8 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
         LONGLONG llTimeStamp = 0;
 
         // サンプルを読み込む
-        result = pReader->ReadSample(
-            MF_SOURCE_READER_FIRST_AUDIO_STREAM,
-            0,
-            &streamIndex,
-            &flags,
-            &llTimeStamp,
-            &pSample
-        );
+        result =
+            pReader->ReadSample(MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, &streamIndex, &flags, &llTimeStamp, &pSample);
         assert(SUCCEEDED(result));
         if (FAILED(result)) {
             LogSoundError("ReadSample failed.", result);
@@ -238,7 +225,7 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
             return soundData;
         }
 
-        BYTE* pData = nullptr;
+        BYTE *pData = nullptr;
         DWORD maxLength = 0;
         DWORD currentLength = 0;
 
@@ -252,11 +239,7 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
         }
 
         // 読み込んだPCMデータを末尾に追加
-        soundData.buffer.insert(
-            soundData.buffer.end(),
-            pData,
-            pData + currentLength
-        );
+        soundData.buffer.insert(soundData.buffer.end(), pData, pData + currentLength);
 
         // バッファをアンロック
         result = pBuffer->Unlock();
@@ -279,7 +262,8 @@ Sound::SoundData Sound::SoundLoadFile(const std::string& filename) {
     return soundData;
 }
 
-void Sound::SoundUnload(SoundData* soundData) {
+// 読み込んだ音声データを解放し、形式情報を初期化する。
+void Sound::SoundUnload(SoundData *soundData) {
     if (!soundData) {
         return;
     }
@@ -287,7 +271,8 @@ void Sound::SoundUnload(SoundData* soundData) {
     soundData->wfex = {};
 }
 
-void Sound::SoundPlay(const SoundData& soundData, float volume) {
+// 効果音用の再生ボイスを作り、音量を指定して音声を再生する。
+void Sound::SoundPlay(const SoundData &soundData, float volume) {
     HRESULT result;
 
     CleanupFinishedSoundEffects();
@@ -300,7 +285,7 @@ void Sound::SoundPlay(const SoundData& soundData, float volume) {
     volume = ClampVolume(volume);
 
     // 波形フォーマットを元にSourceVoiceの生成
-    IXAudio2SourceVoice* pSourceVoice = nullptr;
+    IXAudio2SourceVoice *pSourceVoice = nullptr;
     result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
     assert(SUCCEEDED(result));
     if (FAILED(result)) {
@@ -344,8 +329,8 @@ void Sound::SoundPlay(const SoundData& soundData, float volume) {
     sourceVoices.push_back(pSourceVoice);
 }
 
-void Sound::BGMPlay(const SoundData& soundData, float volume)
-{
+// BGM用の音声を設定し、指定されたループと音量で再生する。
+void Sound::BGMPlay(const SoundData &soundData, float volume) {
 
     HRESULT result;
 
@@ -400,6 +385,7 @@ void Sound::BGMPlay(const SoundData& soundData, float volume)
     }
 }
 
+// 再生中のBGMを停止し、ボイスのキューを空にする。
 void Sound::BGMStop() {
     if (bgmSourceVoice) {
         bgmSourceVoice->Stop();
@@ -407,9 +393,9 @@ void Sound::BGMStop() {
         bgmSourceVoice->DestroyVoice();
         bgmSourceVoice = nullptr;
     }
-
 }
 
+// 再生位置を保ったまま、BGMを一時停止する。
 void Sound::BGMPause() {
     if (bgmSourceVoice) {
         HRESULT result = bgmSourceVoice->Stop();
@@ -420,6 +406,7 @@ void Sound::BGMPause() {
     }
 }
 
+// 一時停止しているBGMの再生を再開する。
 void Sound::BGMResume() {
     if (bgmSourceVoice) {
         HRESULT result = bgmSourceVoice->Start();
@@ -430,6 +417,7 @@ void Sound::BGMResume() {
     }
 }
 
+// BGMボイスへ指定音量を反映する。
 void Sound::SetBGMVolume(float volume) {
     bgmVolume_ = ClampVolume(volume);
     if (bgmSourceVoice) {
@@ -441,8 +429,9 @@ void Sound::SetBGMVolume(float volume) {
     }
 }
 
+// 再生中の全効果音を停止し、所有する再生ボイスを解放する。
 void Sound::StopAllSoundEffects() {
-    for (IXAudio2SourceVoice* sourceVoice : sourceVoices) {
+    for (IXAudio2SourceVoice *sourceVoice : sourceVoices) {
         if (sourceVoice) {
             sourceVoice->Stop();
             sourceVoice->FlushSourceBuffers();
@@ -452,9 +441,10 @@ void Sound::StopAllSoundEffects() {
     sourceVoices.clear();
 }
 
+// 再生が終了した効果音のボイスを回収する。
 void Sound::CleanupFinishedSoundEffects() {
     for (auto it = sourceVoices.begin(); it != sourceVoices.end();) {
-        IXAudio2SourceVoice* sourceVoice = *it;
+        IXAudio2SourceVoice *sourceVoice = *it;
         if (!sourceVoice) {
             it = sourceVoices.erase(it);
             continue;

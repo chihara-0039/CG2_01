@@ -1,4 +1,4 @@
-// アプリケーション資源の生成・破棄と、外部レベルの寿命を管理する。
+﻿// アプリケーション資源の生成・破棄と、外部レベルの寿命を管理する。
 #include "GameRuntime.h"
 #include "../Environment/WeatherPresetManager.h"
 #include "ModelManager.h"
@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <memory>
 
+// ゲーム全体を準備し、初期値と必要なリソースを設定する。
 void GameRuntime::Initialize() {
     // Storm編集用のプリセット一覧は、UIが開かれる前にControllerへ読み込ませる。
     stormEffectEditor_.Initialize();
@@ -38,59 +39,51 @@ void GameRuntime::Initialize() {
     particleManager = std::make_unique<ParticleManager>();
     particleManager->Initialize(dxCommon.get(), textureManager.get());
 
-
     stageSelect_ = std::make_unique<StageSelect>();
     stageSelect_->Initialize(object3dCommon.get(), input.get());
 
-    models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/block",  "block.obj",  textureManager.get())));
-    models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/axis",   "axis.obj",   textureManager.get())));
-    models.push_back(std::unique_ptr<Model>(Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/player", "player.obj", textureManager.get())));
+    models.push_back(std::unique_ptr<Model>(
+        Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/block", "block.obj", textureManager.get())));
+    models.push_back(std::unique_ptr<Model>(
+        Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/axis", "axis.obj", textureManager.get())));
+    models.push_back(std::unique_ptr<Model>(
+        Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/player", "player.obj", textureManager.get())));
 
     blenderRuntimeLevel_.Initialize(object3dCommon.get(), dxCommon.get(), textureManager.get());
-    const char* runtimeLevelPath = std::filesystem::exists("Resources/Levels/game_level.json")
-        ? "Resources/Levels/game_level.json"
-        : "Resources/Levels/sample_level.json";
-    strncpy_s(
-        blenderLevelPath_.data(), blenderLevelPath_.size(),
-        runtimeLevelPath, _TRUNCATE);
+    const char *runtimeLevelPath = std::filesystem::exists("Resources/Levels/game_level.json")
+                                       ? "Resources/Levels/game_level.json"
+                                       : "Resources/Levels/sample_level.json";
+    strncpy_s(blenderLevelPath_.data(), blenderLevelPath_.size(), runtimeLevelPath, _TRUNCATE);
     blenderRuntimeLevel_.Load(runtimeLevelPath);
     SyncBlenderLevelWriteTime();
 
-
-    Object3d* debugFloor = CreateObject(models[0].get(), { -25.0f, 0.0f, 0.0f });
-    debugFloor->SetScale({ 10.0f, 1.0f, 10.0f });
+    Object3d *debugFloor = CreateObject(models[0].get(), {-25.0f, 0.0f, 0.0f});
+    debugFloor->SetScale({10.0f, 1.0f, 10.0f});
     debugFloor->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
 
-    Object3d* debugAxisA = CreateObject(models[1].get(), { -23.0f, 0.0f, 0.0f });
+    Object3d *debugAxisA = CreateObject(models[1].get(), {-23.0f, 0.0f, 0.0f});
     debugAxisA->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
 
-    Object3d* debugAxisB = CreateObject(models[1].get(), { -27.0f, 0.0f, 0.0f });
+    Object3d *debugAxisB = CreateObject(models[1].get(), {-27.0f, 0.0f, 0.0f});
     debugAxisB->SetEnvironmentCoefficient(debugObjectEnvironmentCoefficient_);
 
     uint32_t texHandle = textureManager->LoadTexture("Resources/Models/axis/uvChecker.png");
     sprite = std::make_unique<Sprite>();
     sprite->Initialize(spriteCommon.get(), texHandle);
 
-
     bgmController_.Initialize();
-    
-    
-    
+
     player_ = std::make_unique<Player>();
     const std::string playerWalkGltfPath = "Resources/Models/Work/human/walk.gltf";
     if (std::filesystem::exists(playerWalkGltfPath)) {
-        player_->InitializeWithSkinnedGltf(
-            object3dCommon.get(),
-            dxCommon.get(),
-            playerWalkGltfPath,
-            textureManager.get());
+        player_->InitializeWithSkinnedGltf(object3dCommon.get(), dxCommon.get(), playerWalkGltfPath,
+                                           textureManager.get());
     } else {
         player_->Initialize(object3dCommon.get(), models[2].get());
     }
-    player_->SetPosition({ 0.0f, 1.5f, 0.0f });
+    player_->SetPosition({0.0f, 1.5f, 0.0f});
     player_->SetExternalCollisionBoxes(nullptr);
 
-    
     camera = std::make_unique<Camera>();
 #ifndef NDEBUG
     camera->SetAspectRatio(1280.0f / 720.0f);
@@ -99,7 +92,7 @@ void GameRuntime::Initialize() {
     stageMap_.Initialize(100, 100, 100);
 
 #ifdef DEVELOPMENT
-    currentMode_           = AppMode::Title;
+    currentMode_ = AppMode::Title;
     // 確認用の DebugView では、従来のデバッグオブジェクトと地形を最初から表示する。
     debugFlags_.show3DObjects = true;
     debugFlags_.showTerrain = true;
@@ -110,7 +103,7 @@ void GameRuntime::Initialize() {
         playerBasePosition_.ApplyFromStageMap(stageMap_, player_.get());
     }
 #else
-    currentMode_           = AppMode::Title;
+    currentMode_ = AppMode::Title;
     debugFlags_.showSkybox = true;
     postProcess_.SetEnabled(false);
     if (std::filesystem::exists("Resources/Stages/stage01.txt")) {
@@ -132,23 +125,23 @@ void GameRuntime::Initialize() {
     skydomeObject_->Initialize(object3dCommon.get());
     skydomeObject_->SetModel(skydomeModel_.get());
     skydomeObject_->SetEnableLighting(false);
-    skydomeObject_->SetScale({ 90.0f, 90.0f, 90.0f });
+    skydomeObject_->SetScale({90.0f, 90.0f, 90.0f});
 
     skyboxTextureHandle_ = textureManager->LoadTexture("Resources/dds/rostock_laage_airport_4k.dds");
     object3dCommon->SetEnvironmentTextureHandle(skyboxTextureHandle_);
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(object3dCommon.get(), skyboxTextureHandle_);
-    skybox_->SetScale({ 50.0f, 50.0f, 50.0f });
+    skybox_->SetScale({50.0f, 50.0f, 50.0f});
 
     stageRenderer_ = std::make_unique<StageRenderer>();
     stageRenderer_->Initialize(object3dCommon.get());
-    stageRenderer_->SetBlockScale({ 1.0f, 1.0f, 1.0f });
+    stageRenderer_->SetBlockScale({1.0f, 1.0f, 1.0f});
     stageRenderer_->BuildFromStageMap(stageMap_);
 
     mapCursor_ = std::make_unique<MapCursor>();
     mapCursor_->Initialize(object3dCommon.get());
-    mapCursor_->SetIndex({ 0, 0, 0 }, stageMap_);
-    mapCursor_->SetScale({ 0.9f, 0.9f, 0.9f });
+    mapCursor_->SetIndex({0, 0, 0}, stageMap_);
+    mapCursor_->SetScale({0.9f, 0.9f, 0.9f});
 
     shadowMap_ = std::make_unique<ShadowMap>();
     shadowMap_->Initialize(dxCommon.get(), textureManager.get());
@@ -159,7 +152,6 @@ void GameRuntime::Initialize() {
     bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
     blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
 
-
     gameplayUIManager_ = std::make_unique<GameplayUIManager>();
     gameplayUIManager_->Initialize(dxCommon.get(), textureManager.get(), spriteCommon.get(), object3dCommon.get());
 
@@ -168,138 +160,137 @@ void GameRuntime::Initialize() {
     blockInventoryUI_ = std::make_unique<BlockInventoryUI>();
     blockInventoryUI_->Initialize(dxCommon.get(), spriteCommon.get(), textureManager.get(), &blockInventory_);
 
-
     tutorialSprite_ = std::make_unique<Sprite>();
-    tutorialSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/tutorial/tutorial.png"));
-    tutorialSprite_->SetPosition({ 20, 20 });
-    tutorialSprite_->SetSize({ 1000, 155 });
-
+    tutorialSprite_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/adventure/play.png"));
+    tutorialSprite_->SetPosition({24, 651});
+    tutorialSprite_->SetSize({1000, 40});
 
     placementTutorialSprite_ = std::make_unique<Sprite>();
     placementTutorialSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/tutorial/placement_tutorial.png"));
-    placementTutorialSprite_->SetPosition({ 20, 20 });
-    placementTutorialSprite_->SetSize({ 1000, 120 });
+                                         textureManager->LoadTexture("Resources/UI/adventure/place.png"));
+    placementTutorialSprite_->SetPosition({24, 651});
+    placementTutorialSprite_->SetSize({1200, 44});
 
     inventoryTutorialSprite_ = std::make_unique<Sprite>();
     inventoryTutorialSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/tutorial/inventory_tutorial.png"));
-    inventoryTutorialSprite_->SetPosition({ 20, 20 });
-    inventoryTutorialSprite_->SetSize({ 1000, 120 });
+                                         textureManager->LoadTexture("Resources/UI/adventure/inventory-help.png"));
+    inventoryTutorialSprite_->SetPosition({20, 20});
+    inventoryTutorialSprite_->SetSize({1000, 120});
 
     controllerTutorialSprite_ = std::make_unique<Sprite>();
     controllerTutorialSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/tutorial/tutorial_xbox.png"));
-    controllerTutorialSprite_->SetPosition({ 20, 20 });
-    controllerTutorialSprite_->SetSize({ 1000, 155 });
+                                          textureManager->LoadTexture("Resources/UI/adventure/play-pad.png"));
+    controllerTutorialSprite_->SetPosition({24, 651});
+    controllerTutorialSprite_->SetSize({1000, 40});
 
     controllerPlacementTutorialSprite_ = std::make_unique<Sprite>();
     controllerPlacementTutorialSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/tutorial/placement_tutorial_xbox.png"));
-    controllerPlacementTutorialSprite_->SetPosition({ 20, 20 });
-    controllerPlacementTutorialSprite_->SetSize({ 1000, 120 });
+                                                   textureManager->LoadTexture("Resources/UI/adventure/place-pad.png"));
+    controllerPlacementTutorialSprite_->SetPosition({24, 651});
+    controllerPlacementTutorialSprite_->SetSize({1200, 44});
 
     controllerInventoryTutorialSprite_ = std::make_unique<Sprite>();
-    controllerInventoryTutorialSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/tutorial/inventory_tutorial_xbox.png"));
-    controllerInventoryTutorialSprite_->SetPosition({ 20, 20 });
-    controllerInventoryTutorialSprite_->SetSize({ 1000, 120 });
+    controllerInventoryTutorialSprite_->Initialize(
+        spriteCommon.get(), textureManager->LoadTexture("Resources/UI/adventure/inventory-help-pad.png"));
+    controllerInventoryTutorialSprite_->SetPosition({20, 20});
+    controllerInventoryTutorialSprite_->SetSize({1000, 120});
 
     // ゲーム開始時の目的と、ステージ選択時の操作をSpriteで案内する。
-    objectiveGuideTexture_ = textureManager->LoadTexture("Resources/UI/objective_guide.png");
+    objectiveGuideTexture_ = textureManager->LoadTexture("Resources/UI/adventure/objective.png");
     objectiveGuideSprite_ = std::make_unique<Sprite>();
     objectiveGuideSprite_->Initialize(spriteCommon.get(), objectiveGuideTexture_);
-    objectiveGuideSprite_->SetPosition({ 320.0f, 165.0f });
-    objectiveGuideSprite_->SetSize({ 640.0f, 72.0f });
+    objectiveGuideSprite_->SetPosition({320.0f, 165.0f});
+    objectiveGuideSprite_->SetSize({640.0f, 72.0f});
+    keyProgressSprite_ = std::make_unique<Sprite>();
+    keyProgressSprite_->Initialize(spriteCommon.get(),
+                                   textureManager->LoadTexture("Resources/UI/adventure/keys-0-0.png"));
+    keyProgressSprite_->SetPosition({24, 24});
+    keyProgressSprite_->SetSize({244, 76});
 
-    stageSelectGuideTexture_ = textureManager->LoadTexture("Resources/UI/stage_select_guide.png");
+    stageSelectGuideTexture_ = textureManager->LoadTexture("Resources/UI/adventure/select-0.png");
     stageSelectGuideSprite_ = std::make_unique<Sprite>();
     stageSelectGuideSprite_->Initialize(spriteCommon.get(), stageSelectGuideTexture_);
-    stageSelectGuideSprite_->SetPosition({ 65.0f, 28.0f });
-    stageSelectGuideSprite_->SetSize({ 1150.0f, 64.0f });
+    stageSelectGuideSprite_->SetPosition({0, 0});
+    stageSelectGuideSprite_->SetSize({1280, 720});
 
-    stageSelectGuideXboxTexture_ = textureManager->LoadTexture("Resources/UI/stage_select_guide_xbox.png");
+    stageSelectGuideXboxTexture_ = textureManager->LoadTexture("Resources/UI/adventure/select-0-pad.png");
     stageSelectGuideXboxSprite_ = std::make_unique<Sprite>();
     stageSelectGuideXboxSprite_->Initialize(spriteCommon.get(), stageSelectGuideXboxTexture_);
-    stageSelectGuideXboxSprite_->SetPosition({ 65.0f, 28.0f });
-    stageSelectGuideXboxSprite_->SetSize({ 1150.0f, 64.0f });
+    stageSelectGuideXboxSprite_->SetPosition({0, 0});
+    stageSelectGuideXboxSprite_->SetSize({1280, 720});
 
     // ゴール到達後にステージ選択へ戻る操作を案内する。
-    clearGuideTexture_ = textureManager->LoadTexture("Resources/UI/clear_guide.png");
+    clearGuideTexture_ = textureManager->LoadTexture("Resources/Models/Journal/guide.png");
     clearGuideSprite_ = std::make_unique<Sprite>();
     clearGuideSprite_->Initialize(spriteCommon.get(), clearGuideTexture_);
-    clearGuideSprite_->SetPosition({ 288.0f, 620.0f });
-    clearGuideSprite_->SetSize({ 704.0f, 64.0f });
+    clearGuideSprite_->SetPosition({0, 0});
+    clearGuideSprite_->SetSize({1280, 720});
 
-    clearGuideXboxTexture_ = textureManager->LoadTexture("Resources/UI/clear_guide_xbox.png");
+    clearGuideXboxTexture_ = textureManager->LoadTexture("Resources/Models/Journal/guide-pad.png");
     clearGuideXboxSprite_ = std::make_unique<Sprite>();
     clearGuideXboxSprite_->Initialize(spriteCommon.get(), clearGuideXboxTexture_);
-    clearGuideXboxSprite_->SetPosition({ 288.0f, 620.0f });
-    clearGuideXboxSprite_->SetSize({ 704.0f, 64.0f });
+    clearGuideXboxSprite_->SetPosition({0, 0});
+    clearGuideXboxSprite_->SetSize({1280, 720});
 
     pauseKeyboardSprite_ = std::make_unique<Sprite>();
     pauseKeyboardSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/pause_keyboard.png"));
-    pauseKeyboardSprite_->SetPosition({ 0.0f, 0.0f });
-    pauseKeyboardSprite_->SetSize({ 1280.0f, 720.0f });
+                                     textureManager->LoadTexture("Resources/UI/adventure/pause.png"));
+    pauseKeyboardSprite_->SetPosition({0.0f, 0.0f});
+    pauseKeyboardSprite_->SetSize({1280.0f, 720.0f});
 
     pauseXboxSprite_ = std::make_unique<Sprite>();
     pauseXboxSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/pause_xbox.png"));
-    pauseXboxSprite_->SetPosition({ 0.0f, 0.0f });
-    pauseXboxSprite_->SetSize({ 1280.0f, 720.0f });
+                                 textureManager->LoadTexture("Resources/UI/adventure/pause-pad.png"));
+    pauseXboxSprite_->SetPosition({0.0f, 0.0f});
+    pauseXboxSprite_->SetSize({1280.0f, 720.0f});
 
     starGetSprite_ = std::make_unique<Sprite>();
-    starGetSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/star_get.png"));
-    starGetSprite_->SetPosition({ 380.0f, 70.0f });
-    starGetSprite_->SetSize({ 520.0f, 110.0f });
+    starGetSprite_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/adventure/star-get.png"));
+    starGetSprite_->SetPosition({380.0f, 70.0f});
+    starGetSprite_->SetSize({520.0f, 110.0f});
 
     goalDirectionSprite_ = std::make_unique<Sprite>();
     goalDirectionSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/arrow/arrow_up.png"));
-    goalDirectionSprite_->SetAnchorPoint({ 0.5f, 0.5f });
-    goalDirectionSprite_->SetPosition({ 640.0f, 650.0f });
-    goalDirectionSprite_->SetSize({ 64.0f, 64.0f });
+                                     textureManager->LoadTexture("Resources/UI/adventure/compass.png"));
+    goalDirectionSprite_->SetAnchorPoint({0.5f, 0.5f});
+    goalDirectionSprite_->SetPosition({1220.0f, 620.0f});
+    goalDirectionSprite_->SetSize({42.0f, 42.0f});
 
     menuExitKeyboardSprite_ = std::make_unique<Sprite>();
     menuExitKeyboardSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/menu_exit_keyboard.png"));
-    menuExitKeyboardSprite_->SetPosition({ 20.0f, 642.0f });
-    menuExitKeyboardSprite_->SetSize({ 430.0f, 62.0f });
+                                        textureManager->LoadTexture("Resources/UI/adventure/title-controls.png"));
+    menuExitKeyboardSprite_->SetPosition({24.0f, 651.0f});
+    menuExitKeyboardSprite_->SetSize({1000.0f, 44.0f});
 
     menuExitXboxSprite_ = std::make_unique<Sprite>();
     menuExitXboxSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/menu_exit_xbox.png"));
-    menuExitXboxSprite_->SetPosition({ 20.0f, 642.0f });
-    menuExitXboxSprite_->SetSize({ 430.0f, 62.0f });
+                                    textureManager->LoadTexture("Resources/UI/adventure/title-controls-pad.png"));
+    menuExitXboxSprite_->SetPosition({24.0f, 651.0f});
+    menuExitXboxSprite_->SetSize({1000.0f, 44.0f});
 
     // 共通シーン遷移用の全画面暗転。白テクスチャへ黒色を乗算して使用する。
     sceneFadeSprite_ = std::make_unique<Sprite>();
-    sceneFadeSprite_->Initialize(spriteCommon.get(),
-        textureManager->LoadTexture("Resources/UI/inventory/white.png"));
-    sceneFadeSprite_->SetPosition({ 0.0f, 0.0f });
-    sceneFadeSprite_->SetSize({ 1280.0f, 720.0f });
-    sceneFadeSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+    sceneFadeSprite_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/inventory/white.png"));
+    sceneFadeSprite_->SetPosition({0.0f, 0.0f});
+    sceneFadeSprite_->SetSize({1280.0f, 720.0f});
+    sceneFadeSprite_->SetColor({0.0f, 0.0f, 0.0f, 0.0f});
     sceneFadeSprite_->Update();
 
     recoveryTransition_ = std::make_unique<RecoveryTransition>();
     recoveryTransition_->Initialize(spriteCommon.get());
-    gameOver_=std::make_unique<GameOver>();
-    gameOver_->Initialize(spriteCommon.get(), {
-        textureManager->LoadTexture("Resources/UI/gameover/title.png"),
-        textureManager->LoadTexture("Resources/UI/gameover/subtitle.png"),
-        textureManager->LoadTexture("Resources/UI/gameover/retry.png"),
-        textureManager->LoadTexture("Resources/UI/gameover/select.png"),
-        textureManager->LoadTexture("Resources/UI/gameover/controls.png"),
-        textureManager->LoadTexture("Resources/UI/gameover/background.png"),
-        textureManager->LoadTexture("Resources/UI/gameover/sigil.png"),
-        textureManager->LoadTexture("Resources/UI/gameover/selection.png"),
-        textureManager->LoadTexture("Resources/UI/gameover/sparkle.png")});
+    gameOver_ = std::make_unique<GameOver>();
+    gameOver_->Initialize(spriteCommon.get(), {textureManager->LoadTexture("Resources/UI/gameover/title.png"),
+                                               textureManager->LoadTexture("Resources/UI/gameover/subtitle.png"),
+                                               textureManager->LoadTexture("Resources/UI/gameover/retry.png"),
+                                               textureManager->LoadTexture("Resources/UI/gameover/select.png"),
+                                               textureManager->LoadTexture("Resources/UI/gameover/controls.png"),
+                                               textureManager->LoadTexture("Resources/UI/gameover/background.png"),
+                                               textureManager->LoadTexture("Resources/UI/gameover/sigil.png"),
+                                               textureManager->LoadTexture("Resources/UI/gameover/selection.png"),
+                                               textureManager->LoadTexture("Resources/UI/gameover/sparkle.png")});
     startIntro_ = std::make_unique<StartIntro>();
-    startIntro_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/arrival_cloud.png"), textureManager->LoadTexture("Resources/UI/gameover/sparkle.png"), object3dCommon.get());
-
+    startIntro_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/arrival_cloud.png"),
+                            textureManager->LoadTexture("Resources/UI/gameover/sparkle.png"), object3dCommon.get());
 
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
@@ -307,32 +298,51 @@ void GameRuntime::Initialize() {
     sceneManager_ = SceneManager::GetInstance();
     sceneManager_->Initialize(&sceneFactory_, GetCurrentSceneType(), *this);
     InitializeCaptureTools();
+#ifndef NDEBUG
+    wchar_t openEditor[2]{};
+    if (GetEnvironmentVariableW(L"CG2_OPEN_EDITOR", openEditor, 2) == 1 && openEditor[0] == L'1') {
+        char rotationEditor[16]{};
+        GetEnvironmentVariableA("CG2_ROTATION_COURSE", rotationEditor, sizeof(rotationEditor));
+        const std::string course(rotationEditor);
+        if (course == "bridge" || course == "relay") {
+            rotationTrial_ = true;
+            rotationResultPage_ = course == "bridge" ? 5 : 6;
+            stageMap_.LoadFromFile("Resources/Stages/" +
+                                   std::string(course == "bridge" ? "rotationBridge.txt" : "rotationRelay.txt"));
+            stageRenderer_->BuildFromStageMap(stageMap_);
+            backupMap_ = stageMap_;
+            stageEditorController_.ResetPlayerToStartCell(stageMap_, player_.get());
+        }
+        RequestSceneChange(SceneType::StageEditor);
+    }
+#endif
 }
 
-
-
-Object3d* GameRuntime::CreateObject(Model* model, Vector3 initialPosition) {
+// モデルを持つ3Dオブジェクトを作り、初期位置を設定する。
+Object3d *GameRuntime::CreateObject(Model *model, Vector3 initialPosition) {
     auto createdObject = std::make_unique<Object3d>();
     createdObject->Initialize(object3dCommon.get());
     createdObject->SetModel(model);
     createdObject->SetPosition(initialPosition);
-    createdObject->SetRotation({ 1.57f, 0.0f, 0.0f });
-    Object3d* createdObjectRawPtr = createdObject.get();
+    createdObject->SetRotation({1.57f, 0.0f, 0.0f});
+    Object3d *createdObjectRawPtr = createdObject.get();
     objectList.push_back(std::move(createdObject));
     return createdObjectRawPtr;
 }
 
+// 外部レベルに開始位置があれば、プレイヤーの復帰地点へ反映する。
 bool GameRuntime::ApplyRuntimePlayerSpawn() {
     if (!player_ || !blenderRuntimeLevel_.HasPlayerSpawn()) {
         return false;
     }
 
-    const Vector3& spawn = blenderRuntimeLevel_.GetPlayerSpawn();
+    const Vector3 &spawn = blenderRuntimeLevel_.GetPlayerSpawn();
     player_->SetPosition(spawn);
     player_->SetRespawnPosition(spawn);
     return true;
 }
 
+// 外部レベルを読み、開始位置・描画・当たり判定を切り替える。
 bool GameRuntime::LoadBlenderStage(bool beginPlay) {
     const std::string levelPath = blenderLevelPath_.data();
     if (!blenderRuntimeLevel_.Load(levelPath)) {
@@ -362,13 +372,14 @@ bool GameRuntime::LoadBlenderStage(bool beginPlay) {
         blenderStageActive_ = true;
         player_->SetExternalCollisionBoxes(&blenderRuntimeLevel_.GetCollisionBoxes());
         ApplyRuntimePlayerSpawn();
-        camera->ForceReset(player_->GetPosition(), 18.0f, { 0.35f, 0.0f, 0.0f });
+        camera->ForceReset(player_->GetPosition(), 18.0f, {0.35f, 0.0f, 0.0f});
     } else if (blenderStageActive_) {
         player_->SetExternalCollisionBoxes(&blenderRuntimeLevel_.GetCollisionBoxes());
     }
     return true;
 }
 
+// 外部レベルの更新時刻を記録し、次の変更検出の基準にする。
 void GameRuntime::SyncBlenderLevelWriteTime() {
     std::error_code error;
     const std::filesystem::path levelPath(blenderLevelPath_.data());
@@ -386,6 +397,7 @@ void GameRuntime::SyncBlenderLevelWriteTime() {
     }
 }
 
+// 外部レベルの更新時刻を監視し、変更時に再読み込みする。
 void GameRuntime::UpdateBlenderLevelFileWatch() {
     // エディターから明示的に読み込んだ外部レベルだけを監視する。
     // 初期パスを常時監視すると、F5操作や別ステージ編集中に意図せず混在してしまう。
@@ -421,16 +433,13 @@ void GameRuntime::UpdateBlenderLevelFileWatch() {
     }
 
     // BlenderがJSONを書き終える前に開かないよう、更新時刻が安定してから確認を出す。
-    if (blenderLevelReloadPending_ &&
-        blenderLevelChangeStableTime_ >= 0.5f &&
-        !blenderReloadDialogOpen_) {
+    if (blenderLevelReloadPending_ && blenderLevelChangeStableTime_ >= 0.5f && !blenderReloadDialogOpen_) {
         ImGui::OpenPopup("Blenderレベルの外部変更");
         blenderReloadDialogOpen_ = true;
     }
 
     bool keepDialogOpen = true;
-    if (ImGui::BeginPopupModal(
-        "Blenderレベルの外部変更", &keepDialogOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal("Blenderレベルの外部変更", &keepDialogOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextUnformatted("Blenderレベルファイルの変更を検出しました。");
         ImGui::Text("File: %s", blenderLevelPath_.data());
         ImGui::Separator();
@@ -438,9 +447,8 @@ void GameRuntime::UpdateBlenderLevelFileWatch() {
 
         if (ImGui::Button("再読み込み", ImVec2(150.0f, 0.0f))) {
             const bool runtimeReloaded = LoadBlenderStage(false);
-            const bool editorReloaded =
-                currentMode_ != AppMode::SkinningEditor ||
-                skinningEditor_.ReloadExternalLevel(blenderLevelPath_.data());
+            const bool editorReloaded = currentMode_ != AppMode::SkinningEditor ||
+                                        skinningEditor_.ReloadExternalLevel(blenderLevelPath_.data());
             if (runtimeReloaded && editorReloaded) {
                 blenderLevelReloadPending_ = false;
             }
@@ -467,19 +475,19 @@ void GameRuntime::UpdateBlenderLevelFileWatch() {
 }
 
 bool GameRuntime::IsRuntimeLevelVisible() const {
-    return blenderStageActive_ && (currentMode_ == AppMode::StageEditor ||
-        currentMode_ == AppMode::GamePlay ||
-        currentMode_ == AppMode::GamePlay_BlockPlace);
+    return blenderStageActive_ && (currentMode_ == AppMode::StageEditor || currentMode_ == AppMode::GamePlay ||
+                                   currentMode_ == AppMode::GamePlay_BlockPlace);
 }
 
-void GameRuntime::UpdateRuntimeLevelObjects(
-    const Matrix4x4& view, const Matrix4x4& proj, const Matrix4x4& lightVP) {
+// 外部レベルのオブジェクトへ、カメラと光源の変換を渡す。
+void GameRuntime::UpdateRuntimeLevelObjects(const Matrix4x4 &view, const Matrix4x4 &proj, const Matrix4x4 &lightVP) {
     if (!IsRuntimeLevelVisible()) {
         return;
     }
     blenderRuntimeLevel_.Update(view, proj, lightVP);
 }
 
+// 表示対象の外部レベルのオブジェクトを描画する。
 void GameRuntime::DrawRuntimeLevelObjects() {
     if (!IsRuntimeLevelVisible()) {
         return;
@@ -487,13 +495,15 @@ void GameRuntime::DrawRuntimeLevelObjects() {
     blenderRuntimeLevel_.Draw();
 }
 
-void GameRuntime::DrawRuntimeLevelShadows(const Matrix4x4& lightVP) {
+// 外部レベルの形状を、影の深度マップへ描画する。
+void GameRuntime::DrawRuntimeLevelShadows(const Matrix4x4 &lightVP) {
     if (!IsRuntimeLevelVisible()) {
         return;
     }
     blenderRuntimeLevel_.DrawShadow(lightVP);
 }
 
+// スキニングエディタを、最初に必要になった時だけ初期化する。
 void GameRuntime::EnsureSkinningEditorInitialized() {
     if (skinningEditorInitialized_) {
         return;
@@ -502,6 +512,7 @@ void GameRuntime::EnsureSkinningEditorInitialized() {
     skinningEditorInitialized_ = true;
 }
 
+// 地形表示に必要なリソースを、初回利用時に作成する。
 void GameRuntime::EnsureTerrainInitialized() {
     if (terrainObject_) {
         return;
@@ -512,14 +523,15 @@ void GameRuntime::EnsureTerrainInitialized() {
     terrainObject_ = std::make_unique<Object3d>();
     terrainObject_->Initialize(object3dCommon.get());
     terrainObject_->SetModel(terrainModel_.get());
-    terrainObject_->SetPosition({ 0.0f, 0.0f, 0.0f });
-    terrainObject_->SetScale({ 1.0f, 1.0f, 1.0f });
-    terrainObject_->SetRotation({ 0.0f, 0.0f, 0.0f });
+    terrainObject_->SetPosition({0.0f, 0.0f, 0.0f});
+    terrainObject_->SetScale({1.0f, 1.0f, 1.0f});
+    terrainObject_->SetRotation({0.0f, 0.0f, 0.0f});
     terrainObject_->SetEnvironmentCoefficient(terrainEnvironmentCoefficient_);
     terrainObject_->SetShininess(0.38f);
     terrainObject_->SetMetallic(0.08f);
 }
 
+// ポストエフェクト用の描画先を、初回利用時に作成する。
 void GameRuntime::EnsurePostProcessInitialized() {
     if (postProcessInitialized_) {
         return;
@@ -528,9 +540,11 @@ void GameRuntime::EnsurePostProcessInitialized() {
     postProcessInitialized_ = true;
 }
 
-
+// ゲーム全体が保持するオブジェクトとリソースを解放する。
 void GameRuntime::Finalize() {
-    if (dxCommon) dxCommon->Recorder().Finish();
+    if (dxCommon) {
+        dxCommon->Recorder().Finish();
+    }
 
     if (dxCommon) {
         dxCommon->WaitForGpu();
@@ -544,7 +558,6 @@ void GameRuntime::Finalize() {
     bgmController_.Finalize();
 
     dxCommon->FinalizeImGui();
-
 
     ModelManager::Finalize();
     objectList.clear();
@@ -567,16 +580,19 @@ void GameRuntime::Finalize() {
     sprite.reset();
     sceneFadeSprite_.reset();
     recoveryTransition_.reset();
-    if (gameOver_) gameOver_->Finalize();
+    if (gameOver_) {
+        gameOver_->Finalize();
+    }
     gameOver_.reset();
-    if (startIntro_) startIntro_->Finalize();
+    if (startIntro_) {
+        startIntro_->Finalize();
+    }
     startIntro_.reset();
     stageRenderer_.reset();
     mapCursor_.reset();
     camera.reset();
     shadowMap_.reset();
     lightCamera_.reset();
-
 
     particleManager.reset();
     object3dCommon.reset();
@@ -586,5 +602,3 @@ void GameRuntime::Finalize() {
     dxCommon.reset();
     winApp.reset();
 }
-
-

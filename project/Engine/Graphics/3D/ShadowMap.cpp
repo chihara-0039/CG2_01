@@ -3,13 +3,14 @@
 
 using namespace Microsoft::WRL;
 
-void ShadowMap::Initialize(DirectXCommon* dxCommon, TextureManager* textureManager) {
-    ID3D12Device* device = dxCommon->GetDevice();
+// 影の深度マップを準備し、初期値と必要なリソースを設定する。
+void ShadowMap::Initialize(DirectXCommon *dxCommon, TextureManager *textureManager) {
+    ID3D12Device *device = dxCommon->GetDevice();
 
     // 1. 影用テクスチャリソースの設定
     D3D12_RESOURCE_DESC resDesc = {};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    resDesc.Width = kWidth;   // 2048などの解像度
+    resDesc.Width = kWidth; // 2048などの解像度
     resDesc.Height = kHeight;
     resDesc.DepthOrArraySize = 1;
     resDesc.MipLevels = 1;
@@ -30,13 +31,13 @@ void ShadowMap::Initialize(DirectXCommon* dxCommon, TextureManager* textureManag
     // リソースの生成
     HRESULT hr = device->CreateCommittedResource(
         &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, // 初期状態はSRV（読み取り用）にしておくのがポイント
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, // 初期状態はSRV（読み取り用）にしておくのがポイント
         &clearValue, IID_PPV_ARGS(&resource_));
     assert(SUCCEEDED(hr));
 
     // --- 2. DSV用の棚(ヒープ)を作成 ---
     D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
-    dsvHeapDesc.NumDescriptors = 1; // 1つだけ
+    dsvHeapDesc.NumDescriptors = 1;                    // 1つだけ
     dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV; // 深度用
     device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&dsvHeap_));
 
@@ -48,7 +49,6 @@ void ShadowMap::Initialize(DirectXCommon* dxCommon, TextureManager* textureManag
     dsvDesc.Format = DXGI_FORMAT_D32_FLOAT; // 元がR32_TYPELESSなので、ここでD32と定義
     dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
     device->CreateDepthStencilView(resource_.Get(), &dsvDesc, dsvHandle_);
-
 
     // --- 3. SRV用の棚(ヒープ)を作成 ---
     uint32_t handle = textureManager->RegisterExternalTexture(resource_.Get());
@@ -68,7 +68,8 @@ void ShadowMap::Initialize(DirectXCommon* dxCommon, TextureManager* textureManag
     //device->CreateShaderResourceView(resource_.Get(), &srvDesc, srvCpuHandle);
 }
 
-void ShadowMap::PreDraw(ID3D12GraphicsCommandList* commandList) {
+// 深度マップを影の描画先へ切り替え、前フレームの深度を消去する。
+void ShadowMap::PreDraw(ID3D12GraphicsCommandList *commandList) {
     // 1. リソースバリアを張る（読み取り用から書き込み用へ）
     // 前のフレームでシェーダーが影を参照していた状態から、書き込みモードに切り替えます
     D3D12_RESOURCE_BARRIER barrier = {};
@@ -88,13 +89,14 @@ void ShadowMap::PreDraw(ID3D12GraphicsCommandList* commandList) {
 
     // 4. ビューポートとシザー矩形をシャドウマップの解像度に合わせる
     // 画面サイズ（1280x720等）ではなく、2048x2048などに設定します
-    D3D12_VIEWPORT viewport = { 0.0f, 0.0f, (float)kWidth, (float)kHeight, 0.0f, 1.0f };
-    D3D12_RECT scissorRect = { 0, 0, kWidth, kHeight };
+    D3D12_VIEWPORT viewport = {0.0f, 0.0f, (float)kWidth, (float)kHeight, 0.0f, 1.0f};
+    D3D12_RECT scissorRect = {0, 0, kWidth, kHeight};
     commandList->RSSetViewports(1, &viewport);
     commandList->RSSetScissorRects(1, &scissorRect);
 }
 
-void ShadowMap::PostDraw(ID3D12GraphicsCommandList* commandList) {
+// 影の深度マップを、通常描画のシェーダーから読める状態へ戻す。
+void ShadowMap::PostDraw(ID3D12GraphicsCommandList *commandList) {
     // 描画後は、リソースバリアを戻す（書き込み用から読み取り用へ）
     D3D12_RESOURCE_BARRIER barrier = {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -104,4 +106,3 @@ void ShadowMap::PostDraw(ID3D12GraphicsCommandList* commandList) {
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     commandList->ResourceBarrier(1, &barrier);
 }
-
