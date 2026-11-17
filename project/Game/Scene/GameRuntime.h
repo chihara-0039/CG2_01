@@ -272,8 +272,8 @@ class GameRuntime {
     float placeRotationY_ = 0.0f;
     bool placeMouseWasDown_ = false;
     float playerGlow_ = 0.0f;
-    float playerLightIntensity_ = 1.6f;
-    Vector4 playerLightColor_ = {1.0f, 0.90f, 0.70f, 1.0f};
+    float playerLightIntensity_ = 4.0f;
+    Vector4 playerLightColor_ = {0.68f, 0.84f, 1.0f, 1.0f};
     float debugObjectEnvironmentCoefficient_ = 0.25f;
     float terrainEnvironmentCoefficient_ = 0.0f;
     float playerEnvironmentCoefficient_ = 0.0f;
