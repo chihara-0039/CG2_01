@@ -201,8 +201,10 @@ uint32_t TextureManager::LoadTexture(const std::string &filePath) {
 
     // 3. ミップマップ生成
     DirectX::ScratchImage mipImages;
-    if (DirectX::IsCompressed(originalMetadata.format) || originalMetadata.miscFlags & DirectX::TEX_MISC_TEXTURECUBE ||
-        originalMetadata.arraySize == 6) {
+    // 画面上のUIは等倍のスプライトなので、使わない縮小段を起動時に生成しない。
+    const bool screenUI = filePath.starts_with("Resources/UI/") || filePath.starts_with("Resources\\UI\\");
+    if (screenUI || DirectX::IsCompressed(originalMetadata.format) ||
+        originalMetadata.miscFlags & DirectX::TEX_MISC_TEXTURECUBE || originalMetadata.arraySize == 6) {
         // CubeMapはGenerateMipMapsせず、そのまま使う
         mipImages = std::move(image);
     } else {

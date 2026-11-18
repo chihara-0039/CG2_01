@@ -6,6 +6,7 @@
 #include "../Game/Player/LadderTraversal.h"
 #include "../Game/UI/InventoryNavigation.h"
 #include "../Game/Scene/JournalResultTimeline.h"
+#include "../Game/Scene/StarGetTimeline.h"
 #include <cassert>
 #include <filesystem>
 #include <iostream>
@@ -17,6 +18,17 @@
 
 // マップ保存・拡張・回転・選択などの回帰テストを実行する。
 int main() {
+    for (int fps : {30, 60, 144}) {
+        for (int i = 0; i <= fps * 4; ++i) {
+            const auto frame = StarGet::Evaluate(static_cast<float>(i) / fps);
+            assert(std::isfinite(frame.scale) && frame.scale > 0);
+            assert(frame.lift >= 0 && frame.lift <= 1 && frame.hop >= -.0001f && frame.hop <= .301f);
+        }
+    }
+    assert(StarGet::Evaluate(0).caption == 0);
+    assert(StarGet::Evaluate(1).lift == 1 && StarGet::Evaluate(1).spin == 0);
+    assert(StarGet::Evaluate(StarGet::kDuration).hop < .001f);
+    std::cout << "PASS: star reception, jump landing and held pose have finite bounded transforms at 30/60/144 FPS\n";
     for (const auto *filename : {"rotationBridge.txt", "rotationRelay.txt"}) {
         StageMap course;
         assert(course.LoadFromFile(std::string("project/Resources/Stages/") + filename));
@@ -92,6 +104,29 @@ int main() {
     assert(JournalResult::Evaluate(1.6f).open == 1);
     assert(std::abs(JournalResult::Evaluate(JournalResult::kImpact).stampZ + .36f) < .001f);
     assert(!JournalResult::Evaluate(JournalResult::kReady).hand);
+    for (const int fps : {30, 60, 144}) {
+        JournalResult::Inspection book;
+        assert(!book.Toggle(false) && book.Open() == 1);
+        assert(book.Toggle(true));
+        for (int i = 0; i < fps; ++i) {
+            book.Advance(1.0f / fps);
+        }
+        assert(book.Open() == 0);
+        assert(book.Toggle(true));
+        book.Advance(.3f);
+        const float halfway = book.Open();
+        assert(halfway > 0 && halfway < 1);
+        assert(book.Toggle(true) && book.Open() == halfway);
+        book.Advance(-1);
+        assert(book.Open() == halfway);
+        book.Advance(1);
+        assert(book.Open() == 0);
+        assert(book.Toggle(true));
+        book.Advance(1);
+        assert(book.Open() == 1 && JournalResult::Evaluate(20).ink);
+    }
+    std::cout
+        << "PASS: journal inspection waits for stamp, closes/reopens and reverses continuously at 30/60/144 FPS\n";
     std::cout
         << "PASS: journal opens before stamp, ink persists, impact fires once at 30/60/144 FPS, controls wait for withdrawal\n";
     // A pulled-back camera and a maximum-width stage must keep every corner inside far.
@@ -200,6 +235,28 @@ int main() {
         assert(exit.x == 3 + dx && exit.z == 3 + dz && exit.y == 2.5f);
         assert(LadderTraversal::TryEnterFromTop(ladderMap, exit, collision, entry, angle));
         assert(entry.x == 3 && entry.z == 3 && entry.y < 2.5f);
+        // 梯子の4方向とカメラ16方向で、向かう入力のみが上端を掴むことを確認する。
+        for (int view = 0; view < 16; ++view) {
+            const float yaw = view * .3926990817f;
+            const auto up =
+                LadderTraversal::ResolveMovement(ladderMap, 3, 1, 3, yaw, dx * std::cos(yaw) - dz * std::sin(yaw),
+                                                 dx * std::sin(yaw) + dz * std::cos(yaw));
+            assert(std::abs(up.vertical - 1) < .001f);
+            const auto down =
+                LadderTraversal::ResolveMovement(ladderMap, 3, 1, 3, yaw, -dx * std::cos(yaw) + dz * std::sin(yaw),
+                                                 -dx * std::sin(yaw) - dz * std::cos(yaw));
+            assert(std::abs(down.vertical + 1) < .001f);
+            const auto side =
+                LadderTraversal::ResolveMovement(ladderMap, 3, 1, 3, yaw, dz * std::cos(yaw) + dx * std::sin(yaw),
+                                                 dz * std::sin(yaw) - dx * std::cos(yaw));
+            assert(side.vertical == 0 && std::hypot(side.side.x, side.side.z) > .99f);
+            const float inputX = -dx * std::cos(yaw) + dz * std::sin(yaw);
+            const float inputZ = -dx * std::sin(yaw) - dz * std::cos(yaw);
+            assert(LadderTraversal::TryEnterFromTop(ladderMap, exit, collision, entry, yaw, inputX, inputZ));
+            assert(!LadderTraversal::TryEnterFromTop(ladderMap, exit, collision, entry, yaw, -inputX, -inputZ));
+            assert(!LadderTraversal::TryEnterFromTop(ladderMap, exit, collision, entry, yaw, 0, 0));
+        }
+
         assert(!LadderTraversal::TryEnterFromTop(ladderMap, exit, collision, entry, angle + 3.14159265f));
         assert(!LadderTraversal::TryExit(ladderMap, 3, 0, 3, {3, 1.4f, 3}, collision, exit));
         ladderMap.SetBlock(3 + dx, 3, 3 + dz, BlockType::Wall);

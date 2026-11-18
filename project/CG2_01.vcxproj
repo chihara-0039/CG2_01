@@ -203,6 +203,7 @@
     <ClCompile Include="Game\Scene\SceneFactory.cpp" />
     <ClCompile Include="Game\Scene\SceneManager.cpp" />
     <ClCompile Include="Game\Scene\GameClearScene.cpp" />
+    <ClCompile Include="Game\Scene\StarGetPresentation.cpp" />
     <ClCompile Include="Game\Scene\TitleScene.cpp" />
     <ClCompile Include="Game\Scene\SkinningEditorController.cpp" />
     <ClCompile Include="Engine\Graphics\PostProcessRenderer.cpp" />
@@ -346,6 +347,7 @@
     <ClInclude Include="Game\Scene\RecoveryTransition.h" />
     <ClInclude Include="Game\Scene\RecoveryTransitionMotion.h" />
     <ClInclude Include="Engine\Utility\FrameRecorder.h" />
+    <ClInclude Include="Engine\Utility\LifecycleTrace.h" />
     <ClInclude Include="Game\Environment\FogExplorer.h" />
     <ClInclude Include="Game\Scene\StartIntro.h" />
     <ClInclude Include="Game\Scene\StartIntroTimeline.h" />
@@ -369,6 +371,8 @@
     <ClInclude Include="Game\Scene\SceneUpdateContext.h" />
     <ClInclude Include="Game\Scene\TitleScene.h" />
     <ClInclude Include="Game\Scene\GameClearScene.h" />
+    <ClInclude Include="Game\Scene\StarGetPresentation.h" />
+    <ClInclude Include="Game\Scene\StarGetTimeline.h" />
     <ClInclude Include="Game\Scene\SkinningEditorController.h" />
     <ClInclude Include="Engine\Graphics\PostProcessRenderer.h" />
     <ClInclude Include="Game\Scene\Skybox.h" />

@@ -606,6 +606,14 @@ void SkinnedModel::AddExplorerOutfit() {
     const Vector4 olive{.24f, .31f, .16f, 1}, skin{.81f, .58f, .39f, 1};
     for (auto &v : skinnedVertices_) {
         const auto &name = joints_[v.jointIndices[0]].name;
+        // 首の付け根を保って頭を少し小さくし、顔の横に腕を出せる余白を作る。
+        if (name.find(":Head") != std::string::npos) {
+            v.position.x *= .80f;
+            v.position.y = .89f + (v.position.y - .89f) * .85f;
+            v.position.z *= .82f;
+            v.normal = Math::Normalize({v.normal.x / .80f, v.normal.y / .85f, v.normal.z / .82f});
+        }
+
         if (name.find("Head") != std::string::npos || name.find("Neck") != std::string::npos ||
             name.find("Hand") != std::string::npos) {
             v.color = skin;
@@ -651,10 +659,10 @@ void SkinnedModel::AddExplorerOutfit() {
         }
     };
     // 幅広のサファリハット、濃い帽子帯、正面の小さなランプ。
-    cylinder({0, 1.60f, .015f}, .48f, .035f, .86f, head, khaki);
-    cylinder({0, 1.72f, .015f}, .31f, .22f, .91f, head, khaki);
-    cylinder({0, 1.64f, .015f}, .315f, .055f, .91f, head, leather);
-    box({0, 1.69f, -.28f}, {.10f, .085f, .035f}, head, {.95f, .83f, .48f, 1});
+    cylinder({0, 1.485f, .015f}, .405f, .035f, .86f, head, khaki);
+    cylinder({0, 1.59f, .015f}, .265f, .20f, .91f, head, khaki);
+    cylinder({0, 1.525f, .015f}, .270f, .055f, .91f, head, leather);
+    box({0, 1.57f, -.24f}, {.10f, .085f, .035f}, head, {.95f, .83f, .48f, 1});
     // リュック本体、ふた、ポケット、肩紐、上部の寝袋。
     box({0, .74f, .19f}, {.32f, .32f, .21f}, spine, olive);
     box({0, .91f, .20f}, {.35f, .07f, .24f}, spine, leather);
@@ -1325,7 +1333,74 @@ void SkinnedModel::GenerateRunPreset() {
     }
 }
 
-// 跳躍中の姿勢を表す関節キーフレームを生成する。
+// 基準姿勢から星を掲げるモーションを作り、同名の既存モーションは再利用する。
+void SkinnedModel::GenerateStarGetPreset() {
+    for (int i = 0; i < static_cast<int>(motions_.size()); ++i) {
+        if (motions_[i].name == "StarGet") {
+            activeMotionIndex_ = i;
+            return;
+        }
+    }
+    auto motion = CreateRestMotion(joints_, "StarGet", 4.0f);
+    for (auto &animation : motion.jointAnimations) {
+        const auto rest = animation.keyframes.front();
+        animation.keyframes.clear();
+        for (float time : {0.0f, .22f, .72f, 1.0f, 4.0f}) {
+            auto key = rest;
+            key.time = time;
+            animation.keyframes.push_back(key);
+        }
+    }
+    // 親の姿勢も含めて腕の向きを決め、左右の腕に専用の決めポーズを与える。
+    auto aim = [&](int index, Vector3 direction) {
+        if (index < 0) {
+            return;
+        }
+        direction = Math::Normalize(direction);
+        Matrix4x4 parent = Math::MakeIdentity4x4();
+        for (int ancestor = joints_[index].parentIndex; ancestor >= 0; ancestor = joints_[ancestor].parentIndex) {
+            const auto &pose = motion.jointAnimations[ancestor].keyframes.back();
+            const auto local = pose.isQuaternion
+                                   ? Math::MakeAffineMatrix(pose.scale, pose.rotationQuat, pose.translation)
+                                   : Math::MakeAffineMatrix(pose.scale, pose.rotation, pose.translation);
+            parent = Math::Multiply(parent, Math::Multiply(local, joints_[ancestor].externalParentMatrix));
+        }
+        float best = -3;
+        Vector3 chosen{};
+        const auto &arm = joints_[index];
+        for (int x = -16; x <= 16; ++x) {
+            for (int z = -16; z <= 16; ++z) {
+                const Vector3 offset{x * .19634954f, 0, z * .19634954f};
+                const Vector3 rotation{arm.restRotation.x + offset.x, arm.restRotation.y,
+                                       arm.restRotation.z + offset.z};
+                const auto global =
+                    Math::Multiply(Math::Multiply(Math::MakeAffineMatrix(arm.restScale, rotation, arm.restTranslation),
+                                                  arm.externalParentMatrix),
+                                   parent);
+                const Vector3 axis = Math::Normalize({global.m[1][0], global.m[1][1], global.m[1][2]});
+                const float score = axis.x * direction.x + axis.y * direction.y + axis.z * direction.z -
+                                    .001f * (std::abs(offset.x) + std::abs(offset.z));
+                if (score > best) {
+                    best = score;
+                    chosen = offset;
+                }
+            }
+        }
+        for (int k = 1; k < 5; ++k) {
+            const float blend = k == 1 ? .15f : 1.0f;
+            AddEulerOffset(motion, index, k, {chosen.x * blend, 0, chosen.z * blend});
+        }
+    };
+    // 上腕を外側へ開いてから肘を上げ、手が頭の輪郭へ入り込まないようにする。
+    aim(FindJointIndexByHints(joints_, {"rightarm", "right_arm"}), {-.90f, .43f, -.05f});
+    aim(FindJointIndexByHints(joints_, {"rightforearm", "right_forearm"}), {-.40f, .90f, -.12f});
+    aim(FindJointIndexByHints(joints_, {"leftarm", "left_arm"}), {.24f, -.96f, -.10f});
+    aim(FindJointIndexByHints(joints_, {"leftforearm", "left_forearm"}), {.20f, -.95f, -.20f});
+    motions_.push_back(std::move(motion));
+    activeMotionIndex_ = static_cast<int>(motions_.size()) - 1;
+}
+
+// 踏み込み・蹴り上げ・空中・着地の姿勢から、通常ジャンプのモーションを作る。
 void SkinnedModel::GenerateJumpPreset() {
     if (motions_.empty()) {
         motions_.push_back(MotionData{"Jump", 0.8f, {}});

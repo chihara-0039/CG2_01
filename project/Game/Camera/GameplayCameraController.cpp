@@ -29,10 +29,11 @@ void GameplayCameraController::Update(Input *input, Camera *camera, WinApp *winA
 
     const auto &mouse = input->GetMouseState();
 
-    bool isGuiCaptured = false;
+    // Alt中はカーソル操作を優先し、マウスの視点移動とズームを止める。
+    bool isGuiCaptured = input->PushKey(DIK_LMENU) || input->PushKey(DIK_RMENU);
 #if defined(USE_IMGUI) && !defined(NDEBUG)
     if (ImGui::GetCurrentContext()) {
-        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
+        isGuiCaptured = isGuiCaptured || ImGui::GetIO().WantCaptureMouse;
     }
 #endif
 
@@ -88,7 +89,7 @@ void GameplayCameraController::Update(Input *input, Camera *camera, WinApp *winA
     }
 
     // 画面端のガイド領域を左クリックした時だけ、カメラを段階的に回転させる。
-    if (!placementMode && mouse.buttons[0] && !isGuiCaptured) {
+    if (!placementMode && mouse.buttons[0] && !mouse.buttons[1] && !isGuiCaptured) {
         RECT clientRect;
         GetClientRect(winApp->GetHwnd(), &clientRect);
 
@@ -177,8 +178,9 @@ void GameplayCameraController::Update(Input *input, Camera *camera, WinApp *winA
         }
     }
 
-    if (placementMode && mouse.buttons[1] && !isGuiCaptured && (mouse.x != 0 || mouse.y != 0)) {
-        cameraAngle_ -= static_cast<float>(mouse.x) * 0.004f;
+    // ボタン不要で視点を動かす。左右は矢印キーと同じ向きにし、移動量を直接反映する。
+    if (!isGuiCaptured && (mouse.x != 0 || mouse.y != 0)) {
+        cameraAngle_ += static_cast<float>(mouse.x) * 0.004f;
         cameraPitch_ += static_cast<float>(mouse.y) * 0.004f;
         hasCameraParameterChanged = true;
     }

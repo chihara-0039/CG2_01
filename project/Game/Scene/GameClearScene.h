@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-// ゴール取得演出の後に表示する、花火付きの正式なクリアシーン。
+// ゴール取得後に手帳へ打刻し、完了後は表紙も見返せるクリアシーン。
 class GameClearScene final : public BaseScene {
   public:
     void Initialize(GameRuntime &game) override;
@@ -43,4 +43,5 @@ class GameClearScene final : public BaseScene {
     std::chrono::steady_clock::time_point lastUpdate_{};
     float elapsed_ = 0;
     JournalResult::Frame frame_{};
+    JournalResult::Inspection inspection_{};
 };

@@ -1,4 +1,4 @@
-# クリア時の手帳・印刷面・ハンコ・印影の3D素材を生成する。
+﻿# クリア時の手帳・印刷面・ハンコ・印影の3D素材を生成する。
 """Original 3D field journal and rubber-stamp result props; no external assets."""
 from pathlib import Path
 from PIL import Image,ImageDraw,ImageFont,ImageFilter,ImageChops
@@ -7,7 +7,9 @@ import recover_models
 root=Path(__file__).resolve().parents[1]
 out=root/'Resources/Models/Journal';out.mkdir(exist_ok=True)
 def font(n,serif=False):return ImageFont.truetype('C:/Windows/Fonts/yumin.ttf' if serif else 'C:/Windows/Fonts/YuGothM.ttc',n)
-from AdventureTheme import INK,TEAL,GOLD,PAPER,font,sheet
+# 実物の手帳は紙とインクの質感を保ち、画面の操作帯だけを空のUIへ合わせる。
+from AdventureTheme import sheet, font as screen_font, INK as SCREEN_INK, TEAL as SCREEN_TEAL
+INK='#243c43';TEAL='#286d70';GOLD='#b68a39';PAPER=(244,238,220,245)
 ink=INK;teal=TEAL;brass=GOLD;paper=PAPER[:3]
 # 共通の紙色と罫線から、手帳の印刷用ページを用意する。
 def page():
@@ -18,6 +20,15 @@ def page():
  return im,d
 files=['beginnerTrail.txt','mechanismGardens.txt','skylineRelay.txt','expeditionGrandTour.txt','rotationTrial.txt','rotationBridge.txt','rotationRelay.txt']
 names=['はじめての探検','鍵とスイッチの庭','空中回廊','総合探検','回転する島の実験','風見の橋と寄り道の鍵','三つの橋をつなぐ空路']
+title_lines=['はじめての\n探検','鍵とスイッチの\n庭','空中回廊','総合探検','回転する島の\n実験','風見の橋と\n寄り道の鍵','三つの橋を\nつなぐ空路']
+
+# 表紙と扉ページに、長いステージ名も中央揃えで読みやすく配置する。
+def stage_title(d,label,y,color,size=64):
+ for row,line in enumerate(label.splitlines()):
+  f=font(size,True);bounds=d.textbbox((0,0),line,font=f)
+  x=(768-(bounds[2]-bounds[0]))/2-bounds[0]
+  d.text((x,y+row*(size+25)),line,font=f,fill=color)
+
 for i,(file,name) in enumerate(zip(files,names)):
  lines=(root/'Resources/Stages'/file).read_text(encoding='utf-8-sig').splitlines();cells=[]
  for line in lines[1:]:
@@ -41,6 +52,14 @@ for i,(file,name) in enumerate(zip(files,names)):
  d.text((61,824),'雲の海を越えた先で、',font=font(26,True),fill=ink)
  d.text((61,866),'またひとつ、道を見つけた。',font=font(26,True),fill=ink)
  d.text((61,936),f'FIELD NOTE   {i+1:02}',font=font(20),fill='#7e775f');im.save(out/f'map-{i}.png')
+ # 閉じた表紙にも同じ名前を刻み、どのステージの手帳か分かるようにする。
+ im=Image.new('RGB',(768,1024),'#24484a');d=ImageDraw.Draw(im)
+ for pad in (24,36):d.rectangle((pad,pad,767-pad,1023-pad),outline=brass,width=3)
+ d.text((258,180),'探 検 手 帳',font=font(35,True),fill='#d9bd79')
+ stage_title(d,title_lines[i],365,'#ead39b',60)
+ d.line((161,648,606,648),fill=brass,width=3)
+ d.text((214,810),'回転の国の探検隊',font=font(30),fill='#c5b174')
+ im.save(out/f'cover-{i}.png')
 im=Image.new('RGB',(768,1024),'#24484a');d=ImageDraw.Draw(im)
 for pad in (24,36):d.rectangle((pad,pad,767-pad,1023-pad),outline=brass,width=3)
 d.text((151,340),'探検手帳',font=font(105,True),fill='#d9bd79');d.text((160,485),'回転の国の探検隊',font=font(39),fill='#c5b174')
@@ -85,10 +104,12 @@ quad('cover-art','cover.png',.04,-4.20,6.36,4.20,-.126)
 for i in range(len(files)):
  quad(f'report-{i}',f'report-{i}.png',.14,-4.02,6.18,4.02,-.025)
  quad(f'map-{i}',f'map-{i}.png',.14,-4.02,6.18,4.02,.126,True)
+ quad(f'cover-art-{i}',f'cover-{i}.png',.04,-4.20,6.36,4.20,-.126)
 quad('ink','ink.png',-1.48,-1.48,1.48,1.48,0)
 quad('shadow','shadow.png',-1.65,-1.65,1.65,1.65,0)
 for pad in (False,True):
- im=Image.new('RGBA',(1280,720));d=sheet(im,(256,653,1024,695))
- d.text((281,662),'A  次の行き先へ       B  タイトルへ' if pad else 'Enter / Space  次の行き先へ       Esc  タイトルへ',font=font(21),fill=ink)
+ im=Image.new('RGBA',(1280,720));d=sheet(im,(160,650,1120,711))
+ d.text((187,654),'A  次の行き先へ       B  タイトルへ' if pad else 'Enter / Space  次の行き先へ       Esc  タイトルへ',font=screen_font(19),fill=SCREEN_INK)
+ d.text((187,682),'X  手帳を閉じる・開く' if pad else 'Tab  手帳を閉じる・開く',font=screen_font(18),fill=SCREEN_TEAL)
  im.save(out/f'guide{"-pad" if pad else ""}.png')
 print('3D journal covers, pages, seven course reports, stamp and ink generated')

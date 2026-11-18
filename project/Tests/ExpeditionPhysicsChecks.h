@@ -206,7 +206,7 @@ inline bool VerifyExpeditionPlayerPhysics(const std::string &output) {
             }
         }
         for (int frame = 0; frame < 100 && (p.GetPosition().y < 2.49f || p.IsOnLadder()); ++frame) {
-            if (!tick(map, p, in, 0, .95f, {})) {
+            if (!tick(map, p, in, .95f, 0, {})) {
                 return false;
             }
         }
@@ -288,6 +288,73 @@ inline bool VerifyExpeditionPlayerPhysics(const std::string &output) {
         }
         return move(map, p, in, {15, 3.5f, 28}, false);
     });
+    // どのカメラ方向からも同じ上端へ入り、入力を保持したまま地面まで降りられる。
+    for (int view = 0; view < 8; ++view) {
+        trial(("camera-relative ladder entry " + std::to_string(view)).c_str(),
+              [&](StageMap &map, Player &p, Input &in) {
+                  map.Initialize(9, 8, 9);
+                  for (int x = 0; x < 9; ++x) {
+                      for (int z = 0; z < 9; ++z) {
+                          map.SetBlock(x, 0, z, BlockType::Ground);
+                      }
+                  }
+                  for (int y = 1; y <= 3; ++y) {
+                      map.SetBlock(4, y, 4, BlockType::Ladder);
+                  }
+                  map.SetBlock(4, 3, 5, BlockType::Ground);
+                  p.SetRespawnPosition({4, 3.5f, 5});
+                  p.Respawn();
+                  const float yaw = view * .7853981634f;
+                  const float x = std::sin(yaw), z = -std::cos(yaw);
+                  for (int frame = 0; frame < 100; ++frame) {
+                      InputTestPlayback::Advance(in, x, z);
+                      p.Update(&in, map, yaw, Math::MakeIdentity4x4(), nullptr, true);
+                      const auto position = p.GetPosition();
+                      if (frame == 0 && position.y >= 3.5f) {
+                          return false;
+                      }
+                      if (position.y < .7f && position.z < 3.5f) {
+                          return true;
+                      }
+                  }
+                  return false;
+              });
+    }
+    // 昇降中もカメラ基準で入力を解釈する。横向きでD登攀・A下降の実キー入力も含む。
+    for (int view = 0; view < 8; ++view) {
+        trial(("camera-relative climbing " + std::to_string(view)).c_str(), [&](StageMap &map, Player &p, Input &in) {
+            map.Initialize(9, 8, 9);
+            for (int y = 1; y <= 4; ++y) {
+                map.SetBlock(4, y, 4, BlockType::Ladder);
+            }
+            map.SetBlock(4, 4, 5, BlockType::Ground);
+            p.SetRespawnPosition({4, 1.3f, 4});
+            p.Respawn();
+            const float yaw = view * .7853981634f;
+            for (int frame = 0; frame < 12; ++frame) {
+                if (view == 6) {
+                    InputTestPlayback::Advance(in, 0, 0, {DIK_D});
+                } else {
+                    InputTestPlayback::Advance(in, -std::sin(yaw), std::cos(yaw));
+                }
+                p.Update(&in, map, yaw, Math::MakeIdentity4x4(), nullptr, true);
+            }
+            const float raised = p.GetPosition().y;
+            if (raised < 1.8f) {
+                return false;
+            }
+            for (int frame = 0; frame < 12; ++frame) {
+                if (view == 6) {
+                    InputTestPlayback::Advance(in, 0, 0, {DIK_A});
+                } else {
+                    InputTestPlayback::Advance(in, std::sin(yaw), -std::cos(yaw));
+                }
+                p.Update(&in, map, yaw, Math::MakeIdentity4x4(), nullptr, true);
+            }
+            const auto end = p.GetPosition();
+            return end.y < raised - .5f && std::abs(end.x - 4) < .01f && std::abs(end.z - 4) < .01f;
+        });
+    }
     trial("fixed ladder ascent", [&](StageMap &map, Player &p, Input &in) {
         p.SetRespawnPosition({29, 1.5f, 13});
         p.Respawn();
@@ -465,7 +532,7 @@ inline bool VerifyExpeditionPlayerPhysics(const std::string &output) {
         }
         bool onSummit = false;
         for (int i = 0; i < 80; ++i) {
-            if (!tick(map, p, in, 0, .95f, {})) {
+            if (!tick(map, p, in, 0, -.95f, {})) {
                 return false;
             }
             if (p.GetPosition().y > 6.4f && !p.IsOnLadder()) {

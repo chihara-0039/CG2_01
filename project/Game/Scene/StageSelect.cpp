@@ -9,9 +9,10 @@ constexpr std::array<const char *, 4> approvedCourses = {"beginnerTrail.txt", "m
                                                          "skylineRelay.txt", "expeditionGrandTour.txt"};
 }
 // ステージ選択を準備し、初期値と必要なリソースを設定する。
-void StageSelect::Initialize(Object3dCommon *common, Input *input, int startIndex) {
+void StageSelect::Initialize(Object3dCommon *common, Input *input, int startIndex, bool loadPreview) {
     object3dCommon_ = common;
     input_ = input;
+    const auto previousFiles = stageFiles_;
     stageFiles_.clear();
     std::ifstream sequence("Resources/Stages/sequence.txt");
     std::string line;
@@ -35,6 +36,12 @@ void StageSelect::Initialize(Object3dCommon *common, Input *input, int startInde
     previewCamera_.SetRotation({.36f, 0, 0});
     previewCamera_.SetFov(.65f);
     previewCamera_.Update();
+    // タイトルでは一覧だけを用意し、選択へ入る時にプレビューを読み込む。
+    // 同じ一覧で戻ってきた場合はGPUモデルを作り直さない。
+    if (!loadPreview ||
+        (previousFiles == stageFiles_ && previewModels_.size() == stageFiles_.size() && previewObject_)) {
+        return;
+    }
     previewModels_.clear();
     for (const auto &name : stageFiles_) {
         const auto index =

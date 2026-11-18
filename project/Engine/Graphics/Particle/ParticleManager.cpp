@@ -1488,13 +1488,15 @@ void ParticleManager::EmitSplash(const Vector3 &pos, const Vector4 &color) {
 
 // 中心から放射状に粒子を飛ばし、花火の広がりを作る。
 void ParticleManager::EmitFireworkBurst(const Vector3 &pos) {
-    constexpr int kSparkCount = 84;
     constexpr float kPi = 3.14159265f;
     std::uniform_real_distribution<float> zeroOne(0.0f, 1.0f);
     std::uniform_real_distribution<float> angle(0.0f, kPi * 2.0f);
-    std::uniform_real_distribution<float> speed(0.035f, 0.075f);
+    std::uniform_real_distribution<float> speed(0.055f, 0.115f);
     std::uniform_real_distribution<float> life(1.15f, 1.85f);
     std::uniform_real_distribution<float> offset(-0.08f, 0.08f);
+    // 花火一輪ごとの大きさと密度を変え、同じ形が並ばないようにする。
+    const float burstScale = .80f + zeroOne(engine) * .50f;
+    const int sparkCount = 90 + static_cast<int>(zeroOne(engine) * 51);
 
     const int palette = static_cast<int>(zeroOne(engine) * 4.0f) % 4;
     Vector4 primary = {1.0f, 0.34f, 0.12f, 1.0f};
@@ -1510,20 +1512,20 @@ void ParticleManager::EmitFireworkBurst(const Vector3 &pos) {
         secondary = {1.0f, 0.92f, 0.36f, 1.0f};
     }
 
-    // 球面上へ均等に近い方向で火花を飛ばす。
-    for (int i = 0; i < kSparkCount && Particles().size() < kMaxParticles; ++i) {
+    // 横方向を広くした球状に火花を飛ばし、大輪でも粒がまばらにならない密度を保つ。
+    for (int i = 0; i < sparkCount && Particles().size() < kMaxParticles; ++i) {
         const float azimuth = angle(engine);
         const float y = zeroOne(engine) * 2.0f - 1.0f;
         const float horizontal = std::sqrt((std::max)(0.0f, 1.0f - y * y));
-        const float sparkSpeed = speed(engine);
+        const float sparkSpeed = speed(engine) * burstScale;
 
         Particle spark;
         spark.type = Particle::Type::Firework;
         spark.transform.translate = {pos.x + offset(engine), pos.y + offset(engine), pos.z + offset(engine)};
-        spark.transform.scale = {0.11f, 0.11f, 1.0f};
+        spark.transform.scale = {.12f * burstScale, .12f * burstScale, 1.0f};
         spark.transform.rotate = {0.0f, 0.0f, azimuth};
-        spark.velocity = {std::cos(azimuth) * horizontal * sparkSpeed, y * sparkSpeed,
-                          std::sin(azimuth) * horizontal * sparkSpeed};
+        spark.velocity = {std::cos(azimuth) * horizontal * sparkSpeed * 1.25f, y * sparkSpeed,
+                          std::sin(azimuth) * horizontal * sparkSpeed * 1.25f};
         spark.color = (i % 4 == 0) ? secondary : primary;
         spark.initialAlpha = 1.0f;
         spark.lifeTime = 0.0f;
@@ -1536,7 +1538,7 @@ void ParticleManager::EmitFireworkBurst(const Vector3 &pos) {
         Particle flash;
         flash.type = Particle::Type::Ring;
         flash.transform.translate = pos;
-        flash.transform.scale = {0.35f, 0.35f, 1.0f};
+        flash.transform.scale = {.35f * burstScale, .35f * burstScale, 1.0f};
         flash.transform.rotate = {};
         flash.velocity = {};
         flash.color = secondary;

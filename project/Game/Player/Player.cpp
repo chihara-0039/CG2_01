@@ -106,15 +106,31 @@ void Player::Update(const Input *input, StageMap &map, float cameraRotY, const M
     isNearKey_ = false;
     isNearKeyBlock_ = false;
 
-    // 上の足場ではS/スティック下で隣接する梯子をつかみ直す。
+    // 歩行と同じカメラ基準の入力で、足場の縁にある梯子へ降り始める。
     const auto collision = [&](const Vector3 &pos) { return CheckCollision(pos, map, false); };
-    const bool wantsDown = input->PushKey(DIK_S) || input->GetGamePadState().leftStickY < -0.2f;
-    if (!wantsDown) {
+    float ladderInputX = input->GetGamePadState().leftStickX;
+    float ladderInputZ = input->GetGamePadState().leftStickY;
+    if (input->PushKey(DIK_D)) {
+        ladderInputX += 1;
+    }
+    if (input->PushKey(DIK_A)) {
+        ladderInputX -= 1;
+    }
+    if (input->PushKey(DIK_W)) {
+        ladderInputZ += 1;
+    }
+    if (input->PushKey(DIK_S)) {
+        ladderInputZ -= 1;
+    }
+    ladderInputX = std::clamp(ladderInputX, -1.0f, 1.0f);
+    ladderInputZ = std::clamp(ladderInputZ, -1.0f, 1.0f);
+    const float ladderInputLength = std::hypot(ladderInputX, ladderInputZ);
+    if (ladderInputLength < .2f) {
         ladderBottomExitUntilRelease_ = false;
     }
     Vector3 entry{};
-    if (stageCollisionEnabled_ && !isOnLadder_ && !ladderBottomExitUntilRelease_ && wantsDown &&
-        LadderTraversal::TryEnterFromTop(map, position_, collision, entry, cameraRotY)) {
+    if (stageCollisionEnabled_ && !isOnLadder_ && !ladderBottomExitUntilRelease_ &&
+        LadderTraversal::TryEnterFromTop(map, position_, collision, entry, cameraRotY, ladderInputX, ladderInputZ)) {
         position_ = entry;
         velocity_ = {0, 0, 0};
     }
@@ -148,27 +164,12 @@ void Player::Update(const Input *input, StageMap &map, float cameraRotY, const M
 
         velocity_ = {0, 0, 0}; // 登攀前の慣性を持ち越さない
 
-        // 入力方向の強さを計算（W/Sキーで上下、A/Dキーで左右に整理）
-        float moveVertical = 0.0f;
-        if (input->PushKey(DIK_W)) {
-            moveVertical += 1.0f;
-        }
-        if (input->PushKey(DIK_S)) {
-            moveVertical -= 1.0f;
-        }
-        moveVertical += input->GetGamePadState().leftStickY;
-        moveVertical = std::clamp(moveVertical, -1.0f, 1.0f);
-
-        float moveSide = 0.0f;
-        if (input->PushKey(DIK_D)) {
-            moveSide += 1.0f;
-        }
-        if (input->PushKey(DIK_A)) {
-            moveSide -= 1.0f;
-        }
-        moveSide += input->GetGamePadState().leftStickX;
-        moveSide = std::clamp(moveSide, -1.0f, 1.0f);
-        hasMoveInput = std::abs(moveVertical) > 0.05f || std::abs(moveSide) > 0.05f;
+        // カメラから見て梯子へ向かう入力で登り、反対方向で降りる。
+        const auto ladderMove =
+            LadderTraversal::ResolveMovement(map, gx, ladderY, gz, cameraRotY, ladderInputX, ladderInputZ);
+        const float moveVertical = ladderMove.vertical;
+        const float moveSide = std::hypot(ladderMove.side.x, ladderMove.side.z);
+        hasMoveInput = std::abs(moveVertical) > .05f || moveSide > .05f;
 
         // 1. 登る・下りる入力がある時だけ上下移動と吸い寄せを行う
         if (moveVertical != 0.0f) {
@@ -181,12 +182,14 @@ void Player::Update(const Input *input, StageMap &map, float cameraRotY, const M
                 }
                 nextPos.y = (std::min)(nextPos.y, topY + 0.5f - 0.001f);
             }
+            // 下端でも、実際に押しているワールド方向の出口を優先する。
+            const float exitYaw = std::atan2(-ladderMove.world.x, -ladderMove.world.z);
             Vector3 exit{};
             if (moveVertical > 0.0f && LadderTraversal::TryExit(map, gx, ladderY, gz, position_, collision, exit)) {
                 position_ = exit;
                 isOnLadder_ = false;
             } else if (moveVertical < 0.0f &&
-                       LadderTraversal::TryBottomExit(map, gx, ladderY, gz, position_, cameraRotY, collision, exit)) {
+                       LadderTraversal::TryBottomExit(map, gx, ladderY, gz, position_, exitYaw, collision, exit)) {
                 position_ = exit;
                 isOnLadder_ = false;
                 ladderBottomExitUntilRelease_ = true;
@@ -209,8 +212,8 @@ void Player::Update(const Input *input, StageMap &map, float cameraRotY, const M
             }
 
         } else if (moveSide != 0.0f) {
-            // 通常歩行と同じカメラ基準の左右。X/Zを分けて壁沿いにも離れられる。
-            const Vector3 side = LadderTraversal::SideOffset(moveSide, cameraRotY, walkSpeed_);
+            // 梯子に沿う横方向の入力は、通常歩行と同じ向きへ移動する。
+            const Vector3 side{ladderMove.side.x * walkSpeed_, 0, ladderMove.side.z * walkSpeed_};
             Vector3 nextPos = position_;
             nextPos.x += side.x;
             if (!CheckCollision(nextPos, map)) {

@@ -1,5 +1,6 @@
 ﻿// アプリケーション資源の生成・破棄と、外部レベルの寿命を管理する。
 #include "GameRuntime.h"
+#include "LifecycleTrace.h"
 #include "../Environment/WeatherPresetManager.h"
 #include "ModelManager.h"
 #include "externals/imgui/imgui.h"
@@ -13,12 +14,14 @@ void GameRuntime::Initialize() {
     WeatherPresetManager::GetInstance().LoadPresets();
     LoadEffectPresetNames();
 
+    LifecycleTrace::Mark("startup-presets");
     winApp = std::make_unique<WinApp>();
     winApp->Initialize();
 
     dxCommon = std::make_unique<DirectXCommon>();
     dxCommon->Initialize(winApp.get());
 
+    LifecycleTrace::Mark("startup-dx");
     input = std::make_unique<Input>();
     input->Initialize(winApp.get());
 
@@ -36,12 +39,15 @@ void GameRuntime::Initialize() {
     object3dCommon->SetTextureManager(textureManager.get());
     object3dCommon->Initialize(dxCommon.get());
 
+    LifecycleTrace::Mark("startup-draw-pipelines");
     particleManager = std::make_unique<ParticleManager>();
     particleManager->Initialize(dxCommon.get(), textureManager.get());
 
+    LifecycleTrace::Mark("startup-particles");
     stageSelect_ = std::make_unique<StageSelect>();
-    stageSelect_->Initialize(object3dCommon.get(), input.get());
+    stageSelect_->Initialize(object3dCommon.get(), input.get(), 0, false);
 
+    LifecycleTrace::Mark("startup-previews");
     models.push_back(std::unique_ptr<Model>(
         Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/block", "block.obj", textureManager.get())));
     models.push_back(std::unique_ptr<Model>(
@@ -54,8 +60,7 @@ void GameRuntime::Initialize() {
                                        ? "Resources/Levels/game_level.json"
                                        : "Resources/Levels/sample_level.json";
     strncpy_s(blenderLevelPath_.data(), blenderLevelPath_.size(), runtimeLevelPath, _TRUNCATE);
-    blenderRuntimeLevel_.Load(runtimeLevelPath);
-    SyncBlenderLevelWriteTime();
+    // 外部レベルはエディターの読込操作で読み、タイトル用に先読みしない。
 
     Object3d *debugFloor = CreateObject(models[0].get(), {-25.0f, 0.0f, 0.0f});
     debugFloor->SetScale({10.0f, 1.0f, 10.0f});
@@ -71,6 +76,7 @@ void GameRuntime::Initialize() {
     sprite = std::make_unique<Sprite>();
     sprite->Initialize(spriteCommon.get(), texHandle);
 
+    LifecycleTrace::Mark("startup-debug-level");
     bgmController_.Initialize();
 
     player_ = std::make_unique<Player>();
@@ -84,6 +90,7 @@ void GameRuntime::Initialize() {
     player_->SetPosition({0.0f, 1.5f, 0.0f});
     player_->SetExternalCollisionBoxes(nullptr);
 
+    LifecycleTrace::Mark("startup-player-audio");
     camera = std::make_unique<Camera>();
 #ifndef NDEBUG
     camera->SetAspectRatio(1280.0f / 720.0f);
@@ -119,6 +126,7 @@ void GameRuntime::Initialize() {
         effectPreviewShowGPUParticleSphere_ = false;
     }
 
+    LifecycleTrace::Mark("startup-stage-data");
     skydomeModel_ = std::unique_ptr<Model>(
         Model::CreateFromOBJ(dxCommon.get(), "Resources/Models/skydome", "skydome.obj", textureManager.get()));
     skydomeObject_ = std::make_unique<Object3d>();
@@ -133,11 +141,13 @@ void GameRuntime::Initialize() {
     skybox_->Initialize(object3dCommon.get(), skyboxTextureHandle_);
     skybox_->SetScale({50.0f, 50.0f, 50.0f});
 
+    LifecycleTrace::Mark("startup-sky");
     stageRenderer_ = std::make_unique<StageRenderer>();
     stageRenderer_->Initialize(object3dCommon.get());
     stageRenderer_->SetBlockScale({1.0f, 1.0f, 1.0f});
-    stageRenderer_->BuildFromStageMap(stageMap_);
+    // タイトルでは初期ステージの描画オブジェクトを作らず、使用する画面まで待つ。
 
+    LifecycleTrace::Mark("startup-stage-renderer");
     mapCursor_ = std::make_unique<MapCursor>();
     mapCursor_->Initialize(object3dCommon.get());
     mapCursor_->SetIndex({0, 0, 0}, stageMap_);
@@ -160,6 +170,7 @@ void GameRuntime::Initialize() {
     blockInventoryUI_ = std::make_unique<BlockInventoryUI>();
     blockInventoryUI_->Initialize(dxCommon.get(), spriteCommon.get(), textureManager.get(), &blockInventory_);
 
+    LifecycleTrace::Mark("startup-gameplay-ui");
     tutorialSprite_ = std::make_unique<Sprite>();
     tutorialSprite_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/adventure/play.png"));
     tutorialSprite_->SetPosition({24, 651});
@@ -207,6 +218,15 @@ void GameRuntime::Initialize() {
     keyProgressSprite_->SetPosition({24, 24});
     keyProgressSprite_->SetSize({244, 76});
 
+    // 選択中の島を、軽く弾む金色の星で示す。
+    stageSelectAccentSprite_ = std::make_unique<Sprite>();
+    stageSelectAccentSprite_->Initialize(spriteCommon.get(),
+                                         textureManager->LoadTexture("Resources/UI/adventure/selection-star.png"));
+    stageSelectAccentSprite_->SetAnchorPoint({.5f, .5f});
+    stageSelectAccentSprite_->SetSize({40, 40});
+    stageSelectAccentSprite_->SetPosition({28, 258});
+    stageSelectAccentSprite_->Update();
+
     stageSelectGuideTexture_ = textureManager->LoadTexture("Resources/UI/adventure/select-0.png");
     stageSelectGuideSprite_ = std::make_unique<Sprite>();
     stageSelectGuideSprite_->Initialize(spriteCommon.get(), stageSelectGuideTexture_);
@@ -246,7 +266,7 @@ void GameRuntime::Initialize() {
 
     starGetSprite_ = std::make_unique<Sprite>();
     starGetSprite_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/adventure/star-get.png"));
-    starGetSprite_->SetPosition({380.0f, 70.0f});
+    starGetSprite_->SetPosition({380.0f, 595.0f});
     starGetSprite_->SetSize({520.0f, 110.0f});
 
     goalDirectionSprite_ = std::make_unique<Sprite>();
@@ -292,11 +312,13 @@ void GameRuntime::Initialize() {
     startIntro_->Initialize(spriteCommon.get(), textureManager->LoadTexture("Resources/UI/arrival_cloud.png"),
                             textureManager->LoadTexture("Resources/UI/gameover/sparkle.png"), object3dCommon.get());
 
+    LifecycleTrace::Mark("startup-menu-ui");
     gameplayCameraController_.Initialize();
     stageEditorController_.Initialize();
 
     sceneManager_ = SceneManager::GetInstance();
     sceneManager_->Initialize(&sceneFactory_, GetCurrentSceneType(), *this);
+    LifecycleTrace::Mark("startup-scenes");
     InitializeCaptureTools();
 #ifndef NDEBUG
     wchar_t openEditor[2]{};
@@ -542,6 +564,12 @@ void GameRuntime::EnsurePostProcessInitialized() {
 
 // ゲーム全体が保持するオブジェクトとリソースを解放する。
 void GameRuntime::Finalize() {
+    // 保存やGPU資源の解放を待つ前に画面を閉じ、カーソルを通常へ戻す。
+    if (winApp) {
+        SetCursor(LoadCursor(nullptr, IDC_ARROW));
+        ShowWindow(winApp->GetHwnd(), SW_HIDE);
+    }
+    LifecycleTrace::Mark("window-hidden");
     if (dxCommon) {
         dxCommon->Recorder().Finish();
     }
@@ -550,19 +578,24 @@ void GameRuntime::Finalize() {
         dxCommon->WaitForGpu();
     }
 
+    LifecycleTrace::Mark("shutdown-gpu-idle");
     if (sceneManager_) {
         sceneManager_->Finalize(*this);
         sceneManager_ = nullptr;
     }
 
+    LifecycleTrace::Mark("shutdown-scenes");
     bgmController_.Finalize();
+    starGetPresentation_.Finalize();
 
+    LifecycleTrace::Mark("shutdown-audio");
     dxCommon->FinalizeImGui();
 
     ModelManager::Finalize();
     objectList.clear();
     models.clear();
 
+    LifecycleTrace::Mark("shutdown-models");
     if (gameplayUIManager_) {
         gameplayUIManager_->Finalize();
     }
@@ -572,6 +605,7 @@ void GameRuntime::Finalize() {
     }
     blockInventoryUI_.reset();
 
+    LifecycleTrace::Mark("shutdown-ui");
     player_.reset();
     terrainObject_.reset();
     terrainModel_.reset();
@@ -594,11 +628,15 @@ void GameRuntime::Finalize() {
     shadowMap_.reset();
     lightCamera_.reset();
 
+    LifecycleTrace::Mark("shutdown-world");
     particleManager.reset();
     object3dCommon.reset();
     spriteCommon.reset();
+    LifecycleTrace::Mark("shutdown-pipelines");
     textureManager.reset();
     input.reset();
+    LifecycleTrace::Mark("shutdown-textures-input");
     dxCommon.reset();
+    LifecycleTrace::Mark("shutdown-dx");
     winApp.reset();
 }

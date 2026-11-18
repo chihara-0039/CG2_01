@@ -2,18 +2,6 @@
 #include "MyMath.h" // 必ずインクルード
 #include "WinApp.h"
 #include <cassert>
-#include <cstdio>
-
-namespace {
-// DirectX APIの失敗箇所と結果コードをログへ残す。
-void LogDirectXFailure(const char *operation, HRESULT hr, ID3D12Device *device) {
-    char message[256]{};
-    const HRESULT removedReason = device ? device->GetDeviceRemovedReason() : S_OK;
-    std::snprintf(message, sizeof(message), "Sprite: %s failed. HRESULT=0x%08lX, DeviceRemovedReason=0x%08lX\n",
-                  operation, static_cast<unsigned long>(hr), static_cast<unsigned long>(removedReason));
-    OutputDebugStringA(message);
-}
-}
 
 // 2Dスプライトを準備し、初期値と必要なリソースを設定する。
 void Sprite::Initialize(SpriteCommon *spriteCommon, uint32_t textureHandle) {
@@ -29,9 +17,7 @@ void Sprite::Initialize(SpriteCommon *spriteCommon, uint32_t textureHandle) {
     textureSize_ = size_; // 初期状態は全範囲
     textureLeftTop_ = {0.0f, 0.0f};
 
-    CreateVertexBuffer();
-    CreateMaterialBuffer();
-    CreateTransformationMatrixBuffer();
+    CreateBuffers();
 
     // 初期データを転送
     UpdateVertexData();
@@ -85,10 +71,10 @@ void Sprite::Draw() {
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
     // 2. マテリアルCBV
-    commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(0, materialAddress_);
 
     // 3. トランスフォームCBV
-    commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResource_->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(1, transformationAddress_);
 
     // 4. テクスチャSRV
     auto gpuHandle = spriteCommon_->GetTextureManager()->GetSrvHandleGPU(textureHandle_);
@@ -118,98 +104,31 @@ void Sprite::SetTexture(uint32_t textureHandle) {
     transferNeeded_ = true;
 }
 
-// 頂点バッファの作成
-void Sprite::CreateVertexBuffer() {
-    auto device = spriteCommon_->GetDxCommon()->GetDevice();
-
-    // 頂点リソース作成
-    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
-    D3D12_RESOURCE_DESC resDesc = {};
-    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = sizeof(VertexData) * 6;
-    resDesc.Height = 1;
-    resDesc.DepthOrArraySize = 1;
-    resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    resDesc.SampleDesc.Count = 1;
-
-    const HRESULT hr =
-        device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
-                                        nullptr, IID_PPV_ARGS(&vertexBuffer_));
-    if (FAILED(hr) || !vertexBuffer_) {
-        LogDirectXFailure("CreateCommittedResource(vertex)", hr, device);
-        vertexBufferView_ = {};
-        return;
-    }
-
-    vertexBufferView_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
+// 頂点・色・変換の保存領域を一括取得し、各定数を256バイト境界へそろえる。
+void Sprite::CreateBuffers() {
+    constexpr size_t alignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+    static_assert(sizeof(VertexData) * 6 <= alignment);
+    static_assert(sizeof(Material) <= alignment);
+    static_assert(sizeof(TransformationMatrix) <= alignment);
+    const auto storage = spriteCommon_->AllocateSpriteStorage();
+    storageResource_ = storage.resource;
+    vertexData_ = reinterpret_cast<VertexData *>(storage.cpu);
+    vertexBufferView_.BufferLocation = storage.gpu;
     vertexBufferView_.SizeInBytes = sizeof(VertexData) * 6;
     vertexBufferView_.StrideInBytes = sizeof(VertexData);
+    materialData_ = reinterpret_cast<Material *>(storage.cpu + alignment);
+    materialAddress_ = storage.gpu + alignment;
+    materialData_->color = {1, 1, 1, 1};
+    transformationMatrixData_ = reinterpret_cast<TransformationMatrix *>(storage.cpu + alignment * 2);
+    transformationAddress_ = storage.gpu + alignment * 2;
 }
 
-// マテリアルバッファの作成
-void Sprite::CreateMaterialBuffer() {
-    // マテリアルは色のみなので、サイズはMaterial構造体分で十分ですが、256バイトアラインメントに合わせてサイズを調整します
-    auto device = spriteCommon_->GetDxCommon()->GetDevice();
-    size_t sizeIB = (sizeof(Material) + 0xff) & ~0xff;
-    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
-    D3D12_RESOURCE_DESC resDesc = {};
-    // バッファリソースの設定
-    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = sizeIB;
-    resDesc.Height = 1;
-    resDesc.DepthOrArraySize = 1;
-    resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    resDesc.SampleDesc.Count = 1;
-
-    // 初期値は白色
-    device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
-                                    nullptr, IID_PPV_ARGS(&materialResource_));
-    materialResource_->Map(0, nullptr, (void **)&materialData_);
-    materialData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
-}
-
-// トランスフォームバッファの作成
-void Sprite::CreateTransformationMatrixBuffer() {
-    // トランスフォームはWVP行列のみですが、256バイトアラインメントに合わせてサイズを調整します
-    auto device = spriteCommon_->GetDxCommon()->GetDevice();
-    size_t sizeIB = (sizeof(TransformationMatrix) + 0xff) & ~0xff;
-    D3D12_HEAP_PROPERTIES heapProps = {D3D12_HEAP_TYPE_UPLOAD, D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-                                       D3D12_MEMORY_POOL_UNKNOWN, 1, 1};
-    D3D12_RESOURCE_DESC resDesc = {};
-
-    // バッファリソースの設定
-    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = sizeIB;
-    resDesc.Height = 1;
-    resDesc.DepthOrArraySize = 1;
-    resDesc.MipLevels = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    resDesc.SampleDesc.Count = 1;
-
-    // 初期値は単位行列
-    device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
-                                    nullptr, IID_PPV_ARGS(&transformationMatrixResource_));
-    transformationMatrixResource_->Map(0, nullptr, (void **)&transformationMatrixData_);
-    transformationMatrixData_->WVP = Math::MakeIdentity4x4();
-}
-
-// 頂点データの更新（サイズや切り抜き変更時）
+// 常時マップされた専用領域に、UVと頂点位置を書き込む。
 void Sprite::UpdateVertexData() {
-    if (!vertexBuffer_ || !spriteCommon_ || !spriteCommon_->GetDxCommon()) {
-        OutputDebugStringA("Sprite: Vertex update skipped because the required resource is null.\n");
+    if (!storageResource_ || !vertexData_ || !spriteCommon_) {
         return;
     }
-
-    VertexData *vertMap = nullptr;
-    const HRESULT hr = vertexBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&vertMap));
-    if (FAILED(hr) || !vertMap) {
-        LogDirectXFailure("Map(vertex)", hr, spriteCommon_->GetDxCommon()->GetDevice());
-        return;
-    }
+    VertexData *vertMap = vertexData_;
 
     // テクスチャ全体のサイズ取得
     auto &texDesc = spriteCommon_->GetTextureManager()->GetResourceDesc(textureHandle_);
@@ -245,6 +164,5 @@ void Sprite::UpdateVertexData() {
     vertMap[5].position = {rightPos, topPos, 0.0f, 1.0f};
     vertMap[5].texcoord = {right, top};
 
-    // マップ解除
-    vertexBuffer_->Unmap(0, nullptr);
+    // 保存ページは寿命中マップしたまま使用する。
 }

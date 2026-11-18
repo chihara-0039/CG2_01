@@ -10,6 +10,27 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg
 
 #pragma comment(lib, "winmm.lib")
 
+namespace {
+// Alt中と非アクティブ時は通常の矢印を使い、それ以外のゲーム画面では隠す。
+void SetGameCursor(HWND hwnd) {
+    const bool visible = GetForegroundWindow() != hwnd || (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    SetCursor(visible ? LoadCursor(nullptr, IDC_ARROW) : nullptr);
+}
+
+// マウスが静止していてもAltの押し離しを反映する。ゲーム領域の外には干渉しない。
+void UpdateGameCursor(HWND hwnd) {
+    POINT screen{};
+    RECT client{};
+    if (!GetCursorPos(&screen) || WindowFromPoint(screen) != hwnd || !GetClientRect(hwnd, &client)) {
+        return;
+    }
+    POINT local = screen;
+    if (ScreenToClient(hwnd, &local) && PtInRect(&client, local)) {
+        SetGameCursor(hwnd);
+    }
+}
+}
+
 // ゲーム用ウィンドウを準備し、初期値と必要なリソースを設定する。
 void WinApp::Initialize() {
     HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
@@ -38,13 +59,21 @@ void WinApp::Initialize() {
     timeBeginPeriod(1);
 }
 
+// カーソルを通常表示へ戻し、ウィンドウとCOMの終了処理を行う。
 void WinApp::Finalize() {
+    SetCursor(LoadCursor(nullptr, IDC_ARROW));
     CloseWindow(hwnd_);
     CoUninitialize();
 }
 
 // Windowsメッセージを処理し、終了要求の有無を返す。
 bool WinApp::ProcessMessage() {
+#ifdef USE_IMGUI
+    if (ImGui::GetCurrentContext()) {
+        // ImGuiが独自に矢印へ戻すことを防ぎ、カーソルの表示方針を一元化する。
+        ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+    }
+#endif
     MSG msg{};
     // Drain the entire queue every frame. Processing only one message causes
     // mouse move/click events to build up and makes ImGui feel delayed.
@@ -55,11 +84,23 @@ bool WinApp::ProcessMessage() {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
+    UpdateGameCursor(hwnd_);
     return false;
 }
 
 // ウィンドウの入力・サイズ変更・終了メッセージを振り分ける。
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+    if (msg == WM_SETCURSOR && LOWORD(lparam) == HTCLIENT) {
+        SetGameCursor(hwnd);
+        return TRUE;
+    }
+    if (msg == WM_ACTIVATE && LOWORD(wparam) == WA_INACTIVE) {
+        SetCursor(LoadCursor(nullptr, IDC_ARROW));
+    }
+    if (msg == WM_SYSCOMMAND && (wparam & 0xFFF0) == SC_KEYMENU && lparam == 0) {
+        // Alt単体でシステムメニューへフォーカスが移ることを防ぐ。
+        return 0;
+    }
 #ifdef USE_IMGUI
     // ImGuiのメッセージ処理を優先
     if (ImGui::GetCurrentContext() != nullptr) {
@@ -71,6 +112,7 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 #endif
     switch (msg) {
     case WM_CLOSE:
+        SetCursor(LoadCursor(nullptr, IDC_ARROW));
         PostQuitMessage(0);
         return 0;
     }

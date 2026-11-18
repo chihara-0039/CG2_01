@@ -39,11 +39,11 @@ void BlockInventoryUI::Initialize(DirectXCommon *dxCommon, SpriteCommon *spriteC
     panelSprite_->Initialize(spriteCommon_, panelTextureHandle_);
     panelSprite_->SetSize({panelWidth_, panelHeight_});
 
-    // 2. フォーカス枠の初期化 (white.pngを黄色カラーフィルタして使用)
-    focusTextureHandle_ = textureManager_->LoadTexture("Resources/UI/inventory/white.png");
+    // 2. 丸い青枠と金色の縁で、持ち出すパーツを示す
+    focusTextureHandle_ = textureManager_->LoadTexture("Resources/UI/adventure/inventory-focus.png");
     focusSprite_ = std::make_unique<Sprite>();
     focusSprite_->Initialize(spriteCommon_, focusTextureHandle_);
-    focusSprite_->SetColor({.14f, .43f, .44f, .22f});
+    focusSprite_->SetColor({1, 1, 1, 1});
 
     quickGuideSprite_ = std::make_unique<Sprite>();
     quickGuideSprite_->Initialize(spriteCommon_,
@@ -69,7 +69,7 @@ void BlockInventoryUI::Initialize(DirectXCommon *dxCommon, SpriteCommon *spriteC
             auto glyph = std::make_unique<Sprite>();
             glyph->Initialize(spriteCommon_, font);
             glyph->SetSize({8.0f, 14.0f});
-            glyph->SetColor({.14f, .24f, .27f, 1});
+            glyph->SetColor({.09f, .25f, .44f, 1});
             btn.textSprites.push_back(std::move(glyph));
         }
 
@@ -85,7 +85,7 @@ void BlockInventoryUI::Initialize(DirectXCommon *dxCommon, SpriteCommon *spriteC
 
         // 所持数ドット（最大8個）の生成
         {
-            uint32_t whiteTex = textureManager_->LoadTexture("Resources/UI/inventory/white.png");
+            uint32_t whiteTex = textureManager_->LoadTexture("Resources/UI/adventure/inventory-focus.png");
             for (int i = 0; i < 8; ++i) {
                 auto s = std::make_unique<Sprite>();
                 s->Initialize(spriteCommon_, whiteTex);
@@ -374,7 +374,7 @@ void BlockInventoryUI::Update(Input *input, WinApp *winApp, bool isGamePlayMode,
                 if (i < drawCount) {
                     float dotX = startX - i * spacing;
                     btn.countSprites[i]->SetPosition({currentPos_.x + dotX, dotY});
-                    btn.countSprites[i]->SetColor({0.2f, 1.0f, 0.2f, 1.0f}); // 明るい黄緑色
+                    btn.countSprites[i]->SetColor({1.0f, .72f, .22f, 1.0f}); // 星と同じ金色
                     btn.countSprites[i]->Update();
                 }
             }
