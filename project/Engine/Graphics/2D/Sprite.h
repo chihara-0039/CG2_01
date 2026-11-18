@@ -64,12 +64,8 @@ class Sprite {
     const Vector2 &GetSize() const { return size_; }
 
   private:
-    // 矩形描画用の頂点バッファを作成する。
-    void CreateVertexBuffer();
-    // 色情報を渡す定数バッファを作成する。
-    void CreateMaterialBuffer();
-    // WVP行列を渡す定数バッファを作成する。
-    void CreateTransformationMatrixBuffer();
+    // 頂点・色・WVP行列の専用領域を共有ページから確保する。
+    void CreateBuffers();
 
     // サイズ、アンカー、切り抜き範囲をもとに頂点データを再計算する。
     void UpdateVertexData();
@@ -96,12 +92,13 @@ class Sprite {
     float lastRotation_ = 0.0f;
 
     // DirectXリソース。
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> storageResource_;
+    VertexData *vertexData_ = nullptr;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
+    D3D12_GPU_VIRTUAL_ADDRESS materialAddress_ = 0;
     Material *materialData_ = nullptr;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_;
+    D3D12_GPU_VIRTUAL_ADDRESS transformationAddress_ = 0;
     TransformationMatrix *transformationMatrixData_ = nullptr;
 };

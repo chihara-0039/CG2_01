@@ -1,5 +1,6 @@
-#include "SpriteCommon.h"
+﻿#include "SpriteCommon.h"
 #include <cassert>
+#include <stdexcept>
 
 using Microsoft::WRL::ComPtr;
 
@@ -122,4 +123,37 @@ void SpriteCommon::CreateGraphicsPipeline() {
     psoDesc.SampleDesc.Count = 1;
 
     device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState_));
+}
+// 小さいGPU割当を一ページにまとめる。領域を再利用せず、GPU参照中の上書きを防ぐ。
+SpriteCommon::SpriteStorage SpriteCommon::AllocateSpriteStorage() {
+    constexpr size_t kPageBytes = 64 * 1024;
+    constexpr size_t kSpriteBytes = 3 * D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+    if (spritePages_.empty() || spritePages_.back().used + kSpriteBytes > kPageBytes) {
+        UploadPage page;
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width = kPageBytes;
+        desc.Height = 1;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.SampleDesc.Count = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        const auto created = dxCommon_->GetDevice()->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                                                                             D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                                             IID_PPV_ARGS(&page.resource));
+        if (FAILED(created)) {
+            throw std::runtime_error("Cannot allocate sprite upload page");
+        }
+        const D3D12_RANGE noRead{0, 0};
+        if (FAILED(page.resource->Map(0, &noRead, reinterpret_cast<void **>(&page.cpu)))) {
+            throw std::runtime_error("Cannot map sprite upload page");
+        }
+        spritePages_.push_back(std::move(page));
+    }
+    auto &page = spritePages_.back();
+    const size_t offset = page.used;
+    page.used += kSpriteBytes;
+    return {page.resource, page.cpu + offset, page.resource->GetGPUVirtualAddress() + offset};
 }

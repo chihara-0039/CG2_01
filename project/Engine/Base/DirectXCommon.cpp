@@ -1,5 +1,6 @@
-#include "DirectXCommon.h"
+﻿#include "DirectXCommon.h"
 #include "WinApp.h"
+#include "LifecycleTrace.h"
 #include <vector>
 #include <cassert>
 #include <format>
@@ -113,12 +114,16 @@ void DirectXCommon::Initialize(WinApp *winApp) {
 
     InitializeFixFPS();
     InitializeDevice();
+    LifecycleTrace::Mark("dx-device");
     InitializeCommand();
     InitializeSwapChain();
+    LifecycleTrace::Mark("dx-swapchain");
     InitializeRenderTargetView();
     InitializeDepthStencilView();
     InitializeFence();
+    LifecycleTrace::Mark("dx-targets");
     InitializeDXC();
+    LifecycleTrace::Mark("dx-compiler");
     InitializePerformanceCapture();
 
 #ifdef USE_IMGUI
@@ -143,6 +148,7 @@ void DirectXCommon::Initialize(WinApp *winApp) {
         imguiIO.Fonts->AddFontDefault();
     }
 
+    LifecycleTrace::Mark("dx-imgui-font");
     // 2. Win32バックエンドの初期化
     ImGui_ImplWin32_Init(winApp_->GetHwnd());
 
@@ -442,6 +448,16 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring &filePath, cons
 }
 
 // DirectXのデバイス・描画先・同期に使うパイプラインと参照先をコマンドリストへ設定する。
+// ポストエフェクトで外した深度を戻し、重ねる3D同士の前後判定を有効にする。
+void DirectXCommon::BindBackBufferWithDepth() {
+    auto rtv = rtvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+    rtv.ptr += swapChain_->GetCurrentBackBufferIndex() *
+               device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    const auto dsv = dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+    commandList_->OMSetRenderTargets(1, &rtv, false, &dsv);
+}
+
+// バックバッファを描画先へ切り替え、背景色と必要な深度を初期化する。
 void DirectXCommon::PreDraw(bool clearDepth) {
     // バックバッファのインデックス取得
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();

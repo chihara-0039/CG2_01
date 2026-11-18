@@ -93,6 +93,12 @@ void GameRuntime::Update() {
 
     UpdateDebugAndEffectObjects(view, proj, lightVP);
 
+    // 初期マップが必要な編集・プレイ画面へ移った時だけ、最初の描画データを用意する。
+    if (!initialStageGeometryReady_ && currentMode_ != AppMode::Title && currentMode_ != AppMode::StageSelect &&
+        stageRenderer_) {
+        stageRenderer_->BuildFromStageMap(stageMap_);
+        initialStageGeometryReady_ = true;
+    }
     UpdateStagePresentation(view, proj, lightVP);
     if (stageRenderer_ && player_ &&
         (currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace)) {
@@ -325,7 +331,9 @@ void GameRuntime::UpdatePlayerCameraAndTransform(const Matrix4x4 &view, const Ma
         player_->SetStageCollisionEnabled(true);
         camera->SetFov(gameplayCameraController_.GetFov());
         gameplayCameraController_.SetFollowPlayerMode(true);
-        gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get(), true);
+        if (!isGamePaused_ && (!blockInventoryUI_ || !blockInventoryUI_->IsActive())) {
+            gameplayCameraController_.Update(input.get(), camera.get(), winApp.get(), player_.get(), true);
+        }
         camera->Update();
         player_->SetCamera(camera->GetViewMatrix(), camera->GetProjectionMatrix());
         player_->UpdateTransform(lightVP, dxCommon.get());
@@ -532,6 +540,9 @@ void GameRuntime::ApplySceneLighting(const Vector3 &lightDir) {
     object3dCommon->SetLightIntensity(isEffectPresentation ? 0.18f : stageMap_.GetLightIntensity());
     object3dCommon->SetCameraPosition(camera->GetPosition());
     object3dCommon->ClearPointLights();
+    if (currentMode_ == AppMode::GamePlay && isGoalReached_ && starGetPresentation_.Active()) {
+        object3dCommon->AddPointLight(starGetPresentation_.LightPosition(), .65f, {1, .82f, .3f, 1}, 5);
+    }
 
     const bool isPlayerScene = currentMode_ == AppMode::DebugView || currentMode_ == AppMode::StageEditor ||
                                currentMode_ == AppMode::GamePlay || currentMode_ == AppMode::GamePlay_BlockPlace;

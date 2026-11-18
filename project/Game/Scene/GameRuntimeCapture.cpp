@@ -459,7 +459,7 @@ void GameRuntime::InitializeCaptureTools() {
                 }
             }
             sceneFadePhase_ = SceneFadePhase::None;
-            goalCelebrationTimer_ = 2.5f;
+            goalCelebrationTimer_ = StarGet::kDuration;
             UpdateGoalCelebration();
             const bool clearRequested =
                 sceneFadePhase_ == SceneFadePhase::FadingOut && pendingSceneType_ == SceneType::GameClear;
@@ -696,11 +696,12 @@ void GameRuntime::InitializeCaptureTools() {
                 }
                 stageRenderer_->BuildFromStageMap(stageMap_);
                 stageMap_.ClearRebuildFlag();
-                player_->SetPosition({19, 2.5f, 14});
+                player_->SetPosition({goalGuideTarget_.x, goalGuideTarget_.y - .5f, goalGuideTarget_.z});
                 isGoalReached_ = true;
                 isGoalBlocked_ = false;
-                camera->SetPosition({24, 5.5f, 19});
-                camera->SetRotation({.30f, -2.35619f, 0});
+                const auto p = player_->GetPosition();
+                camera->SetPosition({p.x + 5, p.y + 3, p.z - 6});
+                camera->SetRotation({.30f, -.6947f, 0});
                 camera->SetFov(.75f);
                 camera->Update();
             }
@@ -815,16 +816,10 @@ void GameRuntime::BeginFogTrial() {
 void GameRuntime::UpdateCaptureTools() {
     const auto campaignShot = CaptureEnvironment("CG2_CAMPAIGN_SHOT");
     if (!campaignShot.empty()) {
-        if (campaignShot == "star") {
-            isGoalReached_ = true;
-            goalCelebrationTimer_ = std::fmod(
-                std::chrono::duration<float>(std::chrono::steady_clock::now() - comparisonStarted_).count(), 2.2f);
-            UpdateGoalCelebration();
-        }
         if (!comparisonRecordingStarted_) {
             FrameRecorder::Options options;
             options.name = "campaign-" + campaignShot;
-            options.gifSeconds = 8;
+            options.gifSeconds = campaignShot == "star" ? 12 : 8;
             const auto output = CaptureEnvironment("CG2_CAPTURE_DIR");
             options.directory = output.empty() ? "../generated/campaign-review" : output;
             if (!dxCommon->Recorder().Start(options)) {
@@ -835,6 +830,15 @@ void GameRuntime::UpdateCaptureTools() {
         }
         const float elapsed =
             std::chrono::duration<float>(std::chrono::steady_clock::now() - comparisonStarted_).count();
+        // 表紙の確認用撮影では、打刻後にTabで閉じ、再び開く実際の入力を送る。
+        if (campaignShot == "clear" && CaptureEnvironment("CG2_JOURNAL_INSPECT") == "1") {
+            static int lastPhase = 0;
+            const int phase = elapsed < 4 ? 0 : elapsed < 6 ? 1 : 2;
+            InputTestPlayback::Advance(*input, 0, 0,
+                                       phase != lastPhase ? std::initializer_list<BYTE>{DIK_TAB}
+                                                          : std::initializer_list<BYTE>{});
+            lastPhase = phase;
+        }
         if (campaignShot == "rotation" && rotationTrial_) {
             static int quarter = 0;
             const int target = elapsed < 3 ? 0 : elapsed < 6 ? 1 : 2;
@@ -848,7 +852,7 @@ void GameRuntime::UpdateCaptureTools() {
                 }
             }
         }
-        if (elapsed > 8) {
+        if (elapsed > (campaignShot == "star" ? 12.0f : 8.0f)) {
             if (dxCommon->Recorder().IsRecording()) {
                 dxCommon->Recorder().Stop();
             }

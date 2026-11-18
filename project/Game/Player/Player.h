@@ -296,7 +296,7 @@ class Player {
     Vector3 nearKeyBlockWorldPos_ = {0, 0, 0};
     bool isNearKeyBlock_ = false;
 
-    bool ladderBottomExitUntilRelease_ = false; // Sを離すまで上端の自動再捕捉を抑止
+    bool ladderBottomExitUntilRelease_ = false; // 移動入力を離すまで上端の自動再捕捉を抑止
     bool isOnLadder_ = false;                   // はしごに掴まっているか
     Vector3 ladderWorldPos_ = {0, 0, 0};        // はしごのワールド座標 (UI 追従用)
 

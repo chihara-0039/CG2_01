@@ -8,6 +8,7 @@
 #include "SceneType.h"
 #include "SceneFactory.h"
 #include "SceneManager.h"
+#include "StarGetPresentation.h"
 
 #include "WinApp.h"
 #include "DirectXCommon.h"
@@ -178,6 +179,7 @@ class GameRuntime {
     SceneFactory sceneFactory_;
     SceneManager *sceneManager_ = nullptr;
     std::unique_ptr<StageSelect> stageSelect_;
+    bool initialStageGeometryReady_ = false;
 
     std::unique_ptr<GameplayUIManager> gameplayUIManager_;
     std::unique_ptr<BlockInventoryUI> blockInventoryUI_;
@@ -195,6 +197,7 @@ class GameRuntime {
     uint32_t clearGuideXboxTexture_ = 0;
     std::unique_ptr<Sprite> objectiveGuideSprite_;
     std::unique_ptr<Sprite> stageSelectGuideSprite_;
+    std::unique_ptr<Sprite> stageSelectAccentSprite_;
     std::unique_ptr<Sprite> stageSelectGuideXboxSprite_;
     std::unique_ptr<Sprite> clearGuideSprite_;
     std::unique_ptr<Sprite> clearGuideXboxSprite_;
@@ -241,6 +244,7 @@ class GameRuntime {
     DebugDrawFlags debugFlags_;
     bool isGoalReached_ = false;
     float goalCelebrationTimer_ = 0.0f;
+    StarGetPresentation starGetPresentation_;
     float gameClearTimer_ = 0.0f;
     float gameClearFireworkTimer_ = 0.0f;
     bool gameClearCelebrationStarted_ = false;

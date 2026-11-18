@@ -266,6 +266,8 @@ void GameRuntime::Draw() {
     }
 
     if (currentMode_ == AppMode::GameClear && sceneManager_) {
+        // 画面効果の描画時はDSVが外れているため、本の前後判定用に接続し直す。
+        dxCommon->BindBackBufferWithDepth();
         const auto dsv = dxCommon->GetDsvHeap()->GetCPUDescriptorHandleForHeapStart();
         commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
         object3dCommon->PreDrawBook();
@@ -376,6 +378,11 @@ void GameRuntime::RenderScene() {
                 }
                 // Draw visible fragments last, so the player never occludes their own highlight.
                 player_->Draw();
+                if (isGoalReached_ && starGetPresentation_.Active()) {
+                    object3dCommon->PreDraw();
+                    commandList->SetGraphicsRootDescriptorTable(4, shadowMap_->GetSrvHandle());
+                    starGetPresentation_.Draw(*camera, lightCamera_->GetViewProjectionMatrix());
+                }
             }
 
             if (!isGoalReached_ && !dioramaCapture_ && currentMode_ == AppMode::GamePlay && gameplayUIManager_ &&
@@ -496,6 +503,9 @@ void GameRuntime::RenderUi() {
             stageSelectGuideXboxSprite_->Draw();
         } else if (stageSelectGuideSprite_) {
             stageSelectGuideSprite_->Draw();
+        }
+        if (stageSelectAccentSprite_) {
+            stageSelectAccentSprite_->Draw();
         }
     }
     if (currentMode_ == AppMode::GamePlay && !isInventoryOpen && !fogTrial_) {

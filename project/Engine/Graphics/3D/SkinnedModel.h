@@ -136,6 +136,7 @@ class SkinnedModel {
     void GenerateWalkPreset();
     void GenerateRunPreset();
     void GenerateJumpPreset();
+    void GenerateStarGetPreset();
     void EnsureDefaultPlayerMotions();
     int GetActiveMotionIndex() const { return activeMotionIndex_; }
     void SetActiveMotionIndex(int index);

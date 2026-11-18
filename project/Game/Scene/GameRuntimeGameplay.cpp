@@ -4,6 +4,7 @@
 #include "../Stage/RotationIsland.h"
 #include <algorithm>
 #include <cmath>
+#include <random>
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
 #endif
@@ -79,10 +80,10 @@ void GameRuntime::UpdateGamePlay() {
     } else {
         camera->SetFov(0.9f);
 
-        bool isGuiCaptured = false;
+        bool isGuiCaptured = input->PushKey(DIK_LMENU) || input->PushKey(DIK_RMENU);
 #if defined(USE_IMGUI) && !defined(NDEBUG)
 
-        isGuiCaptured = ImGui::GetIO().WantCaptureMouse;
+        isGuiCaptured = isGuiCaptured || ImGui::GetIO().WantCaptureMouse;
 #endif
         const auto &mouse = input->GetMouseState();
 
@@ -213,11 +214,6 @@ void GameRuntime::UpdateGamePlay() {
         isGoalReached_ = true;
         isGoalBlocked_ = false;
         goalCelebrationTimer_ = 0.0f;
-        if (particleManager && player_) {
-            Vector3 effectPosition = player_->GetPosition();
-            effectPosition.y += 1.2f;
-            particleManager->EmitHitEffect(effectPosition);
-        }
     }
 
     if ((input->TriggerKey(DIK_B) || input->TriggerControllerButton(XINPUT_GAMEPAD_LEFT_SHOULDER)) && player_ &&
@@ -234,42 +230,29 @@ void GameRuntime::UpdateGamePlay() {
 
 // スター取得後のプレイヤー演出とカメラを進め、完了後にリザルトへ移る。
 void GameRuntime::UpdateGoalCelebration() {
-    constexpr float kCelebrationDuration = 2.5f;
-    goalCelebrationTimer_ += 1.0f / 60.0f;
-
-    // スター取得直後は操作を止め、プレイヤーを中心にカメラを回して見せる。
-    if (!dioramaCapture_ && player_ && camera) {
-        const auto foot = player_->GetPosition();
-        const Vector3 target{foot.x, foot.y + .8f, foot.z};
-        const float angle = goalCelebrationTimer_ * 1.8f;
-        const Vector3 offset{std::sin(angle) * 5.5f, 2.0f, std::cos(angle) * 5.5f};
-        float fraction = 1.0f;
-        for (float t = .10f; t <= 1.0f; t += .025f) {
-            const Vector3 sample{target.x + offset.x * t, target.y + offset.y * t, target.z + offset.z * t};
-            const auto *c = stageMap_.GetCell(static_cast<int>(std::floor(sample.x + .5f)),
-                                              static_cast<int>(std::floor(sample.y + .5f)),
-                                              static_cast<int>(std::floor(sample.z + .5f)));
-            if (c && c->isSolid && !c->isHidden && c->type != BlockType::MovingFloor) {
-                fraction = (std::max)(.12f, t - .06f);
-                break;
-            }
-        }
-        const Vector3 position{target.x + offset.x * fraction, target.y + offset.y * fraction,
-                               target.z + offset.z * fraction};
-        const Vector3 aim{target.x - position.x, target.y - position.y, target.z - position.z};
-        camera->SetPosition(position);
-        camera->SetRotation(
-            {-std::atan2(aim.y, std::sqrt(aim.x * aim.x + aim.z * aim.z)), std::atan2(aim.x, aim.z), 0});
-        camera->Update();
+    if (!player_ || !camera) {
+        return;
     }
+    if (!starGetPresentation_.Active()) {
+        starGetPresentation_.Begin(object3dCommon.get(), *player_, *camera, stageMap_,
+                                   hasGoalGuideTarget_ ? goalGuideTarget_ : player_->GetPosition());
+    }
+    const float dt = starGetPresentation_.DeltaTime();
+    if (!IsWindowInactive()) {
+        goalCelebrationTimer_ += dt;
+    }
+    starGetPresentation_.Update(goalCelebrationTimer_, *player_, *camera, stageMap_, particleManager.get(),
+                                lightCamera_->GetViewProjectionMatrix(), !dioramaCapture_);
 
     if (starGetSprite_) {
+        const float alpha = StarGet::Evaluate(goalCelebrationTimer_).caption;
+        starGetSprite_->SetColor({1, 1, 1, alpha});
         starGetSprite_->Update();
     }
     if (dioramaCapture_) {
         return; // Keep the wide shot and final pose until recording ends.
     }
-    if (goalCelebrationTimer_ >= kCelebrationDuration) {
+    if (goalCelebrationTimer_ >= StarGet::kDuration) {
         RequestSceneChange(SceneType::GameClear);
     }
 }
@@ -290,18 +273,24 @@ void GameRuntime::UpdateGameClear(bool celebrationReady) {
         return;
     }
 
-    gameClearFireworkTimer_ += 1.0f / 60.0f;
-    const bool firstFirework = !gameClearCelebrationStarted_;
-    const int previousBeat = static_cast<int>((gameClearFireworkTimer_ - 1.0f / 60.0f) / 0.75f);
-    const int currentBeat = static_cast<int>(gameClearFireworkTimer_ / 0.75f);
-    if (particleManager && (firstFirework || currentBeat != previousBeat)) {
-        const int positionIndex = currentBeat % 3;
-        const float x = positionIndex == 0 ? -4.2f : (positionIndex == 1 ? 4.2f : 0.0f);
-        const float y = positionIndex == 2 ? 2.8f : 1.2f;
-        // 手帳の背後で、花火を左右・中央の順に発生させる。
-        particleManager->EmitFireworkBurst({x, y, 3.5f});
+    // 次の打ち上げまでの待ち時間を使い、決まった拍子や左右対称の繰り返しを避ける。
+    gameClearFireworkTimer_ -= 1.0f / 60.0f;
+    if (particleManager && (!gameClearCelebrationStarted_ || gameClearFireworkTimer_ <= 0)) {
+        static std::mt19937 random(std::random_device{}());
+        std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+        const float group = unit(random);
+        const int bursts = group < .55f ? 1 : (group < .93f ? 2 : 3);
+        for (int i = 0; i < bursts; ++i) {
+            // 花火の中心は本の外側に置き、高さと奥行きは一発ごとにばらつかせる。
+            const float side = unit(random) < .5f ? -1.0f : 1.0f;
+            const float x = side * (6.8f + unit(random) * 3.0f);
+            const float y = -5.3f + unit(random) * 6.1f;
+            const float z = 2.8f + unit(random) * 2.4f;
+            particleManager->EmitFireworkBurst({x, y, z});
+        }
+        gameClearFireworkTimer_ = .18f + unit(random) * .40f;
+        gameClearCelebrationStarted_ = true;
     }
-    gameClearCelebrationStarted_ = true;
 
     if (clearGuideSprite_) {
         clearGuideSprite_->Update();
@@ -405,6 +394,15 @@ void GameRuntime::UpdateStageSelect() {
     }
 
     stageSelect_->Update();
+    // 入力直後も選択先に追従し、実時間の緩い脈動で操作可能な場所を示す。
+    if (stageSelectAccentSprite_) {
+        static const auto started = std::chrono::steady_clock::now();
+        const float time = std::chrono::duration<float>(std::chrono::steady_clock::now() - started).count();
+        const float pulse = std::sin(std::fmod(time, 6.2831853f) * 3.0f);
+        stageSelectAccentSprite_->SetPosition({28 + pulse * 3, 258.0f + stageSelect_->GetSelectedIndex() * 76});
+        stageSelectAccentSprite_->SetSize({40 + pulse * 2, 40 + pulse * 2});
+        stageSelectAccentSprite_->Update();
+    }
     if (stageSelect_->IsFnished()) {
         std::string path = "Resources/Stages/" + stageSelect_->GetSelectedFileName();
         if (!std::filesystem::exists(path) || !stageMap_.LoadFromFile(path)) {

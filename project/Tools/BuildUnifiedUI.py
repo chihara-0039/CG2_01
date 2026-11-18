@@ -1,5 +1,5 @@
-# 共通テーマを使って、ゲーム内のUI素材をまとめて生成する。
-"""Rebuild the journal UI and replace remaining legacy screen assets consistently."""
+﻿# 共通テーマを使って、ゲーム内のUI素材をまとめて生成する。
+"""Rebuild the rounded sky-travel UI while retaining the physical journal result."""
 from pathlib import Path
 from PIL import Image,ImageDraw
 import BuildAdventureUI
@@ -39,7 +39,7 @@ for name,label,size,n,serif in [('title','探検は、ここから',(900,150),56
     im=Image.new('RGBA',size);d=ImageDraw.Draw(im);centered(d,(0,0,*size),label,n,INK if name!='subtitle' else MUTED,serif);im.save(go/(name+'.png'))
 im=Image.new('RGBA',(1280,720),(14,34,39,150));sheet(im,(230,134,1050,665));im.save(go/'background.png')
 im=Image.new('RGBA',(670,82));d=ImageDraw.Draw(im)
-d.rectangle((5,4,664,77),fill=(40,109,112,26));d.line((6,5,6,76),fill=TEAL,width=4)
+d.rounded_rectangle((5,4,664,77),radius=30,fill=(84,188,239,75),outline='#ffffff',width=3);badge_star(d,35,40,19);sparkle(d,635,22,8)
 im.save(go/'selection.png')
 print('Unified title, objectives, controls, inventory help and retry menu')
 
@@ -51,3 +51,15 @@ for name,follow in [('stage_overview_icon',False),('follow_player_icon',True)]:
         d.polygon([(15,25),(31,15),(47,25),(31,35)],outline=TEAL)
         d.line([(15,25),(15,39),(31,49),(47,39),(47,25)],fill=TEAL,width=2);d.line((31,35,31,49),fill=TEAL,width=2)
     im.save(root/f'Resources/UI/{name}.png')
+
+# 手帳そのものの印刷面を変えず、画面上の操作帯だけを新テーマへそろえる。
+for pad in (False,True):
+    im=Image.new('RGBA',(1280,720));d=sheet(im,(160,650,1120,711))
+    text(d,(187,654),'A  次の行き先へ       B  タイトルへ' if pad else 'Enter / Space  次の行き先へ       Esc  タイトルへ',19)
+    text(d,(187,682),'X  手帳を閉じる・開く' if pad else 'Tab  手帳を閉じる・開く',18,TEAL)
+    im.save(root/f'Resources/Models/Journal/guide{"-pad" if pad else ""}.png')
+im=Image.new('RGBA',(64,64));d=ImageDraw.Draw(im);badge_star(d,32,31,26);im.save(out/'selection-star.png')
+im=Image.new('RGBA',(80,80));d=ImageDraw.Draw(im)
+d.rounded_rectangle((3,3,76,76),radius=18,fill=(105,202,252,65),outline='#ffffff',width=3)
+d.rounded_rectangle((7,7,72,72),radius=14,outline='#ffc95b',width=3)
+sparkle(d,69,10,7);im.save(out/'inventory-focus.png')

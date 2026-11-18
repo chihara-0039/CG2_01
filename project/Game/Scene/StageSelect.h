@@ -13,7 +13,7 @@
 class StageSelect {
   public:
     // ステージ一覧とプレビュー表示用オブジェクトを初期化する。
-    void Initialize(Object3dCommon *objCommon, Input *input, int startIndex = 0);
+    void Initialize(Object3dCommon *objCommon, Input *input, int startIndex = 0, bool loadPreview = true);
 
     // 入力に応じて選択ステージとプレビュー回転を更新する。
     void Update();

@@ -31,4 +31,28 @@ inline Frame Evaluate(float t) {
 inline bool Crossed(float before, float after, float event) {
     return before < event && after >= event;
 }
+
+// 打刻後の開閉だけを扱い、印影と最初のクリア演出の時刻は巻き戻さない。
+class Inspection {
+  public:
+    static constexpr float kDuration = .8f;
+
+    float Open() const { return start_ + (target_ - start_) * Smooth(elapsed_ / kDuration); }
+
+    // 途中で逆操作しても、現在の角度を始点にして滑らかに折り返す。
+    bool Toggle(bool ready) {
+        if (!ready) {
+            return false;
+        }
+        start_ = Open();
+        target_ = target_ > .5f ? 0.0f : 1.0f;
+        elapsed_ = 0;
+        return true;
+    }
+
+    void Advance(float dt) { elapsed_ = std::clamp(elapsed_ + (std::max)(dt, 0.0f), 0.0f, kDuration); }
+
+  private:
+    float start_ = 1, target_ = 1, elapsed_ = kDuration;
+};
 }

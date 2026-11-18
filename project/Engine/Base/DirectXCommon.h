@@ -91,6 +91,8 @@ class DirectXCommon {
     //  - ビューポートとシザー矩形をセット
     // -------------------------------------------------------
     void PreDraw(bool clearDepth = true);
+    // 画面効果の後に3Dを重ねる際、背景色を消さずに深度バッファを再接続する。
+    void BindBackBufferWithDepth();
     // 次のフレームで描画先を消去する背景色を保持する。
     void SetClearColor(float r, float g, float b, float a = 1.0f) {
         clearColor_[0] = r;

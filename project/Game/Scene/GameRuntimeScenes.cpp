@@ -277,6 +277,9 @@ void GameRuntime::OnSceneEntered(SceneType sceneType) {
 
 // 退出するシーンの演出やカメラへの一時的な変更を解除する。
 void GameRuntime::OnSceneExited(SceneType sceneType) {
+    if (sceneType == SceneType::GamePlay) {
+        starGetPresentation_.Cancel(player_.get());
+    }
     if (sceneType == SceneType::GamePlay && gameOver_) {
         gameOver_->Cancel(camera.get());
         if (player_) {
@@ -505,7 +508,8 @@ void GameRuntime::RunGamePlayScene() {
     GetEnvironmentVariableA("CG2_SHOT", captureShot, sizeof(captureShot));
     char buildingShot[32]{};
     GetEnvironmentVariableA("CG2_BUILD_SHOT", buildingShot, sizeof(buildingShot));
-    if (comparisonActive_ && std::string(captureShot) != "route" && std::string(buildingShot) != "route") {
+    if (comparisonActive_ && !isGoalReached_ && std::string(captureShot) != "route" &&
+        std::string(buildingShot) != "route") {
         return;
     }
     if (startIntro_ && startIntro_->IsActive()) {

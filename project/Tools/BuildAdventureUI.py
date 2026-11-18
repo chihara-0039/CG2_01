@@ -1,8 +1,9 @@
-# ステージ選択・鍵HUD・操作説明など、探検手帳風のUI画像を生成する。
-"""Original expedition-journal UI: paper, ink, brass keys, restrained typography."""
+﻿# ステージ選択・鍵HUD・操作説明など、探検手帳風のUI画像を生成する。
+"""Sky-travel UI: rounded blue panels, golden stars and friendly Japanese headings."""
 from pathlib import Path
 from PIL import Image,ImageDraw,ImageFont
 import math,random
+import sys
 root=Path(__file__).resolve().parents[1]
 out=root/'Resources/UI/adventure';out.mkdir(exist_ok=True)
 INK='#243c43';MUTED='#657476';TEAL='#286d70';GOLD='#b68a39';PAPER=(244,238,220,245)
@@ -19,7 +20,7 @@ def sheet(im,box):
     return d
 def text(d,at,s,n=22,color=INK,serif=False):d.text(at,s,font=font(n,serif),fill=color)
 # Override the legacy local helpers with the shared design system.
-from AdventureTheme import INK,MUTED,TEAL,GOLD,PAPER,font,sheet,text
+from AdventureTheme import INK,MUTED,TEAL,GOLD,PAPER,font,sheet,text,badge_star,sparkle
 
 # 真鍮色の鍵の輪と軸を描く。
 def key(d,x,y,scale=1,color=GOLD):
@@ -29,11 +30,27 @@ def key(d,x,y,scale=1,color=GOLD):
     d.line((x+32*s,y+32*s,x+39*s,y+25*s),fill=color,width=max(2,int(4*s)))
 # 交互の半径から星の輪郭を作り、アイコンを描く。
 def star(d,x,y,r=24):
-    p=[]
-    for i in range(10):
-        a=-math.pi/2+i*math.pi/5;radius=r if i%2==0 else r*.46;p.append((x+math.cos(a)*radius,y+math.sin(a)*radius))
-    d.polygon(p,fill='#d5ae57',outline='#896a2d')
+    badge_star(d,x,y,r)
 names=['はじめての探検','鍵とスイッチの庭','空中回廊','総合探検']
+
+# 通常プレイの操作帯だけを再生成できるよう、他のUI生成から分離する。
+def build_play_controls(pad):
+    im=Image.new('RGBA',(1000,40));d=sheet(im,(0,0,996,35))
+    text(d,(15,6),'左スティック  移動    右スティック  視点    LB  道具袋    START  休憩' if pad else 'WASD  移動    マウス / 矢印  視点    Alt  カーソル    B  道具袋    F1  手帳    Esc  休憩',18)
+    im.save(out/f'play{"-pad" if pad else ""}.png')
+
+# 配置中も同じフリールック操作を案内する。
+def build_placement_controls(pad):
+    im=Image.new('RGBA',(1200,44));d=sheet(im,(0,0,1196,39))
+    text(d,(15,7),'左スティック  位置    LB/RB  高さ    X  回転    A  配置    右スティック  視点    B  戻る' if pad else 'WASD  位置    Q/E  高さ    R  回転    左クリック / Enter  配置    マウス  視点    Alt  カーソル    Z  取消    B  戻る',18)
+    im.save(out/f'place{"-pad" if pad else ""}.png')
+
+if __name__=='__main__' and ('--play-only' in sys.argv or '--controls-only' in sys.argv):
+    for pad in (False,True):build_play_controls(pad)
+    if '--controls-only' in sys.argv:
+        for pad in (False,True):build_placement_controls(pad)
+    raise SystemExit(0)
+
 sub=['足場づくりの第一歩','仕掛けの先にある道','高い島へ、もう一歩','すべての経験をひとつに']
 files=['beginnerTrail.txt','mechanismGardens.txt','skylineRelay.txt','expeditionGrandTour.txt']
 counts=[]
@@ -44,22 +61,27 @@ for i in range(4):
     for pad in (False,True):
         for failed in (False,True):
             im=Image.new('RGBA',(1280,720));d=sheet(im,(28,150,350,570))
-            text(d,(45,52),'回転の国の探検隊',30,INK,True);text(d,(47,96),'飛 行 計 画',16,TEAL)
-            text(d,(51,173),'行き先を選ぶ',23,INK,True);d.line((51,211,325,211),fill=GOLD,width=1)
+            badge_star(d,48,119,13);text(d,(70,103),'空の旅へ！',22,'#ffffff',True)
+            text(d,(51,169),'どの島へ行こう？',25,INK,True);d.line((55,210,323,210),fill='#afdaef',width=2)
             for j,name in enumerate(names):
                 y=232+j*76
                 if i==j:
-                    d.rectangle((40,y-6,338,y+58),fill=(225,233,220,255));d.line((40,y-6,40,y+58),fill=TEAL,width=4)
-                d.ellipse((51,y+5,84,y+38),outline=TEAL if i==j else MUTED,width=1)
-                text(d,(56,y+10),f'{j+1:02}',14,TEAL if i==j else MUTED)
-                text(d,(96,y),name,24 if i==j else 21,INK,True)
-                text(d,(96,y+33),sub[j],12,MUTED)
-            d=sheet(im,(485,63,1218,149));text(d,(507,72),names[i],34,INK,True)
+                    d.rounded_rectangle((39,y-8,339,y+60),radius=19,fill='#269cda',outline='#ffffff',width=2);sparkle(d,322,y+1,6)
+                d.ellipse((51,y+5,84,y+38),fill='#ffdf73' if i==j else '#deeff8',outline='#ffffff',width=2)
+                text(d,(56,y+10),f'{j+1:02}',14,INK if i==j else MUTED)
+                text(d,(96,y),name,24 if i==j else 21,'#ffffff' if i==j else INK,True)
+                text(d,(96,y+33),sub[j],12,'#e0f8ff' if i==j else MUTED)
+            d=sheet(im,(485,63,1218,149));badge_star(d,516,103,18);text(d,(548,71),names[i],34,INK,True)
             text(d,(510,118),f'かぎ {counts[i][0]} 個   /   道具入りのシャボン玉 {counts[i][1]} 個',17,MUTED)
             if failed:text(d,(508,158),'この島を読み込めません。別の島を選んでください。',18,'#7b372e')
             d=sheet(im,(28,651,1251,695))
             text(d,(48,660),'十字キー  選択      A  出発      右スティック  島を見回す      B  戻る' if pad else '← →  選択      Enter / Space  出発      右ドラッグ  島を見回す      Esc  戻る',19)
             im.save(out/f'select-{"error-" if failed else ""}{i}{"-pad" if pad else ""}.png')
+# 選択画面だけの修正時は、他のUI素材を再生成しない。
+if __name__=='__main__' and '--selection-only' in sys.argv:
+    print('Selection UI generated')
+    raise SystemExit(0)
+
 for total in range(17):
     for n in range(total+1):
         im=Image.new('RGBA',(244,76));d=sheet(im,(0,0,239,70));key(d,16,15,.85)
@@ -68,12 +90,8 @@ for total in range(17):
         im.save(out/f'keys-{n}-{total}.png')
 im=Image.new('RGBA',(244,76));d=sheet(im,(0,0,239,70));key(d,16,15,.85);text(d,(64,20),'鍵を集めて、星へ',17);im.save(out/'keys-many.png')
 for pad in (False,True):
-    im=Image.new('RGBA',(1000,40));d=sheet(im,(0,0,996,35))
-    text(d,(15,6),'左スティック  移動    右スティック  視点    LB  道具袋    START  休憩' if pad else 'WASD  移動    矢印  視点    B  道具袋    F1  手帳    Esc  休憩',18)
-    im.save(out/f'play{"-pad" if pad else ""}.png')
-    im=Image.new('RGBA',(1200,44));d=sheet(im,(0,0,1196,39))
-    text(d,(15,7),'左スティック  位置    LB/RB  高さ    X  回転    A  配置    右スティック  視点    B  戻る' if pad else 'WASD  位置    Q/E  高さ    R  回転    左クリック / Enter  配置    右ドラッグ  視点    Z  取り消し    B  戻る',18)
-    im.save(out/f'place{"-pad" if pad else ""}.png')
+    build_play_controls(pad)
+    build_placement_controls(pad)
     im=Image.new('RGBA',(1000,155));d=sheet(im,(0,0,996,150));text(d,(22,12),'探検の手帳',27,INK,True)
     text(d,(23,54),'鍵をすべて集めると、スターを取れる。金色の鍵は触れると回収できる。',19)
     text(d,(23,86),'扉用の鍵とスイッチは F で操作。シャボン玉は道具袋に入る配置用パーツ。',19)
@@ -81,7 +99,7 @@ for pad in (False,True):
     im.save(out/f'help{"-pad" if pad else ""}.png')
     im=Image.new('RGBA',(1280,720));d=sheet(im,(324,180,956,530));star(d,640,221,25)
     text(d,(500,264),'探 検 完 了',48,INK,True);text(d,(460,342),'すべての鍵を見つけ、星を手に入れた。',20,MUTED)
-    d.line((370,399,910,399),fill='#c6baa0',width=1)
+    d.line((370,399,910,399),fill='#afdaef',width=1)
     text(d,(414,428),'A   次の行き先を選ぶ' if pad else 'Enter / Space   次の行き先を選ぶ',24,TEAL)
     text(d,(539,478),'B   タイトルへ' if pad else 'Esc   タイトルへ',18,MUTED)
     im.save(out/f'clear{"-pad" if pad else ""}.png')

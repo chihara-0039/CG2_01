@@ -32,12 +32,19 @@ Sound::SoundData GameClearScene::MakeSound(bool stamp) {
 void GameClearScene::Initialize(GameRuntime &game) {
     game.OnSceneEntered(SceneType::GameClear);
     elapsed_ = 0;
+    inspection_ = {};
     lastUpdate_ = std::chrono::steady_clock::now();
     auto *common = game.GetObject3dCommon();
     const int index = std::clamp(game.GetResultPageIndex(), 0, 6);
-    const std::string names[Count] = {"back",  "pages",     "report-" + std::to_string(index),
-                                      "cover", "cover-art", "map-" + std::to_string(index),
-                                      "ink",   "shadow",    "stamp"};
+    const std::string names[Count] = {"back",
+                                      "pages",
+                                      "report-" + std::to_string(index),
+                                      "cover",
+                                      "cover-art-" + std::to_string(index),
+                                      "map-" + std::to_string(index),
+                                      "ink",
+                                      "shadow",
+                                      "stamp"};
     for (int i = 0; i < Count; ++i) {
         models_[i] = Model::CreateFromOBJ(common->GetDxCommon(), "Resources/Models/Journal", names[i] + ".obj",
                                           common->GetTextureManager());
@@ -71,6 +78,18 @@ void GameClearScene::Update(GameRuntime &game, const SceneUpdateContext &context
         sound_.SoundPlay(stampSound_, .8f);
     }
     frame_ = JournalResult::Evaluate(elapsed_);
+    if (frame_.ready && game.IsResultAnimationVisible()) {
+        const auto *input = game.GetInput();
+        if ((input->TriggerKey(DIK_TAB) || input->TriggerControllerButton(XINPUT_GAMEPAD_X)) &&
+            inspection_.Toggle(frame_.ready)) {
+            sound_.SoundPlay(pageSound_, .65f);
+        }
+        inspection_.Advance(dt);
+        frame_.open = inspection_.Open();
+    } else if (frame_.ready) {
+        // ウィンドウが非アクティブでも、見返し中の表紙の角度を保持する。
+        frame_.open = inspection_.Open();
+    }
     sound_.CleanupFinishedSoundEffects();
     const Vector3 root{-3.2f * (1 - frame_.open), -9.5f * (1 - frame_.rise) + frame_.shake * .055f, 0};
     for (auto &obj : objects_) {
@@ -101,13 +120,19 @@ void GameClearScene::Update(GameRuntime &game, const SceneUpdateContext &context
 // クリア手帳の表示対象を選び、描画コマンドを記録する。
 void GameClearScene::Draw(GameRuntime &game) {
     (void)game;
-    for (const int part : {Back, Pages, Paper, Cover, CoverArt, Inside}) {
+    for (const int part : {Back, Pages, Paper, Cover}) {
         objects_[part]->Draw();
+    }
+    // 外側と内側の印刷を分け、裏面の文字が表紙へ映り込むことを防ぐ。
+    if (frame_.open < .5f) {
+        objects_[CoverArt]->Draw();
+    } else {
+        objects_[Inside]->Draw();
     }
     if (frame_.hand) {
         objects_[Shadow]->Draw();
     }
-    if (frame_.ink) {
+    if (frame_.ink && frame_.open > .02f) {
         objects_[Ink]->Draw();
     }
     if (frame_.hand) {

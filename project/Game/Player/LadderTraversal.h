@@ -2,6 +2,7 @@
 #include "StageMap.h"
 #include "MyMath.h"
 #include <cmath>
+#include <algorithm>
 
 namespace LadderTraversal {
 // 到着点だけでなく経路全体を検査し、梯子の出入り中に壁をすり抜けることを防ぐ。
@@ -22,6 +23,38 @@ inline bool IsLadder(const StageMap &map, int x, int y, int z) {
 }
 inline Vector3 SideOffset(float input, float cameraYaw, float speed) {
     return {input * speed * std::cos(cameraYaw), 0.0f, -input * speed * std::sin(cameraYaw)};
+}
+struct Movement {
+    float vertical;
+    Vector3 side;
+    Vector3 world;
+};
+// 上端の足場へ向かう水平軸を登る方向にし、カメラ基準の入力を昇降と横移動へ分ける。
+inline Movement ResolveMovement(const StageMap &map, int x, int y, int z, float cameraYaw, float inputX, float inputZ) {
+    while (IsLadder(map, x, y + 1, z)) {
+        ++y;
+    }
+    const auto *ladder = map.GetCell(x, y, z);
+    if (!ladder) {
+        return {};
+    }
+    float nx = std::round(std::sin(ladder->rotationY));
+    float nz = std::round(std::cos(ladder->rotationY));
+    const auto *front = map.GetCell(x + static_cast<int>(nx), y, z + static_cast<int>(nz));
+    const auto *back = map.GetCell(x - static_cast<int>(nx), y, z - static_cast<int>(nz));
+    if ((!front || !front->isSolid) && back && back->isSolid) {
+        nx = -nx;
+        nz = -nz;
+    }
+    const float length = (std::max)(1.0f, std::hypot(inputX, inputZ));
+    const Vector3 world{(inputX * std::cos(cameraYaw) + inputZ * std::sin(cameraYaw)) / length, 0,
+                        (-inputX * std::sin(cameraYaw) + inputZ * std::cos(cameraYaw)) / length};
+    float vertical = world.x * nx + world.z * nz;
+    if (std::abs(vertical) < .15f) {
+        vertical = 0;
+    }
+    const float lateral = world.x * nz - world.z * nx;
+    return {vertical, {lateral * nz, 0, -lateral * nx}, world};
 }
 template <class Collision>
 // 梯子の下端から地面へ降りられるか、通路と接地先を確認する。
@@ -94,17 +127,23 @@ bool TryExit(const StageMap &map, int x, int y, int z, const Vector3 &position, 
 template <class Collision>
 // 足場の縁から降りられる梯子を探し、掴み直す位置を求める。
 bool TryEnterFromTop(const StageMap &map, const Vector3 &position, Collision collision, Vector3 &result,
-                     float cameraYaw = 0.0f) {
+                     float cameraYaw = 0.0f, float inputX = 0.0f, float inputZ = -1.0f) {
     const int x = static_cast<int>(std::floor(position.x + 0.5f));
     const int z = static_cast<int>(std::floor(position.z + 0.5f));
     const int y = static_cast<int>(std::round(position.y - 0.5f));
     if (std::abs(position.y - (y + 0.5f)) > 0.18f) {
         return false;
     }
+    const float length = std::hypot(inputX, inputZ);
+    if (length < .2f) {
+        return false;
+    }
+    const float worldX = (inputX * std::cos(cameraYaw) + inputZ * std::sin(cameraYaw)) / length;
+    const float worldZ = (-inputX * std::sin(cameraYaw) + inputZ * std::cos(cameraYaw)) / length;
     for (const auto &offset : {Vector3{1, 0, 0}, Vector3{-1, 0, 0}, Vector3{0, 0, 1}, Vector3{0, 0, -1}}) {
-        // Only grab an edge in the requested walking direction; S away from a ladder must walk away.
-        const float toward = offset.x * (-std::sin(cameraYaw)) + offset.z * (-std::cos(cameraYaw));
-        if (toward < 0.25f) {
+        // 通常歩行と同じ方向にある梯子だけを掴み、横や背後への吸い付きを防ぐ。
+        const float toward = offset.x * worldX + offset.z * worldZ;
+        if (toward < 0.65f) {
             continue;
         }
         const int lx = x + static_cast<int>(offset.x), lz = z + static_cast<int>(offset.z);
