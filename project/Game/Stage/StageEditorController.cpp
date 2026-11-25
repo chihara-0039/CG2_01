@@ -1,4 +1,4 @@
-﻿#include "StageEditorController.h"
+#include "StageEditorController.h"
 #include "../Environment/WeatherPresetManager.h"
 #include "RotationIsland.h"
 #include <fstream>
@@ -339,9 +339,9 @@ void StageEditorController::Update(Input *input, StageMap &stageMap, StageRender
     if (input->TriggerKey(DIK_R)) {
         if (mapCursor) {
             const Int3 &cursor = mapCursor->GetIndex();
-            MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+            const MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
             if (cell && cell->type != BlockType::None) {
-                cell->rotationY += 1.5708f;
+                stageMap.EditCell(cursor, [](MapCell &value) { value.rotationY += 1.5708f; });
                 if (stageRenderer) {
                     stageRenderer->BuildFromStageMap(stageMap);
                 }
@@ -800,9 +800,11 @@ void StageEditorController::DrawImGui(StageMap &stageMap, StageRenderer *stageRe
             }
         }
 
-        auto *part = stageMap.GetCustomPart(selectedCustomPartSlot_);
+        const auto *originalPart = stageMap.GetCustomPart(selectedCustomPartSlot_);
         // 選択中のカスタムパーツが存在する場合、編集UIを表示
-        if (part) {
+        if (originalPart) {
+            auto editedPart = *originalPart;
+            auto *part = &editedPart;
             bool changed = false;
 
             // 1. パーツ名編集
@@ -810,6 +812,7 @@ void StageEditorController::DrawImGui(StageMap &stageMap, StageRenderer *stageRe
             strcpy_s(nameBuf, part->name.c_str());
             if (ImGui::InputText("Part Name", nameBuf, sizeof(nameBuf))) {
                 part->name = nameBuf;
+                changed = true;
             }
 
             // 2. カラー編集
@@ -900,7 +903,7 @@ void StageEditorController::DrawImGui(StageMap &stageMap, StageRenderer *stageRe
             }
 
             // 変更があったら3D表示をリアルタイム再構築！
-            if (changed && stageRenderer) {
+            if (changed && stageMap.SetCustomPart(selectedCustomPartSlot_, editedPart) && stageRenderer) {
                 stageRenderer->BuildFromStageMap(stageMap);
             }
         }
@@ -1208,9 +1211,9 @@ void StageEditorController::DrawEditorToolbar(StageMap &stageMap, StageRenderer 
     // 回転ボタン（Rキーと同等）
     if (ImGui::Button("Rotate (R)", ImVec2(-FLT_MIN, 30))) {
         const Int3 &cursor = mapCursor->GetIndex();
-        MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+        const MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
         if (cell && cell->type != BlockType::None) {
-            cell->rotationY += 1.5708f;
+            stageMap.EditCell(cursor, [](MapCell &value) { value.rotationY += 1.5708f; });
             if (stageRenderer) {
                 stageRenderer->BuildFromStageMap(stageMap);
             }
@@ -1245,7 +1248,7 @@ void StageEditorController::ApplyPlacement(StageMap &stageMap, StageRenderer *st
     }
 
     const Int3 &cursor = mapCursor->GetIndex();
-    MapCell *oldCell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+    const MapCell *oldCell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
 
     // ==========================================================
     // ドア配置時の特殊処理（ペアリング管理）
@@ -1256,9 +1259,9 @@ void StageEditorController::ApplyPlacement(StageMap &stageMap, StageRenderer *st
 
         // 既存のファイル保存フォーマット（直後に座標を3つ要求する仕様）との互換性を保つため、
         // doorTargetIndex には一旦自身の座標かダミー値を書き込んでおきます
-        MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+        const MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
         if (cell) {
-            cell->doorTargetIndex = cursor;
+            stageMap.EditCell(cursor, [&](MapCell &value) { value.doorTargetIndex = cursor; });
         }
     } // ==========================================================
     // ▼ 追加：Pスイッチ / Pブロック配置時の特殊処理
@@ -1267,14 +1270,18 @@ void StageEditorController::ApplyPlacement(StageMap &stageMap, StageRenderer *st
              selectedBlockType_ == BlockType::PBlockAppears) {
         stageMap.SetBlock(cursor, selectedBlockType_, selectedPSwitchId_);
 
-        MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+        const MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
         // Pブロックの場合は、最初はすり抜ける状態にするかどうかを設定
         if (cell && selectedBlockType_ == BlockType::PBlock) {
-            cell->isSolid = true;
-            cell->isHidden = false;
+            stageMap.EditCell(cursor, [](MapCell &value) {
+                value.isSolid = true;
+                value.isHidden = false;
+            });
         } else if (cell && selectedBlockType_ == BlockType::PBlockAppears) {
-            cell->isSolid = false;  // 最初はすり抜ける状態
-            cell->isHidden = false; // エディタで見えるようにする
+            stageMap.EditCell(cursor, [](MapCell &value) {
+                value.isSolid = false;
+                value.isHidden = false;
+            });
         }
     } else if (selectedBlockType_ == BlockType::TimedBlock) {
         int variant = selectedTimedGroupId_ * 10 + selectedTimedOrderId_;
@@ -1324,9 +1331,9 @@ void StageEditorController::ApplyPlacement(StageMap &stageMap, StageRenderer *st
         }
 
         // プレイヤースタート地点の場合は即座にプレイヤー座標も更新する
-        MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
+        const MapCell *cell = stageMap.GetCell(cursor.x, cursor.y, cursor.z);
         if (cell && selectedBlockType_ == BlockType::MovingFloor) {
-            cell->moveOffset = currentMoveOffset_;
+            stageMap.EditCell(cursor, [&](MapCell &value) { value.moveOffset = currentMoveOffset_; });
         }
         // プレイヤースタート地点の場合は即座にプレイヤー座標も更新する
         if (selectedBlockType_ == BlockType::PlayerStart && player) {

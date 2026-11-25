@@ -1,4 +1,4 @@
-﻿#include "BubblePickupController.h"
+#include "BubblePickupController.h"
 
 #include <cmath>
 #include <cassert>
@@ -21,7 +21,7 @@ void BubblePickupController::Initialize(StageMap *stageMap, StageRenderer *stage
     for (int y = 0; y < stageMap_->GetHeight(); ++y) {
         for (int z = 0; z < stageMap_->GetDepth(); ++z) {
             for (int x = 0; x < stageMap_->GetWidth(); ++x) {
-                const MapCell *cell = stageMap_->GetCell(x, y, z);
+                const const MapCell *cell = stageMap_->GetCell(x, y, z);
                 if (cell != nullptr && cell->type == BlockType::BubblePickup) {
                     ++totalPickupCount_;
                 }
@@ -69,7 +69,7 @@ Int3 BubblePickupController::ToGridIndex(const Vector3 &position) const {
 
 // 対象セルのシャボン玉を確認し、中身を在庫へ移して回収済みにする。
 bool BubblePickupController::TryCollectAt(const Int3 &index) {
-    MapCell *cell = stageMap_->GetCell(index);
+    const MapCell *cell = stageMap_->GetCell(index);
     if (!cell) {
         return false;
     }

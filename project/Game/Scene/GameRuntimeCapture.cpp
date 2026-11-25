@@ -1,4 +1,4 @@
-﻿// 録画ツールと探索ステージの接続。ゲームの通常ステージは変更しない。
+// 録画ツールと探索ステージの接続。ゲームの通常ステージは変更しない。
 #include "GameRuntime.h"
 #include "../../Tests/ExpeditionPhysicsChecks.h"
 #include "Goal.h"
@@ -1696,8 +1696,8 @@ void GameRuntime::BeginBuildTrial() {
     stageMap_.SetBlock(7, 1, 3, BlockType::PlayerStart);
     stageMap_.SetBlock(7, 1, 4, BlockType::BubblePickup, PackBubbleContents(BlockType::Wall, 1));
     stageMap_.SetBlock(7, 1, 12, BlockType::Goal);
-    auto *part = stageMap_.GetCustomPart(1);
-    *part = CustomBlockPart{};
+    CustomBlockPart editedPart{};
+    auto *part = &editedPart;
     part->id = 1;
     part->name = "Bridge";
     part->baseType = BlockType::Wall;
@@ -1707,6 +1707,7 @@ void GameRuntime::BeginBuildTrial() {
     for (int z = 0; z < 3; ++z) {
         part->cells[0][z][1].type = BlockType::Wall;
     }
+    stageMap_.SetCustomPart(1, editedPart);
     backupMap_ = stageMap_;
     stageRenderer_->BuildFromStageMap(stageMap_);
     blockInventory_.Initialize(0);
@@ -1904,7 +1905,7 @@ void GameRuntime::VerifyBuilding() {
                                                        blockInventory_.GetBlockCount(BlockType::Wall, 1) == 0 &&
                                                        stageMap_.GetCell(7, 0, 7)->type == BlockType::IceBlock});
     reset();
-    *stageMap_.GetCustomPart(1) = CustomBlockPart{};
+    stageMap_.SetCustomPart(1, CustomBlockPart{});
     results.push_back({"emptyPartRejected", !blockPlacementController_.TryPlace({6, 0, 6}) &&
                                                 blockInventory_.GetBlockCount(BlockType::Wall, 1) == 1});
     reset();
@@ -1927,7 +1928,7 @@ void GameRuntime::VerifyBuilding() {
                                                      blockInventory_.GetBlockCount(BlockType::MovingFloor) == 1 &&
                                                      !blockPlacementController_.TryUndo()});
     blockPlacementController_.TryPlace({9, 0, 7});
-    stageMap_.GetCell(9, 0, 7)->moveOffset.z = 8;
+    stageMap_.EditCell({9, 0, 7}, [&](MapCell &cell) { cell.moveOffset.z = 8; });
     results.push_back(
         {"editedMovingFloorUndoRejected",
          !blockPlacementController_.TryUndo() && blockInventory_.GetBlockCount(BlockType::MovingFloor) == 0});

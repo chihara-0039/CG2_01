@@ -1,4 +1,4 @@
-﻿#include "StageMap.h"
+#include "StageMap.h"
 #include "../Engine/Base/MouseLookPolicy.h"
 #include "../Engine/Graphics/Particle/AdventureParticlePath.h"
 #include "../Game/Stage/RotationIsland.h"
@@ -9,6 +9,7 @@
 #include "../Game/UI/InventoryNavigation.h"
 #include "../Game/Scene/JournalResultTimeline.h"
 #include "../Game/Scene/StarGetTimeline.h"
+#include "../Game/Player/FootstepEmitter.h"
 #include <cassert>
 #include <filesystem>
 #include <iostream>
@@ -17,9 +18,70 @@
 #include <utility>
 #include <set>
 #include <queue>
+#include <type_traits>
 
 // マップ保存・拡張・回転・選択などの回帰テストを実行する。
 int main() {
+    // 非constなマップからでも、内部セルとパーツを直接変更できる型を返さない。
+    static_assert(std::is_same_v<decltype(std::declval<StageMap &>().GetCell(0, 0, 0)), const MapCell *>);
+    static_assert(std::is_same_v<decltype(std::declval<StageMap &>().GetCustomPart(1)), const CustomBlockPart *>);
+    StageMap encapsulatedMap;
+    encapsulatedMap.Initialize(6, 4, 6);
+    assert(encapsulatedMap.SetBlock(2, 0, 2, BlockType::EnemyWalker));
+    assert(encapsulatedMap.GetEnemies().size() == 1);
+    assert(encapsulatedMap.SetBlock(2, 0, 2, BlockType::EnemyFlyer));
+    assert(encapsulatedMap.GetEnemies().size() == 1); // 同じ座標を二重登録しない。
+    assert(encapsulatedMap.SetBlock(2, 0, 2, BlockType::MovingFloor));
+    assert(encapsulatedMap.GetEnemies().empty());
+    assert(encapsulatedMap.GetIntersectingMovingFloor(2, 0, 2, .1f, .1f, .1f));
+    encapsulatedMap.ClearRebuildFlag();
+    assert(!encapsulatedMap.EditCell({2, 0, 2},
+                                     [](MapCell &cell) { cell.rotationY = std::numeric_limits<float>::quiet_NaN(); }));
+    assert(!encapsulatedMap.NeedsRebuild() && encapsulatedMap.GetCell(2, 0, 2)->rotationY == 0);
+    assert(!encapsulatedMap.EditCell({-1, 0, 0}, [](MapCell &cell) { cell.type = BlockType::Wall; }));
+    assert(encapsulatedMap.RemoveBlock(2, 0, 2));
+    assert(!encapsulatedMap.GetIntersectingMovingFloor(2, 0, 2, .1f, .1f, .1f));
+    auto partCopy = *encapsulatedMap.GetCustomPart(2);
+    partCopy.id = 999;
+    partCopy.name = "COPY";
+    assert(encapsulatedMap.SetCustomPart(2, partCopy));
+    partCopy.name = "CHANGED OUTSIDE";
+    assert(encapsulatedMap.GetCustomPart(2)->name == "COPY" && encapsulatedMap.GetCustomPart(2)->id == 2);
+    partCopy.colorR = std::numeric_limits<float>::infinity();
+    assert(!encapsulatedMap.SetCustomPart(2, partCopy));
+    assert(encapsulatedMap.GetCustomPart(2)->name == "COPY");
+    assert(encapsulatedMap.SetBlock(1, 0, 1, BlockType::CrumblingFloor));
+    assert(encapsulatedMap.EditCell({1, 0, 1}, [](MapCell &cell) { cell.crumbleTimer = .3f; }));
+    assert(encapsulatedMap.StartCrumbling({1, 0, 1}) && encapsulatedMap.StartCrumbling({1, 0, 1}));
+    assert(encapsulatedMap.GetCell(1, 0, 1)->crumbleTimer == .3f);
+    std::cout << "PASS: read-only map API, validated copies, derived indexes and crumble notification\n";
+    // 歩幅の内部値へ触れず、公開操作の結果で発生間隔とリセット条件を確認する。
+    FootstepEmitter footsteps;
+    Vector3 previous{};
+    for (int i = 1; i <= 4; ++i) {
+        const Vector3 next{i * .2f, 0, 0};
+        auto emission = footsteps.Update(previous, next, true);
+        assert(emission.has_value() == (i == 4));
+        if (emission) {
+            assert(std::abs(emission->motion.x - .2f) < .001f && emission->strength == .9f);
+            emission->strength = -100; // 返した値を変更しても、クラス内の次の判定には干渉しない。
+        }
+        previous = next;
+    }
+    assert(!footsteps.Update(previous, previous, true));
+    assert(!footsteps.Update({}, {.3f, 0, 0}, true));
+    assert(!footsteps.Update({}, {.3f, 0, 0}, false)); // 空中・梯子では前の歩幅を捨てる。
+    assert(!footsteps.Update({}, {.3f, 0, 0}, true));
+    assert(!footsteps.Update({}, {10, 0, 0}, true)); // ワープ距離を歩幅として数えない。
+    assert(!footsteps.Update({}, {.3f, 0, 0}, true));
+    footsteps.Reset();
+    assert(!footsteps.Update({}, {.3f, 0, 0}, true));
+    assert(!footsteps.Update({}, {std::numeric_limits<float>::infinity(), 0, 0}, true));
+    assert(!footsteps.Update({}, {.3f, 0, 0}, true));
+    assert(!footsteps.Update({}, {.3f, 0, 0}, true));
+    const auto nextStep = footsteps.Update({}, {.1f, 0, 0}, true);
+    assert(nextStep && std::abs(nextStep->strength - .8f) < .001f);
+    std::cout << "PASS: encapsulated footstep interval, reset, invalid movement and value results\n";
     // 表示ポリシー・画面四辺・移動量の累積と消費を、OSのカーソル位置と切り離して確認する。
     assert(MouseLookPolicy::Visible(false, true, false));
     assert(!MouseLookPolicy::Visible(true, true, false));
@@ -233,11 +295,13 @@ int main() {
     StageMap map;
     map.Initialize(8, 4, 8);
     map.SetBlock(7, 3, 7, BlockType::Door, 9);
-    map.GetCell(7, 3, 7)->doorTargetIndex = {2, 1, 3};
-    map.GetCell(7, 3, 7)->rotationY = 1.57f;
+    map.EditCell({7, 3, 7}, [&](MapCell &cell) { cell.doorTargetIndex = {2, 1, 3}; });
+    map.EditCell({7, 3, 7}, [&](MapCell &cell) { cell.rotationY = 1.57f; });
     map.SetWeatherPresetName("Snowy");
     map.SetVisualStyle("Miniature");
-    map.GetCustomPart(1)->name = "KEPT PART";
+    auto keptPart = *map.GetCustomPart(1);
+    keptPart.name = "KEPT PART";
+    assert(map.SetCustomPart(1, keptPart));
     assert(map.Expand(128, 32, 128));
     assert(map.GetWidth() == 128 && map.GetHeight() == 32 && map.GetDepth() == 128);
     const auto *cell = map.GetCell(7, 3, 7);
@@ -279,7 +343,7 @@ int main() {
         const int dz = static_cast<int>(std::round(std::cos(angle)));
         for (int y = 0; y <= 2; ++y) {
             ladderMap.SetBlock(3, y, 3, BlockType::Ladder);
-            ladderMap.GetCell(3, y, 3)->rotationY = angle;
+            ladderMap.EditCell({3, y, 3}, [&](MapCell &cell) { cell.rotationY = angle; });
         }
         ladderMap.SetBlock(3 + dx, 2, 3 + dz, BlockType::Ground);
         auto collision = [&](const Vector3 &pos) {
@@ -337,7 +401,7 @@ int main() {
         ladderMap.Initialize(7, 8, 7);
         for (int y = 1; y <= 3; ++y) {
             ladderMap.SetBlock(3, y, 3, BlockType::Ladder);
-            ladderMap.GetCell(3, y, 3)->rotationY = angle;
+            ladderMap.EditCell({3, y, 3}, [&](MapCell &cell) { cell.rotationY = angle; });
         }
         for (int x = 2; x <= 4; ++x) {
             for (int z = 2; z <= 4; ++z) {
@@ -401,11 +465,14 @@ int main() {
     assert(!(key == snapshot({2, 2, 2}, 2, 0)));
     assert(!(key == snapshot({2, 2, 2}, 1, 1.5707963f)));
     const auto originalType = previewMap.GetCustomPart(3)->cells[2][2][2].type;
-    previewMap.GetCustomPart(3)->cells[2][2][2].type =
-        originalType == BlockType::None ? BlockType::Ladder : BlockType::None;
+    auto editedPreviewPart = *previewMap.GetCustomPart(3);
+    editedPreviewPart.cells[2][2][2].type = originalType == BlockType::None ? BlockType::Ladder : BlockType::None;
+    assert(previewMap.SetCustomPart(3, editedPreviewPart));
     assert(!(key == snapshot({2, 2, 2}, 1, 0)));
-    previewMap.GetCustomPart(3)->cells[2][2][2].type = originalType;
-    previewMap.GetCustomPart(3)->colorR += .1f;
+    editedPreviewPart.cells[2][2][2].type = originalType;
+    editedPreviewPart.colorR =
+        editedPreviewPart.colorR > .5f ? editedPreviewPart.colorR - .1f : editedPreviewPart.colorR + .1f;
+    assert(previewMap.SetCustomPart(3, editedPreviewPart));
     assert(!(key == snapshot({2, 2, 2}, 1, 0)));
     std::cout << "PASS: preview cache invalidates for cursor, rotation, validity, edited shape and color\n";
     StageMap doors;
@@ -413,12 +480,12 @@ int main() {
     for (const auto pos : {Int3{1, 1, 1}, Int3{2, 1, 1}, Int3{7, 1, 7}, Int3{8, 1, 7}}) {
         doors.SetBlock(pos, BlockType::Door, 0);
     }
-    doors.GetCell(1, 1, 1)->doorTargetIndex = {8, 1, 7};
-    doors.GetCell(8, 1, 7)->doorTargetIndex = {1, 1, 1};
-    doors.GetCell(2, 1, 1)->doorTargetIndex = {7, 1, 7};
-    doors.GetCell(7, 1, 7)->doorTargetIndex = {2, 1, 1};
+    doors.EditCell({1, 1, 1}, [&](MapCell &cell) { cell.doorTargetIndex = {8, 1, 7}; });
+    doors.EditCell({8, 1, 7}, [&](MapCell &cell) { cell.doorTargetIndex = {1, 1, 1}; });
+    doors.EditCell({2, 1, 1}, [&](MapCell &cell) { cell.doorTargetIndex = {7, 1, 7}; });
+    doors.EditCell({7, 1, 7}, [&](MapCell &cell) { cell.doorTargetIndex = {2, 1, 1}; });
     assert(doors.FindPairedDoor(1, 1, 1).x == 8 && doors.FindPairedDoor(7, 1, 7).x == 2);
-    doors.GetCell(1, 1, 1)->doorTargetIndex = {1, 1, 1};
+    doors.EditCell({1, 1, 1}, [&](MapCell &cell) { cell.doorTargetIndex = {1, 1, 1}; });
     assert(doors.FindPairedDoor(1, 1, 1).x == 1);
     doors.Initialize(10, 4, 10);
     doors.SetBlock(1, 1, 1, BlockType::Door, 3);
@@ -443,14 +510,12 @@ int main() {
     for (int y = 0; y < 16; ++y) {
         for (int z = 0; z < 64; ++z) {
             for (int x = 0; x < 64; ++x) {
-                auto *cell = largeGate.GetCell(x, y, z);
-                cell->type = BlockType::KeyBlock;
-                cell->isSolid = true;
+                largeGate.SetBlock(x, y, z, BlockType::KeyBlock);
             }
         }
     }
-    largeGate.GetCell(65, 0, 0)->type = BlockType::KeyBlock;
-    largeGate.GetCell(65, 0, 0)->isSolid = true;
+    largeGate.EditCell({65, 0, 0}, [&](MapCell &cell) { cell.type = BlockType::KeyBlock; });
+    largeGate.EditCell({65, 0, 0}, [&](MapCell &cell) { cell.isSolid = true; });
     largeGate.RemoveConnectedKeyBlocks(0, 0, 0);
     for (int y = 0; y < 16; ++y) {
         for (int z = 0; z < 64; ++z) {
@@ -469,7 +534,9 @@ int main() {
     protectedMap.SetVisualStyle("Miniature");
     protectedMap.SetWeatherPresetName("Snowy");
     protectedMap.ToggleOnState();
-    protectedMap.GetCustomPart(2)->name = "PRESERVED";
+    auto preservedPart = *protectedMap.GetCustomPart(2);
+    preservedPart.name = "PRESERVED";
+    assert(protectedMap.SetCustomPart(2, preservedPart));
     const std::vector<std::string> badFiles = {"4 4 4\n1 0 1 1 0 0 0\nbogus\n", "4 4 4\nPART 1\n",
                                                "4 4 4\nPARTCELL 1 4 0 0 2\n",   "4 4 4\n1 1 1 8 0 0 0\n",
                                                "4 4 4\n9 0 0 1 0 0 0\n",        "4 4 4\n0 0 0 999 0 0 0\n",

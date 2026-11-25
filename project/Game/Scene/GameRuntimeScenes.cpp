@@ -144,6 +144,9 @@ void GameRuntime::SyncTitleCamera(const Vector3 &position, const Vector3 &rotati
 
 // 入場先のモードへ切り替え、シーン固有の演出・カメラを準備する。
 void GameRuntime::OnSceneEntered(SceneType sceneType) {
+    if (sceneType == SceneType::GamePlay) {
+        footstepEmitter_.Reset();
+    }
     // 画面効果はシーン固有の状態として扱い、前のシーンから持ち越さない。
     // Dissolveの内部タイマーも同時に止めるため、Controller経由で初期化する。
     EnsurePostProcessInitialized();

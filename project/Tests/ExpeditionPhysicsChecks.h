@@ -13,25 +13,10 @@
 class InputTestPlayback {
   public:
     // 実機の入力を変更せず、検証用マウスの移動とボタン状態を設定する。
-    static void Mouse(Input &input, LONG x, LONG y, int button = -1) {
-        input.mouseState_ = {};
-        input.mouseState_.x = x;
-        input.mouseState_.y = y;
-        if (button >= 0 && button < 3) {
-            input.mouseState_.buttons[button] = true;
-        }
-    }
+    static void Mouse(Input &input, LONG x, LONG y, int button = -1) { input.ApplyPlaybackMouse(x, y, button); }
     // 前回入力を残し、検証用のキーとスティックを次のフレームの状態へ進める。
     static void Advance(Input &input, float x, float z, std::initializer_list<BYTE> keys = {}) {
-        std::memcpy(input.keyPre_, input.key_, sizeof(input.key_));
-        std::memset(input.key_, 0, sizeof(input.key_));
-        for (BYTE key : keys) {
-            input.key_[key] = 0x80;
-        }
-        input.gamePadState_ = {};
-        input.gamePadState_.connected = true;
-        input.gamePadState_.leftStickX = x;
-        input.gamePadState_.leftStickY = z;
+        input.ApplyPlaybackFrame(x, z, keys);
     }
 };
 

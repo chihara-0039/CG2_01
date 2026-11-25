@@ -240,8 +240,20 @@ class StageMap {
     const MapCell *GetCell(int x, int y, int z) const;
     const MapCell *GetCell(const Int3 &index) const;
 
-    MapCell *GetCell(int x, int y, int z);
-    MapCell *GetCell(const Int3 &index);
+    // 完成したセル値を検証して反映する。内部セルへの書き込み可能な参照は公開しない。
+    bool SetCell(const Int3 &index, const MapCell &cell);
+    // コピーを編集し、検証に成功した場合だけ反映する。失敗時は元のセルを保つ。
+    template <class Edit> bool EditCell(const Int3 &index, Edit edit) {
+        const auto *current = GetCell(index);
+        if (!current) {
+            return false;
+        }
+        MapCell value = *current;
+        edit(value);
+        return SetCell(index, value);
+    }
+    // 崩れる床へ乗った事実を通知し、進行中のタイマーは初期化しない。
+    bool StartCrumbling(const Int3 &index);
 
     // 設置
     bool SetBlock(int x, int y, int z, BlockType type, int variant = 0);
@@ -296,13 +308,8 @@ class StageMap {
         return nullptr;
     }
 
-    // Mutable 版の GetCustomPart
-    CustomBlockPart *GetCustomPart(int id) {
-        if (id >= 1 && id <= (int)customParts_.size()) {
-            return &customParts_[id - 1];
-        }
-        return nullptr;
-    }
+    // 編集用コピーの反映。IDは指定スロットへ固定し、不正な値は反映しない。
+    bool SetCustomPart(int id, const CustomBlockPart &part);
 
     // ImGui描画用
     void DrawImGui();
@@ -372,6 +379,7 @@ class StageMap {
 
   private:
     int ToIndex(int x, int y, int z) const;
+    MapCell *GetMutableCell(int x, int y, int z);
     MapCell MakeCell(BlockType type, int variant);
 
     bool isPSwitchActive_ = false; // Pスイッチの状態

@@ -3,6 +3,7 @@
 #include <wrl.h>
 #include <dinput.h> // DirectInput のヘッダー
 #include <Xinput.h>
+#include <initializer_list>
 #include "WinApp.h"
 
 // 入力ライブラリをリンクする。
@@ -37,7 +38,6 @@ enum class ActiveInputDevice {
 };
 
 class Input {
-    friend class InputTestPlayback; // Isolated CPU physics verification; never overrides the live input instance.
   public:
     // COM オブジェクトを安全に扱うための別名。
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
@@ -48,6 +48,10 @@ class Input {
 
     // キーボード、マウス、ゲームパッドの状態を1フレーム分更新する。
     void Update();
+    // 検証・リプレイ用の一フレームを反映し、前回キーとスティックの範囲も内部で管理する。
+    void ApplyPlaybackFrame(float stickX, float stickY, std::initializer_list<BYTE> keys = {});
+    // 再生用マウス入力を反映する。不正なボタン番号では何も変更しない。
+    bool ApplyPlaybackMouse(LONG x, LONG y, int button = -1);
     // 視点操作中だけ端のカーソルを戻す。Alt・UI・フォーカス喪失では解除する。
     bool PrepareCameraMouseLook(bool guiCaptured, bool middleDrag = false);
     void FinishCameraMouseLookFrame();

@@ -230,6 +230,9 @@ void GameRuntime::UpdateGamePlay() {
                 }
             }
         }
+        // 歩幅の判定は専用クラスへ渡し、ゲーム側では発生結果だけを描画へつなぐ。
+        const auto step = footstepEmitter_.Update(beforePosition, player_->GetPosition(),
+                                                  wasGrounded && player_->IsGrounded() && !player_->IsOnLadder());
         // 地上の歩幅と接地状態の変化から、一操作につき一度だけ効果を発生させる。
         if (particleManager && !player_->IsOnLadder()) {
             const auto position = player_->GetPosition();
@@ -239,18 +242,8 @@ void GameRuntime::UpdateGamePlay() {
             } else if (!wasGrounded && grounded) {
                 particleManager->EmitAdventureEffect(ParticleManager::AdventureEffect::Land, position);
             }
-            if (grounded && wasGrounded) {
-                const float distance = std::hypot(position.x - beforePosition.x, position.z - beforePosition.z);
-                if (distance < .4f) {
-                    stepEffectDistance_ += distance;
-                }
-                if (stepEffectDistance_ > .65f) {
-                    const Vector3 motion{position.x - beforePosition.x, 0, position.z - beforePosition.z};
-                    particleManager->EmitDust(position, motion, std::clamp(distance * 8.0f, .45f, .9f));
-                    stepEffectDistance_ = 0;
-                }
-            } else {
-                stepEffectDistance_ = 0;
+            if (step) {
+                particleManager->EmitDust(position, step->motion, step->strength);
             }
             if (player_->GetCollectedLevelKeys() > beforeKeys) {
                 particleManager->EmitAdventureEffect(ParticleManager::AdventureEffect::Key,

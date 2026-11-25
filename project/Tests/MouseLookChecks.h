@@ -3,9 +3,20 @@
 #include "GameplayCameraController.h"
 #include <fstream>
 #include <vector>
+#include <limits>
 
 // 自分のウィンドウの四辺で視点を動かし、戻し処理とAlt/UI解除を実際のWin32座標で確認する。
 inline bool VerifyMouseLook(WinApp &window, Player &player, const std::string &output) {
+    // 再生APIだけで境界値とトリガー遷移を検証し、内部バッファへ直接アクセスしない。
+    Input replay;
+    replay.ApplyPlaybackFrame(2, std::numeric_limits<float>::quiet_NaN(), {DIK_W});
+    bool playback = replay.GetGamePadState().leftStickX == 1 && replay.GetGamePadState().leftStickY == 0 &&
+                    replay.TriggerKey(DIK_W);
+    replay.ApplyPlaybackFrame(0, 0, {DIK_W});
+    playback = playback && replay.PushKey(DIK_W) && !replay.TriggerKey(DIK_W);
+    playback = replay.ApplyPlaybackMouse(10, 20, 0) && playback;
+    playback = !replay.ApplyPlaybackMouse(100, 200, 9) && playback && replay.GetMouseState().x == 10 &&
+               replay.GetMouseState().buttons[0];
     POINT saved{};
     GetCursorPos(&saved);
     SetForegroundWindow(window.GetHwnd());
@@ -87,10 +98,11 @@ inline bool VerifyMouseLook(WinApp &window, Player &player, const std::string &o
         }
     }
     SetCursorPos(saved.x, saved.y);
-    const bool ok = foreground && usable && rotation && recenter && alt && ui && cursor && registered;
+    const bool ok = playback && foreground && usable && rotation && recenter && alt && ui && cursor && registered;
     std::ofstream(output) << std::boolalpha << "{\"success\":" << ok << ",\"foreground\":" << foreground
                           << ",\"fourEdgesRecenter\":" << recenter << ",\"continuousRotation\":" << rotation
                           << ",\"altReleases\":" << alt << ",\"uiBlocksCamera\":" << ui
-                          << ",\"cursorPolicy\":" << cursor << ",\"rawInputRegistered\":" << registered << "}";
+                          << ",\"cursorPolicy\":" << cursor << ",\"rawInputRegistered\":" << registered
+                          << ",\"playbackValidation\":" << playback << "}";
     return ok;
 }

@@ -1,4 +1,4 @@
-﻿#include "Player.h"
+#include "Player.h"
 #include "LadderTraversal.h"
 #include <algorithm>
 #include <cctype>
@@ -328,7 +328,7 @@ void Player::Update(const Input *input, StageMap &map, float cameraRotY, const M
         int py = static_cast<int>(std::floor(position_.y + 0.5f)); // キャラクターの中心あたりの高さ
         int pz = static_cast<int>(std::floor(position_.z + 0.5f));
 
-        MapCell *cell = map.GetCell(px, py, pz);
+        const MapCell *cell = map.GetCell(px, py, pz);
         if (cell && cell->type == BlockType::Checkpoint) {
             // 中間地点に触れたらリスポーン地点を更新する
             const Vector3 checkpointPos = position_; // The current foot position is already collision-safe.
@@ -583,7 +583,7 @@ void Player::KeyUpdate(StageMap &map) {
     int gy = static_cast<int>(std::floor(position_.y + 0.5f));
     int gz = static_cast<int>(std::floor(position_.z + 0.5f));
 
-    MapCell *cell = map.GetCell(gx, gy, gz);
+    const MapCell *cell = map.GetCell(gx, gy, gz);
 
     if (cell && cell->type == BlockType::Key && cell->variant == 1) {
         ++collectedLevelKeys_;
@@ -598,8 +598,7 @@ void Player::KeyUpdate(StageMap &map) {
         if (IsInteractTriggered()) {
             hasKey_ = true;
             ++collectedLevelKeys_;
-            cell->type = BlockType::None;
-            cell->isSolid = false;
+            map.RemoveBlock(gx, gy, gz);
             map.RequestRebuild();
         }
     }
@@ -805,7 +804,7 @@ bool Player::CheckCollision(const Vector3 &pos, StageMap &map, bool allowKeyUse)
             for (int gx = minX; gx <= maxX; ++gx) {
 
                 // 指定した座標のセル情報を取得
-                MapCell *cell = map.GetCell(gx, gy, gz);
+                const MapCell *cell = map.GetCell(gx, gy, gz);
 
                 // ▼ 追加：鍵ブロックの判定と破壊 ▼
                 if (cell && cell->type == BlockType::KeyBlock) {
@@ -979,9 +978,9 @@ void Player::CrumbleUpdate(StageMap &map) {
     int gyBottom = static_cast<int>(std::floor(position_.y - 0.05f));
     int gz = static_cast<int>(std::floor(position_.z));
 
-    MapCell *cellBelow = map.GetCell(gx, gyBottom, gz);
+    const MapCell *cellBelow = map.GetCell(gx, gyBottom, gz);
 
     if (cellBelow && cellBelow->type == BlockType::CrumblingFloor && !cellBelow->isHidden) {
-        cellBelow->isCrumbling = true;
+        map.StartCrumbling({gx, gyBottom, gz});
     }
 }

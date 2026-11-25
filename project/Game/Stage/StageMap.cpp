@@ -662,7 +662,7 @@ bool StageMap::ParseFromFile(const std::string &filename) {
                 // 座標がステージ内にあるか確認してから配置する
                 BlockType type = static_cast<BlockType>(typeVal);
                 SetBlock(x, y, z, type, variant);
-                MapCell *cell = GetCell(x, y, z);
+                MapCell *cell = GetMutableCell(x, y, z);
                 // 角度を復元する
                 if (cell) {
                     cell->rotationX = rotX;
@@ -733,16 +733,91 @@ const MapCell *StageMap::GetCell(const Int3 &index) const {
 }
 
 // Mutable 版の GetCell
-MapCell *StageMap::GetCell(int x, int y, int z) {
+MapCell *StageMap::GetMutableCell(int x, int y, int z) {
     if (!IsInside(x, y, z)) {
         return nullptr;
     }
     return &cells_[ToIndex(x, y, z)];
 }
 
-// Int3 版の GetCell
-MapCell *StageMap::GetCell(const Int3 &index) {
-    return GetCell(index.x, index.y, index.z);
+// セル値と派生リストを一緒に更新し、読み取り側に古い当たり判定や敵一覧を残さない。
+bool StageMap::SetCell(const Int3 &index, const MapCell &cell) {
+    auto *current = GetMutableCell(index.x, index.y, index.z);
+    if (!current || static_cast<uint32_t>(cell.type) > static_cast<uint32_t>(BlockType::TransparentBlock) ||
+        (cell.type == BlockType::None && cell.isSolid)) {
+        return false;
+    }
+    for (float value : {cell.rotationX, cell.rotationY, cell.crumbleTimer, cell.respawnTimer, cell.colorR, cell.colorG,
+                        cell.colorB, cell.opacity, cell.moveTimer, cell.currentOffsetX, cell.currentOffsetY,
+                        cell.currentOffsetZ, cell.deltaOffsetX, cell.deltaOffsetY, cell.deltaOffsetZ}) {
+        if (!std::isfinite(value)) {
+            return false;
+        }
+    }
+    const auto enemy = [](BlockType type) {
+        return type == BlockType::EnemyWalker || type == BlockType::EnemyFlyer || type == BlockType::EnemyChaser;
+    };
+    // 変更した座標だけを更新し、連続配置のたびに全マップを走査しない。
+    const auto updateList = [&](auto &list, bool wasMember, bool isMember) {
+        if (wasMember == isMember) {
+            return;
+        }
+        if (isMember) {
+            // 全走査で作った場合と同じグリッド順を保ち、重なった足場の判定順を変えない。
+            const int target = ToIndex(index.x, index.y, index.z);
+            const auto position = std::lower_bound(list.begin(), list.end(), target, [&](const auto &entry, int value) {
+                return ToIndex(entry.x, entry.y, entry.z) < value;
+            });
+            list.insert(position, {index.x, index.y, index.z});
+        } else {
+            list.erase(std::remove_if(list.begin(), list.end(),
+                                      [&](const auto &entry) {
+                                          return entry.x == index.x && entry.y == index.y && entry.z == index.z;
+                                      }),
+                       list.end());
+        }
+    };
+    updateList(movingFloors_, current->type == BlockType::MovingFloor, cell.type == BlockType::MovingFloor);
+    updateList(enemies_, enemy(current->type), enemy(cell.type));
+    *current = cell;
+    needsRebuild_ = true;
+    return true;
+}
+
+// 崩壊の開始通知だけを受け取り、タイマーや描画色の更新はStageMap自身に任せる。
+bool StageMap::StartCrumbling(const Int3 &index) {
+    auto *cell = GetMutableCell(index.x, index.y, index.z);
+    if (!cell || cell->type != BlockType::CrumblingFloor || cell->isHidden) {
+        return false;
+    }
+    cell->isCrumbling = true;
+    return true;
+}
+
+// パーツはコピーを保存し、外側に残った編集値から内部の形状を変更できないようにする。
+bool StageMap::SetCustomPart(int id, const CustomBlockPart &part) {
+    if (id < 1 || id > static_cast<int>(customParts_.size()) ||
+        static_cast<uint32_t>(part.baseType) > static_cast<uint32_t>(BlockType::TransparentBlock)) {
+        return false;
+    }
+    for (float color : {part.colorR, part.colorG, part.colorB}) {
+        if (!std::isfinite(color) || color < 0 || color > 1) {
+            return false;
+        }
+    }
+    for (const auto &layer : part.cells) {
+        for (const auto &row : layer) {
+            for (const auto &cell : row) {
+                if (static_cast<uint32_t>(cell.type) > static_cast<uint32_t>(BlockType::TransparentBlock)) {
+                    return false;
+                }
+            }
+        }
+    }
+    customParts_[id - 1] = part;
+    customParts_[id - 1].id = id;
+    needsRebuild_ = true;
+    return true;
 }
 
 // 指定座標のブロックを新しいタイプとバリアントで置き換える
@@ -752,10 +827,7 @@ bool StageMap::SetBlock(int x, int y, int z, BlockType type, int variant) {
     }
 
     // 指定座標のブロックを新しいタイプとバリアントで置き換える
-    cells_[ToIndex(x, y, z)] = MakeCell(type, variant);
-    RebuildMovingFloorList();
-    RebuildEnemyList();
-    return true;
+    return SetCell({x, y, z}, MakeCell(type, variant));
 }
 
 // Int3 版の SetBlock
@@ -770,11 +842,7 @@ bool StageMap::RemoveBlock(int x, int y, int z) {
     }
 
     // 指定座標のブロックを None に置き換える
-    cells_[ToIndex(x, y, z)] = MakeCell(BlockType::None, 0);
-    RebuildMovingFloorList();
-    RebuildEnemyList();
-
-    return true;
+    return SetCell({x, y, z}, MakeCell(BlockType::None, 0));
 }
 
 // Int3 版の RemoveBlock
@@ -877,7 +945,7 @@ const MapCell *StageMap::GetIntersectingMovingFloor(float pX, float pY, float pZ
 void StageMap::RemoveConnectedKeyBlocks(int x, int y, int z) {
     std::vector<Int3> pending;
     auto enqueue = [&](int cx, int cy, int cz) {
-        auto *cell = GetCell(cx, cy, cz);
+        auto *cell = GetMutableCell(cx, cy, cz);
         if (!cell || cell->type != BlockType::KeyBlock) {
             return;
         }
