@@ -278,8 +278,12 @@ int main() {
         const Vector3 initial{5, 2, 4}, body{0, 3.1f, 0}, cam{9, 8, -9}, aim{.4f, 3.1f, 0};
         const auto frozen =
             GameOverTimeline::EvaluatePose(GameOverTimeline::kHitStop, fall, initial, body, cam, aim, .8f);
-        assert(frozen.position.y == initial.y && frozen.cameraPosition.x == cam.x && frozen.fov == .8f &&
-               frozen.scale == 1);
+        if (fall) {
+            assert(frozen.position.y < initial.y && frozen.cameraPosition.x != cam.x);
+        } else {
+            assert(frozen.position.y == initial.y && frozen.cameraPosition.x == cam.x && frozen.fov == .8f);
+        }
+        assert(frozen.scale == 1);
         auto previous = frozen;
         for (int i = 19; i <= 320; ++i) {
             const auto pose =
@@ -304,6 +308,25 @@ int main() {
         assert(previous.scale == .25f);
         assert(GameOverTimeline::EvaluatePose(0, fall, initial, body, cam, aim, .8f).scale == 1);
     }
+    // 演出へ渡した速度を最初のフレームから保ち、ヒットストップ区間でも落下を続ける。
+    for (int fps : {30, 60, 144}) {
+        for (float speed : {-6.0f, -24.0f, -42.0f}) {
+            const Vector3 initial{5, -3, 4}, body{}, cam{9, 8, -9}, aim{.4f, 0, 0};
+            float previousY = initial.y;
+            for (int i = 1; i <= fps * 2; ++i) {
+                const float time = static_cast<float>(i) / fps;
+                const auto pose = GameOverTimeline::EvaluatePose(time, true, initial, body, cam, aim, .8f, speed);
+                assert(pose.position.y < previousY);
+                assert(std::abs(pose.position.y - (initial.y + speed * time - 27 * time * time)) < .001f);
+                previousY = pose.position.y;
+            }
+            const float dt = 1.0f / fps;
+            const auto first = GameOverTimeline::EvaluatePose(dt, true, initial, body, cam, aim, .8f, speed);
+            const float measuredSpeed = (first.position.y - initial.y) / dt;
+            assert(std::abs(measuredSpeed - (speed - 27 * dt)) < .01f);
+        }
+    }
+    std::cout << "Game over: uninterrupted falling preserves entry velocity at 30/60/144 FPS\n";
     std::cout
         << "Game over: hit stop, full iris coverage, guarded input, retry/reveal, stage select and restart passed\n";
     const float cueTimes[] = {0, 1, 2, 3};

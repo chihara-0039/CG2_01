@@ -37,6 +37,8 @@ void GameplayCameraController::Update(Input *input, Camera *camera, WinApp *winA
     }
 #endif
 
+    isGuiCaptured = !input->PrepareCameraMouseLook(isGuiCaptured);
+
     bool hasCameraParameterChanged = false;
     const GamePadState &gamePad = input->GetGamePadState();
 

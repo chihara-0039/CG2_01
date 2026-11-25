@@ -75,16 +75,23 @@ GameOverTimeline::Letter GameOverTimeline::EvaluateLetter(float seconds, int ind
 // 失敗演出の進み具合から、プレイヤーとカメラの姿勢を計算する。
 GameOverTimeline::Pose GameOverTimeline::EvaluatePose(float seconds, bool fall, const Vector3 &initial,
                                                       const Vector3 &rotation, const Vector3 &cameraPosition,
-                                                      const Vector3 &cameraRotation, float fov) {
+                                                      const Vector3 &cameraRotation, float fov, float fallVelocity) {
     const auto frame = Evaluate(seconds);
-    const float m = frame.motion, b = frame.cameraBlend;
+    const float m = frame.motion, b = fall ? Ease(seconds / .65f) : frame.cameraBlend;
     const float yaw = cameraRotation.y;
     Vector3 position = initial, body = rotation;
-    // ヒットストップ後に小さく弾かれる。落下は徐々に速く沈み、カメラが見送る。
+    // 敵接触だけヒットストップを使う。落下は直前の速度と通常プレイと同じ重力を引き継ぐ。
     const float kick = fall ? 0.0f : 1.2f * m;
     position.x -= std::sin(yaw) * kick;
     position.z -= std::cos(yaw) * kick;
-    position.y += fall ? -14 * m * m : 1.4f * std::sin(m * 3.14159265359f) - 2 * Ease((seconds - .95f) / 1.0f);
+    if (fall) {
+        // 円形暗転が閉じるまで動かし、メニュー裏で座標が増え続けることは避ける。
+        const float time = std::clamp(seconds, 0.0f, 2.15f);
+        const float velocity = std::isfinite(fallVelocity) ? (std::min)(fallVelocity, 0.0f) : -6.0f;
+        position.y += velocity * time - 27.0f * time * time;
+    } else {
+        position.y += 1.4f * std::sin(m * 3.14159265359f) - 2 * Ease((seconds - .95f) / 1.0f);
+    }
     body.z += fall ? 0.0f : .45f * std::sin(m * 3.14159265359f);
     body.x += fall ? 0.0f : -.35f * m;
     const float orbit = yaw + .15f * m;

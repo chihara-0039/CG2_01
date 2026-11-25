@@ -211,7 +211,7 @@ class GameRuntime {
     std::unique_ptr<RecoveryTransition> recoveryTransition_;
     std::unique_ptr<StartIntro> startIntro_;
     std::unique_ptr<GameOver> gameOver_;
-    void BeginGameOver(bool fall);
+    void BeginGameOver(bool fall, float fallVelocity = -6.0f);
     bool startIntroPending_ = false;
     bool useRecoveryTransition_ = false;
 
@@ -244,6 +244,7 @@ class GameRuntime {
     DebugDrawFlags debugFlags_;
     bool isGoalReached_ = false;
     float goalCelebrationTimer_ = 0.0f;
+    float stepEffectDistance_ = 0;
     StarGetPresentation starGetPresentation_;
     float gameClearTimer_ = 0.0f;
     float gameClearFireworkTimer_ = 0.0f;

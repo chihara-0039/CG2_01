@@ -1,4 +1,5 @@
-﻿#include "ParticleManager.h"
+﻿#include "AdventureParticlePath.h"
+#include "ParticleManager.h"
 #include "StageMap.h"
 #include <algorithm>
 #include <cassert>
@@ -493,6 +494,11 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
         (void)groupName;
         for (auto it = group.particles.begin(); it != group.particles.end();) {
             it->lifeTime += deltaTime;
+            // 負の寿命は発生待ち。複数の層を少しずつずらして開かせる。
+            if (it->lifeTime < 0) {
+                ++it;
+                continue;
+            }
             if (it->lifeTime >= it->maxTime) {
                 it = group.particles.erase(it);
                 continue;
@@ -509,6 +515,64 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
                 const float width = ambientCloudEmitter_.areaX * 2.0f;
                 float &x = it->transform.translate.x;
                 x -= std::floor((x - left) / width) * width;
+            }
+
+            // 演出の小粒は実時間の軌跡で動かし、発生時刻から縮小・回転を求める。
+            if (it->type == Particle::Type::Accent) {
+                const float age = it->lifeTime, t = age / it->maxTime;
+                it->transform.translate = {it->origin.x + it->velocity.x * age,
+                                           it->origin.y + it->velocity.y * age - .25f * age * age,
+                                           it->origin.z + it->velocity.z * age};
+                const float size = (.65f + .5f * std::sin(t * 3.14159265f)) * (1 - .65f * t);
+                it->transform.scale = {it->baseScale.x * size, it->baseScale.y * size, 1};
+                it->transform.rotate.z = it->phase + age * .7f;
+            }
+            // 土煙は初速を減衰させながら膨らませ、光の粒と違う重さを出す。
+            if (it->type == Particle::Type::Dust) {
+                const float age = it->lifeTime;
+                const float spread = (1.0f - std::exp(-age * 4.0f)) / 4.0f;
+                it->transform.translate = {it->origin.x + it->velocity.x * spread,
+                                           it->origin.y + it->velocity.y * spread + age * .12f,
+                                           it->origin.z + it->velocity.z * spread};
+                const float size = .65f + 1.65f * age / it->maxTime;
+                it->transform.scale = {it->baseScale.x * size, it->baseScale.y * size, 1};
+                it->transform.rotate.z = it->phase + age * .35f;
+            }
+            // 冒険用エフェクトは寿命から形を求め、フレームレートによる軌跡の差を抑える。
+            if (it->adventure != 0) {
+                const float t = std::clamp(it->lifeTime / it->maxTime, 0.0f, 1.0f);
+                const bool inward = it->adventure == static_cast<int>(AdventureEffect::Collect) ||
+                                    it->adventure == static_cast<int>(AdventureEffect::Undo);
+                if (inward && it->type == Particle::Type::Adventure && it->shape != 6) {
+                    it->transform.translate = it->adventure == static_cast<int>(AdventureEffect::Undo)
+                                                  ? AdventureParticlePath::Undo(it->origin, it->target, t, it->phase)
+                                                  : AdventureParticlePath::Sample(it->origin, it->target, t, it->phase);
+                } else if (it->type == Particle::Type::Adventure && it->shape == 5) {
+                    it->transform.translate = AdventureParticlePath::Assemble(it->origin, it->target, t);
+                } else if (it->type == Particle::Type::Adventure) {
+                    const float age = it->lifeTime;
+                    it->transform.translate = {it->origin.x + it->velocity.x * age * 60,
+                                               it->origin.y + it->velocity.y * age * 60 - .35f * age * age,
+                                               it->origin.z + it->velocity.z * age * 60};
+                }
+                float scale = .65f + .8f * std::sin(t * 3.14159265f);
+                if (it->type == Particle::Type::Ring) {
+                    scale = inward ? 1.2f - t : .2f + 1.6f * t;
+                }
+                if (it->shape == 6) {
+                    // 割れたシャボン玉は外へ広がる輪だけを短く残す。
+                    scale = .6f + t * 1.8f;
+                } else if (it->shape == 5 || (inward && it->type == Particle::Type::Adventure)) {
+                    scale *= 1.0f - .85f * t;
+                }
+                it->transform.scale = {it->baseScale.x * scale, it->baseScale.y * scale, it->baseScale.z * scale};
+                if (it->type == Particle::Type::Cylinder) {
+                    const float rise = std::clamp(t / .35f, 0.0f, 1.0f);
+                    it->transform.scale.y = it->baseScale.y * (.05f + rise);
+                }
+                if (it->type == Particle::Type::Adventure && (it->shape == 3 || it->shape == 5)) {
+                    it->transform.rotate.z = it->phase + it->lifeTime * 1.3f;
+                }
             }
 
             if (it->type == Particle::Type::Firework) {
@@ -549,11 +613,11 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
                 }
             }
 
-            if (it->type == Particle::Type::Ring) {
+            if (!it->adventure && it->type == Particle::Type::Ring) {
                 float t = it->lifeTime / it->maxTime;
                 float ringScale = 0.25f + 1.8f * t;
                 it->transform.scale = {ringScale, ringScale, 1.0f};
-            } else if (it->type == Particle::Type::Cylinder) {
+            } else if (!it->adventure && it->type == Particle::Type::Cylinder) {
                 float t = it->lifeTime / it->maxTime;
                 float radiusScale = 0.7f + 0.6f * t;
                 float heightScale = 0.8f + 0.4f * t;
@@ -608,6 +672,11 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
                 const float fadeOut = std::clamp((1.0f - normalizedLife) / 0.16f, 0.0f, 1.0f);
                 alpha = fadeIn * fadeIn * (3.0f - 2.0f * fadeIn) * fadeOut * fadeOut * (3.0f - 2.0f * fadeOut);
             }
+            if (it->adventure != 0 || it->type == Particle::Type::Dust || it->type == Particle::Type::Accent) {
+                const float fadeIn = std::clamp(normalizedLife / .08f, 0.0f, 1.0f);
+                const float fadeOut = std::clamp((1 - normalizedLife) / .45f, 0.0f, 1.0f);
+                alpha = fadeIn * fadeIn * (3 - 2 * fadeIn) * fadeOut * fadeOut * (3 - 2 * fadeOut);
+            }
             it->color.w = it->initialAlpha * alpha;
 
             ++it;
@@ -651,7 +720,9 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
         std::vector<const Particle *> drawOrder;
         drawOrder.reserve(group.particles.size());
         for (const auto &particle : group.particles) {
-            drawOrder.push_back(&particle);
+            if (particle.lifeTime >= 0) {
+                drawOrder.push_back(&particle);
+            }
         }
         std::stable_sort(drawOrder.begin(), drawOrder.end(), [&](const Particle *a, const Particle *b) {
             const auto viewDepth = [&](const Particle *p) {
@@ -666,9 +737,11 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
             uint32_t *indexPtr = &planeInstanceCount_;
             uint32_t *groupCountPtr = &group.planeInstanceCount;
             InstanceData *instancingData = instancingDataMapped_;
-            bool useBillboard = true;
+            bool useBillboard = !particle.worldAligned;
 
-            if (particle.type == Particle::Type::StormCloud) {
+            // 土煙も発光させず、雲と同じ通常の半透明合成で描く。
+            if (particle.type == Particle::Type::StormCloud || particle.type == Particle::Type::Dust ||
+                (particle.type == Particle::Type::Accent && particle.shape == 0)) {
                 indexPtr = &cloudInstanceCount_;
                 groupCountPtr = &group.cloudInstanceCount;
                 instancingData = cloudInstancingDataMapped_;
@@ -728,9 +801,10 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
                 instancingData[index].lightDirection = {0.0f, -1.0f};
                 instancingData[index].ambientLight = 1.0f;
             }
-            instancingData[index].shape = particle.type == Particle::Type::StormCloud  ? 2.0f
-                                          : particle.type == Particle::Type::Lightning ? 1.0f
-                                                                                       : 0.0f;
+            instancingData[index].shape = particle.shape != 0                           ? particle.shape
+                                          : particle.type == Particle::Type::StormCloud ? 2.0f
+                                          : particle.type == Particle::Type::Lightning  ? 1.0f
+                                                                                        : 0.0f;
             index++;
             (*groupCountPtr)++;
         }
@@ -1498,6 +1572,7 @@ void ParticleManager::EmitFireworkBurst(const Vector3 &pos) {
     const float burstScale = .80f + zeroOne(engine) * .50f;
     const int sparkCount = 90 + static_cast<int>(zeroOne(engine) * 51);
 
+    const int pattern = static_cast<int>(zeroOne(engine) * 3) % 3;
     const int palette = static_cast<int>(zeroOne(engine) * 4.0f) % 4;
     Vector4 primary = {1.0f, 0.34f, 0.12f, 1.0f};
     Vector4 secondary = {1.0f, 0.88f, 0.24f, 1.0f};
@@ -1521,11 +1596,17 @@ void ParticleManager::EmitFireworkBurst(const Vector3 &pos) {
 
         Particle spark;
         spark.type = Particle::Type::Firework;
+        spark.shape = i % 4 == 0 ? 3.0f : 0.0f;
         spark.transform.translate = {pos.x + offset(engine), pos.y + offset(engine), pos.z + offset(engine)};
         spark.transform.scale = {.12f * burstScale, .12f * burstScale, 1.0f};
         spark.transform.rotate = {0.0f, 0.0f, azimuth};
         spark.velocity = {std::cos(azimuth) * horizontal * sparkSpeed * 1.25f, y * sparkSpeed,
                           std::sin(azimuth) * horizontal * sparkSpeed * 1.25f};
+        if (pattern != 0) {
+            const float lobe = pattern == 2 ? .68f + .32f * std::cos(azimuth * 5) : 1.0f;
+            spark.velocity = {std::cos(azimuth) * sparkSpeed * lobe * 1.25f, std::sin(azimuth) * sparkSpeed * lobe,
+                              (zeroOne(engine) - .5f) * .012f};
+        }
         spark.color = (i % 4 == 0) ? secondary : primary;
         spark.initialAlpha = 1.0f;
         spark.lifeTime = 0.0f;
@@ -1971,5 +2052,220 @@ void ParticleManager::EmitArrivalCloud(const Vector3 &pos, bool bank) {
         cloud.initialAlpha = cloud.color.w;
         cloud.maxTime = bank ? 1.2f : .4f;
         Particles().push_back(cloud);
+    }
+}
+
+// 足元の小さな塊を後方へ散らす。寿命と大きさをずらし、規則的な輪に見せない。
+void ParticleManager::EmitDust(const Vector3 &position, const Vector3 &motion, float strength) {
+    strength = std::clamp(strength, .35f, 2.0f);
+    std::uniform_real_distribution<float> unit(0, 1);
+    const float speed = std::hypot(motion.x, motion.z);
+    const Vector3 back = speed > .001f ? Vector3{-motion.x / speed, 0, -motion.z / speed} : Vector3{};
+    const int count = static_cast<int>(5 + strength * 6);
+    for (int i = 0; i < count && Particles().size() < kMaxParticles; ++i) {
+        const float angle = unit(engine) * 6.2831853f;
+        const float radius = .06f + unit(engine) * .17f;
+        const float size = (.18f + unit(engine) * .16f) * std::sqrt(strength);
+        Particle p{};
+        p.type = Particle::Type::Dust;
+        p.origin = {position.x + std::cos(angle) * radius, position.y + .14f + unit(engine) * .10f,
+                    position.z + std::sin(angle) * radius};
+        p.transform.translate = p.origin;
+        p.baseScale = {size * (1 + unit(engine) * .4f), size, 1};
+        p.transform.scale = p.baseScale;
+        p.phase = angle;
+        p.velocity = {(std::cos(angle) * .65f + back.x * .7f) * strength, .25f + unit(engine) * .4f,
+                      (std::sin(angle) * .65f + back.z * .7f) * strength};
+        const float shade = .85f + unit(engine) * .15f;
+        p.color = {.62f * shade, .48f * shade, .30f * shade, .48f};
+        p.initialAlpha = p.color.w;
+        p.maxTime = .38f + unit(engine) * .30f;
+        p.shape = 4;
+        Particles().push_back(p);
+    }
+}
+
+// 打刻は紙面に沿って散らし、風は上向き、目標の光は少量だけ漂わせる。
+void ParticleManager::EmitSceneEffect(SceneEffect effect, const Vector3 &position, bool warm) {
+    std::uniform_real_distribution<float> unit(0, 1);
+    const bool stamp = effect == SceneEffect::Stamp, trail = effect == SceneEffect::FallTrail;
+    const bool glow = effect == SceneEffect::Glow;
+    const int count = stamp ? 30 : trail ? 4 : glow ? 2 : effect == SceneEffect::Ladder ? 5 : 20;
+    for (int i = 0; i < count && Particles().size() < kMaxParticles; ++i) {
+        const float angle = unit(engine) * 6.2831853f;
+        const float radius = glow ? .35f : trail ? .4f : stamp ? 1.15f : .22f;
+        Particle p{};
+        p.type = Particle::Type::Accent;
+        p.origin = {position.x + std::cos(angle) * radius,
+                    position.y + (stamp ? std::sin(angle) * radius : unit(engine) * .35f),
+                    position.z + (stamp ? -.08f : std::sin(angle) * radius)};
+        p.transform.translate = p.origin;
+        const float size = glow ? .06f : stamp ? .06f + unit(engine) * .05f : .09f;
+        p.baseScale = trail ? Vector3{.018f, .25f + unit(engine) * .3f, 1} : Vector3{size, size, 1};
+        p.transform.scale = p.baseScale;
+        const float speed = stamp ? 1.2f + unit(engine) : glow ? .12f : .7f;
+        p.velocity = {std::cos(angle) * speed,
+                      stamp   ? std::sin(angle) * speed
+                      : trail ? 2.4f
+                      : glow  ? .35f
+                              : .6f + unit(engine),
+                      stamp ? -.12f : std::sin(angle) * speed};
+        p.phase = trail ? 0 : angle;
+        p.color = warm || effect == SceneEffect::Retry || effect == SceneEffect::Switch ? Vector4{.95f, .63f, .18f, .5f}
+                                                                                        : Vector4{.18f, .70f, 1, .42f};
+        if (stamp) {
+            // インクは通常合成に回し、金色の星だけを光らせる。
+            p.color = i % 3 == 0 ? Vector4{1, .65f, .18f, .55f} : Vector4{.55f, .12f, .10f, .65f};
+            p.shape = i % 3 == 0 ? 3 : 0;
+        } else {
+            p.shape = trail ? 1 : 3;
+        }
+        p.initialAlpha = p.color.w;
+        p.lifeTime = stamp ? -(i % 3) * .025f : effect == SceneEffect::Retry ? -.25f : 0;
+        p.maxTime = trail                          ? .30f
+                    : glow                         ? .75f
+                    : effect == SceneEffect::Retry ? .85f
+                    : stamp                        ? .85f + unit(engine) * .1f
+                                                   : .45f + unit(engine) * .25f;
+        Particles().push_back(p);
+    }
+}
+
+// 一回の出来事に、発生時刻をずらした粒・リング・光柱を重ねて強弱を付ける。
+void ParticleManager::EmitAdventureEffect(AdventureEffect effect, const Vector3 &position, const Vector3 &target) {
+    const bool moving =
+        effect == AdventureEffect::Step || effect == AdventureEffect::Jump || effect == AdventureEffect::Land;
+    if (moving) {
+        EmitDust(position, {}, effect == AdventureEffect::Step ? .55f : effect == AdventureEffect::Jump ? .85f : 1.5f);
+        return;
+    }
+    const bool inward = effect == AdventureEffect::Collect || effect == AdventureEffect::Undo;
+    const bool star = effect == AdventureEffect::Star;
+    const bool golden = effect == AdventureEffect::Key || star;
+    const Vector4 color = golden                            ? Vector4{.95f, .58f, .10f, .56f}
+                          : effect == AdventureEffect::Undo ? Vector4{.68f, .26f, .95f, .60f}
+                                                            : Vector4{.10f, .68f, 1.0f, .62f};
+    std::uniform_real_distribution<float> unit(0, 1);
+    const int count = star ? 48 : inward ? 36 : 28;
+    for (int i = 0; i < count && Particles().size() < kMaxParticles; ++i) {
+        // 回収は3本の渦、取消は四角いかけら、祝福は大きい星と細い光筋に分ける。
+        const float angle =
+            inward ? (i % 3) * 2.0943951f + (i / 3) * .07f : i * 6.2831853f / count + unit(engine) * .2f;
+        const float radius = star ? .55f + unit(engine) * .35f : .55f;
+        Particle p{};
+        p.type = Particle::Type::Adventure;
+        p.adventure = static_cast<int>(effect);
+        p.phase = angle;
+        p.origin = {position.x + std::cos(angle) * radius, position.y + .08f + unit(engine) * (star ? .65f : .18f),
+                    position.z + std::sin(angle) * radius};
+        p.target = target;
+        p.transform.translate = p.origin;
+        p.transform.rotate = {0, 0, angle};
+        const bool streak = !inward && i % 3 == 0;
+        const float size = i % 6 == 0 ? .24f : .10f + unit(engine) * .06f;
+        p.baseScale = streak ? Vector3{.025f, .26f + unit(engine) * .18f, 1} : Vector3{size, size, 1};
+        p.transform.scale = p.baseScale;
+        p.velocity = {std::cos(angle) * (star ? .023f : .018f), .012f + unit(engine) * (star ? .03f : .02f),
+                      std::sin(angle) * (star ? .023f : .018f)};
+        p.color = color;
+        if (star && i % 4 == 1) {
+            p.color = {.16f, .65f, 1, .48f};
+        } else if (star && i % 4 == 2) {
+            p.color = {.80f, .32f, .85f, .42f};
+        }
+        p.initialAlpha = p.color.w;
+        p.lifeTime = -(inward ? (i / 3) * .018f : (i % 4) * .045f);
+        p.maxTime = star ? .75f + unit(engine) * .4f : .65f + unit(engine) * .2f;
+        p.shape = effect == AdventureEffect::Undo ? 5 : streak ? 1 : 3;
+        Particles().push_back(p);
+    }
+    // 二重・三重のリングを時間差で広げる。地面や空中へ固定し、視点で向きを変えない。
+    const int rings = star ? 3 : 2;
+    for (int i = 0; i < rings && Particles().size() < kMaxParticles; ++i) {
+        Particle ring{};
+        ring.type = Particle::Type::Ring;
+        ring.adventure = static_cast<int>(effect);
+        ring.worldAligned = true;
+        ring.origin = position;
+        ring.transform.translate = {position.x, position.y + .04f + (star ? i * .12f : i * .04f), position.z};
+        ring.transform.rotate = star ? Vector3{.65f + i * .55f, i * .8f, .2f} : Vector3{1.5707963f, 0, 0};
+        const float size = .65f + i * .25f;
+        ring.baseScale = {size, size, 1};
+        ring.transform.scale = ring.baseScale;
+        ring.color = i % 2 == 0 ? color : Vector4{.55f, .85f, 1, .45f};
+        ring.initialAlpha = star ? .27f : .34f;
+        ring.lifeTime = -i * .10f;
+        ring.maxTime = star ? .85f : .52f;
+        Particles().push_back(ring);
+    }
+    // シャボン玉の破裂はカメラを向く薄い輪。地面のリングとは向きを分ける。
+    if (effect == AdventureEffect::Collect && Particles().size() < kMaxParticles) {
+        Particle shell{};
+        shell.type = Particle::Type::Adventure;
+        shell.adventure = static_cast<int>(effect);
+        shell.origin = position;
+        shell.target = position;
+        shell.transform.translate = position;
+        shell.baseScale = {.65f, .65f, 1};
+        shell.transform.scale = shell.baseScale;
+        shell.color = {.55f, .85f, 1, .36f};
+        shell.initialAlpha = shell.color.w;
+        shell.maxTime = .3f;
+        shell.shape = 6;
+        Particles().push_back(shell);
+    }
+    // 配置は周囲のかけらを集めてから、光柱と光筋を重ねて完成を示す。
+    if (effect == AdventureEffect::Place) {
+        for (int i = 0; i < 20 && Particles().size() < kMaxParticles; ++i) {
+            const float angle = i * 6.2831853f / 20 + unit(engine) * .2f;
+            const float radius = .9f + unit(engine) * .5f;
+            Particle chip{};
+            chip.type = Particle::Type::Adventure;
+            chip.adventure = static_cast<int>(effect);
+            chip.origin = {position.x + std::cos(angle) * radius, position.y + unit(engine) * .8f,
+                           position.z + std::sin(angle) * radius};
+            chip.target = {position.x + std::cos(angle) * .35f, position.y + .15f + (i % 3) * .25f,
+                           position.z + std::sin(angle) * .35f};
+            chip.transform.translate = chip.origin;
+            chip.phase = angle;
+            chip.baseScale = {.09f, .09f, 1};
+            chip.transform.scale = chip.baseScale;
+            chip.color = i % 3 == 0 ? Vector4{.95f, .65f, .22f, .55f} : Vector4{.2f, .75f, 1, .55f};
+            chip.initialAlpha = chip.color.w;
+            chip.lifeTime = -(i % 4) * .035f;
+            chip.maxTime = .5f;
+            chip.shape = 5;
+            Particles().push_back(chip);
+        }
+        for (int i = 0; i < 3 && Particles().size() < kMaxParticles; ++i) {
+            Particle pillar{};
+            pillar.type = Particle::Type::Cylinder;
+            pillar.adventure = static_cast<int>(effect);
+            pillar.baseScale = {.62f + i * .15f, .55f + i * .32f, .62f + i * .15f};
+            pillar.transform.scale = pillar.baseScale;
+            pillar.transform.translate = position;
+            pillar.color = i == 1 ? Vector4{.30f, .85f, 1, 1} : color;
+            pillar.initialAlpha = .12f;
+            pillar.lifeTime = -i * .09f;
+            pillar.maxTime = .52f;
+            Particles().push_back(pillar);
+        }
+        for (int i = 0; i < 12 && Particles().size() < kMaxParticles; ++i) {
+            const float angle = i * .5235988f;
+            Particle ray{};
+            ray.type = Particle::Type::Adventure;
+            ray.adventure = static_cast<int>(effect);
+            ray.origin = {position.x + std::cos(angle) * .65f, position.y, position.z + std::sin(angle) * .65f};
+            ray.transform.translate = ray.origin;
+            ray.baseScale = {.022f, .32f, 1};
+            ray.transform.scale = ray.baseScale;
+            ray.velocity = {0, .035f, 0};
+            ray.color = {.35f, .8f, 1, .46f};
+            ray.initialAlpha = ray.color.w;
+            ray.lifeTime = -(i % 3) * .06f;
+            ray.maxTime = .6f;
+            ray.shape = 1;
+            Particles().push_back(ray);
+        }
     }
 }

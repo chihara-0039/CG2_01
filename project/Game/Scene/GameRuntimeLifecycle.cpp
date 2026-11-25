@@ -161,6 +161,23 @@ void GameRuntime::Initialize() {
 
     bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
     blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
+    // 操作が成功した地点から光を出す。取消・回収は主人公の道具袋へ吸い込む。
+    blockPlacementController_.SetFeedbackCallback([this](const Vector3 &position, bool undo) {
+        if (particleManager && player_) {
+            auto target = player_->GetPosition();
+            target.y += .8f;
+            particleManager->EmitAdventureEffect(undo ? ParticleManager::AdventureEffect::Undo
+                                                      : ParticleManager::AdventureEffect::Place,
+                                                 position, target);
+        }
+    });
+    bubblePickupController_.SetCollectCallback([this](const Vector3 &position) {
+        if (particleManager && player_) {
+            auto target = player_->GetPosition();
+            target.y += .8f;
+            particleManager->EmitAdventureEffect(ParticleManager::AdventureEffect::Collect, position, target);
+        }
+    });
 
     gameplayUIManager_ = std::make_unique<GameplayUIManager>();
     gameplayUIManager_->Initialize(dxCommon.get(), textureManager.get(), spriteCommon.get(), object3dCommon.get());
@@ -638,5 +655,8 @@ void GameRuntime::Finalize() {
     LifecycleTrace::Mark("shutdown-textures-input");
     dxCommon.reset();
     LifecycleTrace::Mark("shutdown-dx");
+    if (winApp) {
+        winApp->Finalize();
+    }
     winApp.reset();
 }

@@ -85,7 +85,12 @@ void GameRuntime::UpdateGamePlay() {
 
         isGuiCaptured = isGuiCaptured || ImGui::GetIO().WantCaptureMouse;
 #endif
+        isGuiCaptured = !input->PrepareCameraMouseLook(isGuiCaptured);
         const auto &mouse = input->GetMouseState();
+        if (!isGuiCaptured) {
+            fpsCameraYaw_ += mouse.x * .004f;
+            fpsCameraPitch_ += mouse.y * .004f;
+        }
 
         if (mouse.buttons[0] && !isGuiCaptured) {
             RECT rect;
@@ -164,6 +169,9 @@ void GameRuntime::UpdateGamePlay() {
                                      (input->GetGamePadState().buttons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
                 if (RotationIsland::Apply(stageMap_, p, reverse, r)) {
                     blockPlacementController_.RotateUndo(reverse, r);
+                    if (particleManager) {
+                        particleManager->EmitSceneEffect(ParticleManager::SceneEffect::Switch, p);
+                    }
                 }
                 break;
             }
@@ -180,10 +188,79 @@ void GameRuntime::UpdateGamePlay() {
         player_->SetStageCollisionEnabled(true);
         // PR1の自動撮影・検証は即復帰を維持し、対話プレイでだけ失敗演出へ進む。
         const bool deferFailure = !(comparisonActive_ || dioramaCapture_ || trialVerification_);
+        const auto beforePosition = player_->GetPosition();
+        const bool wasGrounded = player_->IsGrounded();
+        const bool wasOnLadder = player_->IsOnLadder();
+        const bool switchWasActive = stageMap_.IsPSwitchActive();
+        const int beforeKeys = player_->GetCollectedLevelKeys();
         player_->Update(input.get(), stageMap_, cameraYawForMovement, lightVP, dxCommon.get(), deferFailure, true);
+        // 梯子への乗り降りとスイッチの切替は、状態が変わった瞬間だけ光を出す。
+        if (particleManager) {
+            const auto p = player_->GetPosition();
+            if (wasOnLadder != player_->IsOnLadder()) {
+                particleManager->EmitSceneEffect(ParticleManager::SceneEffect::Ladder, p);
+            }
+            if (switchWasActive != stageMap_.IsPSwitchActive()) {
+                particleManager->EmitSceneEffect(ParticleManager::SceneEffect::Switch, p);
+            }
+            // 近くの目標だけを低頻度で調べ、常時エフェクトの数と探索範囲を制限する。
+            if (std::floor(totalTime_ * 3) != std::floor((totalTime_ - fixedDeltaTime) * 3)) {
+                int emitted = 0;
+                const int cx = static_cast<int>(std::floor(p.x + .5f));
+                const int cy = static_cast<int>(std::floor(p.y + .5f));
+                const int cz = static_cast<int>(std::floor(p.z + .5f));
+                for (int y = cy - 2; y <= cy + 3 && emitted < 4; ++y) {
+                    for (int z = cz - 5; z <= cz + 5 && emitted < 4; ++z) {
+                        for (int x = cx - 5; x <= cx + 5 && emitted < 4; ++x) {
+                            const auto *cell = stageMap_.GetCell(x, y, z);
+                            if (!cell) {
+                                continue;
+                            }
+                            const bool key = cell->type == BlockType::Key;
+                            const bool goal = cell->type == BlockType::Goal && !isGoalReached_ &&
+                                              player_->GetCollectedLevelKeys() >= objectiveKeyTotal_;
+                            if (key || goal || cell->type == BlockType::BubblePickup) {
+                                particleManager->EmitSceneEffect(
+                                    ParticleManager::SceneEffect::Glow,
+                                    {static_cast<float>(x), y + .3f, static_cast<float>(z)}, key || goal);
+                                ++emitted;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // 地上の歩幅と接地状態の変化から、一操作につき一度だけ効果を発生させる。
+        if (particleManager && !player_->IsOnLadder()) {
+            const auto position = player_->GetPosition();
+            const bool grounded = player_->IsGrounded();
+            if (wasGrounded && !grounded && position.y > beforePosition.y + .01f) {
+                particleManager->EmitAdventureEffect(ParticleManager::AdventureEffect::Jump, beforePosition);
+            } else if (!wasGrounded && grounded) {
+                particleManager->EmitAdventureEffect(ParticleManager::AdventureEffect::Land, position);
+            }
+            if (grounded && wasGrounded) {
+                const float distance = std::hypot(position.x - beforePosition.x, position.z - beforePosition.z);
+                if (distance < .4f) {
+                    stepEffectDistance_ += distance;
+                }
+                if (stepEffectDistance_ > .65f) {
+                    const Vector3 motion{position.x - beforePosition.x, 0, position.z - beforePosition.z};
+                    particleManager->EmitDust(position, motion, std::clamp(distance * 8.0f, .45f, .9f));
+                    stepEffectDistance_ = 0;
+                }
+            } else {
+                stepEffectDistance_ = 0;
+            }
+            if (player_->GetCollectedLevelKeys() > beforeKeys) {
+                particleManager->EmitAdventureEffect(ParticleManager::AdventureEffect::Key,
+                                                     {position.x, position.y + .7f, position.z});
+            }
+        }
         const bool contactFailure = player_->ConsumeFailure();
         if (deferFailure && (contactFailure || player_->GetPosition().y < -3.0f)) {
-            BeginGameOver(!contactFailure);
+            // プレイヤーの1フレーム分の変位を秒単位へ直し、演出へ落下速度を渡す。
+            BeginGameOver(!contactFailure, (player_->GetPosition().y - beforePosition.y) / fixedDeltaTime);
             return;
         }
     }
@@ -346,7 +423,14 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
                                             plan.Ready() ? 1 : 2);
     }
 
-    bool mouseJustPressed = input->GetMouseState().buttons[0] && !placeMouseWasDown_;
+    bool pointerUi = input->PushKey(DIK_LMENU) || input->PushKey(DIK_RMENU);
+#if defined(USE_IMGUI) && !defined(NDEBUG)
+    if (ImGui::GetCurrentContext()) {
+        pointerUi = pointerUi || ImGui::GetIO().WantCaptureMouse;
+    }
+#endif
+    // UIを触るために出したカーソルで、背後のブロックを誤配置しない。
+    bool mouseJustPressed = !pointerUi && input->GetMouseState().buttons[0] && !placeMouseWasDown_;
     placeMouseWasDown_ = input->GetMouseState().buttons[0];
     bool mouseTrigger = false;
     if (mouseJustPressed && (!blockInventoryUI_ || !blockInventoryUI_->IsActive())) {
@@ -580,7 +664,7 @@ void GameRuntime::ReturnToStageSelect() {
 }
 
 // 失敗時の操作を止め、プレイヤーとカメラの再挑戦演出を開始する。
-void GameRuntime::BeginGameOver(bool fall) {
+void GameRuntime::BeginGameOver(bool fall, float fallVelocity) {
     if (!player_ || !gameOver_ || gameOver_->IsActive()) {
         return;
     }
@@ -608,5 +692,5 @@ void GameRuntime::BeginGameOver(bool fall) {
         hit.ringColor = {.55f, .8f, 1, 1};
         particleManager->EmitHitEffect(player_->GetPosition(), hit);
     }
-    gameOver_->Begin(camera.get(), player_->GetPosition(), player_->GetRotation(), fall);
+    gameOver_->Begin(camera.get(), player_->GetPosition(), player_->GetRotation(), fall, fallVelocity);
 }

@@ -98,6 +98,9 @@
     <ClInclude Include="Engine\Utility\Camera.h" />
     <ClInclude Include="Engine\Utility\FrameRecorder.h" />
     <ClInclude Include="Engine\Utility\LifecycleTrace.h" />
+    <ClInclude Include="Engine\Base\MouseLookPolicy.h" />
+    <ClInclude Include="Tests\MouseLookChecks.h" />
+    <ClInclude Include="Engine\Graphics\Particle\AdventureParticlePath.h" />
     <ClInclude Include="Game\Environment\FogExplorer.h" />
     <ClInclude Include="Engine\Utility\D3DResourceLeakChecker.h" />
     <ClInclude Include="Engine\Base\DirectXCommon.h" />

@@ -1,4 +1,4 @@
-struct VertexShaderOutput {
+﻿struct VertexShaderOutput {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
     float4 color : COLOR0;
@@ -39,7 +39,25 @@ PixelShaderOutput main(VertexShaderOutput input) {
     float density = CloudDensity(centeredUv);
     float cloudAlpha = smoothstep(0.035f, 0.90f, density) * 0.72f;
     cloudAlpha *= 1.0f - smoothstep(0.78f, 1.0f, max(abs(centeredUv.x), abs(centeredUv.y)));
-    float shapeAlpha = input.shape > 1.5f ? cloudAlpha : input.shape > 0.5f ? solidLineAlpha : softCircleAlpha;
+    // 星形の計算は該当する粒だけで行い、雲や通常の粒の負荷を増やさない。
+    float shapeAlpha;
+    [branch]
+    if (input.shape > 5.5f) {
+        // 薄い輪を外へ広げ、シャボン玉が弾けた瞬間を残す。
+        shapeAlpha = 1.0f - smoothstep(.035f, .10f, abs(length(centeredUv) - .72f));
+    } else if (input.shape > 4.5f) {
+        // パーツの組立・分解には角を残した小さな四角形を使う。
+        shapeAlpha = 1.0f - smoothstep(.65f, .9f, max(abs(centeredUv.x), abs(centeredUv.y)));
+    } else if (input.shape > 3.5f) {
+        // 土煙は三つの柔らかな塊を重ね、輪郭を丸い粒より不規則にする。
+        shapeAlpha = smoothstep(.04f, 1.0f, density) * .8f;
+        shapeAlpha *= 1.0f - smoothstep(.70f, 1.0f, max(abs(centeredUv.x), abs(centeredUv.y)));
+    } else if (input.shape > 2.5f) {
+        float starDistance = pow(abs(centeredUv.x), .55f) + pow(abs(centeredUv.y), .55f);
+        shapeAlpha = 1.0f - smoothstep(.90f, 1.05f, starDistance);
+    } else {
+        shapeAlpha = input.shape > 1.5f ? cloudAlpha : input.shape > .5f ? solidLineAlpha : softCircleAlpha;
+    }
 
     // テクスチャの色 * パーティクルの色
     output.color = textureColor * input.color;
@@ -47,7 +65,7 @@ PixelShaderOutput main(VertexShaderOutput input) {
 
     // 雲は発光物ではないため、ブルーム抽出閾値より十分低い明度に抑える。
     // 雷や通常パーティクルには適用せず、太陽・月など他の発光表現を維持する。
-    if (input.shape > 1.5f) {
+    if (input.shape > 1.5f && input.shape < 2.5f) {
         const float epsilon = 0.025f;
         const float gradientX =
             (CloudDensity(centeredUv + float2(epsilon, 0.0f)) - CloudDensity(centeredUv - float2(epsilon, 0.0f))) /

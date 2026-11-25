@@ -43,11 +43,15 @@ class Input {
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
   public:
-    // DirectInput と XInput の入力デバイスを初期化する。
+    // キーボードのDirectInput、マウスのRaw Input、パッドのXInputを準備する。
     void Initialize(WinApp *winApp);
 
     // キーボード、マウス、ゲームパッドの状態を1フレーム分更新する。
     void Update();
+    // 視点操作中だけ端のカーソルを戻す。Alt・UI・フォーカス喪失では解除する。
+    bool PrepareCameraMouseLook(bool guiCaptured, bool middleDrag = false);
+    void FinishCameraMouseLookFrame();
+    RECT CameraMouseRegion() const;
 
     // 指定キーが現在押されているかを返す。
     // keyNumber: DIK_SPACE などの DirectInput キーコード。
@@ -80,13 +84,16 @@ class Input {
     float NormalizeTrigger(BYTE value) const;
 
     WinApp *winApp_ = nullptr;
+    bool cameraMouseActive_ = false, cameraMouseRequested_ = false, cameraMouseMiddleDrag_ = false;
+    bool rawMouseEnabled_ = false, previousCursorValid_ = false;
+    POINT previousCursor_{};
+    void RecenterCameraMouse();
 
     ComPtr<IDirectInput8> directInput_;
     ComPtr<IDirectInputDevice8> keyboard_;
 
-    ComPtr<IDirectInputDevice8> mouse_; // マウス用 DirectInput デバイス
-    MouseState mouseState_ = {};        // 毎フレーム更新されるマウス入力状態
-    GamePadState gamePadState_ = {};    // 毎フレーム更新されるゲームパッド入力状態
+    MouseState mouseState_ = {};     // 毎フレーム更新されるマウス入力状態
+    GamePadState gamePadState_ = {}; // 毎フレーム更新されるゲームパッド入力状態
     ActiveInputDevice activeInputDevice_ = ActiveInputDevice::KeyboardMouse;
 
     // キーボード入力状態。DirectInput の全キー 256 個を保持する。

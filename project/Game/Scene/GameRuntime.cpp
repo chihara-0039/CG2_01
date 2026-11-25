@@ -14,9 +14,9 @@ void GameRuntime::Update() {
 
     HandleModeChange();
 
-    BeginFrameImGui();
-
     input->Update();
+
+    BeginFrameImGui();
     static const auto cloudClockStart = std::chrono::steady_clock::now();
     object3dCommon->SetCloudTime(
         std::chrono::duration<float>(std::chrono::steady_clock::now() - cloudClockStart).count());
@@ -115,6 +115,7 @@ void GameRuntime::Update() {
     UpdateClearColorForFrame();
 
     UpdateGameplayUserInterface();
+    input->FinishCameraMouseLookFrame();
 }
 
 // モードが変わった時だけ、カメラ・表示対象・演出状態を切り替える。
@@ -244,6 +245,9 @@ void GameRuntime::UpdateSharedCameraControls(bool isGuiCaptured) {
     // インベントリを開く前の視点が失われるため、ここでは更新しない。
     if (currentMode_ != AppMode::GamePlay && currentMode_ != AppMode::GamePlay_BlockPlace &&
         currentMode_ != AppMode::GameClear && currentMode_ != AppMode::DebugView) {
+        if (input->GetMouseState().buttons[2]) {
+            isGuiCaptured = !input->PrepareCameraMouseLook(isGuiCaptured, true);
+        }
         const bool invertEditorOrbit = currentMode_ == AppMode::StageEditor;
         camera->UpdateBlenderStyle(input.get(), isGuiCaptured, winApp->GetHwnd(), invertEditorOrbit);
     }

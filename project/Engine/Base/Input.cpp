@@ -1,4 +1,4 @@
-#include "Input.h"
+﻿#include "Input.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
@@ -9,7 +9,7 @@ void Input::Initialize(WinApp *winApp) {
     winApp_ = winApp;
     HRESULT resultCode;
 
-    // DirectInput 本体を生成する。キーボードとマウスはこのオブジェクトから作る。
+    // キーボード用のDirectInput本体を生成する。
     resultCode = DirectInput8Create(winApp->GetHInstance(), DIRECTINPUT_VERSION, IID_IDirectInput8,
                                     reinterpret_cast<void **>(directInput_.GetAddressOf()), nullptr);
     assert(SUCCEEDED(resultCode));
@@ -27,19 +27,9 @@ void Input::Initialize(WinApp *winApp) {
         resultCode =
             keyboard_->SetCooperativeLevel(winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
         assert(SUCCEEDED(resultCode));
-
-        // マウスデバイスを生成する。
-        resultCode = directInput_->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(), nullptr);
-        assert(SUCCEEDED(resultCode));
-
-        // マウスの入力データ形式を DirectInput 標準形式に設定する。
-        resultCode = mouse_->SetDataFormat(&c_dfDIMouse);
-        assert(SUCCEEDED(resultCode));
-
-        // マウスはウィンドウ外で動く場合もあるため、非排他で取得する。
-        resultCode = mouse_->SetCooperativeLevel(winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-        assert(SUCCEEDED(resultCode));
     }
+    // マウスのRaw Input登録をDirectInputと競合させないため、DIはキーボードだけで使う。
+    rawMouseEnabled_ = winApp_->EnableRawMouse();
 
     // 初回更新前に前回入力が残らないよう、入力バッファを明示的にクリアする。
     std::memset(key_, 0, sizeof(key_));
@@ -67,21 +57,38 @@ void Input::Update() {
         std::memset(key_, 0, sizeof(key_));
     }
 
-    // マウスの相対移動量、ホイール、ボタン状態を取得する。
-    DIMOUSESTATE mouseData{};
-    if (mouse_) {
-        resultCode = mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseData);
-        if (FAILED(resultCode)) {
-            mouse_->Acquire();
-            mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseData);
+    // カーソル位置と独立した相対移動を優先し、画面端でも物理的な移動量を得る。
+    const bool foreground = GetForegroundWindow() == winApp_->GetHwnd();
+    const auto raw = winApp_->ConsumeRawMouse(foreground);
+    POINT physicalCursor{};
+    GetCursorPos(&physicalCursor);
+    mouseState_.x = 0;
+    mouseState_.y = 0;
+    mouseState_.wheel = foreground ? static_cast<int>(raw.wheel) : 0;
+    if (foreground) {
+        if (rawMouseEnabled_) {
+            mouseState_.x = raw.x;
+            mouseState_.y = raw.y;
+        } else if (previousCursorValid_) {
+            mouseState_.x = physicalCursor.x - previousCursor_.x;
+            mouseState_.y = physicalCursor.y - previousCursor_.y;
         }
-
-        mouseState_.x = mouseData.lX;
-        mouseState_.y = mouseData.lY;
-        mouseState_.wheel = mouseData.lZ;
-        for (int buttonIndex = 0; buttonIndex < 3; buttonIndex++) {
-            mouseState_.buttons[buttonIndex] = (mouseData.rgbButtons[buttonIndex] & 0x80) != 0;
-        }
+    } else {
+        cameraMouseActive_ = false;
+    }
+    const int mouseButtons[] = {VK_LBUTTON, VK_RBUTTON, VK_MBUTTON};
+    for (int button = 0; button < 3; ++button) {
+        mouseState_.buttons[button] = foreground && (GetAsyncKeyState(mouseButtons[button]) & 0x8000) != 0;
+    }
+    previousCursor_ = physicalCursor;
+    previousCursorValid_ = foreground;
+    cameraMouseRequested_ = false;
+    const bool alt = PushKey(DIK_LMENU) || PushKey(DIK_RMENU);
+    if (alt || (cameraMouseMiddleDrag_ && !mouseState_.buttons[2])) {
+        cameraMouseActive_ = false;
+    }
+    if (cameraMouseActive_) {
+        RecenterCameraMouse();
     }
 
     // マウスカーソルの絶対位置はウィンドウのクライアント座標に変換して保持する。
@@ -178,4 +185,87 @@ float Input::NormalizeTrigger(BYTE value) const {
     // トリガー閾値を越えた分だけを 0.0 から 1.0 に正規化する。
     return static_cast<float>(value - XINPUT_GAMEPAD_TRIGGER_THRESHOLD) /
            static_cast<float>(255 - XINPUT_GAMEPAD_TRIGGER_THRESHOLD);
+}
+
+// エディタのパネルと、実際に見えているモニターの範囲を除外する。
+RECT Input::CameraMouseRegion() const {
+    RECT client{};
+    GetClientRect(winApp_->GetHwnd(), &client);
+#if defined(USE_IMGUI) && !defined(NDEBUG)
+    constexpr bool editor = true;
+#else
+    constexpr bool editor = false;
+#endif
+    const auto region = MouseLookPolicy::Region(client.right, client.bottom, editor);
+    RECT result{region.left, region.top, region.right, region.bottom};
+    MONITORINFO monitor{sizeof(MONITORINFO)};
+    if (GetMonitorInfoW(MonitorFromWindow(winApp_->GetHwnd(), MONITOR_DEFAULTTONEAREST), &monitor)) {
+        POINT top{monitor.rcMonitor.left, monitor.rcMonitor.top},
+            bottom{monitor.rcMonitor.right, monitor.rcMonitor.bottom};
+        ScreenToClient(winApp_->GetHwnd(), &top);
+        ScreenToClient(winApp_->GetHwnd(), &bottom);
+        const RECT visible{top.x, top.y, bottom.x, bottom.y};
+        RECT clipped{};
+        IntersectRect(&clipped, &result, &visible);
+        IntersectRect(&result, &clipped, &client);
+    }
+    return result;
+}
+
+// 中央へ戻してもRaw Inputの移動量には混ぜず、端まで動かし続けられるようにする。
+void Input::RecenterCameraMouse() {
+    if (!winApp_ || GetForegroundWindow() != winApp_->GetHwnd()) {
+        cameraMouseActive_ = false;
+        return;
+    }
+    POINT cursor{};
+    if (!GetCursorPos(&cursor)) {
+        return;
+    }
+    ScreenToClient(winApp_->GetHwnd(), &cursor);
+    const auto rect = CameraMouseRegion();
+    const MouseLookPolicy::Rect region{rect.left, rect.top, rect.right, rect.bottom};
+    if (rect.right - rect.left < 64 || rect.bottom - rect.top < 64 ||
+        !MouseLookPolicy::NearEdge(region, cursor.x, cursor.y)) {
+        return;
+    }
+    POINT center{(rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2};
+    mouseState_.posX = center.x;
+    mouseState_.posY = center.y;
+    ClientToScreen(winApp_->GetHwnd(), &center);
+    if (SetCursorPos(center.x, center.y)) {
+        previousCursor_ = center;
+    }
+}
+
+// 操作の開始は3D表示領域内だけに限定し、UIから入った直後の大きな差分は使わない。
+bool Input::PrepareCameraMouseLook(bool guiCaptured, bool middleDrag) {
+    const bool allowed = winApp_ && GetForegroundWindow() == winApp_->GetHwnd() && !guiCaptured &&
+                         !PushKey(DIK_LMENU) && !PushKey(DIK_RMENU) && (!middleDrag || mouseState_.buttons[2]);
+    if (!allowed) {
+        cameraMouseActive_ = false;
+        return false;
+    }
+    if (!cameraMouseActive_) {
+        POINT cursor{};
+        GetCursorPos(&cursor);
+        ScreenToClient(winApp_->GetHwnd(), &cursor);
+        const auto rect = CameraMouseRegion();
+        if (!PtInRect(&rect, cursor)) {
+            return false;
+        }
+        mouseState_.x = 0;
+        mouseState_.y = 0;
+    }
+    cameraMouseActive_ = true;
+    cameraMouseRequested_ = true;
+    cameraMouseMiddleDrag_ = middleDrag;
+    RecenterCameraMouse();
+    return true;
+}
+
+// ポーズ・インベントリ・別シーンなど、カメラ更新のないフレームでは拘束を残さない。
+void Input::FinishCameraMouseLookFrame() {
+    cameraMouseActive_ = cameraMouseActive_ && cameraMouseRequested_;
+    cameraMouseRequested_ = false;
 }
