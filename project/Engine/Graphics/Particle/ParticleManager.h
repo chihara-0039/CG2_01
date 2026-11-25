@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <d3d12.h>
 #include <wrl.h>
 #include <vector>
@@ -7,41 +7,11 @@
 #include <unordered_map>
 #include <random>
 #include "MyMath.h"
+#include "Particle.h"
 #include "DirectXCommon.h"
 #include "TextureManager.h"
 
 class StageMap;
-
-// パーティクル1つのデータ構造
-struct Particle {
-    enum class Type {
-        Fall,
-        Splash,
-        Ring,
-        Cylinder,
-        Lightning,
-        Firework,
-        Adventure,
-        Dust,
-        Accent,
-        StormCloud,
-        StormRain,
-        StormWind
-    };
-    Type type = Type::Fall;
-    Transform transform; // 位置、回転、スケール
-    Vector3 velocity;    // 速度
-    Vector4 color;       // 色
-    int adventure = 0;
-    Vector3 origin{}, target{}, baseScale{};
-    bool worldAligned = false;
-    float shape = 0;
-    float phase = 0;
-    float initialAlpha = 1.0f;
-    bool ambientCloud = false;
-    float lifeTime; // 時間(現在)
-    float maxTime;  // (最大)
-};
 
 // マネージャークラス
 class ParticleManager {
@@ -294,16 +264,7 @@ class ParticleManager {
 
     // ステージ到着時の足元から広がる薄い土煙。
     void EmitLandingDust(const Vector3 &pos);
-    enum class AdventureEffect {
-        Step = 1,
-        Jump,
-        Land,
-        Collect,
-        Place,
-        Undo,
-        Key,
-        Star
-    };
+    using AdventureEffect = AdventureEffectKind;
     // ゲーム側は成功した出来事だけを通知し、形・寿命・動きはここで決める。
     void EmitAdventureEffect(AdventureEffect effect, const Vector3 &position, const Vector3 &target = {});
     // 移動方向の後ろへ土煙を放ち、強さに応じて量と広がりを変える。

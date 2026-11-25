@@ -7,6 +7,6 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup><OutDir>$(MSBuildThisFileDirectory)..\..\generated\editor-tests\</OutDir><IntDir>$(OutDir)obj\</IntDir><TargetName>StageEditorTests</TargetName></PropertyGroup>
   <ItemDefinitionGroup><ClCompile><LanguageStandard>stdcpp20</LanguageStandard><AdditionalOptions>/utf-8</AdditionalOptions><AdditionalIncludeDirectories>..\Game\Stage;..\Engine\Math</AdditionalIncludeDirectories><RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary></ClCompile><Link><SubSystem>Console</SubSystem></Link></ItemDefinitionGroup>
-  <ItemGroup><ClCompile Include="StageEditorTests.cpp"/><ClCompile Include="..\Game\Stage\StageMap.cpp"/></ItemGroup>
+  <ItemGroup><ClCompile Include="StageEditorTests.cpp"/><ClCompile Include="..\Engine\Graphics\Particle\ParticleMotion.cpp"/><ClCompile Include="..\Game\Stage\StageMap.cpp"/><ClCompile Include="..\Game\Stage\StageCellBehavior.cpp"/></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

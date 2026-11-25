@@ -1,4 +1,4 @@
-#include "AdventureParticlePath.h"
+#include "ParticleMotion.h"
 #include "ParticleManager.h"
 #include "StageMap.h"
 #include <algorithm>
@@ -504,81 +504,13 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
 
             float oldY = it->transform.translate.y;
 
-            it->transform.translate.x += it->velocity.x * deltaTime * 60.0f;
-            it->transform.translate.y += it->velocity.y * deltaTime * 60.0f;
-            it->transform.translate.z += it->velocity.z * deltaTime * 60.0f;
+            SelectParticleMotion(*it).Update(*it, deltaTime);
             if (it->ambientCloud && ambientCloudEmitter_.areaX > 0.0f) {
                 // 風で雲海が片側へ流れ切らないよう、画面外の端で循環させる。
                 const float left = ambientCloudEmitter_.center.x - ambientCloudEmitter_.areaX;
                 const float width = ambientCloudEmitter_.areaX * 2.0f;
                 float &x = it->transform.translate.x;
                 x -= std::floor((x - left) / width) * width;
-            }
-
-            // 演出の小粒は実時間の軌跡で動かし、発生時刻から縮小・回転を求める。
-            if (it->type == Particle::Type::Accent) {
-                const float age = it->lifeTime, t = age / it->maxTime;
-                it->transform.translate = {it->origin.x + it->velocity.x * age,
-                                           it->origin.y + it->velocity.y * age - .25f * age * age,
-                                           it->origin.z + it->velocity.z * age};
-                const float size = (.65f + .5f * std::sin(t * 3.14159265f)) * (1 - .65f * t);
-                it->transform.scale = {it->baseScale.x * size, it->baseScale.y * size, 1};
-                it->transform.rotate.z = it->phase + age * .7f;
-            }
-            // 土煙は初速を減衰させながら膨らませ、光の粒と違う重さを出す。
-            if (it->type == Particle::Type::Dust) {
-                const float age = it->lifeTime;
-                const float spread = (1.0f - std::exp(-age * 4.0f)) / 4.0f;
-                it->transform.translate = {it->origin.x + it->velocity.x * spread,
-                                           it->origin.y + it->velocity.y * spread + age * .12f,
-                                           it->origin.z + it->velocity.z * spread};
-                const float size = .65f + 1.65f * age / it->maxTime;
-                it->transform.scale = {it->baseScale.x * size, it->baseScale.y * size, 1};
-                it->transform.rotate.z = it->phase + age * .35f;
-            }
-            // 冒険用エフェクトは寿命から形を求め、フレームレートによる軌跡の差を抑える。
-            if (it->adventure != 0) {
-                const float t = std::clamp(it->lifeTime / it->maxTime, 0.0f, 1.0f);
-                const bool inward = it->adventure == static_cast<int>(AdventureEffect::Collect) ||
-                                    it->adventure == static_cast<int>(AdventureEffect::Undo);
-                if (inward && it->type == Particle::Type::Adventure && it->shape != 6) {
-                    it->transform.translate = it->adventure == static_cast<int>(AdventureEffect::Undo)
-                                                  ? AdventureParticlePath::Undo(it->origin, it->target, t, it->phase)
-                                                  : AdventureParticlePath::Sample(it->origin, it->target, t, it->phase);
-                } else if (it->type == Particle::Type::Adventure && it->shape == 5) {
-                    it->transform.translate = AdventureParticlePath::Assemble(it->origin, it->target, t);
-                } else if (it->type == Particle::Type::Adventure) {
-                    const float age = it->lifeTime;
-                    it->transform.translate = {it->origin.x + it->velocity.x * age * 60,
-                                               it->origin.y + it->velocity.y * age * 60 - .35f * age * age,
-                                               it->origin.z + it->velocity.z * age * 60};
-                }
-                float scale = .65f + .8f * std::sin(t * 3.14159265f);
-                if (it->type == Particle::Type::Ring) {
-                    scale = inward ? 1.2f - t : .2f + 1.6f * t;
-                }
-                if (it->shape == 6) {
-                    // 割れたシャボン玉は外へ広がる輪だけを短く残す。
-                    scale = .6f + t * 1.8f;
-                } else if (it->shape == 5 || (inward && it->type == Particle::Type::Adventure)) {
-                    scale *= 1.0f - .85f * t;
-                }
-                it->transform.scale = {it->baseScale.x * scale, it->baseScale.y * scale, it->baseScale.z * scale};
-                if (it->type == Particle::Type::Cylinder) {
-                    const float rise = std::clamp(t / .35f, 0.0f, 1.0f);
-                    it->transform.scale.y = it->baseScale.y * (.05f + rise);
-                }
-                if (it->type == Particle::Type::Adventure && (it->shape == 3 || it->shape == 5)) {
-                    it->transform.rotate.z = it->phase + it->lifeTime * 1.3f;
-                }
-            }
-
-            if (it->type == Particle::Type::Firework) {
-                // 炸裂後の火花を徐々に落下させ、花火らしい放物線を作る。
-                it->velocity.y -= 0.0012f * deltaTime * 60.0f;
-                const float remaining = 1.0f - it->lifeTime / it->maxTime;
-                const float scale = 0.035f + 0.075f * remaining;
-                it->transform.scale = {scale, scale, 1.0f};
             }
 
             if (it->type == Particle::Type::StormRain) {
