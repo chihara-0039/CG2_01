@@ -331,7 +331,7 @@ int GameRuntime::GetResultPageIndex() const {
     return rotationTrial_ ? rotationResultPage_ : stageSelect_ ? stageSelect_->GetSelectedIndex() : 0;
 }
 bool GameRuntime::IsResultAnimationVisible() {
-    return sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive();
+    return sceneFade_.CurrentPhase() == SceneFadePhase::None && !IsWindowInactive();
 }
 
 // 手帳演出の完了を待ち、ステージ選択またはタイトルへ戻る入力を受け付ける。
@@ -573,7 +573,7 @@ void GameRuntime::UpdateSceneTransition() {
     if (gameOver_ && gameOver_->IsActive()) {
         return;
     }
-    if (sceneFadePhase_ != SceneFadePhase::None) {
+    if (sceneFade_.CurrentPhase() != SceneFadePhase::None) {
         return;
     }
 

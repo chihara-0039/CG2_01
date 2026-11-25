@@ -287,7 +287,7 @@ void GameRuntime::Draw() {
         gameOver_->Draw();
     }
     // すべての3D描画・HUDより後に描き、シーン全体を自然に暗転させる。
-    if (sceneFadeSprite_ && sceneFadeAlpha_ > 0.0f) {
+    if (sceneFadeSprite_ && sceneFade_.Alpha() > 0.0f) {
         spriteCommon->PreDraw();
         sceneFadeSprite_->Draw();
         if (useRecoveryTransition_ && recoveryTransition_) {

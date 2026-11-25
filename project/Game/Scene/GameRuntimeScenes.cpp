@@ -310,7 +310,7 @@ void GameRuntime::OnSceneExited(SceneType sceneType) {
 // シーン遷移を予約し、必要なフェードの開始状態を設定する。
 void GameRuntime::RequestSceneChange(SceneType sceneType) {
     const SceneType currentScene = sceneManager_ ? sceneManager_->GetCurrentSceneType() : GetCurrentSceneType();
-    if (currentScene == sceneType || sceneFadePhase_ != SceneFadePhase::None) {
+    if (currentScene == sceneType || sceneFade_.CurrentPhase() != SceneFadePhase::None) {
         return;
     }
 
@@ -326,9 +326,7 @@ void GameRuntime::RequestSceneChange(SceneType sceneType) {
     // コンテストの四画面だけに適用。エディタとプレイ内サブモードは従来通り。
     useRecoveryTransition_ =
         RecoveryTransitionMotion::IsContestScene(currentScene) && RecoveryTransitionMotion::IsContestScene(sceneType);
-    sceneFadePhase_ = SceneFadePhase::FadingOut;
-    sceneFadeAlpha_ = 0.0f;
-    sceneFadeHoldRemaining_ = 0.0f;
+    sceneFade_.Begin(useRecoveryTransition_);
     sceneFadeLastUpdate_ = std::chrono::steady_clock::now();
 }
 
@@ -373,7 +371,7 @@ void GameRuntime::ApplySceneTypeToMode(SceneType sceneType) {
 
 // シーン切り替え時のフェード処理を更新する。フェード中は、シーンの更新・描画も
 void GameRuntime::UpdateSceneFade() {
-    if (sceneFadePhase_ == SceneFadePhase::None || !sceneFadeSprite_) {
+    if (sceneFade_.CurrentPhase() == SceneFadePhase::None || !sceneFadeSprite_) {
         return;
     }
 
@@ -381,40 +379,22 @@ void GameRuntime::UpdateSceneFade() {
     const float deltaTime = (std::clamp)(std::chrono::duration<float>(now - sceneFadeLastUpdate_).count(), 0.0f, 0.1f);
     sceneFadeLastUpdate_ = now;
 
-    // 幕を閉じる約0.55秒、開く約0.65秒。戻る操作も待たせすぎない長さ。
-    const float kFadeSpeed =
-        useRecoveryTransition_ ? (sceneFadePhase_ == SceneFadePhase::FadingIn ? 1.0f / 0.65f : 1.0f / 0.55f) : 3.0f;
-    if (sceneFadePhase_ == SceneFadePhase::FadingOut) {
-        sceneFadeAlpha_ = (std::min)(1.0f, sceneFadeAlpha_ + kFadeSpeed * deltaTime);
-        if (sceneFadeAlpha_ >= 1.0f) {
-            if (sceneManager_) {
-                sceneManager_->ChangeScene(pendingSceneType_, *this);
-            } else {
-                ApplySceneTypeToMode(pendingSceneType_);
-            }
-            // 遷移先の最初の更新・描画を完全な黒の裏で済ませる。
-            // 読み込み直後の未更新Spriteが一瞬大きく表示されるのを防止する。
-            sceneFadePhase_ = SceneFadePhase::HoldingBlack;
-            sceneFadeHoldRemaining_ = 0.12f;
-        }
-    } else if (sceneFadePhase_ == SceneFadePhase::HoldingBlack) {
-        sceneFadeAlpha_ = 1.0f;
-        sceneFadeHoldRemaining_ -= deltaTime;
-        if (sceneFadeHoldRemaining_ <= 0.0f) {
-            sceneFadePhase_ = SceneFadePhase::FadingIn;
-        }
-    } else {
-        sceneFadeAlpha_ = (std::max)(0.0f, sceneFadeAlpha_ - kFadeSpeed * deltaTime);
-        if (sceneFadeAlpha_ <= 0.0f) {
-            sceneFadePhase_ = SceneFadePhase::None;
+    // 遷移の判断は現在の状態へ委譲し、完全に覆った時だけ実際のシーンを切り替える。
+    if (sceneFade_.Advance(deltaTime)) {
+        if (sceneManager_) {
+            sceneManager_->ChangeScene(pendingSceneType_, *this);
+        } else {
+            ApplySceneTypeToMode(pendingSceneType_);
         }
     }
 
     if (useRecoveryTransition_ && recoveryTransition_) {
-        recoveryTransition_->Update(sceneFadeAlpha_, sceneFadePhase_ == SceneFadePhase::FadingIn, pendingSceneType_);
+        recoveryTransition_->Update(sceneFade_.Alpha(), sceneFade_.CurrentPhase() == SceneFadePhase::FadingIn,
+                                    pendingSceneType_);
     }
     // 回転幕の外側は軽く暗くするだけ。切替時と保持中は全画面を完全に隠す。
-    const float opacity = useRecoveryTransition_ && sceneFadeAlpha_ < 1.0f ? sceneFadeAlpha_ * 0.22f : sceneFadeAlpha_;
+    const float opacity =
+        useRecoveryTransition_ && sceneFade_.Alpha() < 1.0f ? sceneFade_.Alpha() * 0.22f : sceneFade_.Alpha();
     sceneFadeSprite_->SetColor({0.0f, 0.0f, 0.0f, opacity});
     sceneFadeSprite_->Update();
 }
@@ -483,9 +463,9 @@ void GameRuntime::RunStageEditorScene() {
 // 到着・失敗などの演出を優先し、通常プレイの更新を振り分ける。
 void GameRuntime::RunGamePlayScene() {
     if (gameOver_ && gameOver_->IsActive()) {
-        const auto action =
-            gameOver_->Update(camera.get(), *input, sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive(),
-                              particleManager.get());
+        const auto action = gameOver_->Update(camera.get(), *input,
+                                              sceneFade_.CurrentPhase() == SceneFadePhase::None && !IsWindowInactive(),
+                                              particleManager.get());
         if (gameOver_->IsShowingFailure() && player_) {
             player_->SetPosition(gameOver_->GetPosition());
             player_->SetRotation(gameOver_->GetRotation());
@@ -521,7 +501,7 @@ void GameRuntime::RunGamePlayScene() {
     }
     if (startIntro_ && startIntro_->IsActive()) {
         const bool wasFlying = startIntro_->BlocksInput();
-        startIntro_->Update(camera.get(), sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive());
+        startIntro_->Update(camera.get(), sceneFade_.CurrentPhase() == SceneFadePhase::None && !IsWindowInactive());
         // 見せるための降下経路。物理更新は着地まで止め、最後に正確なスポーンへ戻す。
         if (wasFlying && player_) {
             player_->SetPosition(startIntro_->GetPlayerPosition());

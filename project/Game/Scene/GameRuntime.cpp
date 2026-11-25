@@ -282,7 +282,7 @@ void GameRuntime::UpdateCurrentMode(const Matrix4x4 &lightVP, bool isGuiCaptured
 
     // 暗転中に遷移先を一度更新して、Spriteやカメラの初期値が露出するのを防ぐ。
     // 遷移元は更新せず、遷移先は黒画面の裏とフェードイン中に更新する。
-    if (sceneFadePhase_ == SceneFadePhase::FadingOut) {
+    if (sceneFade_.CurrentPhase() == SceneFadePhase::FadingOut) {
         return;
     }
 

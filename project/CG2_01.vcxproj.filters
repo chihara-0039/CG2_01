@@ -59,6 +59,8 @@
     <ClCompile Include="Engine\Graphics\Particle\ParticleManager.cpp" />
     <ClCompile Include="Engine\Graphics\Particle\ParticleMotion.cpp" />
     <ClCompile Include="Game\Stage\StageCellBehavior.cpp" />
+    <ClCompile Include="Game\Scene\SceneFadeFlow.cpp" />
+    <ClCompile Include="Game\UI\InventoryPanelFlow.cpp" />
     <ClCompile Include="Game\Player\Player.cpp" />
     <ClCompile Include="Engine\Graphics\2D\Sprite.cpp" />
     <ClCompile Include="Engine\Graphics\2D\SpriteCommon.cpp" />
@@ -106,6 +108,8 @@
     <ClInclude Include="Engine\Graphics\Particle\Particle.h" />
     <ClInclude Include="Engine\Graphics\Particle\ParticleMotion.h" />
     <ClInclude Include="Game\Stage\StageCellBehavior.h" />
+    <ClInclude Include="Game\Scene\SceneFadeFlow.h" />
+    <ClInclude Include="Game\UI\InventoryPanelFlow.h" />
     <ClInclude Include="Game\Player\FootstepEmitter.h" />
     <ClInclude Include="Game\Environment\FogExplorer.h" />
     <ClInclude Include="Engine\Utility\D3DResourceLeakChecker.h" />
