@@ -20,13 +20,7 @@ Camera::Camera() {
 
 // 現在の姿勢と投影設定から、ビュー行列と投影行列を再計算する。
 void Camera::Update() {
-    // 1. ビュー行列の計算
-    // アフィン変換行列の逆行列をビュー行列とする
-    Matrix4x4 cameraWorld = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    viewMatrix_ = Math::Inverse(cameraWorld);
-
-    // 2. プロジェクション行列の計算
-    projectionMatrix_ = Math::MakePerspectiveFovMatrix(fov_, aspectRatio_, nearClip_, farClip_);
+    matrixCache_.Update(transform_, fov_, aspectRatio_, nearClip_, farClip_);
 }
 
 // マウス操作から、Blender風の周回・移動・ズームを反映する。

@@ -157,6 +157,7 @@
     <ClCompile Include="Game\Scene\StageFlyover.cpp" />
     <ClCompile Include="Game\Environment\WeatherRuntimeController.cpp" />
     <ClCompile Include="Game\Block\BlockPlacementController.cpp" />
+    <ClCompile Include="Game\Block\PlaceBlocksCommand.cpp" />
     <ClCompile Include="Game\Block\BubblePickupController.cpp" />
     <ClCompile Include="Game\Block\BlockInventory.cpp">
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Game/Block;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -322,6 +323,9 @@
     <ClInclude Include="Game\Environment\WeatherRuntimeController.h" />
     <ClInclude Include="Game\Block\BlockPlacementController.h" />
     <ClInclude Include="Game\Block\PlacementPlan.h" />
+    <ClInclude Include="Game\Block\PlaceBlocksCommand.h" />
+    <ClInclude Include="Engine\Utility\EventSignal.h" />
+    <ClInclude Include="Engine\Utility\CameraMatrixCache.h" />
     <ClInclude Include="Game\Block\BubblePickupController.h" />
     <ClInclude Include="Game\Block\BlockInventory.h" />
     <ClInclude Include="Engine\Utility\Camera.h" />

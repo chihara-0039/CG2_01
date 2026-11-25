@@ -1,4 +1,4 @@
-#include "StageMap.h"
+﻿#include "StageMap.h"
 #include "../Engine/Base/MouseLookPolicy.h"
 #include "../Engine/Graphics/Particle/AdventureParticlePath.h"
 #include "../Game/Stage/RotationIsland.h"
@@ -12,6 +12,9 @@
 #include "../Game/Player/FootstepEmitter.h"
 #include "PolymorphismChecks.h"
 #include "StatePatternChecks.h"
+#include "../Engine/Utility/EventSignal.h"
+#include "../Engine/Utility/CameraMatrixCache.h"
+#include "../Game/Block/PlaceBlocksCommand.h"
 #include <cassert>
 #include <filesystem>
 #include <iostream>
@@ -24,6 +27,75 @@
 
 // マップ保存・拡張・回転・選択などの回帰テストを実行する。
 int main() {
+    // Observerの複数購読・解除・通知中の購読追加を検証する。
+    EventSignal<int> signal;
+    int first = 0, second = 0, late = 0;
+    EventSignal<int>::Connection added;
+    auto a = signal.Subscribe([&](const int &n) { first += n; added = signal.Subscribe([&](const int &v) { late += v; }); });
+    auto b = signal.Subscribe([&](const int &n) { second += n; });
+    signal.Publish(1);
+    assert(first == 1 && second == 1 && late == 0);
+    a.Disconnect();
+    signal.Publish(2);
+    assert(first == 1 && second == 3 && late == 2);
+    b.Disconnect();
+    added.Disconnect();
+    signal.Publish(4);
+    assert(second == 3 && late == 2);
+    // 通知元より長寿命の接続と、通知途中に解除された購読を確認する。
+    EventSignal<int>::Connection orphan;
+    {
+        EventSignal<int> temporary;
+        orphan = temporary.Subscribe([](const int &) {});
+    }
+    orphan.Disconnect();
+    EventSignal<int> removal;
+    EventSignal<int>::Connection removed;
+    int removedCalls = 0;
+    auto remover = removal.Subscribe([&](const int &) { removed.Disconnect(); });
+    removed = removal.Subscribe([&](const int &) { ++removedCalls; });
+    removal.Publish(1);
+    assert(removedCalls == 0);
+    {
+        auto scoped = removal.Subscribe([&](const int &) { ++removedCalls; });
+    }
+    removal.Publish(1);
+    assert(removedCalls == 0);
+    // Commandは生成時に変更せず、実行・取消を二重適用しない。
+    StageMap commandMap;
+    commandMap.Initialize(6,4,6);
+    BlockInventory commandInventory;
+    commandInventory.Initialize(0);
+    commandInventory.AddBlock(BlockType::Ladder,1,0);
+    PlaceBlocksCommand command(commandMap,commandInventory,Placement::Make(commandMap,{2,1,2},BlockType::Ladder,0,0),BlockType::Ladder,0);
+    assert(commandMap.GetCell(2,1,2)->type == BlockType::None);
+    assert(command.Execute());
+    assert(!command.Execute());
+    assert(!commandInventory.HasBlock(BlockType::Ladder,0));
+    assert(command.Undo());
+    assert(!command.Undo());
+    assert(commandInventory.HasBlock(BlockType::Ladder,0));
+    assert(commandMap.GetCell(2,1,2)->type == BlockType::None);
+    // Dirty Flagは姿勢と投影を独立して更新し、静止中は再計算しない。
+    CameraMatrixCache cache;
+    Transform cameraPose{{1,1,1},{.3f,0,0},{0,5,-10}};
+    cache.Update(cameraPose,.45f,16.f/9,.1f,1000);
+    cache.Update(cameraPose,.45f,16.f/9,.1f,1000);
+    assert(cache.ViewRevision() == 1 && cache.ProjectionRevision() == 1);
+    cameraPose.translate.x += 2;
+    cache.Update(cameraPose,.45f,16.f/9,.1f,1000);
+    assert(cache.ViewRevision() == 2 && cache.ProjectionRevision() == 1);
+    cache.Update(cameraPose,.6f,16.f/9,.1f,2000);
+    assert(cache.ViewRevision() == 2 && cache.ProjectionRevision() == 2);
+    const auto expectedView = Math::Inverse(Math::MakeAffineMatrix(cameraPose.scale,cameraPose.rotate,cameraPose.translate));
+    const auto expectedProjection = Math::MakePerspectiveFovMatrix(.6f,16.f/9,.1f,2000);
+    for (int row = 0; row < 4; ++row) {
+        for (int col = 0; col < 4; ++col) {
+            assert(std::abs(cache.View().m[row][col]-expectedView.m[row][col]) < .00001f);
+            assert(std::abs(cache.Projection().m[row][col]-expectedProjection.m[row][col]) < .00001f);
+        }
+    }
+    std::cout << "PASS: Command executes/undoes once; Observer lifetime and subscription changes; independent camera dirty matrices\n";
     StatePatternChecks::Run();
     PolymorphismChecks::Run();
     // 非constなマップからでも、内部セルとパーツを直接変更できる型を返さない。

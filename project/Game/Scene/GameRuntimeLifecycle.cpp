@@ -162,7 +162,9 @@ void GameRuntime::Initialize() {
     bubblePickupController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
     blockPlacementController_.Initialize(&stageMap_, stageRenderer_.get(), &blockInventory_);
     // 操作が成功した地点から光を出す。取消・回収は主人公の道具袋へ吸い込む。
-    blockPlacementController_.SetFeedbackCallback([this](const Vector3 &position, bool undo) {
+    placementEffects_ = blockPlacementController_.ObservePlacement([this](const BlockPlacementController::PlacementEvent &event) {
+        const auto &position = event.position;
+        const bool undo = event.undo;
         if (particleManager && player_) {
             auto target = player_->GetPosition();
             target.y += .8f;
@@ -170,6 +172,11 @@ void GameRuntime::Initialize() {
                                                       : ParticleManager::AdventureEffect::Place,
                                                  position, target);
         }
+    });
+    // UIとエフェクトを独立したObserverとして登録する。
+    placementHud_ = blockPlacementController_.ObservePlacement([this](const BlockPlacementController::PlacementEvent &event) {
+        buildStatus_ = event.undo ? 4 : 3;
+        placementFeedbackUntil_ = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     });
     bubblePickupController_.SetCollectCallback([this](const Vector3 &position) {
         if (particleManager && player_) {
