@@ -20,6 +20,9 @@ struct Particle {
         Cylinder,
         Lightning,
         Firework,
+        Adventure,
+        Dust,
+        Accent,
         StormCloud,
         StormRain,
         StormWind
@@ -28,6 +31,11 @@ struct Particle {
     Transform transform; // 位置、回転、スケール
     Vector3 velocity;    // 速度
     Vector4 color;       // 色
+    int adventure = 0;
+    Vector3 origin{}, target{}, baseScale{};
+    bool worldAligned = false;
+    float shape = 0;
+    float phase = 0;
     float initialAlpha = 1.0f;
     bool ambientCloud = false;
     float lifeTime; // 時間(現在)
@@ -282,6 +290,30 @@ class ParticleManager {
 
     // ステージ到着時の足元から広がる薄い土煙。
     void EmitLandingDust(const Vector3 &pos);
+    enum class AdventureEffect {
+        Step = 1,
+        Jump,
+        Land,
+        Collect,
+        Place,
+        Undo,
+        Key,
+        Star
+    };
+    // ゲーム側は成功した出来事だけを通知し、形・寿命・動きはここで決める。
+    void EmitAdventureEffect(AdventureEffect effect, const Vector3 &position, const Vector3 &target = {});
+    // 移動方向の後ろへ土煙を放ち、強さに応じて量と広がりを変える。
+    void EmitDust(const Vector3 &position, const Vector3 &motion, float strength);
+    enum class SceneEffect {
+        Stamp,
+        FallTrail,
+        Retry,
+        Glow,
+        Ladder,
+        Switch
+    };
+    // 演出の節目と近くの目標へ、短命で小さな粒を足す。
+    void EmitSceneEffect(SceneEffect effect, const Vector3 &position, bool warm = false);
 
     // 到着演出用。モデルの周囲に実空間の雲と短い航跡を作る。
     void EmitArrivalCloud(const Vector3 &pos, bool bank);

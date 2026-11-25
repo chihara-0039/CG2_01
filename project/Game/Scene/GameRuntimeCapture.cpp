@@ -11,6 +11,8 @@
 #include "externals/imgui/imgui.h"
 #endif
 
+#include "../../Tests/MouseLookChecks.h"
+
 namespace {
 // 自動検証や録画に使う環境変数を、安全な文字列として取得する。
 std::string CaptureEnvironment(const char *name) {
@@ -22,6 +24,15 @@ std::string CaptureEnvironment(const char *name) {
 
 // 指定された検証・録画モードの準備を行い、必要なら自動チェックを開始する。
 void GameRuntime::InitializeCaptureTools() {
+    if (CaptureEnvironment("CG2_MOUSE_VERIFY") == "1") {
+        std::filesystem::create_directories("../generated/mouse-look-review");
+        const auto name = CaptureEnvironment("CG2_MOUSE_VERIFY_NAME");
+        const bool ok = VerifyMouseLook(*winApp, *player_,
+                                        "../generated/mouse-look-review/" + (name.empty() ? "native" : name) + ".json");
+        PostQuitMessage(ok ? 0 : 3);
+        return;
+    }
+
     const char *captions[] = {"baseline", "bubble", "scan", "trial_hint", "recording"};
     for (int i = 0; i < 5; ++i) {
         fogLabels_[i] = std::make_unique<Sprite>();
@@ -262,6 +273,15 @@ void GameRuntime::InitializeCaptureTools() {
             PostQuitMessage(ok ? 0 : 3);
         }
         if (CaptureEnvironment("CG2_EXPEDITION_VERIFY") == "1") {
+            int placedFeedback = 0, undoFeedback = 0, collectedFeedback = 0;
+            blockPlacementController_.SetFeedbackCallback([&](const Vector3 &, bool undo) {
+                if (undo) {
+                    ++undoFeedback;
+                } else {
+                    ++placedFeedback;
+                }
+            });
+            bubblePickupController_.SetCollectCallback([&](const Vector3 &) { ++collectedFeedback; });
             bool collected = true, selected = true, placed = true, undo = true, roundtrip = true;
             stageMap_.SaveToFile("../generated/expedition-review/roundtrip.txt");
             StageMap restored;
@@ -317,8 +337,15 @@ void GameRuntime::InitializeCaptureTools() {
                 blockInventory_.AddBlock(kinds[i], 1);
             }
             const bool emptyRejected = !blockInventoryUI_->SelectShortcut(42);
-            const bool ok = collected && selected && placed && undo && roundtrip && emptyRejected && normalSlots &&
-                            zeroStockRejected;
+            const bool invalidPlace = !blockPlacementController_.TryPlace({-1, -1, -1});
+            const bool feedbackOk = invalidPlace && placedFeedback == 5 && undoFeedback == 5 && collectedFeedback == 10;
+            blockPlacementController_.SetFeedbackCallback({});
+            bubblePickupController_.SetCollectCallback({});
+            std::ofstream("../generated/expedition-review/particle-events.json")
+                << "{\"success\":" << (feedbackOk ? "true" : "false") << ",\"placed\":" << placedFeedback
+                << ",\"undone\":" << undoFeedback << ",\"collected\":" << collectedFeedback << "}";
+            const bool ok = feedbackOk && collected && selected && placed && undo && roundtrip && emptyRejected &&
+                            normalSlots && zeroStockRejected;
             std::ofstream("../generated/expedition-review/native-verification.json")
                 << "{\"success\":" << (ok ? "true" : "false") << ",\"saveLoad\":" << (roundtrip ? "true" : "false")
                 << ",\"collectTenBubbles\":" << (collected ? "true" : "false")
@@ -683,6 +710,14 @@ void GameRuntime::InitializeCaptureTools() {
                     blockInventoryUI_->ToggleOpen();
                 }
             }
+            if (campaignShot == "particles") {
+                const Vector3 p{goalGuideTarget_.x, goalGuideTarget_.y - .5f, goalGuideTarget_.z};
+                player_->SetPosition(p);
+                camera->SetPosition({p.x + 5, p.y + 3, p.z - 6});
+                camera->SetRotation({.30f, -.6947f, 0});
+                camera->SetFov(.75f);
+                camera->Update();
+            }
             if (campaignShot == "star") {
                 for (int y = 0; y < stageMap_.GetHeight(); ++y) {
                     for (int z = 0; z < stageMap_.GetDepth(); ++z) {
@@ -819,7 +854,7 @@ void GameRuntime::UpdateCaptureTools() {
         if (!comparisonRecordingStarted_) {
             FrameRecorder::Options options;
             options.name = "campaign-" + campaignShot;
-            options.gifSeconds = campaignShot == "star" ? 12 : 8;
+            options.gifSeconds = (campaignShot == "star" || campaignShot == "particles") ? 12 : 8;
             const auto output = CaptureEnvironment("CG2_CAPTURE_DIR");
             options.directory = output.empty() ? "../generated/campaign-review" : output;
             if (!dxCommon->Recorder().Start(options)) {
@@ -827,9 +862,24 @@ void GameRuntime::UpdateCaptureTools() {
                 return;
             }
             comparisonRecordingStarted_ = true;
+            // シーンや録画の準備時間を含めず、演出を撮る時間を確保する。
+            comparisonStarted_ = std::chrono::steady_clock::now();
         }
         const float elapsed =
             std::chrono::duration<float>(std::chrono::steady_clock::now() - comparisonStarted_).count();
+        // 同じ画角で8種類を順に再生し、形と軌跡を比較するための確認用撮影。
+        if (campaignShot == "particles" && particleManager && player_) {
+            static int previous = -1;
+            const int phase = static_cast<int>(elapsed / 1.3f);
+            if (phase != previous && phase < 8) {
+                const auto p = player_->GetPosition();
+                const Vector3 source{p.x + (phase >= 3 && phase <= 5 ? 1.3f : 0), p.y + (phase >= 6 ? 1.3f : .03f),
+                                     p.z};
+                particleManager->EmitAdventureEffect(static_cast<ParticleManager::AdventureEffect>(phase + 1), source,
+                                                     {p.x, p.y + .8f, p.z});
+                previous = phase;
+            }
+        }
         // 表紙の確認用撮影では、打刻後にTabで閉じ、再び開く実際の入力を送る。
         if (campaignShot == "clear" && CaptureEnvironment("CG2_JOURNAL_INSPECT") == "1") {
             static int lastPhase = 0;
@@ -852,7 +902,7 @@ void GameRuntime::UpdateCaptureTools() {
                 }
             }
         }
-        if (elapsed > (campaignShot == "star" ? 12.0f : 8.0f)) {
+        if (elapsed > ((campaignShot == "star" || campaignShot == "particles") ? 12.0f : 8.0f)) {
             if (dxCommon->Recorder().IsRecording()) {
                 dxCommon->Recorder().Stop();
             }
@@ -934,8 +984,13 @@ void GameRuntime::UpdateCaptureTools() {
         if (cinematic != "arrival" && cinematic != "arrival_transition" && cinematic != "title" &&
             cinematic != "headlamp" && cinematic != "occlusion" && cinematic != "expedition" &&
             cinematic != "placement" && elapsed >= 1 && !triggered) {
-            BeginGameOver(cinematic == "fall");
+            BeginGameOver(cinematic == "fall" || cinematic == "retry");
             triggered = true;
+        }
+        // 再挑戦撮影は通常の決定入力を送り、暗転・リスポーン・開幕までを通す。
+        if (cinematic == "retry") {
+            InputTestPlayback::Advance(
+                *input, 0, 0, elapsed > 5.0f ? std::initializer_list<BYTE>{DIK_RETURN} : std::initializer_list<BYTE>{});
         }
         if (elapsed >= (cinematic == "arrival_transition" ? 10.0f : 8.0f)) {
             if (dxCommon->Recorder().IsRecording()) {
@@ -943,6 +998,11 @@ void GameRuntime::UpdateCaptureTools() {
             }
             if (!dxCommon->Recorder().IsBusy()) {
                 bool ok = true;
+                if (cinematic == "retry") {
+                    ok = gameOver_ && !gameOver_->IsActive() && player_ && player_->IsGrounded();
+                    std::ofstream("../generated/cinematic-review/retry.json")
+                        << "{\"success\":" << (ok ? "true" : "false") << "}";
+                }
                 if (cinematic == "arrival_transition") {
                     const auto p = player_->GetPosition(), spawn = startIntro_->GetSpawnPosition();
                     const bool landed = std::abs(p.x - spawn.x) < .01f && std::abs(p.y - spawn.y) < .01f &&

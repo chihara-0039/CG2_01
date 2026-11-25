@@ -348,6 +348,9 @@
     <ClInclude Include="Game\Scene\RecoveryTransitionMotion.h" />
     <ClInclude Include="Engine\Utility\FrameRecorder.h" />
     <ClInclude Include="Engine\Utility\LifecycleTrace.h" />
+    <ClInclude Include="Engine\Base\MouseLookPolicy.h" />
+    <ClInclude Include="Tests\MouseLookChecks.h" />
+    <ClInclude Include="Engine\Graphics\Particle\AdventureParticlePath.h" />
     <ClInclude Include="Game\Environment\FogExplorer.h" />
     <ClInclude Include="Game\Scene\StartIntro.h" />
     <ClInclude Include="Game\Scene\StartIntroTimeline.h" />

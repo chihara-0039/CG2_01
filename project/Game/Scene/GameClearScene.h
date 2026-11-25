@@ -6,6 +6,7 @@
 #include "Object3d.h"
 #include "Sound.h"
 #include "JournalResultTimeline.h"
+#include "ParticleManager.h"
 #include <array>
 #include <chrono>
 
@@ -37,6 +38,8 @@ class GameClearScene final : public BaseScene {
     std::array<std::unique_ptr<Model>, Count> models_;
     std::array<std::unique_ptr<Object3d>, Count> objects_;
     Camera camera_;
+    // 本の専用カメラと深度で描き、背景花火とは独立して更新する。
+    std::unique_ptr<ParticleManager> stampParticles_;
     Sound sound_;
     Sound::SoundData pageSound_{}, stampSound_{};
     static Sound::SoundData MakeSound(bool stamp);

@@ -25,7 +25,7 @@ struct Pose {
 };
 // 敵接触と落下で異なる芝居を、同じ時間軸でカメラへ同期する。
 Pose EvaluatePose(float seconds, bool fall, const Vector3 &position, const Vector3 &rotation,
-                  const Vector3 &cameraPosition, const Vector3 &cameraRotation, float fov);
+                  const Vector3 &cameraPosition, const Vector3 &cameraRotation, float fov, float fallVelocity = -6.0f);
 // 入力はTriggerの時だけ渡す。連続決定・演出中の入力・再開始を描画なしで検証できる。
 enum class Action {
     None,

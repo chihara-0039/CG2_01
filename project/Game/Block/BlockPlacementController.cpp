@@ -107,11 +107,22 @@ bool BlockPlacementController::TryPlace(const Int3 &index, float rotationY) {
         item.placed = *cell;
         saved.push_back(item);
     }
+    Vector3 center{};
+    for (const auto &cell : saved) {
+        center.x += cell.index.x;
+        center.y += cell.index.y;
+        center.z += cell.index.z;
+    }
+    const float n = static_cast<float>(saved.size());
+    center = {center.x / n, center.y / n + .5f, center.z / n};
     lastPlacement_ = std::move(saved);
     undoType_ = placeBlockType_;
     undoCustomId_ = placeCustomId_;
     undoConsumed_ = consumes;
     stageRenderer_->BuildFromStageMap(*stageMap_);
+    if (feedback_) {
+        feedback_(center, false);
+    }
     return true;
 }
 
@@ -142,6 +153,14 @@ bool BlockPlacementController::TryUndo() {
             return false;
         }
     }
+    Vector3 center{};
+    for (const auto &cell : lastPlacement_) {
+        center.x += cell.index.x;
+        center.y += cell.index.y;
+        center.z += cell.index.z;
+    }
+    const float n = static_cast<float>(lastPlacement_.size());
+    center = {center.x / n, center.y / n + .5f, center.z / n};
     for (const auto &s : lastPlacement_) {
         stageMap_->RemoveBlock(s.index);
         *stageMap_->GetCell(s.index) = s.before;
@@ -152,5 +171,8 @@ bool BlockPlacementController::TryUndo() {
     lastPlacement_.clear();
     stageRenderer_->BuildFromStageMap(*stageMap_);
     lastReason_ = Placement::Reason::Ready;
+    if (feedback_) {
+        feedback_(center, true);
+    }
     return true;
 }

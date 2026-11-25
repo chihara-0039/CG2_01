@@ -7,14 +7,15 @@
 #include <array>
 #include <chrono>
 #include <memory>
+class ParticleManager;
 
 // 通常ゲーム専用。死亡地点を保存して物理から分離し、選択待ちと再開幕まで管理する。
 class GameOver {
   public:
     using Action = GameOverTimeline::Action;
     void Initialize(SpriteCommon *common, const std::array<uint32_t, 9> &textures);
-    void Begin(Camera *camera, const Vector3 &position, const Vector3 &rotation, bool fall);
-    Action Update(Camera *camera, const Input &input, bool visible);
+    void Begin(Camera *camera, const Vector3 &position, const Vector3 &rotation, bool fall, float fallVelocity = -6.0f);
+    Action Update(Camera *camera, const Input &input, bool visible, ParticleManager *particles = nullptr);
     void Draw();
     void Cancel(Camera *camera);
     void Finalize();
@@ -46,4 +47,6 @@ class GameOver {
     bool fall_ = false, titleSoundPlayed_ = false;
     float selectionY_ = 425;
     float playerScale_ = 1;
+    float trailTimer_ = 0;
+    float fallVelocity_ = -6.0f;
 };

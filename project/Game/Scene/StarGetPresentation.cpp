@@ -139,23 +139,7 @@ void StarGetPresentation::Update(float time, Player &player, Camera &camera, con
     object_->SetRotation({.08f * std::sin(time * 3), angle + f.spin, .08f * std::sin(time * 4)});
     object_->SetScale({f.scale * .65f, f.scale * .65f, f.scale * .65f});
     if (particles && previous_ < .72f && time >= .72f) {
-        ParticleManager::HitEffectSettings settings;
-        settings.size = .5f;
-        settings.lifeScale = .65f;
-        settings.slashCount = 0;
-        settings.sparkCount = 30;
-        settings.blueRatio = 0;
-        settings.pillarPower = 0;
-        settings.ringPower = .35f;
-        settings.sparkSpeed = .6f;
-        settings.coreColor = {1, .9f, .5f, 1};
-        settings.sparkColor = {1, .8f, .2f, 1};
-        settings.ringColor = {1, .85f, .3f, 1};
-        settings.crossColor = {1, .9f, .4f, 1};
-        settings.sparkSecondaryColor = {1, .95f, .6f, 1};
-        settings.corePower = .5f;
-        settings.crossPower = .4f;
-        particles->EmitHitEffect(starPosition_, settings);
+        particles->EmitAdventureEffect(ParticleManager::AdventureEffect::Star, starPosition_);
     }
     previous_ = time;
     sound_.CleanupFinishedSoundEffects();

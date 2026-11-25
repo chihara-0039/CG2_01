@@ -1,4 +1,6 @@
 ﻿#include "StageMap.h"
+#include "../Engine/Base/MouseLookPolicy.h"
+#include "../Engine/Graphics/Particle/AdventureParticlePath.h"
 #include "../Game/Stage/RotationIsland.h"
 #include "../Engine/Utility/CameraVisibility.h"
 #include "../Game/Stage/StagePSwitchVisualController.h"
@@ -18,6 +20,72 @@
 
 // マップ保存・拡張・回転・選択などの回帰テストを実行する。
 int main() {
+    // 表示ポリシー・画面四辺・移動量の累積と消費を、OSのカーソル位置と切り離して確認する。
+    assert(MouseLookPolicy::Visible(false, true, false));
+    assert(!MouseLookPolicy::Visible(true, true, false));
+    assert(MouseLookPolicy::Visible(true, true, true));
+    assert(MouseLookPolicy::Visible(true, false, false));
+    const auto area = MouseLookPolicy::Region(1920, 1080, true);
+    assert(area.left == 288 && area.top == 38 && area.right == 1536);
+    assert(!MouseLookPolicy::Contains(area, area.left - 1, 100));
+    const long cx = (area.left + area.right) / 2, cy = (area.top + area.bottom) / 2;
+    assert(!MouseLookPolicy::NearEdge(area, cx, cy));
+    assert(MouseLookPolicy::NearEdge(area, area.left, cy));
+    assert(MouseLookPolicy::NearEdge(area, area.right - 1, cy));
+    assert(MouseLookPolicy::NearEdge(area, cx, area.top));
+    assert(MouseLookPolicy::NearEdge(area, cx, area.bottom - 1));
+    MouseLookPolicy::RelativeMotion motion;
+    for (int i = 0; i < 100; ++i) {
+        motion.Add(12, -4);
+    }
+    motion.AddWheel(120);
+    const auto delta = motion.Consume(true);
+    assert(delta.x == 1200 && delta.y == -400 && delta.wheel == 120 && delta.received);
+    assert(!motion.Consume(true).received);
+    motion.Add(500, 500);
+    assert(!motion.Consume(false).received && !motion.Consume(true).received);
+    std::cout
+        << "PASS: cursor policy, viewport edges and relative input survive cursor limits and reset after focus loss\n";
+
+    // 異なるフレーム間隔でも吸い込みの端点が一致し、途中で不正な座標を作らない。
+    for (int fps : {30, 60, 144}) {
+        const Vector3 start{3, 2, -1}, target{-2, 4, 5};
+        const auto first = AdventureParticlePath::Sample(start, target, 0, 1);
+        const auto last = AdventureParticlePath::Sample(start, target, 1, 1);
+        assert(std::abs(first.x - start.x) < .001f && std::abs(last.x - target.x) < .001f);
+        assert(std::abs(last.y - target.y) < .001f && std::abs(last.z - target.z) < .001f);
+        for (int i = 0; i <= fps; ++i) {
+            const auto p = AdventureParticlePath::Sample(start, target, static_cast<float>(i) / fps, 1);
+            assert(std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z));
+            assert(p.y >= 2 && p.y <= 4.51f);
+        }
+    }
+    std::cout << "PASS: collection spiral endpoints and bounded motion at 30/60/144 FPS\n";
+    // 組立・取消の端点と時間刻みへの依存を確認し、取消直後に袋へ飛ばないことも保証する。
+    for (int fps : {30, 60, 144}) {
+        const Vector3 start{3, 2, -1}, target{-2, 4, 5};
+        for (bool undo : {false, true}) {
+            const auto sample = [&](float t) {
+                return undo ? AdventureParticlePath::Undo(start, target, t, .7f)
+                            : AdventureParticlePath::Assemble(start, target, t);
+            };
+            for (const float t : {-.5f, 0.0f, 1.0f, 1.5f}) {
+                const auto p = sample(t);
+                const auto expected = t <= 0 ? start : target;
+                assert(std::abs(p.x - expected.x) < .001f && std::abs(p.y - expected.y) < .001f &&
+                       std::abs(p.z - expected.z) < .001f);
+            }
+            for (int i = 0; i <= fps; ++i) {
+                const auto p = sample(static_cast<float>(i) / fps);
+                assert(std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z));
+                assert(p.x >= -2.66f && p.x <= 3.66f && p.y >= 2 && p.y <= 4.61f && p.z >= -1.66f && p.z <= 5.66f);
+            }
+        }
+        const auto loosened = AdventureParticlePath::Undo(start, target, .25f, .7f);
+        assert(std::hypot(loosened.x - start.x, loosened.z - start.z) < .66f);
+    }
+    std::cout << "PASS: assembly and undo endpoints, bounds and release phase at 30/60/144 FPS\n";
+
     for (int fps : {30, 60, 144}) {
         for (int i = 0; i <= fps * 4; ++i) {
             const auto frame = StarGet::Evaluate(static_cast<float>(i) / fps);

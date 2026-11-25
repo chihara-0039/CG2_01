@@ -57,6 +57,11 @@ void GameClearScene::Initialize(GameRuntime &game) {
     camera_.SetRotation({.10f, 0, 0});
     camera_.SetFov(.56f);
     camera_.Update();
+    stampParticles_ = std::make_unique<ParticleManager>();
+    stampParticles_->Initialize(common->GetDxCommon(), common->GetTextureManager());
+    stampParticles_->SetAmbientCloudEmitterActive(false);
+    stampParticles_->SetWeatherEmitterActive(false);
+    stampParticles_->SetDrawGPUParticleSphere(false);
     sound_.Initialize();
     pageSound_ = MakeSound(false);
     stampSound_ = MakeSound(true);
@@ -76,6 +81,7 @@ void GameClearScene::Update(GameRuntime &game, const SceneUpdateContext &context
     }
     if (JournalResult::Crossed(previous, elapsed_, JournalResult::kImpact)) {
         sound_.SoundPlay(stampSound_, .8f);
+        stampParticles_->EmitSceneEffect(ParticleManager::SceneEffect::Stamp, {3.65f, -1.65f, -.12f});
     }
     frame_ = JournalResult::Evaluate(elapsed_);
     if (frame_.ready && game.IsResultAnimationVisible()) {
@@ -115,6 +121,13 @@ void GameClearScene::Update(GameRuntime &game, const SceneUpdateContext &context
         obj->SetCamera(camera_.GetViewMatrix(), camera_.GetProjectionMatrix());
         obj->Update(context.lightViewProjection);
     }
+    // 閉じた表紙へ打刻の粒を残さない。打刻の時刻自体は巻き戻さない。
+    if (frame_.ready && frame_.open < .99f) {
+        stampParticles_->ClearParticles();
+    }
+    // 非アクティブ・暗転中は紙面の演出も停止し、復帰時に一気に進ませない。
+    stampParticles_->Update(game.IsResultAnimationVisible() ? dt : 0, camera_.GetViewMatrix(),
+                            camera_.GetProjectionMatrix(), {});
     game.RunGameClearScene(frame_.ready);
 }
 // クリア手帳の表示対象を選び、描画コマンドを記録する。
@@ -138,9 +151,11 @@ void GameClearScene::Draw(GameRuntime &game) {
     if (frame_.hand) {
         objects_[Stamp]->Draw();
     }
+    stampParticles_->Draw();
 }
 // クリア手帳が保持するオブジェクトとリソースを解放する。
 void GameClearScene::Finalize(GameRuntime &game) {
+    stampParticles_.reset();
     sound_.StopAllSoundEffects();
     sound_.Finalize();
     for (auto &obj : objects_) {

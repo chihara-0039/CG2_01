@@ -1,4 +1,5 @@
 #include "GameOver.h"
+#include "ParticleManager.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -75,7 +76,7 @@ Sound::SoundData GameOver::MakeSound(int kind) {
     return data;
 }
 // 失敗時の位置・姿勢・カメラを保存し、再挑戦の演出を開始する。
-void GameOver::Begin(Camera *camera, const Vector3 &position, const Vector3 &rotation, bool fall) {
+void GameOver::Begin(Camera *camera, const Vector3 &position, const Vector3 &rotation, bool fall, float fallVelocity) {
     initialPosition_ = position_ = position;
     initialRotation_ = rotation_ = rotation;
     cameraPosition_ = camera->GetPosition();
@@ -83,9 +84,11 @@ void GameOver::Begin(Camera *camera, const Vector3 &position, const Vector3 &rot
     cameraFov_ = camera->GetFov();
     flow_.Begin();
     fall_ = fall;
+    fallVelocity_ = fallVelocity;
     titleSoundPlayed_ = false;
     selectionY_ = 425;
     playerScale_ = 1;
+    trailTimer_ = 0;
     frame_ = GameOverTimeline::Evaluate(0);
     lastUpdate_ = std::chrono::steady_clock::now();
     sound_.StopAllSoundEffects();
@@ -93,7 +96,7 @@ void GameOver::Begin(Camera *camera, const Vector3 &position, const Vector3 &rot
     UpdateSprites();
 }
 // 失敗演出を進め、再挑戦・選択画面への移動・入力解禁の状態を更新する。
-GameOver::Action GameOver::Update(Camera *camera, const Input &input, bool visible) {
+GameOver::Action GameOver::Update(Camera *camera, const Input &input, bool visible, ParticleManager *particles) {
     if (!flow_.Active()) {
         return Action::None;
     }
@@ -112,8 +115,17 @@ GameOver::Action GameOver::Update(Camera *camera, const Input &input, bool visib
     }
     frame_ = GameOverTimeline::Evaluate(flow_.Elapsed());
     const auto pose = GameOverTimeline::EvaluatePose(flow_.Elapsed(), fall_, initialPosition_, initialRotation_,
-                                                     cameraPosition_, cameraRotation_, cameraFov_);
+                                                     cameraPosition_, cameraRotation_, cameraFov_, fallVelocity_);
     position_ = pose.position;
+    // 落下の芝居中だけ風の筋を残す。処理落ち後も過去の発生分をまとめて出さない。
+    if (fall_ && particles && flow_.Elapsed() < 1.6f) {
+        trailTimer_ -= delta;
+        if (trailTimer_ <= 0) {
+            particles->EmitSceneEffect(ParticleManager::SceneEffect::FallTrail,
+                                       {position_.x, position_.y + .5f, position_.z});
+            trailTimer_ = .07f;
+        }
+    }
     rotation_ = pose.rotation;
     playerScale_ = pose.scale;
     camera->SetPosition(pose.cameraPosition);

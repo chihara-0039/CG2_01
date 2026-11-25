@@ -481,7 +481,8 @@ void GameRuntime::RunStageEditorScene() {
 void GameRuntime::RunGamePlayScene() {
     if (gameOver_ && gameOver_->IsActive()) {
         const auto action =
-            gameOver_->Update(camera.get(), *input, sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive());
+            gameOver_->Update(camera.get(), *input, sceneFadePhase_ == SceneFadePhase::None && !IsWindowInactive(),
+                              particleManager.get());
         if (gameOver_->IsShowingFailure() && player_) {
             player_->SetPosition(gameOver_->GetPosition());
             player_->SetRotation(gameOver_->GetRotation());
@@ -491,6 +492,9 @@ void GameRuntime::RunGamePlayScene() {
         }
         if (action == GameOver::Action::Retry && player_) {
             player_->Respawn(true);
+            if (particleManager) {
+                particleManager->EmitSceneEffect(ParticleManager::SceneEffect::Retry, player_->GetPosition());
+            }
             useFirstPersonCamera_ = false;
             bgmController_.Update(true);
             gameplayCameraController_.ResetCamera(camera.get(), player_.get(), stageMap_,

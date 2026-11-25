@@ -4,6 +4,8 @@
 #include "StageRenderer.h"
 #include "BlockInventory.h"
 #include "PlacementPlan.h"
+#include <functional>
+#include <utility>
 
 // 所持ブロックをステージ上へ配置するための制御クラス。
 class BlockPlacementController {
@@ -15,6 +17,8 @@ class BlockPlacementController {
     bool TryPlace(const Int3 &index, float rotationY = 0.0f);
     Placement::Plan Evaluate(const Int3 &index, float rotationY = 0) const;
     bool TryUndo();
+    // 成功した配置・取消だけを通知し、描画側への依存を持たせない。
+    void SetFeedbackCallback(std::function<void(const Vector3 &, bool)> callback) { feedback_ = std::move(callback); }
     void SetRotationIsland(bool enabled) { rotationIsland_ = enabled; }
     void RotateUndo(bool reverse, const RotationRegion &region = {11, 8, 9, {8, 2, 12}});
     bool HasUndo() const { return !lastPlacement_.empty(); }
@@ -37,6 +41,7 @@ class BlockPlacementController {
         MapCell placed;
     };
     std::vector<SavedCell> lastPlacement_;
+    std::function<void(const Vector3 &, bool)> feedback_;
     BlockType undoType_ = BlockType::None;
     int undoCustomId_ = 0;
     bool rotationIsland_ = false;
