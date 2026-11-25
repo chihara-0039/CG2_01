@@ -1,5 +1,6 @@
 #pragma once
 #include "MyMath.h"
+#include "CameraMatrixCache.h"
 #include "Object3d.h"
 #include <Object3dCommon.h>
 #include <Model.h>
@@ -53,13 +54,13 @@ class Camera {
     /// ビュー行列 (World → Camera 空間への変換行列)。
     /// Object3d::SetCamera() や ShadowMap の lightVP などに渡す。
     /// </summary>
-    const Matrix4x4 &GetViewMatrix() const { return viewMatrix_; }
+    const Matrix4x4 &GetViewMatrix() const { return matrixCache_.View(); }
 
     /// <summary>
     /// プロジェクション行列 (Camera → クリップ空間への変換行列)。
     /// FOV・アスペクト比・Near/Far クリップを元に計算される。
     /// </summary>
-    const Matrix4x4 &GetProjectionMatrix() const { return projectionMatrix_; }
+    const Matrix4x4 &GetProjectionMatrix() const { return matrixCache_.Projection(); }
 
     /// <summary>ワールド空間でのカメラ位置 (スペキュラー計算などに使用)</summary>
     const Vector3 &GetPosition() const { return transform_.translate; }
@@ -128,9 +129,8 @@ class Camera {
     float farClip_ = 1000.0f;          // これより奥は描画しない (Far クリップ面)
 
     // ── 計算済み行列 ──────────────────────────────────────
-    // Update() のたびに再計算される。毎フレーム GetXxxMatrix() で取得すること。
-    Matrix4x4 viewMatrix_{};
-    Matrix4x4 projectionMatrix_{};
+    // Update() で変更された行列のみ再計算する。毎フレーム GetXxxMatrix() で取得すること。
+    CameraMatrixCache matrixCache_;
 
     // ── Orbit カメラ制御用 ────────────────────────────────
     // カメラは target_ を中心に distance_ 離れた球面上に配置される。
