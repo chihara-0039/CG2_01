@@ -1,4 +1,5 @@
-﻿#include "StageMap.h"
+#include "StageMap.h"
+#include "StageCellBehavior.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -190,7 +191,7 @@ void StageMap::Update(float deltaTime, const Vector3 &playerPos) {
 
     // 時間制ブロックは variant の十の位をグループ、 一の位を出現順として扱う。
     // まず各グループに存在する出現順を集め、ステージごとに必要な周期を求められるようにする。
-    std::vector<int> groupOrders[10];
+    std::array<std::vector<int>, 10> groupOrders;
     for (const auto &cell : cells_) {
         if (cell.type == BlockType::TimedBlock) {
             int group = cell.variant / 10;
@@ -215,177 +216,9 @@ void StageMap::Update(float deltaTime, const Vector3 &playerPos) {
         for (int z = 0; z < depth_; ++z) {
             for (int x = 0; x < width_; ++x) {
                 MapCell &cell = cells_[ToIndex(x, y, z)];
-
-                if (cell.type == BlockType::TimedBlock) {
-                    // 同じグループ内で、order の小さいブロックから順に出現させる。
-                    int group = cell.variant / 10;
-                    int order = cell.variant % 10;
-                    if (group >= 1 && group < 10 && !groupOrders[group].empty()) {
-                        const auto &orders = groupOrders[group];
-
-                        float kAppearDelay = 1.2f;    // 1.2秒間隔で次のブロックが出現
-                        float kActiveDuration = 3.0f; // 3.0秒間表示する
-                        float kRestDuration = 1.5f;   // 全て消えた後のインターバル
-
-                        // グループ内の最後のブロックが消えた後、少し待ってから最初に戻る。
-                        float cycleDuration =
-                            static_cast<float>(orders.size() - 1) * kAppearDelay + kActiveDuration + kRestDuration;
-
-                        // このブロックの出現順インデックスを取得
-                        auto it = std::find(orders.begin(), orders.end(), order);
-                        size_t idx = std::distance(orders.begin(), it);
-
-                        // 出現時間と消滅時間を計算
-                        float appearTime = static_cast<float>(idx) * kAppearDelay;
-                        float disappearTime = appearTime + kActiveDuration;
-
-                        // 現在の経過時間を周期内に収める
-                        float localCycleTime = std::fmod(accumulatedTime_, cycleDuration);
-                        if (localCycleTime >= appearTime && localCycleTime < disappearTime) {
-                            cell.isSolid = true;
-                        } else {
-                            cell.isSolid = false;
-                        }
-                    }
-                }
-
-#pragma region 崩れる足場
-
-                if (cell.type == BlockType::CrumblingFloor) {
-                    // --- 崩れる処理 ---
-                    if (!cell.isHidden) {
-                        if (cell.crumbleTimer > 0.0f || cell.isCrumbling) {
-                            cell.crumbleTimer += deltaTime;
-                            // ここが崩れるタイマー
-                            if (cell.crumbleTimer >= 1.0f) {
-                                cell.isHidden = true;
-                                cell.isSolid = false;
-                            }
-                        }
-                    }
-
-                    // --- 復活処理 ---
-                    if (cell.isHidden) {
-                        cell.respawnTimer += deltaTime;
-                        if (cell.respawnTimer >= 3.0f) { // 3秒で復活
-                            cell.isHidden = false;
-                            cell.isSolid = true; // 判定復活
-                            cell.respawnTimer = 0.0f;
-                            cell.crumbleTimer = 0.0f;
-                        }
-                    }
-
-                    // --- 演出用の色・透明度計算 ---
-                    if (!cell.isHidden) {
-                        // crumbleTimerが0なら白、1.0に近づくほど赤くなる
-                        float r = cell.crumbleTimer / 1.0f;
-                        cell.colorG = 1.0f - r;
-                        cell.colorB = 1.0f - r;
-                        cell.opacity = 1.0f - r; // ★追加：乗っている間は徐々に透明（フェードアウト）にする
-                    } else {
-                        cell.opacity = 0.0f; // ★追加：完全に消えている間は透明度 0
-                    }
-                    cell.isCrumbling = false;
-                }
-#pragma endregion
-
-                if (cell.type == BlockType::MovingFloor) {
-                    // MovingFloor は moveOffset で指定された目的地まで往復する。
-                    // currentOffset は描画位置、deltaOffset は乗っているプレイヤーを一緒に動かすために使う。
-                    float moveSpeed = 1.0f;
-                    cell.moveTimer += deltaTime * moveSpeed;
-
-                    float moveRate = (std::sin(cell.moveTimer) + 1.0f) / 2.0f;
-
-                    // 前フレームのオフセットを記憶
-                    float oldX = cell.currentOffsetX;
-                    float oldY = cell.currentOffsetY;
-                    float oldZ = cell.currentOffsetZ;
-
-                    // 新しいオフセットを計算
-                    cell.currentOffsetX = static_cast<float>(cell.moveOffset.x) * moveRate;
-                    cell.currentOffsetY = static_cast<float>(cell.moveOffset.y) * moveRate;
-                    cell.currentOffsetZ = static_cast<float>(cell.moveOffset.z) * moveRate;
-
-                    // 1フレーム分の移動量を記録
-                    cell.deltaOffsetX = cell.currentOffsetX - oldX;
-                    cell.deltaOffsetY = cell.currentOffsetY - oldY;
-                    cell.deltaOffsetZ = cell.currentOffsetZ - oldZ;
-                }
-
-                // --- 敵1 (EnemyWalker): 左右往復 (X軸) ---
-                if (cell.type == BlockType::EnemyWalker) {
-                    cell.moveTimer += deltaTime * 2.0f;
-                    cell.currentOffsetX = std::sin(cell.moveTimer) * 2.0f;
-                    cell.currentOffsetY = 0.0f;
-                    cell.currentOffsetZ = 0.0f;
-                }
-
-                // --- 敵2 (EnemyFlyer): 上下往復 (Y軸) ---
-                if (cell.type == BlockType::EnemyFlyer) {
-                    cell.moveTimer += deltaTime * 1.5f;
-                    cell.currentOffsetY = std::sin(cell.moveTimer) * 2.5f;
-                    cell.currentOffsetX = 0.0f;
-                    cell.currentOffsetZ = 0.0f;
-                }
-
-                // --- 敵3 (EnemyChaser): プレイヤー追尾 (一定範囲内のみ) ---
-                if (cell.type == BlockType::EnemyChaser) {
-                    // スポーン地点から一定範囲内にプレイヤーが入ると追尾し、遠ざかると初期位置へ戻る。
-                    Vector3 spawnPos = {static_cast<float>(x), static_cast<float>(y), static_cast<float>(z)};
-                    Vector3 currentPos = {spawnPos.x + cell.currentOffsetX, spawnPos.y + cell.currentOffsetY,
-                                          spawnPos.z + cell.currentOffsetZ};
-                    Vector3 toPlayer = {playerPos.x - currentPos.x, playerPos.y - currentPos.y,
-                                        playerPos.z - currentPos.z};
-                    float distanceToPlayer =
-                        std::sqrt(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y + toPlayer.z * toPlayer.z);
-
-                    // プレイヤーがスポーン位置からどれくらい離れているかを計算
-                    float playerDistanceFromSpawn = std::sqrt((playerPos.x - spawnPos.x) * (playerPos.x - spawnPos.x) +
-                                                              (playerPos.y - spawnPos.y) * (playerPos.y - spawnPos.y) +
-                                                              (playerPos.z - spawnPos.z) * (playerPos.z - spawnPos.z));
-
-                    // プレイヤーがスポーン位置から8マス以内にいる場合のみ追尾する
-                    if (playerDistanceFromSpawn < 8.0f && distanceToPlayer > 0.05f) {
-                        float speed = 1.2f; // 秒速 1.2 マス
-                        Vector3 directionToPlayer = {toPlayer.x / distanceToPlayer, toPlayer.y / distanceToPlayer,
-                                                     toPlayer.z / distanceToPlayer};
-                        Vector3 nextPos = {currentPos.x + directionToPlayer.x * (speed * deltaTime),
-                                           currentPos.y + directionToPlayer.y * (speed * deltaTime),
-                                           currentPos.z + directionToPlayer.z * (speed * deltaTime)};
-
-                        // スポーン位置からの最大追尾距離を 8 マスに制限
-                        Vector3 nextOffset = {nextPos.x - spawnPos.x, nextPos.y - spawnPos.y, nextPos.z - spawnPos.z};
-                        // 8 マス以上離れないように制限する
-                        float offsetDistanceFromSpawn = std::sqrt(
-                            nextOffset.x * nextOffset.x + nextOffset.y * nextOffset.y + nextOffset.z * nextOffset.z);
-                        if (offsetDistanceFromSpawn > 8.0f) {
-                            nextOffset = {nextOffset.x / offsetDistanceFromSpawn * 8.0f,
-                                          nextOffset.y / offsetDistanceFromSpawn * 8.0f,
-                                          nextOffset.z / offsetDistanceFromSpawn * 8.0f};
-                        }
-                        cell.currentOffsetX = nextOffset.x;
-                        cell.currentOffsetY = nextOffset.y;
-                        cell.currentOffsetZ = nextOffset.z;
-                    } else {
-                        // プレイヤーが遠い場合は、ゆっくり初期位置に戻る
-                        float returnSpeed = 1.0f;
-                        float currentOffsetDistance = std::sqrt(cell.currentOffsetX * cell.currentOffsetX +
-                                                                cell.currentOffsetY * cell.currentOffsetY +
-                                                                cell.currentOffsetZ * cell.currentOffsetZ);
-                        if (currentOffsetDistance > 0.05f) {
-                            cell.currentOffsetX -=
-                                (cell.currentOffsetX / currentOffsetDistance) * returnSpeed * deltaTime;
-                            cell.currentOffsetY -=
-                                (cell.currentOffsetY / currentOffsetDistance) * returnSpeed * deltaTime;
-                            cell.currentOffsetZ -=
-                                (cell.currentOffsetZ / currentOffsetDistance) * returnSpeed * deltaTime;
-                        } else {
-                            cell.currentOffsetX = 0.0f;
-                            cell.currentOffsetY = 0.0f;
-                            cell.currentOffsetZ = 0.0f;
-                        }
-                    }
+                if (const auto *behavior = FindStageCellBehavior(cell.type)) {
+                    behavior->Update(cell,
+                                     StageCellContext{deltaTime, accumulatedTime_, {x, y, z}, playerPos, groupOrders});
                 }
             }
         }

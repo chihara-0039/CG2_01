@@ -57,6 +57,8 @@
     <ClCompile Include="Engine\Graphics\3D\Object3d.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Object3dCommon.cpp" />
     <ClCompile Include="Engine\Graphics\Particle\ParticleManager.cpp" />
+    <ClCompile Include="Engine\Graphics\Particle\ParticleMotion.cpp" />
+    <ClCompile Include="Game\Stage\StageCellBehavior.cpp" />
     <ClCompile Include="Game\Player\Player.cpp" />
     <ClCompile Include="Engine\Graphics\2D\Sprite.cpp" />
     <ClCompile Include="Engine\Graphics\2D\SpriteCommon.cpp" />
@@ -101,6 +103,9 @@
     <ClInclude Include="Engine\Base\MouseLookPolicy.h" />
     <ClInclude Include="Tests\MouseLookChecks.h" />
     <ClInclude Include="Engine\Graphics\Particle\AdventureParticlePath.h" />
+    <ClInclude Include="Engine\Graphics\Particle\Particle.h" />
+    <ClInclude Include="Engine\Graphics\Particle\ParticleMotion.h" />
+    <ClInclude Include="Game\Stage\StageCellBehavior.h" />
     <ClInclude Include="Game\Player\FootstepEmitter.h" />
     <ClInclude Include="Game\Environment\FogExplorer.h" />
     <ClInclude Include="Engine\Utility\D3DResourceLeakChecker.h" />
