@@ -3,6 +3,34 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
+
+// 前回キーを保って再生入力を進める。スティックの不正値を通常入力へ持ち込まない。
+void Input::ApplyPlaybackFrame(float stickX, float stickY, std::initializer_list<BYTE> keys) {
+    std::memcpy(keyPre_, key_, sizeof(key_));
+    std::memset(key_, 0, sizeof(key_));
+    for (BYTE key : keys) {
+        key_[key] = 0x80;
+    }
+    gamePadState_ = {};
+    gamePadState_.connected = true;
+    gamePadState_.leftStickX = std::isfinite(stickX) ? std::clamp(stickX, -1.0f, 1.0f) : 0;
+    gamePadState_.leftStickY = std::isfinite(stickY) ? std::clamp(stickY, -1.0f, 1.0f) : 0;
+}
+
+// 入力の再生も公開操作を通し、内部バッファへのfriendアクセスを不要にする。
+bool Input::ApplyPlaybackMouse(LONG x, LONG y, int button) {
+    if (button < -1 || button >= 3) {
+        return false;
+    }
+    mouseState_ = {};
+    mouseState_.x = x;
+    mouseState_.y = y;
+    if (button >= 0) {
+        mouseState_.buttons[button] = true;
+    }
+    return true;
+}
 
 // キーボード・マウス・パッドの入力を準備し、初期値と必要なリソースを設定する。
 void Input::Initialize(WinApp *winApp) {

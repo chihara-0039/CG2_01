@@ -5,6 +5,7 @@
 #include <list>
 #include <string>
 #include <unordered_map>
+#include <random>
 #include "MyMath.h"
 #include "DirectXCommon.h"
 #include "TextureManager.h"
@@ -138,6 +139,8 @@ class ParticleManager {
         float prewarmSeconds = 0.0f;
     };
 
+  private:
+    // 描画用の管理情報と粒リストは、マネージャー内の操作だけで変更する。
     struct ParticleGroup {
         uint32_t textureHandle = 0;
         std::list<Particle> particles;
@@ -151,6 +154,7 @@ class ParticleManager {
         uint32_t cylinderInstanceCount = 0;
     };
 
+  public:
     struct HitEffectSettings {
         float size = 1.0f;
         float brightness = 1.0f;
@@ -342,8 +346,6 @@ class ParticleManager {
     }
     void SetTexture(const std::string &groupName, uint32_t textureHandle);
     void CreateParticleGroup(const std::string &groupName, uint32_t textureHandle);
-    ParticleGroup *FindParticleGroup(const std::string &groupName);
-    const ParticleGroup *FindParticleGroup(const std::string &groupName) const;
 
     void SetDrawGPUParticleSphere(bool draw) { drawGPUParticleSphere_ = draw; }
     bool GetDrawGPUParticleSphere() const { return drawGPUParticleSphere_; }
@@ -404,6 +406,8 @@ class ParticleManager {
     const std::list<Particle> &Particles() const;
 
   private: // メンバ変数
+    // 発生の乱数状態もマネージャーごとに所有し、別シーンと共有しない。
+    std::mt19937_64 random_{std::random_device{}()};
     DirectXCommon *dxCommon_ = nullptr;
     TextureManager *textureManager_ = nullptr;
 

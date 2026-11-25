@@ -167,6 +167,6 @@ class GameplayCameraController {
     //透過の強さ
     float wallTransparencyAlpha_ = 0.25f;
 
-  public:
+  private:
     int currentStageIndex_ = 0;
 };

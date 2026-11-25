@@ -1,4 +1,4 @@
-﻿#include "AdventureParticlePath.h"
+#include "AdventureParticlePath.h"
 #include "ParticleManager.h"
 #include "StageMap.h"
 #include <algorithm>
@@ -69,10 +69,6 @@ ComPtr<ID3D12Resource> CreateBufferResource(ID3D12Device *device, D3D12_HEAP_TYP
     return resource;
 }
 }
-
-// 乱数生成器
-static std::random_device seed_gen;
-static std::mt19937_64 engine(seed_gen());
 
 // 粒子の発生・更新・描画を準備し、初期値と必要なリソースを設定する。
 void ParticleManager::Initialize(DirectXCommon *dxCommon, TextureManager *textureManager) {
@@ -224,13 +220,13 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
                 p.transform.rotate = {0.0f, 0.0f, 0.0f};
 
                 // プレイヤーの周囲に発生させる
-                p.transform.translate = {playerPos.x + weatherEmitter_.center.x + distX(engine),
-                                         playerPos.y + weatherEmitter_.center.y + distY(engine),
-                                         playerPos.z + weatherEmitter_.center.z + distZ(engine)};
+                p.transform.translate = {playerPos.x + weatherEmitter_.center.x + distX(random_),
+                                         playerPos.y + weatherEmitter_.center.y + distY(random_),
+                                         playerPos.z + weatherEmitter_.center.z + distZ(random_)};
 
-                p.velocity = {weatherEmitter_.velocity.x + randV(engine) * weatherEmitter_.velocityRandom.x,
-                              weatherEmitter_.velocity.y + randV(engine) * weatherEmitter_.velocityRandom.y,
-                              weatherEmitter_.velocity.z + randV(engine) * weatherEmitter_.velocityRandom.z};
+                p.velocity = {weatherEmitter_.velocity.x + randV(random_) * weatherEmitter_.velocityRandom.x,
+                              weatherEmitter_.velocity.y + randV(random_) * weatherEmitter_.velocityRandom.y,
+                              weatherEmitter_.velocity.z + randV(random_) * weatherEmitter_.velocityRandom.z};
 
                 p.type = Particle::Type::Fall;
                 p.color = weatherEmitter_.color;
@@ -253,8 +249,8 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
         std::uniform_real_distribution<float> zeroOne(0.0f, 1.0f);
         while (ambientCloudEmitter_.emitTimer >= cloudInterval) {
             ambientCloudEmitter_.emitTimer -= cloudInterval;
-            const float baseX = ambientCloudEmitter_.center.x + unit(engine) * ambientCloudEmitter_.areaX;
-            const float baseZ = ambientCloudEmitter_.center.z + unit(engine) * ambientCloudEmitter_.areaZ;
+            const float baseX = ambientCloudEmitter_.center.x + unit(random_) * ambientCloudEmitter_.areaX;
+            const float baseZ = ambientCloudEmitter_.center.z + unit(random_) * ambientCloudEmitter_.areaZ;
             const float normalizedDepth = ambientCloudEmitter_.areaZ > 0.001f
                                               ? (baseZ - ambientCloudEmitter_.center.z) / ambientCloudEmitter_.areaZ
                                               : 0.0f;
@@ -266,30 +262,30 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
             const float depthAlpha = ambientCloudEmitter_.depthParallax ? 0.58f + nearFactor * 0.42f : 1.0f;
             const int wispsPerCloud = std::clamp(ambientCloudEmitter_.wispsPerEmission, 1, 8);
             for (int i = 0; i < wispsPerCloud && Particles().size() < kMaxParticles; ++i) {
-                const float scale = ambientCloudEmitter_.size * (0.72f + zeroOne(engine) * 0.72f) * depthScale;
+                const float scale = ambientCloudEmitter_.size * (0.72f + zeroOne(random_) * 0.72f) * depthScale;
                 Particle cloud;
                 cloud.type = Particle::Type::StormCloud;
                 cloud.ambientCloud = true;
-                cloud.transform.translate = {baseX + unit(engine) * 2.4f * ambientCloudEmitter_.size,
+                cloud.transform.translate = {baseX + unit(random_) * 2.4f * ambientCloudEmitter_.size,
                                              ambientCloudEmitter_.minimumHeight +
-                                                 zeroOne(engine) * ambientCloudEmitter_.heightRange +
-                                                 unit(engine) * 0.45f,
-                                             baseZ + unit(engine) * 1.8f * ambientCloudEmitter_.size};
-                cloud.transform.scale = {(3.0f + zeroOne(engine) * 2.6f) * scale,
-                                         (0.85f + zeroOne(engine) * 0.65f) * scale *
+                                                 zeroOne(random_) * ambientCloudEmitter_.heightRange +
+                                                 unit(random_) * 0.45f,
+                                             baseZ + unit(random_) * 1.8f * ambientCloudEmitter_.size};
+                cloud.transform.scale = {(3.0f + zeroOne(random_) * 2.6f) * scale,
+                                         (0.85f + zeroOne(random_) * 0.65f) * scale *
                                              (std::max)(ambientCloudEmitter_.verticalScale, 0.05f),
                                          1.0f};
-                cloud.transform.rotate = {0.0f, 0.0f, unit(engine) * 0.08f};
-                cloud.velocity = {ambientCloudEmitter_.speed * (0.72f + zeroOne(engine) * 0.55f) * depthSpeed, 0.0f,
+                cloud.transform.rotate = {0.0f, 0.0f, unit(random_) * 0.08f};
+                cloud.velocity = {ambientCloudEmitter_.speed * (0.72f + zeroOne(random_) * 0.55f) * depthSpeed, 0.0f,
                                   0.0f};
                 cloud.color = ambientCloudEmitter_.color;
                 cloud.color.w *= depthAlpha;
                 cloud.initialAlpha = cloud.color.w;
                 cloud.lifeTime = 0.0f;
-                cloud.maxTime = ambientCloudEmitter_.life * (0.82f + zeroOne(engine) * 0.42f);
+                cloud.maxTime = ambientCloudEmitter_.life * (0.82f + zeroOne(random_) * 0.42f);
                 // 初回だけ年齢を分散し、雲海全体が同時に出現・消滅しないようにする。
                 if (prewarmSeconds > 0.0f) {
-                    cloud.lifeTime = zeroOne(engine) * (std::min)(prewarmSeconds, cloud.maxTime * 0.90f);
+                    cloud.lifeTime = zeroOne(random_) * (std::min)(prewarmSeconds, cloud.maxTime * 0.90f);
                     cloud.transform.translate.x += cloud.velocity.x * cloud.lifeTime * 60.0f;
                 }
                 Particles().push_back(cloud);
@@ -326,24 +322,25 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
         while (stormCloudEmitTimer_ >= cloudInterval) {
             stormCloudEmitTimer_ -= cloudInterval;
             constexpr int kCloudWispsPerEmission = 3;
-            const float baseCloudX = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaX : 0.0f;
-            const float baseCloudZ = storm.randomizeCloudPosition ? unit(engine) * storm.cloudAreaZ : 0.0f;
+            const float baseCloudX = storm.randomizeCloudPosition ? unit(random_) * storm.cloudAreaX : 0.0f;
+            const float baseCloudZ = storm.randomizeCloudPosition ? unit(random_) * storm.cloudAreaZ : 0.0f;
             const float baseCloudY =
-                (std::max)(stormCenter_.y + storm.cloudHeight, stormMinimumCloudHeight_) + zeroOne(engine) * 1.4f;
+                (std::max)(stormCenter_.y + storm.cloudHeight, stormMinimumCloudHeight_) + zeroOne(random_) * 1.4f;
             for (int wisp = 0; wisp < kCloudWispsPerEmission; ++wisp) {
-                const float cloudScale = storm.randomizeCloudSize ? 0.78f + zeroOne(engine) * 0.95f : 1.0f;
-                const float localSpreadX = unit(engine) * storm.cloudSize * (0.42f + zeroOne(engine) * 0.34f);
-                const float localSpreadY = unit(engine) * storm.cloudSize * 0.18f;
-                const float localSpreadZ = unit(engine) * storm.cloudSize * (0.30f + zeroOne(engine) * 0.30f);
+                const float cloudScale = storm.randomizeCloudSize ? 0.78f + zeroOne(random_) * 0.95f : 1.0f;
+                const float localSpreadX = unit(random_) * storm.cloudSize * (0.42f + zeroOne(random_) * 0.34f);
+                const float localSpreadY = unit(random_) * storm.cloudSize * 0.18f;
+                const float localSpreadZ = unit(random_) * storm.cloudSize * (0.30f + zeroOne(random_) * 0.30f);
                 Vector4 mistColor = storm.cloudColor;
-                mistColor.w *= 0.54f + zeroOne(engine) * 0.28f;
-                pushStormParticle(Particle::Type::StormCloud,
-                                  {stormCenter_.x + baseCloudX + localSpreadX, baseCloudY + localSpreadY,
-                                   stormCenter_.z + baseCloudZ + localSpreadZ},
-                                  {(3.2f + zeroOne(engine) * 3.4f) * cloudScale * storm.cloudSize,
-                                   (1.0f + zeroOne(engine) * 1.15f) * cloudScale * storm.cloudSize, 1.0f},
-                                  {0.0025f + zeroOne(engine) * 0.0065f, unit(engine) * 0.0009f, unit(engine) * 0.0022f},
-                                  mistColor, storm.cloudLife * (0.85f + zeroOne(engine) * 0.55f), unit(engine) * 0.26f);
+                mistColor.w *= 0.54f + zeroOne(random_) * 0.28f;
+                pushStormParticle(
+                    Particle::Type::StormCloud,
+                    {stormCenter_.x + baseCloudX + localSpreadX, baseCloudY + localSpreadY,
+                     stormCenter_.z + baseCloudZ + localSpreadZ},
+                    {(3.2f + zeroOne(random_) * 3.4f) * cloudScale * storm.cloudSize,
+                     (1.0f + zeroOne(random_) * 1.15f) * cloudScale * storm.cloudSize, 1.0f},
+                    {0.0025f + zeroOne(random_) * 0.0065f, unit(random_) * 0.0009f, unit(random_) * 0.0022f}, mistColor,
+                    storm.cloudLife * (0.85f + zeroOne(random_) * 0.55f), unit(random_) * 0.26f);
             }
         }
 
@@ -351,16 +348,17 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
         const float rainInterval = 1.0f / (std::max)(storm.rainEmitRate, 0.1f);
         while (stormRainEmitTimer_ >= rainInterval) {
             stormRainEmitTimer_ -= rainInterval;
-            const float rainX = storm.randomizeRainPosition ? unit(engine) * storm.rainAreaX : 0.0f;
-            const float rainZ = storm.randomizeRainPosition ? unit(engine) * storm.rainAreaZ : 0.0f;
-            const float rainSpeedVariation = storm.randomizeRainSpeed ? 0.78f + zeroOne(engine) * 0.44f : 1.0f;
+            const float rainX = storm.randomizeRainPosition ? unit(random_) * storm.rainAreaX : 0.0f;
+            const float rainZ = storm.randomizeRainPosition ? unit(random_) * storm.rainAreaZ : 0.0f;
+            const float rainSpeedVariation = storm.randomizeRainSpeed ? 0.78f + zeroOne(random_) * 0.44f : 1.0f;
             const float rainSpawnBaseY = (std::max)(stormCenter_.y + 2.0f, stormMinimumCloudHeight_ - 5.0f);
-            pushStormParticle(Particle::Type::StormRain,
-                              {stormCenter_.x + rainX, rainSpawnBaseY + zeroOne(engine) * 5.5f, stormCenter_.z + rainZ},
-                              {0.018f, (0.42f + zeroOne(engine) * 0.48f) * storm.rainLength, 1.0f},
-                              {(0.027f + zeroOne(engine) * 0.009f) * storm.rainSpeed * rainSpeedVariation,
-                               -0.132f * storm.rainSpeed * rainSpeedVariation, unit(engine) * 0.004f},
-                              storm.rainColor, 0.9f + zeroOne(engine) * 0.65f, -0.14f);
+            pushStormParticle(
+                Particle::Type::StormRain,
+                {stormCenter_.x + rainX, rainSpawnBaseY + zeroOne(random_) * 5.5f, stormCenter_.z + rainZ},
+                {0.018f, (0.42f + zeroOne(random_) * 0.48f) * storm.rainLength, 1.0f},
+                {(0.027f + zeroOne(random_) * 0.009f) * storm.rainSpeed * rainSpeedVariation,
+                 -0.132f * storm.rainSpeed * rainSpeedVariation, unit(random_) * 0.004f},
+                storm.rainColor, 0.9f + zeroOne(random_) * 0.65f, -0.14f);
         }
 
         stormWindEmitTimer_ += deltaTime;
@@ -369,12 +367,12 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
             stormWindEmitTimer_ -= windInterval;
             pushStormParticle(
                 Particle::Type::StormWind,
-                {stormCenter_.x - storm.rainAreaX + zeroOne(engine) * 2.0f,
-                 stormCenter_.y + 0.4f + zeroOne(engine) * 3.8f, stormCenter_.z + unit(engine) * storm.rainAreaZ},
-                {0.026f + zeroOne(engine) * 0.025f, (1.2f + zeroOne(engine) * 2.2f) * storm.windLength, 1.0f},
-                {(0.075f + zeroOne(engine) * 0.055f) * storm.windSpeed, 0.002f + unit(engine) * 0.003f,
-                 unit(engine) * 0.003f},
-                storm.windColor, 1.1f + zeroOne(engine) * 0.7f, 1.5707963f);
+                {stormCenter_.x - storm.rainAreaX + zeroOne(random_) * 2.0f,
+                 stormCenter_.y + 0.4f + zeroOne(random_) * 3.8f, stormCenter_.z + unit(random_) * storm.rainAreaZ},
+                {0.026f + zeroOne(random_) * 0.025f, (1.2f + zeroOne(random_) * 2.2f) * storm.windLength, 1.0f},
+                {(0.075f + zeroOne(random_) * 0.055f) * storm.windSpeed, 0.002f + unit(random_) * 0.003f,
+                 unit(random_) * 0.003f},
+                storm.windColor, 1.1f + zeroOne(random_) * 0.7f, 1.5707963f);
         }
 
         stormLightningTimer_ -= deltaTime;
@@ -390,7 +388,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
             const int burstCount =
                 storm.randomizeLightningBurstCount
                     ? (std::min)(configuredBurstCount,
-                                 1 + static_cast<int>(zeroOne(engine) * static_cast<float>(configuredBurstCount)))
+                                 1 + static_cast<int>(zeroOne(random_) * static_cast<float>(configuredBurstCount)))
                     : configuredBurstCount;
             stormLightningBurstsRemaining_ = burstCount - 1;
             stormLightningBurstTimer_ = (std::max)(storm.lightningBurstInterval, 0.02f);
@@ -399,7 +397,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
             const float maxInterval = (std::max)(storm.lightningIntervalMin, storm.lightningIntervalMax);
             const float frequency = (std::max)(storm.lightningFrequency, 0.05f);
             const float nextInterval = storm.randomizeLightningInterval
-                                           ? minInterval + zeroOne(engine) * (maxInterval - minInterval)
+                                           ? minInterval + zeroOne(random_) * (maxInterval - minInterval)
                                            : (minInterval + maxInterval) * 0.5f;
             stormLightningTimer_ =
                 nextInterval / frequency + storm.lightningBurstInterval * static_cast<float>(burstCount - 1);
@@ -411,7 +409,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
                 HitEffectSettings lightning;
                 // One shared energy value keeps each strike visually coherent: small bolts are
                 // short/thin/dim, while rare large bolts grow longer, thicker and brighter.
-                const float energy = storm.randomizeLightningSize ? zeroOne(engine) : 0.5f;
+                const float energy = storm.randomizeLightningSize ? zeroOne(random_) : 0.5f;
                 const auto rangedScale = [energy](float a, float b, float curve = 1.0f) {
                     const float lo = (std::min)(a, b);
                     const float hi = (std::max)(a, b);
@@ -455,7 +453,7 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
                 if (storm.randomizeLightningBranchCount && storm.lightningBranchCount > 0) {
                     lightning.lightningBranchCount =
                         (std::min)(storm.lightningBranchCount,
-                                   1 + static_cast<int>(zeroOne(engine) *
+                                   1 + static_cast<int>(zeroOne(random_) *
                                                         static_cast<float>(storm.lightningBranchCount)));
                 }
                 lightning.lightningBranchLength = storm.lightningBranchLength;
@@ -471,15 +469,15 @@ void ParticleManager::Update(float deltaTime, const Matrix4x4 &viewMatrix, const
                 lightning.sparkColor = storm.lightningColor;
                 lightning.sparkSecondaryColor = {0.88f, 0.94f, 1.0f, 1.0f};
 
-                const float groupOffsetX = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
-                const float groupOffsetZ = strikeIndex > 0 ? unit(engine) * storm.lightningSimultaneousSpread : 0.0f;
+                const float groupOffsetX = strikeIndex > 0 ? unit(random_) * storm.lightningSimultaneousSpread : 0.0f;
+                const float groupOffsetZ = strikeIndex > 0 ? unit(random_) * storm.lightningSimultaneousSpread : 0.0f;
                 const float lightningCloudY =
                     (std::max)(stormCenter_.y + storm.cloudHeight + 1.2f, stormMinimumCloudHeight_ + 1.2f);
                 const Vector3 lightningOrigin = {
-                    stormCenter_.x + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaX : 0.0f) +
+                    stormCenter_.x + (storm.randomizeLightningPosition ? unit(random_) * storm.lightningAreaX : 0.0f) +
                         groupOffsetX,
-                    lightningCloudY + zeroOne(engine) * 0.8f,
-                    stormCenter_.z + (storm.randomizeLightningPosition ? unit(engine) * storm.lightningAreaZ : 0.0f) +
+                    lightningCloudY + zeroOne(random_) * 0.8f,
+                    stormCenter_.z + (storm.randomizeLightningPosition ? unit(random_) * storm.lightningAreaZ : 0.0f) +
                         groupOffsetZ};
                 stormLightningPosition_ = {lightningOrigin.x, stormCenter_.y + 0.45f, lightningOrigin.z};
                 stormLightningPowerScale_ = 0.35f + energy * 1.15f;
@@ -1431,8 +1429,8 @@ void ParticleManager::EmitStormRainSplash(const Vector3 &pos, const Vector4 &col
     std::uniform_real_distribution<float> lifeDistribution(0.10f, 0.20f);
 
     for (int i = 0; i < kDropCount && Particles().size() < kMaxParticles; ++i) {
-        const float angle = angleDistribution(engine);
-        const float speed = speedDistribution(engine);
+        const float angle = angleDistribution(random_);
+        const float speed = speedDistribution(random_);
         Particle splash;
         splash.type = Particle::Type::Splash;
         splash.transform.translate = pos;
@@ -1442,7 +1440,7 @@ void ParticleManager::EmitStormRainSplash(const Vector3 &pos, const Vector4 &col
         splash.color = {color.x * 1.25f, color.y * 1.25f, color.z * 1.25f, (std::max)(color.w, 0.32f)};
         splash.initialAlpha = splash.color.w;
         splash.lifeTime = 0.0f;
-        splash.maxTime = lifeDistribution(engine);
+        splash.maxTime = lifeDistribution(random_);
         Particles().push_back(splash);
     }
 }
@@ -1459,7 +1457,7 @@ void ParticleManager::EmitSnowImpact(const Vector3 &pos, const Vector4 &color) {
         puff.type = Particle::Type::Splash;
         puff.transform.translate = {pos.x, pos.y + 0.025f, pos.z};
         puff.transform.scale = {0.12f, 0.055f, 1.0f};
-        puff.transform.rotate = {0.0f, 0.0f, angleDistribution(engine)};
+        puff.transform.rotate = {0.0f, 0.0f, angleDistribution(random_)};
         puff.velocity = {0.0f, 0.0f, 0.0f};
         puff.color = {color.x, color.y, color.z, 0.22f};
         puff.initialAlpha = puff.color.w;
@@ -1471,18 +1469,18 @@ void ParticleManager::EmitSnowImpact(const Vector3 &pos, const Vector4 &color) {
     // 数枚だけ跳ね、すぐに速度を失う小さな雪片。
     constexpr int kFlakeCount = 4;
     for (int i = 0; i < kFlakeCount && Particles().size() < kMaxParticles; ++i) {
-        const float angle = angleDistribution(engine);
+        const float angle = angleDistribution(random_);
         Particle flake;
         flake.type = Particle::Type::Splash;
-        flake.transform.translate = {pos.x + offsetDistribution(engine), pos.y + 0.035f,
-                                     pos.z + offsetDistribution(engine)};
+        flake.transform.translate = {pos.x + offsetDistribution(random_), pos.y + 0.035f,
+                                     pos.z + offsetDistribution(random_)};
         flake.transform.scale = {0.035f, 0.035f, 1.0f};
         flake.transform.rotate = {0.0f, 0.0f, angle};
         flake.velocity = {std::cos(angle) * 0.006f, 0.006f, std::sin(angle) * 0.006f};
         flake.color = {color.x, color.y, color.z, (std::max)(color.w, 0.5f)};
         flake.initialAlpha = flake.color.w;
         flake.lifeTime = 0.0f;
-        flake.maxTime = lifeDistribution(engine);
+        flake.maxTime = lifeDistribution(random_);
         Particles().push_back(flake);
     }
 }
@@ -1504,7 +1502,7 @@ void ParticleManager::EmitSplash(const Vector3 &pos, const Vector4 &color) {
         cylinder.type = Particle::Type::Cylinder;
         cylinder.transform.translate = {pos.x, pos.y - 0.05f, pos.z};
         cylinder.transform.scale = {0.7f, 0.8f, 0.7f};
-        cylinder.transform.rotate = {0.0f, distRotate(engine), 0.0f};
+        cylinder.transform.rotate = {0.0f, distRotate(random_), 0.0f};
         cylinder.velocity = {0.0f, 0.0f, 0.0f};
         cylinder.color = {color.x * 0.55f, color.y * 0.75f, 1.0f, 0.28f};
         cylinder.initialAlpha = cylinder.color.w;
@@ -1518,7 +1516,7 @@ void ParticleManager::EmitSplash(const Vector3 &pos, const Vector4 &color) {
         ring.type = Particle::Type::Ring;
         ring.transform.translate = {pos.x, pos.y + 0.22f, pos.z};
         ring.transform.scale = {0.25f, 0.25f, 1.0f};
-        ring.transform.rotate = {0.0f, 0.0f, distRotate(engine)};
+        ring.transform.rotate = {0.0f, 0.0f, distRotate(random_)};
         ring.velocity = {0.0f, 0.0f, 0.0f};
         ring.color = {color.x, color.y, color.z, 0.75f};
         ring.initialAlpha = ring.color.w;
@@ -1532,11 +1530,11 @@ void ParticleManager::EmitSplash(const Vector3 &pos, const Vector4 &color) {
             break;
         }
 
-        const float speed = distSplashSpeed(engine);
+        const float speed = distSplashSpeed(random_);
         Vector3 direction = {};
         float lengthSquared = 0.0f;
         do {
-            direction = {distUnit(engine), distUnit(engine), distUnit(engine)};
+            direction = {distUnit(random_), distUnit(random_), distUnit(random_)};
             lengthSquared = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
         } while (lengthSquared < 0.0001f || lengthSquared > 1.0f);
         const float inverseLength = 1.0f / std::sqrt(lengthSquared);
@@ -1545,16 +1543,16 @@ void ParticleManager::EmitSplash(const Vector3 &pos, const Vector4 &color) {
         direction.z *= inverseLength;
         Particle p;
         p.type = Particle::Type::Splash;
-        p.transform.translate = {pos.x + distOffset(engine), pos.y + 0.2f + distOffset(engine),
-                                 pos.z + distOffset(engine)};
-        p.transform.scale = {0.05f, distScale(engine), 1.0f};
-        p.transform.rotate = {distRotate(engine), distRotate(engine), distRotate(engine)};
+        p.transform.translate = {pos.x + distOffset(random_), pos.y + 0.2f + distOffset(random_),
+                                 pos.z + distOffset(random_)};
+        p.transform.scale = {0.05f, distScale(random_), 1.0f};
+        p.transform.rotate = {distRotate(random_), distRotate(random_), distRotate(random_)};
 
         p.velocity = {direction.x * speed, direction.y * speed, direction.z * speed};
         p.color = color;
         p.initialAlpha = p.color.w;
         p.lifeTime = 0.0f;
-        p.maxTime = distLife(engine);
+        p.maxTime = distLife(random_);
 
         Particles().push_back(p);
     }
@@ -1569,11 +1567,11 @@ void ParticleManager::EmitFireworkBurst(const Vector3 &pos) {
     std::uniform_real_distribution<float> life(1.15f, 1.85f);
     std::uniform_real_distribution<float> offset(-0.08f, 0.08f);
     // 花火一輪ごとの大きさと密度を変え、同じ形が並ばないようにする。
-    const float burstScale = .80f + zeroOne(engine) * .50f;
-    const int sparkCount = 90 + static_cast<int>(zeroOne(engine) * 51);
+    const float burstScale = .80f + zeroOne(random_) * .50f;
+    const int sparkCount = 90 + static_cast<int>(zeroOne(random_) * 51);
 
-    const int pattern = static_cast<int>(zeroOne(engine) * 3) % 3;
-    const int palette = static_cast<int>(zeroOne(engine) * 4.0f) % 4;
+    const int pattern = static_cast<int>(zeroOne(random_) * 3) % 3;
+    const int palette = static_cast<int>(zeroOne(random_) * 4.0f) % 4;
     Vector4 primary = {1.0f, 0.34f, 0.12f, 1.0f};
     Vector4 secondary = {1.0f, 0.88f, 0.24f, 1.0f};
     if (palette == 1) {
@@ -1589,15 +1587,15 @@ void ParticleManager::EmitFireworkBurst(const Vector3 &pos) {
 
     // 横方向を広くした球状に火花を飛ばし、大輪でも粒がまばらにならない密度を保つ。
     for (int i = 0; i < sparkCount && Particles().size() < kMaxParticles; ++i) {
-        const float azimuth = angle(engine);
-        const float y = zeroOne(engine) * 2.0f - 1.0f;
+        const float azimuth = angle(random_);
+        const float y = zeroOne(random_) * 2.0f - 1.0f;
         const float horizontal = std::sqrt((std::max)(0.0f, 1.0f - y * y));
-        const float sparkSpeed = speed(engine) * burstScale;
+        const float sparkSpeed = speed(random_) * burstScale;
 
         Particle spark;
         spark.type = Particle::Type::Firework;
         spark.shape = i % 4 == 0 ? 3.0f : 0.0f;
-        spark.transform.translate = {pos.x + offset(engine), pos.y + offset(engine), pos.z + offset(engine)};
+        spark.transform.translate = {pos.x + offset(random_), pos.y + offset(random_), pos.z + offset(random_)};
         spark.transform.scale = {.12f * burstScale, .12f * burstScale, 1.0f};
         spark.transform.rotate = {0.0f, 0.0f, azimuth};
         spark.velocity = {std::cos(azimuth) * horizontal * sparkSpeed * 1.25f, y * sparkSpeed,
@@ -1605,12 +1603,12 @@ void ParticleManager::EmitFireworkBurst(const Vector3 &pos) {
         if (pattern != 0) {
             const float lobe = pattern == 2 ? .68f + .32f * std::cos(azimuth * 5) : 1.0f;
             spark.velocity = {std::cos(azimuth) * sparkSpeed * lobe * 1.25f, std::sin(azimuth) * sparkSpeed * lobe,
-                              (zeroOne(engine) - .5f) * .012f};
+                              (zeroOne(random_) - .5f) * .012f};
         }
         spark.color = (i % 4 == 0) ? secondary : primary;
         spark.initialAlpha = 1.0f;
         spark.lifeTime = 0.0f;
-        spark.maxTime = life(engine);
+        spark.maxTime = life(random_);
         Particles().push_back(spark);
     }
 
@@ -1704,12 +1702,12 @@ void ParticleManager::EmitHitEffect(const Vector3 &pos, const HitEffectSettings 
         float t = slashCount <= 1 ? 0.5f : static_cast<float>(i) / static_cast<float>(slashCount - 1);
         float angle = settings.slashAngle - settings.slashSpread * 0.5f + t * settings.slashSpread;
         if (settings.randomizeDirection) {
-            angle += distAngle(engine) * 0.35f;
+            angle += distAngle(random_) * 0.35f;
         }
         float side = t - 0.5f;
-        const float positionJitter = settings.randomizePosition ? distOffset(engine) * size * 0.35f : 0.0f;
-        const float scaleJitter = settings.randomizeScale ? 0.88f + distSparkTone(engine) * 0.24f : 1.0f;
-        const float lifeJitter = settings.randomizeLifetime ? 0.85f + distSparkTone(engine) * 0.30f : 1.0f;
+        const float positionJitter = settings.randomizePosition ? distOffset(random_) * size * 0.35f : 0.0f;
+        const float scaleJitter = settings.randomizeScale ? 0.88f + distSparkTone(random_) * 0.24f : 1.0f;
+        const float lifeJitter = settings.randomizeLifetime ? 0.85f + distSparkTone(random_) * 0.30f : 1.0f;
         Vector3 slashPos = {pos.x + side * 0.30f * size + positionJitter,
                             pos.y + (0.05f + std::sin(t * kPi) * 0.12f) * size + positionJitter,
                             pos.z + side * 0.10f * size + positionJitter};
@@ -1743,26 +1741,26 @@ void ParticleManager::EmitHitEffect(const Vector3 &pos, const HitEffectSettings 
                 break;
             default: // Radial
                 angle = settings.randomizeDirection
-                            ? distLightningAngle(engine)
+                            ? distLightningAngle(random_)
                             : (static_cast<float>(i) / static_cast<float>(lightningCount)) * kPi * 2.0f;
                 break;
             }
             if (settings.lightningMode != 0 && settings.randomizeDirection) {
-                angle += distDirection(engine) * settings.lightningDirectionSpread;
+                angle += distDirection(random_) * settings.lightningDirectionSpread;
             }
             const float distance =
-                settings.randomizePosition ? distLightningRadius(engine) * 0.12f * size * lightningSpread : 0.0f;
+                settings.randomizePosition ? distLightningRadius(random_) * 0.12f * size * lightningSpread : 0.0f;
             Vector3 boltCursor = {pos.x + std::cos(angle) * distance,
-                                  pos.y + (settings.randomizePosition ? distOffset(engine) * size : 0.0f),
-                                  pos.z + (settings.randomizePosition ? distOffset(engine) * size * 0.35f : 0.0f)};
+                                  pos.y + (settings.randomizePosition ? distOffset(random_) * size : 0.0f),
+                                  pos.z + (settings.randomizePosition ? distOffset(random_) * size * 0.35f : 0.0f)};
             std::vector<Vector3> mainBoltPoints;
             std::vector<float> mainBoltAngles;
             mainBoltPoints.reserve(static_cast<size_t>(lightningSegments) + 1);
             mainBoltAngles.reserve(lightningSegments);
             mainBoltPoints.push_back(boltCursor);
-            const float boltTone = settings.randomizeColor ? distSparkTone(engine) : 0.35f;
+            const float boltTone = settings.randomizeColor ? distSparkTone(random_) : 0.35f;
             const float boltWidth = (0.018f + 0.016f * boltTone) * size * lightningPower * settings.lightningWidth;
-            const float boltLife = (settings.randomizeLifetime ? distLightningLife(engine) : 0.115f) * lifeScale;
+            const float boltLife = (settings.randomizeLifetime ? distLightningLife(random_) : 0.115f) * lifeScale;
             const float colorVariation = settings.randomizeColor ? 0.82f + boltTone * 0.36f : 1.0f;
             const Vector4 boltColor = tintColor(settings.lightningColor, 1.45f * colorVariation, 1.35f * colorVariation,
                                                 1.20f * colorVariation, 0.68f * lightningPower);
@@ -1770,10 +1768,10 @@ void ParticleManager::EmitHitEffect(const Vector3 &pos, const HitEffectSettings 
                                                 settings.lightningGlowOpacity * lightningPower);
 
             for (int segment = 0; segment < lightningSegments; ++segment) {
-                const float segmentScale = settings.randomizeScale ? 0.72f + distSparkTone(engine) * 0.56f : 1.0f;
+                const float segmentScale = settings.randomizeScale ? 0.72f + distSparkTone(random_) * 0.56f : 1.0f;
                 const float segmentLength =
                     size * lightningLength * segmentScale / static_cast<float>(lightningSegments);
-                const float jitter = settings.randomizeDirection ? distAngle(engine) * (1.8f + lightningSpread) : 0.0f;
+                const float jitter = settings.randomizeDirection ? distAngle(random_) * (1.8f + lightningSpread) : 0.0f;
                 angle += jitter;
 
                 const Vector3 direction = {std::cos(angle), std::sin(angle), 0.0f};
@@ -1801,13 +1799,13 @@ void ParticleManager::EmitHitEffect(const Vector3 &pos, const HitEffectSettings 
                 const float branchSide = branch % 2 == 0 ? 1.0f : -1.0f;
                 float branchAngle =
                     mainBoltAngles[pointIndex - 1] +
-                    branchSide * (0.35f + settings.lightningBranchSpread * (0.45f + 0.35f * distSparkTone(engine)));
+                    branchSide * (0.35f + settings.lightningBranchSpread * (0.45f + 0.35f * distSparkTone(random_)));
                 const float branchTotalLength =
-                    size * lightningLength * settings.lightningBranchLength * (0.72f + 0.38f * distSparkTone(engine));
+                    size * lightningLength * settings.lightningBranchLength * (0.72f + 0.38f * distSparkTone(random_));
                 const float branchWidth =
                     0.022f * size * lightningPower * settings.lightningWidth * settings.lightningBranchWidth;
                 const float branchLife =
-                    (settings.randomizeLifetime ? distLightningLife(engine) : 0.10f) * lifeScale * 0.9f;
+                    (settings.randomizeLifetime ? distLightningLife(random_) : 0.10f) * lifeScale * 0.9f;
                 const Vector4 branchColor =
                     tintColor(settings.lightningColor, 1.15f, 1.25f, 1.25f, 0.48f * lightningPower);
                 const Vector4 branchGlowColor = tintColor(settings.lightningGlowColor, 1.0f, 1.0f, 1.0f,
@@ -1815,7 +1813,7 @@ void ParticleManager::EmitHitEffect(const Vector3 &pos, const HitEffectSettings 
 
                 for (int segment = 0; segment < branchSegments; ++segment) {
                     if (settings.randomizeDirection) {
-                        branchAngle += distAngle(engine) * (1.2f + settings.lightningBranchSpread);
+                        branchAngle += distAngle(random_) * (1.2f + settings.lightningBranchSpread);
                     }
                     const float segmentLength = branchTotalLength / static_cast<float>(branchSegments);
                     const Vector3 direction = {std::cos(branchAngle), std::sin(branchAngle), 0.0f};
@@ -1882,19 +1880,19 @@ void ParticleManager::EmitHitEffect(const Vector3 &pos, const HitEffectSettings 
     int sparkCount = std::clamp(settings.sparkCount, 0, 160);
     for (int i = 0; i < sparkCount; ++i) {
         float baseAngle = (static_cast<float>(i) / static_cast<float>(sparkCount)) * kPi * 2.0f;
-        float angle = baseAngle + (settings.randomizeDirection ? distAngle(engine) : 0.0f);
-        float tone = settings.randomizeColor || settings.randomizeScale ? distSparkTone(engine) : 0.5f;
-        float speed = settings.randomizeScale ? distSparkSpeed(engine) : 0.07f * settings.sparkSpeed;
-        const float offsetX = settings.randomizePosition ? distOffset(engine) * size * scatterRadius : 0.0f;
-        const float offsetY = settings.randomizePosition ? distOffset(engine) * size * scatterRadius : 0.0f;
-        const float offsetZ = settings.randomizePosition ? distOffset(engine) * size * scatterRadius : 0.0f;
+        float angle = baseAngle + (settings.randomizeDirection ? distAngle(random_) : 0.0f);
+        float tone = settings.randomizeColor || settings.randomizeScale ? distSparkTone(random_) : 0.5f;
+        float speed = settings.randomizeScale ? distSparkSpeed(random_) : 0.07f * settings.sparkSpeed;
+        const float offsetX = settings.randomizePosition ? distOffset(random_) * size * scatterRadius : 0.0f;
+        const float offsetY = settings.randomizePosition ? distOffset(random_) * size * scatterRadius : 0.0f;
+        const float offsetZ = settings.randomizePosition ? distOffset(random_) * size * scatterRadius : 0.0f;
         Vector3 sparkPos = {pos.x + offsetX, pos.y + offsetY, pos.z + offsetZ};
         Vector3 sparkVelocity = {std::cos(angle) * speed, std::sin(angle) * speed * 0.35f,
                                  std::sin(angle * 1.7f) * speed};
         Vector4 sparkColor = (!settings.randomizeColor || tone < settings.blueRatio)
                                  ? tintColor(settings.sparkColor, 1.05f, 1.0f, 1.0f, 0.88f)
                                  : tintColor(settings.sparkSecondaryColor, 1.0f, 1.0f, 1.0f, 0.88f);
-        const float sparkLife = (settings.randomizeLifetime ? distSparkLife(engine) : 0.205f) * lifeScale;
+        const float sparkLife = (settings.randomizeLifetime ? distSparkLife(random_) : 0.205f) * lifeScale;
         pushPlane(sparkPos, {(0.025f + 0.02f * tone) * size, (0.62f + 0.72f * tone) * size * sparkLength, 1.0f}, angle,
                   sparkColor, sparkLife, sparkVelocity);
     }
@@ -1919,7 +1917,7 @@ void ParticleManager::Emit(const std::string &groupName, const Vector3 &pos, uin
         Particle cylinder;
         cylinder.type = Particle::Type::Cylinder;
         cylinder.transform.scale = {0.7f, 0.8f, 0.7f};
-        cylinder.transform.rotate = {0.0f, distRotate(engine), 0.0f};
+        cylinder.transform.rotate = {0.0f, distRotate(random_), 0.0f};
         cylinder.transform.translate = {pos.x, pos.y - 0.05f, pos.z};
         cylinder.velocity = {0.0f, 0.0f, 0.0f};
         cylinder.color = {0.35f, 0.55f, 1.0f, 0.28f};
@@ -1933,7 +1931,7 @@ void ParticleManager::Emit(const std::string &groupName, const Vector3 &pos, uin
         Particle ring;
         ring.type = Particle::Type::Ring;
         ring.transform.scale = {0.25f, 0.25f, 1.0f};
-        ring.transform.rotate = {0.0f, 0.0f, distRotate(engine)};
+        ring.transform.rotate = {0.0f, 0.0f, distRotate(random_)};
         ring.transform.translate = pos;
         ring.velocity = {0.0f, 0.0f, 0.0f};
         ring.color = {1.0f, 0.9f, 0.45f, 0.75f};
@@ -1950,14 +1948,14 @@ void ParticleManager::Emit(const std::string &groupName, const Vector3 &pos, uin
 
         Particle p;
         p.type = Particle::Type::Splash;
-        p.transform.scale = {0.05f, distScale(engine), 1.0f};
-        p.transform.rotate = {0.0f, 0.0f, distRotate(engine)};
-        p.transform.translate = {pos.x + distOffset(engine), pos.y + distOffset(engine), pos.z + distOffset(engine)};
+        p.transform.scale = {0.05f, distScale(random_), 1.0f};
+        p.transform.rotate = {0.0f, 0.0f, distRotate(random_)};
+        p.transform.translate = {pos.x + distOffset(random_), pos.y + distOffset(random_), pos.z + distOffset(random_)};
         p.velocity = {0.0f, 0.0f, 0.0f};
-        p.color = {distColor(engine), distColor(engine), distColor(engine), 1.0f};
+        p.color = {distColor(random_), distColor(random_), distColor(random_), 1.0f};
         p.initialAlpha = p.color.w;
         p.lifeTime = 0.0f;
-        p.maxTime = distTime(engine);
+        p.maxTime = distTime(random_);
         group.particles.push_back(p);
     }
 }
@@ -1980,16 +1978,6 @@ void ParticleManager::SetTexture(const std::string &groupName, uint32_t textureH
 
     ParticleGroup &group = particleGroups_[groupName];
     group.textureHandle = textureHandle;
-}
-
-ParticleManager::ParticleGroup *ParticleManager::FindParticleGroup(const std::string &groupName) {
-    auto it = particleGroups_.find(groupName);
-    return it == particleGroups_.end() ? nullptr : &it->second;
-}
-
-const ParticleManager::ParticleGroup *ParticleManager::FindParticleGroup(const std::string &groupName) const {
-    auto it = particleGroups_.find(groupName);
-    return it == particleGroups_.end() ? nullptr : &it->second;
 }
 
 // 標準の粒子グループを取得し、未作成なら準備する。
@@ -2063,23 +2051,23 @@ void ParticleManager::EmitDust(const Vector3 &position, const Vector3 &motion, f
     const Vector3 back = speed > .001f ? Vector3{-motion.x / speed, 0, -motion.z / speed} : Vector3{};
     const int count = static_cast<int>(5 + strength * 6);
     for (int i = 0; i < count && Particles().size() < kMaxParticles; ++i) {
-        const float angle = unit(engine) * 6.2831853f;
-        const float radius = .06f + unit(engine) * .17f;
-        const float size = (.18f + unit(engine) * .16f) * std::sqrt(strength);
+        const float angle = unit(random_) * 6.2831853f;
+        const float radius = .06f + unit(random_) * .17f;
+        const float size = (.18f + unit(random_) * .16f) * std::sqrt(strength);
         Particle p{};
         p.type = Particle::Type::Dust;
-        p.origin = {position.x + std::cos(angle) * radius, position.y + .14f + unit(engine) * .10f,
+        p.origin = {position.x + std::cos(angle) * radius, position.y + .14f + unit(random_) * .10f,
                     position.z + std::sin(angle) * radius};
         p.transform.translate = p.origin;
-        p.baseScale = {size * (1 + unit(engine) * .4f), size, 1};
+        p.baseScale = {size * (1 + unit(random_) * .4f), size, 1};
         p.transform.scale = p.baseScale;
         p.phase = angle;
-        p.velocity = {(std::cos(angle) * .65f + back.x * .7f) * strength, .25f + unit(engine) * .4f,
+        p.velocity = {(std::cos(angle) * .65f + back.x * .7f) * strength, .25f + unit(random_) * .4f,
                       (std::sin(angle) * .65f + back.z * .7f) * strength};
-        const float shade = .85f + unit(engine) * .15f;
+        const float shade = .85f + unit(random_) * .15f;
         p.color = {.62f * shade, .48f * shade, .30f * shade, .48f};
         p.initialAlpha = p.color.w;
-        p.maxTime = .38f + unit(engine) * .30f;
+        p.maxTime = .38f + unit(random_) * .30f;
         p.shape = 4;
         Particles().push_back(p);
     }
@@ -2092,23 +2080,23 @@ void ParticleManager::EmitSceneEffect(SceneEffect effect, const Vector3 &positio
     const bool glow = effect == SceneEffect::Glow;
     const int count = stamp ? 30 : trail ? 4 : glow ? 2 : effect == SceneEffect::Ladder ? 5 : 20;
     for (int i = 0; i < count && Particles().size() < kMaxParticles; ++i) {
-        const float angle = unit(engine) * 6.2831853f;
+        const float angle = unit(random_) * 6.2831853f;
         const float radius = glow ? .35f : trail ? .4f : stamp ? 1.15f : .22f;
         Particle p{};
         p.type = Particle::Type::Accent;
         p.origin = {position.x + std::cos(angle) * radius,
-                    position.y + (stamp ? std::sin(angle) * radius : unit(engine) * .35f),
+                    position.y + (stamp ? std::sin(angle) * radius : unit(random_) * .35f),
                     position.z + (stamp ? -.08f : std::sin(angle) * radius)};
         p.transform.translate = p.origin;
-        const float size = glow ? .06f : stamp ? .06f + unit(engine) * .05f : .09f;
-        p.baseScale = trail ? Vector3{.018f, .25f + unit(engine) * .3f, 1} : Vector3{size, size, 1};
+        const float size = glow ? .06f : stamp ? .06f + unit(random_) * .05f : .09f;
+        p.baseScale = trail ? Vector3{.018f, .25f + unit(random_) * .3f, 1} : Vector3{size, size, 1};
         p.transform.scale = p.baseScale;
-        const float speed = stamp ? 1.2f + unit(engine) : glow ? .12f : .7f;
+        const float speed = stamp ? 1.2f + unit(random_) : glow ? .12f : .7f;
         p.velocity = {std::cos(angle) * speed,
                       stamp   ? std::sin(angle) * speed
                       : trail ? 2.4f
                       : glow  ? .35f
-                              : .6f + unit(engine),
+                              : .6f + unit(random_),
                       stamp ? -.12f : std::sin(angle) * speed};
         p.phase = trail ? 0 : angle;
         p.color = warm || effect == SceneEffect::Retry || effect == SceneEffect::Switch ? Vector4{.95f, .63f, .18f, .5f}
@@ -2125,8 +2113,8 @@ void ParticleManager::EmitSceneEffect(SceneEffect effect, const Vector3 &positio
         p.maxTime = trail                          ? .30f
                     : glow                         ? .75f
                     : effect == SceneEffect::Retry ? .85f
-                    : stamp                        ? .85f + unit(engine) * .1f
-                                                   : .45f + unit(engine) * .25f;
+                    : stamp                        ? .85f + unit(random_) * .1f
+                                                   : .45f + unit(random_) * .25f;
         Particles().push_back(p);
     }
 }
@@ -2150,22 +2138,22 @@ void ParticleManager::EmitAdventureEffect(AdventureEffect effect, const Vector3 
     for (int i = 0; i < count && Particles().size() < kMaxParticles; ++i) {
         // 回収は3本の渦、取消は四角いかけら、祝福は大きい星と細い光筋に分ける。
         const float angle =
-            inward ? (i % 3) * 2.0943951f + (i / 3) * .07f : i * 6.2831853f / count + unit(engine) * .2f;
-        const float radius = star ? .55f + unit(engine) * .35f : .55f;
+            inward ? (i % 3) * 2.0943951f + (i / 3) * .07f : i * 6.2831853f / count + unit(random_) * .2f;
+        const float radius = star ? .55f + unit(random_) * .35f : .55f;
         Particle p{};
         p.type = Particle::Type::Adventure;
         p.adventure = static_cast<int>(effect);
         p.phase = angle;
-        p.origin = {position.x + std::cos(angle) * radius, position.y + .08f + unit(engine) * (star ? .65f : .18f),
+        p.origin = {position.x + std::cos(angle) * radius, position.y + .08f + unit(random_) * (star ? .65f : .18f),
                     position.z + std::sin(angle) * radius};
         p.target = target;
         p.transform.translate = p.origin;
         p.transform.rotate = {0, 0, angle};
         const bool streak = !inward && i % 3 == 0;
-        const float size = i % 6 == 0 ? .24f : .10f + unit(engine) * .06f;
-        p.baseScale = streak ? Vector3{.025f, .26f + unit(engine) * .18f, 1} : Vector3{size, size, 1};
+        const float size = i % 6 == 0 ? .24f : .10f + unit(random_) * .06f;
+        p.baseScale = streak ? Vector3{.025f, .26f + unit(random_) * .18f, 1} : Vector3{size, size, 1};
         p.transform.scale = p.baseScale;
-        p.velocity = {std::cos(angle) * (star ? .023f : .018f), .012f + unit(engine) * (star ? .03f : .02f),
+        p.velocity = {std::cos(angle) * (star ? .023f : .018f), .012f + unit(random_) * (star ? .03f : .02f),
                       std::sin(angle) * (star ? .023f : .018f)};
         p.color = color;
         if (star && i % 4 == 1) {
@@ -2175,7 +2163,7 @@ void ParticleManager::EmitAdventureEffect(AdventureEffect effect, const Vector3 
         }
         p.initialAlpha = p.color.w;
         p.lifeTime = -(inward ? (i / 3) * .018f : (i % 4) * .045f);
-        p.maxTime = star ? .75f + unit(engine) * .4f : .65f + unit(engine) * .2f;
+        p.maxTime = star ? .75f + unit(random_) * .4f : .65f + unit(random_) * .2f;
         p.shape = effect == AdventureEffect::Undo ? 5 : streak ? 1 : 3;
         Particles().push_back(p);
     }
@@ -2217,12 +2205,12 @@ void ParticleManager::EmitAdventureEffect(AdventureEffect effect, const Vector3 
     // 配置は周囲のかけらを集めてから、光柱と光筋を重ねて完成を示す。
     if (effect == AdventureEffect::Place) {
         for (int i = 0; i < 20 && Particles().size() < kMaxParticles; ++i) {
-            const float angle = i * 6.2831853f / 20 + unit(engine) * .2f;
-            const float radius = .9f + unit(engine) * .5f;
+            const float angle = i * 6.2831853f / 20 + unit(random_) * .2f;
+            const float radius = .9f + unit(random_) * .5f;
             Particle chip{};
             chip.type = Particle::Type::Adventure;
             chip.adventure = static_cast<int>(effect);
-            chip.origin = {position.x + std::cos(angle) * radius, position.y + unit(engine) * .8f,
+            chip.origin = {position.x + std::cos(angle) * radius, position.y + unit(random_) * .8f,
                            position.z + std::sin(angle) * radius};
             chip.target = {position.x + std::cos(angle) * .35f, position.y + .15f + (i % 3) * .25f,
                            position.z + std::sin(angle) * .35f};

@@ -1,4 +1,4 @@
-﻿#include "BlockPlacementController.h"
+#include "BlockPlacementController.h"
 #include <cassert>
 #include <cmath>
 #include <tuple>
@@ -94,7 +94,7 @@ bool BlockPlacementController::TryPlace(const Int3 &index, float rotationY) {
         SavedCell item{c.index, *stageMap_->GetCell(c.index), {}};
         if (!stageMap_->SetBlock(c.index, c.type, c.variant)) {
             for (const auto &s : saved) {
-                *stageMap_->GetCell(s.index) = s.before;
+                stageMap_->SetCell(s.index, s.before);
             }
             if (consumes) {
                 inventory_->AddBlock(placeBlockType_, 1, placeCustomId_);
@@ -102,9 +102,8 @@ bool BlockPlacementController::TryPlace(const Int3 &index, float rotationY) {
             lastReason_ = Placement::Reason::Changed;
             return false;
         }
-        auto *cell = stageMap_->GetCell(c.index);
-        cell->rotationY = c.rotationY;
-        item.placed = *cell;
+        stageMap_->EditCell(c.index, [&](MapCell &cell) { cell.rotationY = c.rotationY; });
+        item.placed = *stageMap_->GetCell(c.index);
         saved.push_back(item);
     }
     Vector3 center{};
@@ -163,7 +162,7 @@ bool BlockPlacementController::TryUndo() {
     center = {center.x / n, center.y / n + .5f, center.z / n};
     for (const auto &s : lastPlacement_) {
         stageMap_->RemoveBlock(s.index);
-        *stageMap_->GetCell(s.index) = s.before;
+        stageMap_->SetCell(s.index, s.before);
     }
     if (undoConsumed_) {
         inventory_->AddBlock(undoType_, 1, undoCustomId_);

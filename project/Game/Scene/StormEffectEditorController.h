@@ -19,8 +19,6 @@ class StormEffectEditorController {
     bool IsStormPreset(const std::string &name) const;
     void Select(int index);
 
-    bool &IncludeInShowcase() { return includeInShowcase_; }
-    std::array<char, 64> &NameBuffer() { return nameBuffer_; }
     const std::vector<std::string> &PresetNames() const { return presetNames_; }
     const std::vector<std::string> &ShowcasePresetNames() const { return showcasePresetNames_; }
     int SelectedIndex() const { return selectedIndex_; }

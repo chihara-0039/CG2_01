@@ -28,6 +28,7 @@
 #include "SkinnedObject.h"
 
 #include "Player.h"
+#include "../Player/FootstepEmitter.h"
 #include "MapCursor.h"
 #include "StageMap.h"
 #include "StageRenderer.h"
@@ -244,7 +245,7 @@ class GameRuntime {
     DebugDrawFlags debugFlags_;
     bool isGoalReached_ = false;
     float goalCelebrationTimer_ = 0.0f;
-    float stepEffectDistance_ = 0;
+    FootstepEmitter footstepEmitter_;
     StarGetPresentation starGetPresentation_;
     float gameClearTimer_ = 0.0f;
     float gameClearFireworkTimer_ = 0.0f;

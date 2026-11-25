@@ -73,7 +73,7 @@ inline bool Apply(StageMap &map, const Vector3 &player, bool reverse, const Rota
         }
     }
     for (const auto &c : saved) {
-        *map.GetCell(c.at) = c.value;
+        map.SetCell(c.at, c.value);
     }
     // Doors on fixed ground must continue to target the same rotating doorway.
     for (int y = 0; y < map.GetHeight(); ++y) {
@@ -81,7 +81,8 @@ inline bool Apply(StageMap &map, const Vector3 &player, bool reverse, const Rota
             for (int x = 0; x < map.GetWidth(); ++x) {
                 auto *c = map.GetCell(x, y, z);
                 if (!Contains({x, y, z}, r) && c->type == BlockType::Door && Contains(c->doorTargetIndex, r)) {
-                    c->doorTargetIndex = Turn(c->doorTargetIndex, reverse, r);
+                    map.EditCell({x, y, z},
+                                 [&](MapCell &cell) { cell.doorTargetIndex = Turn(cell.doorTargetIndex, reverse, r); });
                 }
             }
         }
