@@ -225,6 +225,8 @@ class GameRuntime {
     BlockInventory blockInventory_;
     BubblePickupController bubblePickupController_;
     BlockPlacementController blockPlacementController_;
+    BlockPlacementController::PlacementSignal::Connection placementEffects_;
+    BlockPlacementController::PlacementSignal::Connection placementHud_;
 
     StageMap stageMap_;
     StageMap backupMap_;
