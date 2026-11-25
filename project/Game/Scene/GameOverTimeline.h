@@ -39,10 +39,10 @@ class Flow {
     void MoveSelection();
     Action Confirm(bool back);
     void Cancel();
-    bool Active() const { return phase_ != Phase::Inactive; }
-    bool Revealing() const { return phase_ == Phase::Reveal; }
-    bool Leaving() const { return phase_ == Phase::Leaving; }
-    bool MenuReady() const { return phase_ == Phase::Failure && elapsed_ >= kMenuTime; }
+    bool Active() const;
+    bool Revealing() const;
+    bool Leaving() const;
+    bool MenuReady() const;
     float Elapsed() const { return elapsed_; }
     float RevealElapsed() const { return revealElapsed_; }
     int Selected() const { return selected_; }
@@ -51,10 +51,33 @@ class Flow {
     enum class Phase {
         Inactive,
         Failure,
+        Menu,
         Reveal,
         Leaving
     };
-    Phase phase_ = Phase::Inactive;
+    enum class EventKind {
+        Begin,
+        Advance,
+        MoveSelection,
+        Confirm,
+        Cancel
+    };
+    struct Event {
+        EventKind kind;
+        float delta = 0;
+        bool back = false;
+    };
+    class State;
+    class InactiveState;
+    class FailureState;
+    class MenuState;
+    class RevealState;
+    class LeavingState;
+    const State &Current() const;
+    static const State &StateFor(Phase phase);
+    void Change(Phase phase);
+    bool HandleControl(const Event &event);
+    const State *state_ = nullptr;
     float elapsed_ = 0, revealElapsed_ = 0;
     int selected_ = 0;
 };

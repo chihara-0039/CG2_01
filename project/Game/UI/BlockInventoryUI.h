@@ -7,17 +7,13 @@
 #include "Input.h"
 #include "../Block/BlockInventory.h"
 #include "StageMap.h"
+#include "InventoryPanelFlow.h"
 
 // 配置可能ブロックの所持数、選択状態、使用要求を表示・操作するインベントリUI。
 class BlockInventoryUI {
   public:
     // パネルの開閉アニメーション状態。
-    enum class State {
-        Closed,
-        Opening,
-        Opened,
-        Closing
-    };
+    using State = InventoryPanelFlow::Phase;
 
     // UI上の1ブロックボタンに必要な描画情報と選択情報。
     struct BlockButton {
@@ -45,8 +41,8 @@ class BlockInventoryUI {
     void Finalize();
 
     // インベントリが開いている、または開閉アニメーション中かを返す。
-    bool IsActive() const { return state_ != State::Closed; }
-    bool IsOpened() const { return state_ == State::Opened; }
+    bool IsActive() const { return panelFlow_.CurrentPhase() != State::Closed; }
+    bool IsOpened() const { return panelFlow_.CurrentPhase() == State::Opened; }
 
     // 現在選択されている通常ブロック種別。
     BlockType GetSelectedBlockType() const { return selectedBlockType_; }
@@ -60,7 +56,7 @@ class BlockInventoryUI {
     float GetPanelLeftX() const { return currentPos_.x; }
 
     // 現在の開閉状態。
-    State GetState() const { return state_; }
+    State GetState() const { return panelFlow_.CurrentPhase(); }
 
     // インベントリの開閉状態を切り替える。
     void ResetForStage();
@@ -94,7 +90,7 @@ class BlockInventoryUI {
     int selectedCustomId_ = 0; // 0: 通常ブロック, 1～5: カスタムパーツ
 
     // パネル開閉状態とアニメーション位置。
-    State state_ = State::Closed;
+    InventoryPanelFlow panelFlow_;
     Vector2 currentPos_;
     Vector2 closedPos_;
     Vector2 openedPos_;

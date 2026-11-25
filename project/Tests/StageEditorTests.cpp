@@ -11,6 +11,7 @@
 #include "../Game/Scene/StarGetTimeline.h"
 #include "../Game/Player/FootstepEmitter.h"
 #include "PolymorphismChecks.h"
+#include "StatePatternChecks.h"
 #include <cassert>
 #include <filesystem>
 #include <iostream>
@@ -23,6 +24,7 @@
 
 // マップ保存・拡張・回転・選択などの回帰テストを実行する。
 int main() {
+    StatePatternChecks::Run();
     PolymorphismChecks::Run();
     // 非constなマップからでも、内部セルとパーツを直接変更できる型を返さない。
     static_assert(std::is_same_v<decltype(std::declval<StageMap &>().GetCell(0, 0, 0)), const MapCell *>);

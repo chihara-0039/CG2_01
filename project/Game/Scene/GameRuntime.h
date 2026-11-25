@@ -55,6 +55,7 @@
 #include "StartIntro.h"
 #include "../Environment/FogExplorer.h"
 #include "GameOver.h"
+#include "SceneFadeFlow.h"
 
 #include "PostProcessRenderer.h"
 #include "PostEffectShowcaseController.h"
@@ -117,12 +118,7 @@ class GameRuntime {
         PostEffectShowcase,
     };
 
-    enum class SceneFadePhase {
-        None,
-        FadingOut,
-        HoldingBlack,
-        FadingIn,
-    };
+    using SceneFadePhase = SceneFadeFlow::Phase;
 
     struct DebugDrawFlags {
         bool show3DObjects = true;
@@ -265,10 +261,8 @@ class GameRuntime {
     bool isGoalBlocked_ = false;
     int placeableBlockCount_ = 0;
     float totalTime_ = 0.0f;
-    SceneFadePhase sceneFadePhase_ = SceneFadePhase::None;
+    SceneFadeFlow sceneFade_;
     SceneType pendingSceneType_ = SceneType::DebugView;
-    float sceneFadeAlpha_ = 0.0f;
-    float sceneFadeHoldRemaining_ = 0.0f;
     std::chrono::steady_clock::time_point sceneFadeLastUpdate_{};
 
     bool useFirstPersonCamera_ = false;

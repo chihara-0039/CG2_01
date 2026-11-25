@@ -21,46 +21,158 @@ float GameOverTimeline::RetryRadius(float seconds) {
     return 800 * Ease(seconds / kRevealTime);
 }
 
-// 失敗の種類と初期時刻を設定し、演出の状態を開始段階へ戻す。
-void GameOverTimeline::Flow::Begin() {
-    phase_ = Phase::Failure;
-    elapsed_ = 0;
-    revealElapsed_ = 0;
-    selected_ = 0;
-}
-// 演出の状態と経過時間を進め、入力受付や画面復帰の段階を切り替える。
-void GameOverTimeline::Flow::Advance(float delta) {
-    delta = (std::max)(delta, 0.0f);
-    if (phase_ == Phase::Failure) {
-        elapsed_ += delta;
-    } else if (phase_ == Phase::Reveal) {
-        revealElapsed_ += delta;
-        if (revealElapsed_ >= kRevealTime) {
-            phase_ = Phase::Inactive;
-        }
-    }
-}
-// 再挑戦メニューの選択を、入力方向に応じて範囲内で移動する。
-void GameOverTimeline::Flow::MoveSelection() {
-    if (MenuReady()) {
-        selected_ = 1 - selected_;
-    }
-}
-// 現在の選択と演出段階から、再挑戦または画面移動の操作結果を返す。
-GameOverTimeline::Action GameOverTimeline::Flow::Confirm(bool back) {
-    if (!MenuReady()) {
+// 状態は入力と時間を受け取り、遷移先を自分で決める。保持するのは共有可能な振る舞いだけ。
+class GameOverTimeline::Flow::State {
+  public:
+    virtual ~State() = default;
+    virtual Action Handle(Flow &flow, const Event &event) const = 0;
+    virtual Phase Kind() const = 0;
+};
+class GameOverTimeline::Flow::InactiveState final : public State {
+  public:
+    // 停止中は開始・取消だけを受け取り、時間や選択入力は進めない。
+    Action Handle(Flow &flow, const Event &event) const override {
+        flow.HandleControl(event);
         return Action::None;
     }
-    if (back || selected_ == 1) {
-        phase_ = Phase::Leaving;
-        return Action::StageSelect;
+    Phase Kind() const override { return Phase::Inactive; }
+};
+class GameOverTimeline::Flow::FailureState final : public State {
+  public:
+    // 失敗の芝居が終わった時刻で、選択入力を受け付ける状態へ移る。
+    Action Handle(Flow &flow, const Event &event) const override {
+        if (flow.HandleControl(event)) {
+            return Action::None;
+        }
+        if (event.kind == EventKind::Advance) {
+            flow.elapsed_ += event.delta;
+            if (flow.elapsed_ >= kMenuTime) {
+                flow.Change(Phase::Menu);
+            }
+        }
+        return Action::None;
     }
-    phase_ = Phase::Reveal;
-    revealElapsed_ = 0;
-    return Action::Retry;
+    Phase Kind() const override { return Phase::Failure; }
+};
+class GameOverTimeline::Flow::MenuState final : public State {
+  public:
+    // 選択待ちだけが決定を解釈し、再挑戦の幕開けかステージ選択への退出を選ぶ。
+    Action Handle(Flow &flow, const Event &event) const override {
+        if (flow.HandleControl(event)) {
+            return Action::None;
+        }
+        if (event.kind == EventKind::Advance) {
+            flow.elapsed_ += event.delta;
+        }
+        if (event.kind == EventKind::MoveSelection) {
+            flow.selected_ = 1 - flow.selected_;
+        }
+        if (event.kind == EventKind::Confirm) {
+            if (event.back || flow.selected_ == 1) {
+                flow.Change(Phase::Leaving);
+                return Action::StageSelect;
+            }
+            flow.revealElapsed_ = 0;
+            flow.Change(Phase::Reveal);
+            return Action::Retry;
+        }
+        return Action::None;
+    }
+    Phase Kind() const override { return Phase::Menu; }
+};
+class GameOverTimeline::Flow::RevealState final : public State {
+  public:
+    // 再挑戦の幕が開き切ったら通常プレイへ戻り、途中の二重決定は受け付けない。
+    Action Handle(Flow &flow, const Event &event) const override {
+        if (flow.HandleControl(event)) {
+            return Action::None;
+        }
+        if (event.kind == EventKind::Advance) {
+            flow.revealElapsed_ += event.delta;
+            if (flow.revealElapsed_ >= kRevealTime) {
+                flow.Change(Phase::Inactive);
+            }
+        }
+        return Action::None;
+    }
+    Phase Kind() const override { return Phase::Reveal; }
+};
+class GameOverTimeline::Flow::LeavingState final : public State {
+  public:
+    // シーン退出待ちは入力を消費済みとして扱い、新しい開始・取消だけを受け付ける。
+    Action Handle(Flow &flow, const Event &event) const override {
+        flow.HandleControl(event);
+        return Action::None;
+    }
+    Phase Kind() const override { return Phase::Leaving; }
+};
+// 状態オブジェクトを共有し、切替のたびに生成・破棄しない。
+const GameOverTimeline::Flow::State &GameOverTimeline::Flow::StateFor(Phase phase) {
+    static const InactiveState inactive;
+    static const FailureState failure;
+    static const MenuState menu;
+    static const RevealState reveal;
+    static const LeavingState leaving;
+    switch (phase) {
+    case Phase::Inactive:
+        return inactive;
+    case Phase::Failure:
+        return failure;
+    case Phase::Menu:
+        return menu;
+    case Phase::Reveal:
+        return reveal;
+    case Phase::Leaving:
+        return leaving;
+    }
+    return inactive;
+}
+const GameOverTimeline::Flow::State &GameOverTimeline::Flow::Current() const {
+    return state_ ? *state_ : StateFor(Phase::Inactive);
+}
+void GameOverTimeline::Flow::Change(Phase phase) {
+    state_ = &StateFor(phase);
+}
+// どの状態からでも開始と取消を扱う。状態側がこの共通処理を呼んで遷移させる。
+bool GameOverTimeline::Flow::HandleControl(const Event &event) {
+    if (event.kind == EventKind::Begin) {
+        elapsed_ = revealElapsed_ = 0;
+        selected_ = 0;
+        Change(Phase::Failure);
+        return true;
+    }
+    if (event.kind == EventKind::Cancel) {
+        Change(Phase::Inactive);
+        return true;
+    }
+    return false;
+}
+void GameOverTimeline::Flow::Begin() {
+    Current().Handle(*this, {EventKind::Begin});
+}
+void GameOverTimeline::Flow::Advance(float delta) {
+    Current().Handle(*this, {EventKind::Advance, (std::max)(delta, 0.0f)});
+}
+void GameOverTimeline::Flow::MoveSelection() {
+    Current().Handle(*this, {EventKind::MoveSelection});
+}
+GameOverTimeline::Action GameOverTimeline::Flow::Confirm(bool back) {
+    return Current().Handle(*this, {EventKind::Confirm, 0, back});
 }
 void GameOverTimeline::Flow::Cancel() {
-    phase_ = Phase::Inactive;
+    Current().Handle(*this, {EventKind::Cancel});
+}
+bool GameOverTimeline::Flow::Active() const {
+    return Current().Kind() != Phase::Inactive;
+}
+bool GameOverTimeline::Flow::Revealing() const {
+    return Current().Kind() == Phase::Reveal;
+}
+bool GameOverTimeline::Flow::Leaving() const {
+    return Current().Kind() == Phase::Leaving;
+}
+bool GameOverTimeline::Flow::MenuReady() const {
+    return Current().Kind() == Phase::Menu;
 }
 
 // 文字ごとの表示開始時刻から、登場位置・回転・大きさを計算する。

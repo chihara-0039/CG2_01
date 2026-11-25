@@ -117,8 +117,9 @@ void BlockInventoryUI::Initialize(DirectXCommon *dxCommon, SpriteCommon *spriteC
     // 4. アニメーション座標の初期化
     closedPos_ = {1280.0f - arrowWidth_, 0.0f};
     openedPos_ = {1280.0f - panelWidth_, 0.0f};
+    panelFlow_.Configure(closedPos_.x, openedPos_.x);
     currentPos_ = closedPos_;
-    state_ = State::Closed;
+    panelFlow_.Close();
 
     selectedBlockType_ = BlockType::Ground;
     selectedCustomId_ = 0;
@@ -165,19 +166,8 @@ void BlockInventoryUI::Update(Input *input, WinApp *winApp, bool isGamePlayMode,
     prevMouseLeft_ = mouse.buttons[0];
 
     // --- 1. アニメーション制御とイージング ---
-    if (state_ == State::Opening) {
-        currentPos_.x += (openedPos_.x - currentPos_.x) * 0.15f;
-        if (std::abs(currentPos_.x - openedPos_.x) < 1.0f) {
-            currentPos_ = openedPos_;
-            state_ = State::Opened;
-        }
-    } else if (state_ == State::Closing) {
-        currentPos_.x += (closedPos_.x - currentPos_.x) * 0.15f;
-        if (std::abs(currentPos_.x - closedPos_.x) < 1.0f) {
-            currentPos_ = closedPos_;
-            state_ = State::Closed;
-        }
-    }
+    panelFlow_.Advance();
+    currentPos_.x = panelFlow_.X();
 
     panelSprite_->SetPosition(currentPos_);
     panelSprite_->Update();
@@ -202,14 +192,14 @@ void BlockInventoryUI::Update(Input *input, WinApp *winApp, bool isGamePlayMode,
 
     // Stable shortcuts work without opening the panel; no stock means no request.
     const BYTE quickKeys[] = {DIK_0, DIK_1, DIK_2, DIK_3, DIK_4, DIK_5, DIK_6, DIK_7, DIK_8, DIK_9};
-    if (canQuickPlace && (state_ == State::Closed || state_ == State::Opened)) {
+    if (canQuickPlace && (panelFlow_.CurrentPhase() == State::Closed || panelFlow_.CurrentPhase() == State::Opened)) {
         for (int digit = 0; digit < 10; ++digit) {
             if (input->TriggerKey(quickKeys[digit]) && SelectShortcut(digit)) {
                 return;
             }
         }
-        if (state_ == State::Closed && input->TriggerKey(DIK_I) && selectedBlockType_ != BlockType::None &&
-            inventory_->HasBlock(selectedBlockType_, selectedCustomId_)) {
+        if (panelFlow_.CurrentPhase() == State::Closed && input->TriggerKey(DIK_I) &&
+            selectedBlockType_ != BlockType::None && inventory_->HasBlock(selectedBlockType_, selectedCustomId_)) {
             useRequested_ = true;
             return;
         }
@@ -217,7 +207,7 @@ void BlockInventoryUI::Update(Input *input, WinApp *winApp, bool isGamePlayMode,
 
     // 閉じている間は、非表示の全アイコン・文字スプライトを再計算しない。
     // 開き始めたフレームには在庫と名前を同期する。
-    if (state_ == State::Closed && !legacyClosedUpdates_) {
+    if (panelFlow_.CurrentPhase() == State::Closed && !legacyClosedUpdates_) {
         return;
     }
 
@@ -381,7 +371,7 @@ void BlockInventoryUI::Update(Input *input, WinApp *winApp, bool isGamePlayMode,
         }
 
         // 開いているときのみクリック選択を受け付ける
-        if (state_ == State::Opened && clickTrigger && btn.isAvailable) {
+        if (panelFlow_.CurrentPhase() == State::Opened && clickTrigger && btn.isAvailable) {
             if (mouseX >= screenPos.x && mouseX <= screenPos.x + btn.size.x && mouseY >= screenPos.y &&
                 mouseY <= screenPos.y + btn.size.y) {
 
@@ -414,7 +404,7 @@ void BlockInventoryUI::Update(Input *input, WinApp *winApp, bool isGamePlayMode,
 
     // 十字キー／矢印キーで選択し、A／Enterで決定、B／Escで閉じる。
     // 開閉アニメーション中の誤入力を避けるため、完全に開いた状態だけ受け付ける。
-    if (state_ == State::Opened) {
+    if (panelFlow_.CurrentPhase() == State::Opened) {
         int selectedIndex = -1;
         for (int i = 0; i < static_cast<int>(buttons_.size()); ++i) {
             const auto &btn = buttons_[i];
@@ -446,13 +436,14 @@ void BlockInventoryUI::Update(Input *input, WinApp *winApp, bool isGamePlayMode,
             selectedCustomId_ = btn.customId;
         }
 
-        if (state_ == State::Opened &&
+        if (panelFlow_.CurrentPhase() == State::Opened &&
             (input->TriggerControllerButton(XINPUT_GAMEPAD_A) || input->TriggerKey(DIK_RETURN)) &&
             selectedBlockType_ != BlockType::None) {
             ConfirmSelection();
-        } else if (state_ == State::Opened && (input->TriggerControllerButton(XINPUT_GAMEPAD_B) ||
-                                               input->TriggerControllerButton(XINPUT_GAMEPAD_LEFT_SHOULDER) ||
-                                               input->TriggerKey(DIK_B) || input->TriggerKey(DIK_ESCAPE))) {
+        } else if (panelFlow_.CurrentPhase() == State::Opened &&
+                   (input->TriggerControllerButton(XINPUT_GAMEPAD_B) ||
+                    input->TriggerControllerButton(XINPUT_GAMEPAD_LEFT_SHOULDER) || input->TriggerKey(DIK_B) ||
+                    input->TriggerKey(DIK_ESCAPE))) {
             ToggleOpen();
         }
     }
@@ -499,7 +490,7 @@ bool BlockInventoryUI::SelectShortcut(int digit) {
         }
         selectedBlockType_ = button.type;
         selectedCustomId_ = button.customId;
-        state_ = State::Closed;
+        panelFlow_.Close();
         currentPos_ = closedPos_;
         panelSprite_->SetPosition(currentPos_);
         panelSprite_->Update();
@@ -511,7 +502,7 @@ bool BlockInventoryUI::SelectShortcut(int digit) {
 
 // 選択パーツと在庫を確認し、配置モードへ渡す内容を確定する。
 bool BlockInventoryUI::ConfirmSelection() {
-    if (state_ != State::Opened || selectedBlockType_ == BlockType::None ||
+    if (panelFlow_.CurrentPhase() != State::Opened || selectedBlockType_ == BlockType::None ||
         (selectedBlockType_ != BlockType::Ground && !inventory_->HasBlock(selectedBlockType_, selectedCustomId_))) {
         return false;
     }
@@ -522,14 +513,14 @@ bool BlockInventoryUI::ConfirmSelection() {
 
 // 道具袋の表示と選択の表示対象を選び、描画コマンドを記録する。
 void BlockInventoryUI::Draw() {
-    if (state_ == State::Closed) {
+    if (panelFlow_.CurrentPhase() == State::Closed) {
         return;
     }
     spriteCommon_->PreDraw();
 
     panelSprite_->Draw();
 
-    if (state_ != State::Closed) {
+    if (panelFlow_.CurrentPhase() != State::Closed) {
         quickGuideSprite_->Draw();
         if (selectedBlockType_ != BlockType::None) {
             focusSprite_->Draw();
@@ -556,7 +547,7 @@ void BlockInventoryUI::Draw() {
 
 // 新しいステージに合わせ、道具袋の選択・表示・要求状態を初期化する。
 void BlockInventoryUI::ResetForStage() {
-    state_ = State::Closed;
+    panelFlow_.Close();
     currentPos_ = closedPos_;
     selectedBlockType_ = BlockType::None;
     selectedCustomId_ = 0;
@@ -575,11 +566,7 @@ void BlockInventoryUI::ResetForStage() {
 
 // 道具袋の開閉を切り替え、表示開始時の選択状態を整える。
 void BlockInventoryUI::ToggleOpen() {
-    if (state_ == State::Closed || state_ == State::Closing) {
-        state_ = State::Opening;
-    } else if (state_ == State::Opened || state_ == State::Opening) {
-        state_ = State::Closing;
-    }
+    panelFlow_.Toggle();
 }
 
 // 道具袋の表示と選択が保持するオブジェクトとリソースを解放する。

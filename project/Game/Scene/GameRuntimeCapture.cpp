@@ -223,11 +223,22 @@ void GameRuntime::InitializeCaptureTools() {
             PostQuitMessage(ok ? 0 : 3);
         }
         if (CaptureEnvironment("CG2_PLACEMENT_VERIFY") == "1") {
+            POINT savedCursor{};
+            GetCursorPos(&savedCursor);
+            SetForegroundWindow(winApp->GetHwnd());
             Input script;
+            script.Initialize(winApp.get());
+            const auto region = script.CameraMouseRegion();
+            POINT center{(region.left + region.right) / 2, (region.top + region.bottom) / 2};
+            ClientToScreen(winApp->GetHwnd(), &center);
+            SetCursorPos(center.x, center.y);
             Camera testCamera;
             GameplayCameraController controller;
             controller.Initialize();
             controller.ResetCamera(&testCamera, player_.get(), stageMap_, 7);
+            // 視点操作へ入った最初の差分は破棄されるため、ゼロ入力で開始を済ませる。
+            InputTestPlayback::Advance(script, 0, 0);
+            controller.Update(&script, &testCamera, winApp.get(), player_.get(), true);
             const float fov = controller.GetFov();
             const auto initial = testCamera.GetPosition();
             StageEditorController editor;
@@ -244,11 +255,11 @@ void GameRuntime::InitializeCaptureTools() {
             controller.Update(&script, &testCamera, winApp.get(), player_.get(), true);
             const bool eOnlyCursor = mapCursor_->GetIndex().y == 1 && controller.GetFov() == fov;
             InputTestPlayback::Advance(script, 0, 0, {});
-            InputTestPlayback::Mouse(script, 30, -20, 1);
+            InputTestPlayback::Mouse(script, 30, -20);
             const float angle = controller.GetAngle();
             controller.Update(&script, &testCamera, winApp.get(), player_.get(), true);
-            const bool rightOrbit = controller.GetAngle() != angle && controller.GetFov() == fov;
-            InputTestPlayback::Mouse(script, 30, 0, 0);
+            const bool mouseOrbit = controller.GetAngle() != angle && controller.GetFov() == fov;
+            InputTestPlayback::Mouse(script, 0, 0, 0);
             const float afterOrbit = controller.GetAngle();
             controller.Update(&script, &testCamera, winApp.get(), player_.get(), true);
             const bool leftNoOrbit = controller.GetAngle() == afterOrbit;
@@ -261,11 +272,12 @@ void GameRuntime::InitializeCaptureTools() {
             controller.TogglePlayerFollow(player_.get());
             const bool followRestored = controller.IsFollowPlayerMode();
             const bool ok =
-                qOnlyCursor && eOnlyCursor && rightOrbit && leftNoOrbit && playZoom && followDisabled && followRestored;
+                qOnlyCursor && eOnlyCursor && mouseOrbit && leftNoOrbit && playZoom && followDisabled && followRestored;
+            SetCursorPos(savedCursor.x, savedCursor.y);
             std::ofstream("../generated/expedition-review/placement-controls.json")
                 << "{\"success\":" << (ok ? "true" : "false") << ",\"qOnlyCursor\":" << (qOnlyCursor ? "true" : "false")
                 << ",\"eOnlyCursor\":" << (eOnlyCursor ? "true" : "false")
-                << ",\"rightDragOrbits\":" << (rightOrbit ? "true" : "false")
+                << ",\"mouseMovementOrbits\":" << (mouseOrbit ? "true" : "false")
                 << ",\"leftClickDoesNotOrbit\":" << (leftNoOrbit ? "true" : "false")
                 << ",\"normalPlayKeyboardZoom\":" << (playZoom ? "true" : "false")
                 << ",\"followCanDisable\":" << (followDisabled ? "true" : "false")
@@ -388,15 +400,15 @@ void GameRuntime::InitializeCaptureTools() {
         InputTestPlayback::Mouse(*input, 0, 0);
         navigation = navigation && manualOrbit;
         for (int index = 0; index < 4; ++index) {
-            sceneFadePhase_ = SceneFadePhase::None;
+            sceneFade_.Reset();
             sceneManager_->ChangeScene(SceneType::StageSelect, *this);
             stageSelect_->Initialize(object3dCommon.get(), input.get(), index);
             InputTestPlayback::Advance(*input, 0, 0, {});
             InputTestPlayback::Advance(*input, 0, 0, {DIK_RETURN});
             UpdateStageSelect();
             const bool selected =
-                pendingSceneType_ == SceneType::GamePlay && sceneFadePhase_ == SceneFadePhase::FadingOut;
-            sceneFadePhase_ = SceneFadePhase::None;
+                pendingSceneType_ == SceneType::GamePlay && sceneFade_.CurrentPhase() == SceneFadePhase::FadingOut;
+            sceneFade_.Reset();
             sceneManager_->ChangeScene(SceneType::GamePlay, *this);
             startIntro_->Cancel(camera.get());
             startIntroPending_ = false;
@@ -485,16 +497,16 @@ void GameRuntime::InitializeCaptureTools() {
                     }
                 }
             }
-            sceneFadePhase_ = SceneFadePhase::None;
+            sceneFade_.Reset();
             goalCelebrationTimer_ = StarGet::kDuration;
             UpdateGoalCelebration();
             const bool clearRequested =
-                sceneFadePhase_ == SceneFadePhase::FadingOut && pendingSceneType_ == SceneType::GameClear;
-            sceneFadePhase_ = SceneFadePhase::None;
+                sceneFade_.CurrentPhase() == SceneFadePhase::FadingOut && pendingSceneType_ == SceneType::GameClear;
+            sceneFade_.Reset();
             sceneManager_->ChangeScene(SceneType::GameClear, *this);
             InputTestPlayback::Advance(*input, 0, 0, {DIK_RETURN});
             UpdateGameClear(true);
-            const bool returned = sceneFadePhase_ == SceneFadePhase::FadingOut &&
+            const bool returned = sceneFade_.CurrentPhase() == SceneFadePhase::FadingOut &&
                                   pendingSceneType_ == SceneType::StageSelect &&
                                   stageSelect_->GetSelectedIndex() == index && blockInventory_.GetBlockCount() == 0;
             const bool ok = selected && locked && normalOcclusion && helpToggled && bubblesDoNotUnlock &&
@@ -517,12 +529,13 @@ void GameRuntime::InitializeCaptureTools() {
                    << ",\"clearRequested\":" << (clearRequested ? "true" : "false")
                    << ",\"returnedToSelection\":" << (returned ? "true" : "false") << "}";
         }
-        sceneFadePhase_ = SceneFadePhase::None;
+        sceneFade_.Reset();
         sceneManager_->ChangeScene(SceneType::GameClear, *this);
         InputTestPlayback::Advance(*input, 0, 0, {});
         InputTestPlayback::Advance(*input, 0, 0, {DIK_ESCAPE});
         UpdateGameClear(true);
-        const bool titleReturn = pendingSceneType_ == SceneType::Title && sceneFadePhase_ == SceneFadePhase::FadingOut;
+        const bool titleReturn =
+            pendingSceneType_ == SceneType::Title && sceneFade_.CurrentPhase() == SceneFadePhase::FadingOut;
         report << "],\"allFourSelectable\":" << (navigation ? "true" : "false")
                << ",\"clearEscapeReturnsTitle\":" << (titleReturn ? "true" : "false")
                << ",\"success\":" << (all && navigation && titleReturn ? "true" : "false") << "}";
@@ -687,7 +700,7 @@ void GameRuntime::InitializeCaptureTools() {
             stageSelect_->Initialize(object3dCommon.get(), input.get(), index);
             InputTestPlayback::Advance(*input, 0, 0, {DIK_RETURN});
             UpdateStageSelect();
-            sceneFadePhase_ = SceneFadePhase::None;
+            sceneFade_.Reset();
             sceneManager_->ChangeScene(SceneType::GamePlay, *this);
             startIntro_->Cancel(camera.get());
             startIntroPending_ = false;
@@ -741,7 +754,7 @@ void GameRuntime::InitializeCaptureTools() {
                 camera->Update();
             }
         }
-        sceneFadePhase_ = SceneFadePhase::None;
+        sceneFade_.Reset();
     }
     if ((dxCommon->IsPerformanceCaptureActive() && CaptureEnvironment("CG2_PERF_PLACEMENT") == "1") ||
         placementReview) {
@@ -783,8 +796,7 @@ void GameRuntime::BeginFogTrial() {
     if (startIntro_) {
         startIntro_->Cancel(camera.get());
     }
-    sceneFadePhase_ = SceneFadePhase::None;
-    sceneFadeAlpha_ = 0;
+    sceneFade_.Reset();
     startIntroPending_ = false;
     fogTrial_ = true;
     fogExplorer_.Reset();
@@ -1207,7 +1219,7 @@ void GameRuntime::UpdateExplorationFog() {
     }
     const bool paused = (gameOver_ && gameOver_->IsActive()) || (startIntro_ && startIntro_->BlocksInput()) ||
                         isGamePaused_ || (blockInventoryUI_ && blockInventoryUI_->IsActive()) ||
-                        sceneFadePhase_ != SceneFadePhase::None || isGoalReached_ ||
+                        sceneFade_.CurrentPhase() != SceneFadePhase::None || isGoalReached_ ||
                         (!comparisonActive_ && IsWindowInactive());
     if (!paused && input->TriggerKey(DIK_G)) {
         fogExplorer_.TryScan();
