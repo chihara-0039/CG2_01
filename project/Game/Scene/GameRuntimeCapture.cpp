@@ -1,5 +1,6 @@
 // 録画ツールと探索ステージの接続。ゲームの通常ステージは変更しない。
 #include "GameRuntime.h"
+#include "GameClearScene.h"
 #include "../../Tests/ExpeditionPhysicsChecks.h"
 #include "Goal.h"
 #include "../Stage/RotationIsland.h"
@@ -405,7 +406,7 @@ void GameRuntime::InitializeCaptureTools() {
             stageSelect_->Initialize(object3dCommon.get(), input.get(), index);
             InputTestPlayback::Advance(*input, 0, 0, {});
             InputTestPlayback::Advance(*input, 0, 0, {DIK_RETURN});
-            UpdateStageSelect();
+            sceneManager_->Update(*this, SceneUpdateContext{lightCamera_->GetViewProjectionMatrix(), false});
             const bool selected =
                 pendingSceneType_ == SceneType::GamePlay && sceneFade_.CurrentPhase() == SceneFadePhase::FadingOut;
             sceneFade_.Reset();
@@ -499,13 +500,13 @@ void GameRuntime::InitializeCaptureTools() {
             }
             sceneFade_.Reset();
             goalCelebrationTimer_ = StarGet::kDuration;
-            UpdateGoalCelebration();
+            sceneManager_->Update(*this, SceneUpdateContext{lightCamera_->GetViewProjectionMatrix(), false});
             const bool clearRequested =
                 sceneFade_.CurrentPhase() == SceneFadePhase::FadingOut && pendingSceneType_ == SceneType::GameClear;
             sceneFade_.Reset();
             sceneManager_->ChangeScene(SceneType::GameClear, *this);
             InputTestPlayback::Advance(*input, 0, 0, {DIK_RETURN});
-            UpdateGameClear(true);
+            GameClearScene::HandleNavigation(*this, true);
             const bool returned = sceneFade_.CurrentPhase() == SceneFadePhase::FadingOut &&
                                   pendingSceneType_ == SceneType::StageSelect &&
                                   stageSelect_->GetSelectedIndex() == index && blockInventory_.GetBlockCount() == 0;
@@ -533,7 +534,7 @@ void GameRuntime::InitializeCaptureTools() {
         sceneManager_->ChangeScene(SceneType::GameClear, *this);
         InputTestPlayback::Advance(*input, 0, 0, {});
         InputTestPlayback::Advance(*input, 0, 0, {DIK_ESCAPE});
-        UpdateGameClear(true);
+        GameClearScene::HandleNavigation(*this, true);
         const bool titleReturn =
             pendingSceneType_ == SceneType::Title && sceneFade_.CurrentPhase() == SceneFadePhase::FadingOut;
         report << "],\"allFourSelectable\":" << (navigation ? "true" : "false")
@@ -699,7 +700,7 @@ void GameRuntime::InitializeCaptureTools() {
             const int index = std::clamp(std::atoi(campaignShot.c_str()), 0, 3);
             stageSelect_->Initialize(object3dCommon.get(), input.get(), index);
             InputTestPlayback::Advance(*input, 0, 0, {DIK_RETURN});
-            UpdateStageSelect();
+            sceneManager_->Update(*this, SceneUpdateContext{lightCamera_->GetViewProjectionMatrix(), false});
             sceneFade_.Reset();
             sceneManager_->ChangeScene(SceneType::GamePlay, *this);
             startIntro_->Cancel(camera.get());

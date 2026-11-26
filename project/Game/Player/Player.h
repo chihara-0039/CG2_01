@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "Object3d.h"
+#include "PlayerActionFlow.h"
 #include "Input.h"
 #include "StageMap.h"
 #include "SkinnedObject.h"
@@ -37,7 +38,7 @@ class DirectXCommon;
 //  SPACE キー    : ジャンプ (長押しで高く飛べる追加加速あり)
 //  B キー        : インベントリ開閉 (GamePlay_BlockPlace モードへ移行)
 // ==============================================================
-class Player {
+class Player : private IPlayerActionBody {
   public:
     Player() = default;
     ~Player();
@@ -227,13 +228,12 @@ class Player {
     void SetStageCollisionEnabled(bool enabled) { stageCollisionEnabled_ = enabled; }
 
   private:
-    enum class AnimationState {
-        Idle,
-        Walk,
-        Run,
-        Jump,
-        Ladder,
-    };
+    struct MovementFrame;
+    MovementFrame *movementFrame_ = nullptr;
+    PlayerActionFlow actionFlow_;
+    PlayerActionFacts ActionFacts() const override;
+    void MoveGround(float inputScale, bool jumpRequested) override;
+    void MoveLadder() override;
 
     // -------------------------------------------------------
     //  CheckCollision : pos でブロックと衝突しているか判定する。
@@ -246,16 +246,15 @@ class Player {
     bool IsJumpTriggered() const;
     bool IsInteractTriggered() const;
     bool IsRunInputActive(const Vector3 &inputDir) const;
-    AnimationState ResolveAnimationState(bool hasMoveInput, bool isRunInput) const;
-    void ApplySkinnedAnimation(AnimationState state, bool isMoving);
+    void ApplySkinnedAnimation(const IPlayerState &state);
 
   private:
     // ── 描画コンポーネント ────────────────────────────────
-    std::unique_ptr<Object3d> object_;                     // OBJ モデル用 (通常)
-    std::unique_ptr<SkinnedObject> skinnedObject_;         // glTF スキニング用
-    bool isSkinned_ = false;                               // スキニングモードかどうか
-    bool stageCollisionEnabled_ = true;                    // StageMap による壁・床判定を使うか
-    AnimationState animationState_ = AnimationState::Idle; // 現在のプレイヤーアニメーション状態
+    std::unique_ptr<Object3d> object_;             // OBJ モデル用 (通常)
+    std::unique_ptr<SkinnedObject> skinnedObject_; // glTF スキニング用
+    bool isSkinned_ = false;                       // スキニングモードかどうか
+    bool stageCollisionEnabled_ = true;            // StageMap による壁・床判定を使うか
+    const IPlayerState *animationState_ = nullptr; // 最後に適用した不変の状態
 
     // ── トランスフォーム ──────────────────────────────────
     Vector3 position_ = {0, 0, 0}; // 足元基準のワールド座標

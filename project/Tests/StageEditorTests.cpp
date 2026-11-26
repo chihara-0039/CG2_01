@@ -12,6 +12,7 @@
 #include "../Game/Player/FootstepEmitter.h"
 #include "PolymorphismChecks.h"
 #include "StatePatternChecks.h"
+#include "ResubmissionStateChecks.h"
 #include "../Engine/Utility/EventSignal.h"
 #include "../Engine/Utility/CameraMatrixCache.h"
 #include "../Game/Block/PlaceBlocksCommand.h"
@@ -96,6 +97,7 @@ int main() {
         }
     }
     std::cout << "PASS: Command executes/undoes once; Observer lifetime and subscription changes; independent camera dirty matrices\n";
+    ResubmissionStateChecks::Run();
     StatePatternChecks::Run();
     PolymorphismChecks::Run();
     // 非constなマップからでも、内部セルとパーツを直接変更できる型を返さない。

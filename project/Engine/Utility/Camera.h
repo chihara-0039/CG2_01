@@ -1,6 +1,7 @@
 #pragma once
 #include "MyMath.h"
 #include "CameraMatrixCache.h"
+#include "CameraControlFlow.h"
 #include "Object3d.h"
 #include <Object3dCommon.h>
 #include <Model.h>
@@ -131,6 +132,7 @@ class Camera {
     // ── 計算済み行列 ──────────────────────────────────────
     // Update() で変更された行列のみ再計算する。毎フレーム GetXxxMatrix() で取得すること。
     CameraMatrixCache matrixCache_;
+    CameraControlFlow controlFlow_;
 
     // ── Orbit カメラ制御用 ────────────────────────────────
     // カメラは target_ を中心に distance_ 離れた球面上に配置される。

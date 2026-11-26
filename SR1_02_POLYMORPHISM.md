@@ -1,5 +1,18 @@
 # SR1 01_02 ポリモーフィズム
 
+## 再提出対応（2026-11-26 / state-fix）
+
+Engine側の適用を確認しやすいよう、実際の利用経路を明記する。
+
+1. `project/Engine/Utility/CameraControlFlow.h`：仮想デストラクタと純粋仮想`Next` / `Update`を持つ`ICameraControlState`。
+2. 同`.cpp`：Idle / Orbit / Pan / Suspendedの具象クラスがoverride。Flowが基底参照で呼び、`Camera::UpdateBlenderStyle`から実行される。
+3. 既存の`project/Engine/Graphics/Particle/ParticleMotion.h/.cpp`もEngine内の適用箇所。`ParticleManager.cpp`の`SelectParticleMotion(*it).Update(*it, deltaTime)`が基底参照を介した実際の呼び出し。
+4. アプリ側には`IPlayerState`と5つの行動状態、既存のBaseScene / StageCellBehaviorがある。
+5. `SceneFactory.cpp`内の9つの具体シーンは独立した`.h/.cpp`へ移した。BaseSceneはDraw / DrawBackgroundを維持し、将来UIパスを追加する際は既定の空実装を設け、必要なシーンのみoverrideする方針。
+
+再提出では、これらのファイルを含む最終コードが対象になっていることを確認する。前回の「Engine側が見当たらない」という指摘と、現行のParticleMotionの存在には差があるが、採点時にどのコミットを参照したかは未確認。
+
+
 確認日：2026年11月25日。作業ブランチ：`SR1_01_02`。
 課題画像の「自分のコード内で適用できるところへ適用する」に合わせ、既存シーン管理を確認し、パーティクルとステージの更新へ追加適用した。
 
@@ -157,3 +170,16 @@ Release / Debug / Developmentのx64ビルドを通過。
 ## 説明用の短い文章
 
 > パーティクルとステージの種類別更新へポリモーフィズムを適用しました。基底クラスに共通のUpdateを定義し、派生側で砂埃・花火・動く床・敵などの振る舞いを実装しています。実際の更新ループは基底の参照やポインタから呼び出します。状態は粒やセルに持たせ、状態を持たない振る舞いを共有することで、大量のオブジェクト生成を避けています。基底にはvirtualデストラクタを用意し、継承は共通の更新契約としてis-a関係が成立する範囲に使いました。
+
+
+## 再提出修正の自動確認
+
+- Engineの編集カメラ4状態と、Playerの行動5状態：基底経由の呼び出し、状態自身の遷移、ジャンプ入力受付、GUI停止・復帰、インスタンス間の独立性をテスト。
+- 実Player::Update / StageMap::Updateの物理43ケース：すべて成功。コヨーテ、梯子、動く足場、各種スイッチ・鍵・再挑戦を含む。開始地点を個別に設定する自動検証であり、人が連続クリアした結果ではない。
+- キャンペーン4ステージ：選択、鍵条件、ゴール、シーン側からのクリア要求、選択復帰、タイトル復帰に成功。
+- 配置と取消17項目、ステージ移動時の在庫・取消・UI・モードの初期化：成功。
+- 波括弧省略0、説明のない非自明関数0。実行結果は`generated/resubmission`に保存。
+
+今回の確認は自動テスト／本体の検証モード。手動プレイは未実施。変更はstate-fix上で未コミットであり、提出サービスへの再提出やタグの変更は行っていない。
+
+Release / Debug（x64）ビルド成功。MSVC v143 / Windows SDK 10.0.22621.0を維持。
