@@ -89,14 +89,19 @@ class GameRuntime {
     float GetEnvironmentTimeScale() const { return environmentTimeScale_; }
 
     void RunTitleScene();
-    void RunStageSelectScene();
+    bool RunStageSelectScene();
     void RunGameClearScene(bool celebrationReady);
     int GetResultPageIndex() const;
     bool IsResultAnimationVisible();
     void RunDebugViewScene();
     void RunStageEditorScene();
-    void RunGamePlayScene();
-    void RunGamePlayBlockPlaceScene();
+    bool RunGamePlayScene();
+    bool HasReachedGoal() const { return isGoalReached_; }
+    float GoalCelebrationTime() const { return goalCelebrationTimer_; }
+    bool IsDioramaCapture() const { return dioramaCapture_; }
+    void PrepareReturnToStageSelect();
+    bool RunGamePlayBlockPlaceScene();
+    void FinishBlockPlacement();
     void RunSkinningEditorScene(const SceneUpdateContext &context);
     void RunEffectPreviewScene();
     void RunEffectShowcaseScene();
@@ -319,9 +324,9 @@ class GameRuntime {
     void UpdateGoalCelebration();
     void RefreshGoalGuideTarget();
     void UpdateGameClear(bool celebrationReady);
-    void UpdateGamePlayBlockPlace();
+    bool UpdateGamePlayBlockPlace();
     void UpdateTitle();
-    void UpdateStageSelect();
+    bool UpdateStageSelect();
     void UpdateSceneTransition();
     void UpdateSceneFade();
     void ApplySceneTypeToMode(SceneType sceneType);

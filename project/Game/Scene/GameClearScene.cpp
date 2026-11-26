@@ -129,6 +129,7 @@ void GameClearScene::Update(GameRuntime &game, const SceneUpdateContext &context
     stampParticles_->Update(game.IsResultAnimationVisible() ? dt : 0, camera_.GetViewMatrix(),
                             camera_.GetProjectionMatrix(), {});
     game.RunGameClearScene(frame_.ready);
+    HandleNavigation(game, frame_.ready);
 }
 // クリア手帳の表示対象を選び、描画コマンドを記録する。
 void GameClearScene::Draw(GameRuntime &game) {
@@ -165,4 +166,17 @@ void GameClearScene::Finalize(GameRuntime &game) {
         model.reset();
     }
     game.OnSceneExited(SceneType::GameClear);
+}
+
+// 打刻が終わるまでは決定入力を受け付けず、完了後はこの状態が遷移先を選ぶ。
+void GameClearScene::HandleNavigation(GameRuntime &game, bool stampFinished) {
+    if (stampFinished) {
+        const auto *input = game.GetInput();
+        if (input->TriggerKey(DIK_SPACE) || input->TriggerKey(DIK_RETURN) || input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
+            game.PrepareReturnToStageSelect();
+            game.RequestSceneChange(SceneType::StageSelect);
+        } else if (input->TriggerKey(DIK_ESCAPE) || input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
+            game.RequestSceneChange(SceneType::Title);
+        }
+    }
 }

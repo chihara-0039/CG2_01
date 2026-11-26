@@ -443,8 +443,8 @@ void GameRuntime::RunTitleScene() {
     UpdateTitle();
 }
 
-void GameRuntime::RunStageSelectScene() {
-    UpdateStageSelect();
+bool GameRuntime::RunStageSelectScene() {
+    return UpdateStageSelect();
 }
 
 void GameRuntime::RunGameClearScene(bool celebrationReady) {
@@ -461,7 +461,7 @@ void GameRuntime::RunStageEditorScene() {
 }
 
 // 到着・失敗などの演出を優先し、通常プレイの更新を振り分ける。
-void GameRuntime::RunGamePlayScene() {
+bool GameRuntime::RunGamePlayScene() {
     if (gameOver_ && gameOver_->IsActive()) {
         const auto action = gameOver_->Update(camera.get(), *input,
                                               sceneFade_.CurrentPhase() == SceneFadePhase::None && !IsWindowInactive(),
@@ -486,9 +486,9 @@ void GameRuntime::RunGamePlayScene() {
             player_->UpdateTransform(lightCamera_->GetViewProjectionMatrix(), dxCommon.get());
             objectiveGuideStartedAt_ = std::chrono::steady_clock::now();
         } else if (action == GameOver::Action::StageSelect) {
-            ReturnToStageSelect();
+            return true;
         }
-        return;
+        return false;
     }
     // route撮影は配置だけを自動化し、回収・ゴール判定は通常のゲーム処理を通す。
     char captureShot[32]{};
@@ -497,7 +497,7 @@ void GameRuntime::RunGamePlayScene() {
     GetEnvironmentVariableA("CG2_BUILD_SHOT", buildingShot, sizeof(buildingShot));
     if (comparisonActive_ && !isGoalReached_ && std::string(captureShot) != "route" &&
         std::string(buildingShot) != "route") {
-        return;
+        return false;
     }
     if (startIntro_ && startIntro_->IsActive()) {
         const bool wasFlying = startIntro_->BlocksInput();
@@ -522,14 +522,15 @@ void GameRuntime::RunGamePlayScene() {
             }
         }
         if (startIntro_->BlocksInput()) {
-            return;
+            return false;
         }
     }
     UpdateGamePlay();
+    return false;
 }
 
-void GameRuntime::RunGamePlayBlockPlaceScene() {
-    UpdateGamePlayBlockPlace();
+bool GameRuntime::RunGamePlayBlockPlaceScene() {
+    return UpdateGamePlayBlockPlace();
 }
 
 // スキニングエディタを更新し、プレビューと再生要求を反映する。
