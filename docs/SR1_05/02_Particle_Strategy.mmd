@@ -1,0 +1,43 @@
+classDiagram
+class ParticleManager {
+ -unordered_map~string,ParticleGroup~ particleGroups_
+ +Update(deltaTime, viewMatrix, projectionMatrix, playerPos, stageMap) void
+}
+class ParticleGroup {
+ +list~Particle~ particles
+}
+class Particle {
+ +Transform transform
+ +Vector3 velocity
+ +float lifeTime
+ +float maxTime
+}
+class ParticleMotion {
+ <<abstract>>
+ +~ParticleMotion()
+ +Update(particle, deltaTime) void*
+}
+class LinearMotion {
+ +Update(p, deltaTime) void
+}
+class AccentMotion {
+ +Update(p, deltaTime) void
+}
+class DustMotion {
+ +Update(p, deltaTime) void
+}
+class AdventureMotion {
+ +Update(p, deltaTime) void
+}
+class FireworkMotion {
+ +Update(p, deltaTime) void
+}
+ParticleManager "1" *-- "0..*" ParticleGroup
+ParticleGroup "1" *-- "0..*" Particle
+ParticleManager ..> ParticleMotion : calls through base reference
+ParticleMotion ..> Particle : updates argument
+ParticleMotion <|-- LinearMotion
+ParticleMotion <|-- AccentMotion
+ParticleMotion <|-- DustMotion
+ParticleMotion <|-- AdventureMotion
+ParticleMotion <|-- FireworkMotion

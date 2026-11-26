@@ -55,7 +55,8 @@ void Player::Initialize(Object3dCommon *common, Model *model) {
 
     skinnedObject_.reset();
     isSkinned_ = false;
-    animationState_ = AnimationState::Idle;
+    actionFlow_.Reset();
+    animationState_ = nullptr;
 }
 
 // glTFプレイヤーを読み込み、モーションと描画設定を準備する。
@@ -76,7 +77,8 @@ void Player::InitializeWithSkinnedGltf(Object3dCommon *common, DirectXCommon *dx
 
     object_.reset();
     isSkinned_ = true;
-    animationState_ = AnimationState::Idle;
+    actionFlow_.Reset();
+    animationState_ = nullptr;
 }
 
 // 標準の人型モデルを用意し、スキニング付きプレイヤーとして初期化する。
@@ -93,7 +95,261 @@ void Player::InitializeWithDefaultSkinned(Object3dCommon *common, DirectXCommon 
 
     object_.reset();
     isSkinned_ = true;
-    animationState_ = AnimationState::Idle;
+    actionFlow_.Reset();
+    animationState_ = nullptr;
+}
+
+struct Player::MovementFrame {
+    StageMap *map;
+    float cameraYaw;
+    int gx, ladderY, gz;
+    float ladderX, ladderZ;
+};
+// 入力と衝突の事実だけを状態へ渡す。センサーの真偽値は状態の代用にしない。
+PlayerActionFacts Player::ActionFacts() const {
+    Vector3 dir{};
+    if (input_) {
+        dir.x = input_->GetGamePadState().leftStickX + (input_->PushKey(DIK_D) ? 1.f : 0.f) -
+                (input_->PushKey(DIK_A) ? 1.f : 0.f);
+        dir.z = input_->GetGamePadState().leftStickY + (input_->PushKey(DIK_W) ? 1.f : 0.f) -
+                (input_->PushKey(DIK_S) ? 1.f : 0.f);
+    }
+    const float length = std::hypot(dir.x, dir.z);
+    if (length > 1) {
+        dir.x /= length;
+        dir.z /= length;
+    }
+    return {isOnLadder_, isGrounded_, length > 0 || std::abs(velocity_.x) > .01f || std::abs(velocity_.z) > .01f,
+            length > 0 && IsRunInputActive(dir), IsJumpTriggered()};
+}
+// 梯子状態から呼ばれる衝突付きの登攀処理。出口判定は従来の手順を維持する。
+void Player::MoveLadder() {
+    auto &map = *movementFrame_->map;
+    const auto collision = [&](const Vector3 &pos) { return CheckCollision(pos, map, false); };
+    const float cameraRotY = movementFrame_->cameraYaw;
+    const int gx = movementFrame_->gx, ladderY = movementFrame_->ladderY, gz = movementFrame_->gz;
+    const float ladderInputX = movementFrame_->ladderX, ladderInputZ = movementFrame_->ladderZ;
+
+#pragma region はしご
+
+    velocity_ = {0, 0, 0}; // 登攀前の慣性を持ち越さない
+
+    // カメラから見て梯子へ向かう入力で登り、反対方向で降りる。
+    const auto ladderMove =
+        LadderTraversal::ResolveMovement(map, gx, ladderY, gz, cameraRotY, ladderInputX, ladderInputZ);
+    const float moveVertical = ladderMove.vertical;
+    const float moveSide = std::hypot(ladderMove.side.x, ladderMove.side.z);
+
+    // 1. 登る・下りる入力がある時だけ上下移動と吸い寄せを行う
+    if (moveVertical != 0.0f) {
+        Vector3 nextPos = position_;
+        nextPos.y += moveVertical * walkSpeed_;
+        if (moveVertical > 0.0f) {
+            int topY = ladderY;
+            while (LadderTraversal::IsLadder(map, gx, topY + 1, gz)) {
+                ++topY;
+            }
+            nextPos.y = (std::min)(nextPos.y, topY + 0.5f - 0.001f);
+        }
+        // 下端でも、実際に押しているワールド方向の出口を優先する。
+        const float exitYaw = std::atan2(-ladderMove.world.x, -ladderMove.world.z);
+        Vector3 exit{};
+        if (moveVertical > 0.0f && LadderTraversal::TryExit(map, gx, ladderY, gz, position_, collision, exit)) {
+            position_ = exit;
+            isOnLadder_ = false;
+        } else if (moveVertical < 0.0f &&
+                   LadderTraversal::TryBottomExit(map, gx, ladderY, gz, position_, exitYaw, collision, exit)) {
+            position_ = exit;
+            isOnLadder_ = false;
+            ladderBottomExitUntilRelease_ = true;
+        } else if (!CheckCollision(nextPos, map)) {
+            position_.y = nextPos.y;
+
+            // ★修正：ハシゴの芯に吸い寄せる際にも壁判定を行う！
+            // これで横からハシゴに触れてもブロックにめり込みません
+            Vector3 targetPosX = position_;
+            targetPosX.x += (static_cast<float>(gx) - position_.x) * 0.6f;
+            if (!CheckCollision(targetPosX, map)) {
+                position_.x = targetPosX.x;
+            }
+
+            Vector3 targetPosZ = position_;
+            targetPosZ.z += (static_cast<float>(gz) - position_.z) * 0.6f;
+            if (!CheckCollision(targetPosZ, map)) {
+                position_.z = targetPosZ.z;
+            }
+        }
+
+    } else if (moveSide != 0.0f) {
+        // 梯子に沿う横方向の入力は、通常歩行と同じ向きへ移動する。
+        const Vector3 side{ladderMove.side.x * walkSpeed_, 0, ladderMove.side.z * walkSpeed_};
+        Vector3 nextPos = position_;
+        nextPos.x += side.x;
+        if (!CheckCollision(nextPos, map)) {
+            position_.x = nextPos.x;
+        }
+        nextPos = position_;
+        nextPos.z += side.z;
+        if (!CheckCollision(nextPos, map)) {
+            position_.z = nextPos.z;
+        }
+    }
+
+    // ハシゴ中は接地扱いにしてジャンプなどを可能にする
+    isGrounded_ = true;
+
+#pragma endregion
+}
+// 地上・空中状態で共有する積分と衝突判定。状態が入力速度の係数を決める。
+void Player::MoveGround(float inputScale, bool jumpRequested) {
+    auto &map = *movementFrame_->map;
+    const auto *input = input_;
+    const float cameraRotY = movementFrame_->cameraYaw;
+    Vector3 move{};
+
+    // --- 【通常移動モード】（ここが消えていたのでフリーズしていました） ---
+
+    // 入力方向をカメラの水平向きに合わせてワールド移動へ変換する。
+    Vector3 inputDir = {0, 0, 0};
+    if (input->PushKey(DIK_W)) {
+        inputDir.z += 1.0f;
+    }
+    if (input->PushKey(DIK_S)) {
+        inputDir.z -= 1.0f;
+    }
+    if (input->PushKey(DIK_A)) {
+        inputDir.x -= 1.0f;
+    }
+    if (input->PushKey(DIK_D)) {
+        inputDir.x += 1.0f;
+    }
+    inputDir.x += input->GetGamePadState().leftStickX;
+    inputDir.z += input->GetGamePadState().leftStickY;
+
+    if (inputDir.x != 0 || inputDir.z != 0) {
+        float inputLength = std::sqrt(inputDir.x * inputDir.x + inputDir.z * inputDir.z);
+        if (inputLength > 1.0f) {
+            inputDir.x /= inputLength;
+            inputDir.z /= inputLength;
+        }
+        const float movementScale = inputScale;
+        inputDir.x *= movementScale;
+        inputDir.z *= movementScale;
+
+        move.x = inputDir.x * std::cos(cameraRotY) + inputDir.z * std::sin(cameraRotY);
+        move.z = -inputDir.x * std::sin(cameraRotY) + inputDir.z * std::cos(cameraRotY);
+        rotation_.y = std::atan2f(move.x, move.z) + kPlayerModelForwardYawOffset;
+    }
+
+#pragma region 滑る足場
+
+    // 1. 足元のブロックを特定
+    int gx = static_cast<int>(std::floor(position_.x + 0.5f));
+    int gyBelow = static_cast<int>(std::floor(position_.y - 0.1f)); // 足の少し下
+    int gz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+    const MapCell *cellBelow = map.GetCell(gx, gyBelow, gz);
+    bool isOnIce = (cellBelow && cellBelow->type == BlockType::IceBlock);
+
+    // 2. 加速度と摩擦係数を決定
+    float acceleration = isOnIce ? 0.01f : 0.08f; // 氷なら加速が鈍い
+    float friction = isOnIce ? 0.98f : 0.7f;      // 氷なら速度が減りにくい（1.0に近いほど滑る）
+
+    // 加速
+    velocity_.x += move.x * acceleration;
+    velocity_.z += move.z * acceleration;
+
+    // 摩擦（減速）
+    velocity_.x *= friction;
+    velocity_.z *= friction;
+
+#pragma endregion
+
+#pragma region 動く足場
+
+    // ▼ ▼ 追加：動く足場への追従処理 ▼ ▼
+    // 足元より少し下の位置をチェック
+    Vector3 footCheckPos = position_;
+    // プレイヤーの足元よりほんの少し低い位置を判定するための座標
+    float footCheckY = position_.y - 0.05f;
+    // 左右の判定半径を少しだけ小さく（0.8倍に）することで、ギリギリの端っこに乗ったときのガタつきを防ぐ
+    float footRadiusX = radius_.x * 0.8f;
+    float footRadiusZ = radius_.z * 0.8f;
+    float footRadiusY = 0.05f; // 足元チェック用の薄い判定ボックスの高さ
+
+    const MapCell *ridingFloor =
+        map.GetIntersectingMovingFloor(position_.x, footCheckY, position_.z, footRadiusX, footRadiusY, footRadiusZ);
+    if (ridingFloor) {
+        // 足場が動いた分（deltaOffset）だけ、プレイヤーの座標も強制的に動かす
+        position_.x += ridingFloor->deltaOffsetX;
+        position_.y += ridingFloor->deltaOffsetY;
+        position_.z += ridingFloor->deltaOffsetZ;
+
+        // 足場の上に乗っているので、接地フラグを立てて重力による落下速度をリセット
+        isGrounded_ = true;
+        velocity_.y = 0.0f;
+    }
+    // ▲ ▲ ここまで ▲ ▲
+
+#pragma endregion
+
+#pragma region 中間地点
+
+    // 🌟 追加：中間地点の判定
+    // プレイヤーの現在位置のブロック座標を計算
+    int px = static_cast<int>(std::floor(position_.x + 0.5f));
+    int py = static_cast<int>(std::floor(position_.y + 0.5f)); // キャラクターの中心あたりの高さ
+    int pz = static_cast<int>(std::floor(position_.z + 0.5f));
+
+    const MapCell *cell = map.GetCell(px, py, pz);
+    if (cell && cell->type == BlockType::Checkpoint) {
+        // 中間地点に触れたらリスポーン地点を更新する
+        const Vector3 checkpointPos = position_; // The current foot position is already collision-safe.
+        SetRespawnPosition(checkpointPos);
+
+        // ※必要に応じて「触れた瞬間に旗が上がる」ような演出を入れたり、
+        // 何度も判定されないように cell->variant = 1; のようにして
+        // 状態をフラグ管理するとより本格的になります！
+    }
+
+#pragma endregion
+
+    // ジャンプ
+    if ((isGrounded_ || coyoteFramesRemaining_ > 0) && jumpRequested) {
+        velocity_.y = 0.2f;
+        isGrounded_ = false;
+        coyoteFramesRemaining_ = 0;
+    }
+
+    // 重力適用
+    velocity_.y += gravity_;
+
+    // X軸衝突判定
+    Vector3 nextPosX = position_;
+    nextPosX.x += velocity_.x;
+    if (!CheckCollision(nextPosX, map)) {
+        position_.x = nextPosX.x;
+    }
+
+    // Z軸衝突判定
+    Vector3 nextPosZ = position_;
+    nextPosZ.z += velocity_.z;
+    if (!CheckCollision(nextPosZ, map)) {
+        position_.z = nextPosZ.z;
+    }
+
+    // Y軸衝突判定
+    Vector3 nextPosY = position_;
+    nextPosY.y += velocity_.y;
+    if (CheckCollision(nextPosY, map)) {
+        if (velocity_.y < 0) {
+            isGrounded_ = true;
+        }
+        velocity_.y = 0;
+    } else {
+        position_.y = nextPosY.y;
+        isGrounded_ = false;
+    }
 }
 
 // 更新：移動・重力・当たり判定の処理
@@ -154,230 +410,10 @@ void Player::Update(const Input *input, StageMap &map, float cameraRotY, const M
         ladderWorldPos_ = {static_cast<float>(gx), ladderY + 1.2f, static_cast<float>(gz)};
     }
 
-    Vector3 move = {0, 0, 0};
-    bool hasMoveInput = false;
-    bool hasRunInput = false;
-
-    if (isOnLadder) {
-
-#pragma region はしご
-
-        velocity_ = {0, 0, 0}; // 登攀前の慣性を持ち越さない
-
-        // カメラから見て梯子へ向かう入力で登り、反対方向で降りる。
-        const auto ladderMove =
-            LadderTraversal::ResolveMovement(map, gx, ladderY, gz, cameraRotY, ladderInputX, ladderInputZ);
-        const float moveVertical = ladderMove.vertical;
-        const float moveSide = std::hypot(ladderMove.side.x, ladderMove.side.z);
-        hasMoveInput = std::abs(moveVertical) > .05f || moveSide > .05f;
-
-        // 1. 登る・下りる入力がある時だけ上下移動と吸い寄せを行う
-        if (moveVertical != 0.0f) {
-            Vector3 nextPos = position_;
-            nextPos.y += moveVertical * walkSpeed_;
-            if (moveVertical > 0.0f) {
-                int topY = ladderY;
-                while (LadderTraversal::IsLadder(map, gx, topY + 1, gz)) {
-                    ++topY;
-                }
-                nextPos.y = (std::min)(nextPos.y, topY + 0.5f - 0.001f);
-            }
-            // 下端でも、実際に押しているワールド方向の出口を優先する。
-            const float exitYaw = std::atan2(-ladderMove.world.x, -ladderMove.world.z);
-            Vector3 exit{};
-            if (moveVertical > 0.0f && LadderTraversal::TryExit(map, gx, ladderY, gz, position_, collision, exit)) {
-                position_ = exit;
-                isOnLadder_ = false;
-            } else if (moveVertical < 0.0f &&
-                       LadderTraversal::TryBottomExit(map, gx, ladderY, gz, position_, exitYaw, collision, exit)) {
-                position_ = exit;
-                isOnLadder_ = false;
-                ladderBottomExitUntilRelease_ = true;
-            } else if (!CheckCollision(nextPos, map)) {
-                position_.y = nextPos.y;
-
-                // ★修正：ハシゴの芯に吸い寄せる際にも壁判定を行う！
-                // これで横からハシゴに触れてもブロックにめり込みません
-                Vector3 targetPosX = position_;
-                targetPosX.x += (static_cast<float>(gx) - position_.x) * 0.6f;
-                if (!CheckCollision(targetPosX, map)) {
-                    position_.x = targetPosX.x;
-                }
-
-                Vector3 targetPosZ = position_;
-                targetPosZ.z += (static_cast<float>(gz) - position_.z) * 0.6f;
-                if (!CheckCollision(targetPosZ, map)) {
-                    position_.z = targetPosZ.z;
-                }
-            }
-
-        } else if (moveSide != 0.0f) {
-            // 梯子に沿う横方向の入力は、通常歩行と同じ向きへ移動する。
-            const Vector3 side{ladderMove.side.x * walkSpeed_, 0, ladderMove.side.z * walkSpeed_};
-            Vector3 nextPos = position_;
-            nextPos.x += side.x;
-            if (!CheckCollision(nextPos, map)) {
-                position_.x = nextPos.x;
-            }
-            nextPos = position_;
-            nextPos.z += side.z;
-            if (!CheckCollision(nextPos, map)) {
-                position_.z = nextPos.z;
-            }
-        }
-
-        // ハシゴ中は接地扱いにしてジャンプなどを可能にする
-        isGrounded_ = true;
-
-#pragma endregion
-
-    } else {
-        // --- 【通常移動モード】（ここが消えていたのでフリーズしていました） ---
-
-        // 入力方向をカメラの水平向きに合わせてワールド移動へ変換する。
-        Vector3 inputDir = {0, 0, 0};
-        if (input->PushKey(DIK_W)) {
-            inputDir.z += 1.0f;
-        }
-        if (input->PushKey(DIK_S)) {
-            inputDir.z -= 1.0f;
-        }
-        if (input->PushKey(DIK_A)) {
-            inputDir.x -= 1.0f;
-        }
-        if (input->PushKey(DIK_D)) {
-            inputDir.x += 1.0f;
-        }
-        inputDir.x += input->GetGamePadState().leftStickX;
-        inputDir.z += input->GetGamePadState().leftStickY;
-
-        if (inputDir.x != 0 || inputDir.z != 0) {
-            float inputLength = std::sqrt(inputDir.x * inputDir.x + inputDir.z * inputDir.z);
-            if (inputLength > 1.0f) {
-                inputDir.x /= inputLength;
-                inputDir.z /= inputLength;
-            }
-            hasRunInput = IsRunInputActive(inputDir);
-            const float movementScale = hasRunInput ? 0.8f : 0.5f;
-            inputDir.x *= movementScale;
-            inputDir.z *= movementScale;
-            hasMoveInput = true;
-
-            move.x = inputDir.x * std::cos(cameraRotY) + inputDir.z * std::sin(cameraRotY);
-            move.z = -inputDir.x * std::sin(cameraRotY) + inputDir.z * std::cos(cameraRotY);
-            rotation_.y = std::atan2f(move.x, move.z) + kPlayerModelForwardYawOffset;
-        }
-
-#pragma region 滑る足場
-
-        // 1. 足元のブロックを特定
-        int gx = static_cast<int>(std::floor(position_.x + 0.5f));
-        int gyBelow = static_cast<int>(std::floor(position_.y - 0.1f)); // 足の少し下
-        int gz = static_cast<int>(std::floor(position_.z + 0.5f));
-
-        const MapCell *cellBelow = map.GetCell(gx, gyBelow, gz);
-        bool isOnIce = (cellBelow && cellBelow->type == BlockType::IceBlock);
-
-        // 2. 加速度と摩擦係数を決定
-        float acceleration = isOnIce ? 0.01f : 0.08f; // 氷なら加速が鈍い
-        float friction = isOnIce ? 0.98f : 0.7f;      // 氷なら速度が減りにくい（1.0に近いほど滑る）
-
-        // 加速
-        velocity_.x += move.x * acceleration;
-        velocity_.z += move.z * acceleration;
-
-        // 摩擦（減速）
-        velocity_.x *= friction;
-        velocity_.z *= friction;
-
-#pragma endregion
-
-#pragma region 動く足場
-
-        // ▼ ▼ 追加：動く足場への追従処理 ▼ ▼
-        // 足元より少し下の位置をチェック
-        Vector3 footCheckPos = position_;
-        // プレイヤーの足元よりほんの少し低い位置を判定するための座標
-        float footCheckY = position_.y - 0.05f;
-        // 左右の判定半径を少しだけ小さく（0.8倍に）することで、ギリギリの端っこに乗ったときのガタつきを防ぐ
-        float footRadiusX = radius_.x * 0.8f;
-        float footRadiusZ = radius_.z * 0.8f;
-        float footRadiusY = 0.05f; // 足元チェック用の薄い判定ボックスの高さ
-
-        const MapCell *ridingFloor =
-            map.GetIntersectingMovingFloor(position_.x, footCheckY, position_.z, footRadiusX, footRadiusY, footRadiusZ);
-        if (ridingFloor) {
-            // 足場が動いた分（deltaOffset）だけ、プレイヤーの座標も強制的に動かす
-            position_.x += ridingFloor->deltaOffsetX;
-            position_.y += ridingFloor->deltaOffsetY;
-            position_.z += ridingFloor->deltaOffsetZ;
-
-            // 足場の上に乗っているので、接地フラグを立てて重力による落下速度をリセット
-            isGrounded_ = true;
-            velocity_.y = 0.0f;
-        }
-        // ▲ ▲ ここまで ▲ ▲
-
-#pragma endregion
-
-#pragma region 中間地点
-
-        // 🌟 追加：中間地点の判定
-        // プレイヤーの現在位置のブロック座標を計算
-        int px = static_cast<int>(std::floor(position_.x + 0.5f));
-        int py = static_cast<int>(std::floor(position_.y + 0.5f)); // キャラクターの中心あたりの高さ
-        int pz = static_cast<int>(std::floor(position_.z + 0.5f));
-
-        const MapCell *cell = map.GetCell(px, py, pz);
-        if (cell && cell->type == BlockType::Checkpoint) {
-            // 中間地点に触れたらリスポーン地点を更新する
-            const Vector3 checkpointPos = position_; // The current foot position is already collision-safe.
-            SetRespawnPosition(checkpointPos);
-
-            // ※必要に応じて「触れた瞬間に旗が上がる」ような演出を入れたり、
-            // 何度も判定されないように cell->variant = 1; のようにして
-            // 状態をフラグ管理するとより本格的になります！
-        }
-
-#pragma endregion
-
-        // ジャンプ
-        if ((isGrounded_ || coyoteFramesRemaining_ > 0) && IsJumpTriggered()) {
-            velocity_.y = 0.2f;
-            isGrounded_ = false;
-            coyoteFramesRemaining_ = 0;
-        }
-
-        // 重力適用
-        velocity_.y += gravity_;
-
-        // X軸衝突判定
-        Vector3 nextPosX = position_;
-        nextPosX.x += velocity_.x;
-        if (!CheckCollision(nextPosX, map)) {
-            position_.x = nextPosX.x;
-        }
-
-        // Z軸衝突判定
-        Vector3 nextPosZ = position_;
-        nextPosZ.z += velocity_.z;
-        if (!CheckCollision(nextPosZ, map)) {
-            position_.z = nextPosZ.z;
-        }
-
-        // Y軸衝突判定
-        Vector3 nextPosY = position_;
-        nextPosY.y += velocity_.y;
-        if (CheckCollision(nextPosY, map)) {
-            if (velocity_.y < 0) {
-                isGrounded_ = true;
-            }
-            velocity_.y = 0;
-        } else {
-            position_.y = nextPosY.y;
-            isGrounded_ = false;
-        }
-    }
+    MovementFrame frame{&map, cameraRotY, gx, ladderY, gz, ladderInputX, ladderInputZ};
+    movementFrame_ = &frame;
+    actionFlow_.Update(*this);
+    movementFrame_ = nullptr;
 
     if (isOnLadder_) {
         coyoteFramesRemaining_ = 0;
@@ -482,8 +518,7 @@ collision_end:
         skinnedObject_->SetRotation(rotation_);
         skinnedObject_->SetScale({1.0f, 1.0f, 1.0f});
 
-        bool isMoving = hasMoveInput || std::abs(velocity_.x) > 0.01f || std::abs(velocity_.z) > 0.01f;
-        ApplySkinnedAnimation(ResolveAnimationState(isMoving, hasRunInput), isMoving);
+        ApplySkinnedAnimation(actionFlow_.Current());
 
         if (!deferTransform) {
             skinnedObject_->Update(dxCommon, lightVP);
@@ -654,22 +689,8 @@ bool Player::IsRunInputActive(const Vector3 &inputDir) const {
     return input_->IsGamePadConnected() && (stickPower > 0.85f || gamePad.rightTrigger > 0.35f);
 }
 
-// 梯子・接地・移動入力の優先順で、再生するプレイヤーの姿勢を決める。
-Player::AnimationState Player::ResolveAnimationState(bool hasMoveInput, bool isRunInput) const {
-    if (isOnLadder_) {
-        return AnimationState::Ladder;
-    }
-    if (!isGrounded_) {
-        return AnimationState::Jump;
-    }
-    if (hasMoveInput) {
-        return isRunInput ? AnimationState::Run : AnimationState::Walk;
-    }
-    return AnimationState::Idle;
-}
-
 // プレイヤーの状態に合うモーションを選び、切り替えと再生時刻を反映する。
-void Player::ApplySkinnedAnimation(AnimationState state, bool isMoving) {
+void Player::ApplySkinnedAnimation(const IPlayerState &state) {
     if (!skinnedObject_) {
         return;
     }
@@ -684,11 +705,11 @@ void Player::ApplySkinnedAnimation(AnimationState state, bool isMoving) {
         return;
     }
 
-    const bool stateChanged = animationState_ != state;
+    const bool stateChanged = animationState_ != &state;
 
     // 自動生成される Idle はバインドポーズなので、停止時に選ぶとTポーズへ戻ってしまう。
     // 待機専用モーションがないモデルでは、直前のGPUスキニング結果を速度0で保持する。
-    if (state == AnimationState::Idle) {
+    if (state.HoldPose()) {
         const int activeMotionIndex = model->GetActiveMotionIndex();
         if (activeMotionIndex >= 0 && activeMotionIndex < static_cast<int>(motions.size())) {
             const std::string &activeMotionName = motions[static_cast<size_t>(activeMotionIndex)].name;
@@ -697,10 +718,9 @@ void Player::ApplySkinnedAnimation(AnimationState state, bool isMoving) {
             // 通常の移動停止では直前の姿勢を保持する。
             // Jump/Ladderから戻った直後は空中・登攀姿勢を固定せず、
             // 下の処理で歩行モーション由来の待機姿勢へ明示的に戻す。
-            const bool canHoldCurrentPose =
-                animationState_ != AnimationState::Jump && animationState_ != AnimationState::Ladder;
+            const bool canHoldCurrentPose = !animationState_ || animationState_->CanHoldAfter();
             if (!activeMotionIsGeneratedIdle && canHoldCurrentPose) {
-                animationState_ = state;
+                animationState_ = &state;
                 skinnedObject_->SetAnimationSpeed(0.0f);
                 skinnedObject_->SetPlayCustomAnimation(true);
                 return;
@@ -718,54 +738,21 @@ void Player::ApplySkinnedAnimation(AnimationState state, bool isMoving) {
             const float holdTime = (std::max)(0.0f, motions[static_cast<size_t>(holdMotionIndex)].duration * 0.25f);
             skinnedObject_->SetCurrentKeyframeTime(holdTime);
         }
-        animationState_ = state;
+        animationState_ = &state;
         skinnedObject_->SetAnimationSpeed(0.0f);
         skinnedObject_->SetPlayCustomAnimation(true);
         return;
     }
 
-    int targetMotionIndex = 0;
-    switch (state) {
-    case AnimationState::Idle:
-        // Idle は上の停止姿勢保持処理で完結する。
-        break;
-    case AnimationState::Walk:
-        targetMotionIndex = FindMotionIndexByName(motions, {"walk"});
-        if (targetMotionIndex < 0) {
-            targetMotionIndex = motions.size() >= 2 ? 1 : 0;
-        }
-        break;
-    case AnimationState::Run:
-        targetMotionIndex = FindMotionIndexByName(motions, {"run", "sprint"});
-        if (targetMotionIndex < 0) {
-            targetMotionIndex = FindMotionIndexByName(motions, {"walk"});
-        }
-        if (targetMotionIndex < 0) {
-            targetMotionIndex = motions.size() >= 2 ? 1 : 0;
-        }
-        break;
-    case AnimationState::Jump:
-        targetMotionIndex = FindMotionIndexByName(motions, {"jump", "air", "fall"});
-        if (targetMotionIndex < 0) {
-            // ジャンプ専用モーションがない場合も、自動生成Idle（Tポーズ）は
-            // 選ばず、GPUスキニング可能な移動モーションを流用する。
-            targetMotionIndex = FindMotionIndexByName(motions, {"walk", "run", "sprint"});
-        }
-        if (targetMotionIndex < 0) {
-            targetMotionIndex = motions.size() >= 2 ? 1 : 0;
-        }
-        break;
-    case AnimationState::Ladder:
-        targetMotionIndex = FindMotionIndexByName(motions, {"ladder", "climb"});
-        if (targetMotionIndex < 0) {
-            targetMotionIndex = motions.size() >= 4 ? 3 : 0;
-        }
-        break;
+    int targetMotionIndex = FindMotionIndexByName(motions, state.MotionHints());
+    if (targetMotionIndex < 0) { targetMotionIndex = FindMotionIndexByName(motions, state.FallbackHints()); }
+    if (targetMotionIndex < 0) {
+        targetMotionIndex = state.FallbackMotion(static_cast<int>(motions.size()));
     }
 
     model->SetActiveMotionIndex(targetMotionIndex);
 
-    animationState_ = state;
+    animationState_ = &state;
 
     if (stateChanged) {
         skinnedObject_->SetCurrentKeyframeTime(0.0f);
@@ -774,7 +761,7 @@ void Player::ApplySkinnedAnimation(AnimationState state, bool isMoving) {
     // モーションが1本しかないモデルでも再生を止めない。
     // 停止時にカスタムアニメーションを無効化すると、GPUスキニングへ
     // バインドポーズ（Tポーズ）が渡るため、待機中も有効な姿勢を維持する。
-    skinnedObject_->SetAnimationSpeed(state == AnimationState::Run ? 1.4f : 1.0f);
+    skinnedObject_->SetAnimationSpeed(state.AnimationSpeed());
     skinnedObject_->SetPlayCustomAnimation(true);
 }
 
@@ -871,6 +858,8 @@ bool Player::CheckExternalCollision(const Vector3 &pos) const {
 
 // リスポーン処理：座標をリスポーンポイントに戻し、速度と回転をリセット
 void Player::Respawn(bool preserveKey) {
+    actionFlow_.Reset();
+    animationState_ = nullptr;
     failurePending_ = false;
     presentationScale_ = 1;
     position_ = respawnPosition_;

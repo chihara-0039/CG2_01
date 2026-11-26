@@ -26,71 +26,29 @@ void Camera::Update() {
 // マウス操作から、Blender風の周回・移動・ズームを反映する。
 void Camera::UpdateBlenderStyle(const Input *input, bool isGuiCaptured, HWND hwnd, bool invertOrbit) {
 
-    // ★ 修正：バグ対策のガード処理
-    // 1. ウィンドウにフォーカスがない時は何もしない
-    if (GetActiveWindow() != hwnd) {
-        return;
-    }
-    // 2. ImGuiを操作している時は何もしない
-    if (isGuiCaptured) {
-        return;
-    }
-
-    const auto &mouse = input->GetMouseState(); //
-    const auto &gamePad = input->GetGamePadState();
-    const float rotateSpeed = 0.005f; //
-    const float panSpeed = 0.02f;     //
-
-    // --- ここから下のロジック（仕様）は一切変更なし ---
-
-    // 1. 回転 (マウス中ボタンのみ)
-    if (mouse.buttons[2] && !input->PushKey(DIK_LSHIFT)) {
-        // ステージ編集・配置中だけ、通常のツール表示とは上下左右を反転できる。
-        const float orbitDirection = invertOrbit ? 1.0f : -1.0f;
-        transform_.rotate.y += mouse.x * rotateSpeed * orbitDirection;
-        transform_.rotate.x += mouse.y * rotateSpeed * orbitDirection;
-    }
-
-    // 2. パン/並行移動 (Shift + マウス中ボタン)
-    if (mouse.buttons[2] && input->PushKey(DIK_LSHIFT)) {
-        Matrix4x4 matRot =
-            Math::Multiply(Math::MakeRotateXMatrix(transform_.rotate.x), Math::MakeRotateYMatrix(transform_.rotate.y));
-        target_.x -= (matRot.m[0][0] * mouse.x - matRot.m[1][0] * mouse.y) * panSpeed;
-        target_.y += (matRot.m[0][1] * mouse.x - matRot.m[1][1] * mouse.y) * panSpeed;
-        target_.z -= (matRot.m[0][2] * mouse.x - matRot.m[1][2] * mouse.y) * panSpeed;
-    }
-
-    // 3. ズーム (マウスホイール)
-    distance_ -= mouse.wheel * 0.01f;
-
-    // Xbox コントローラーでも、マウスと同じ編集カメラを操作できるようにする。
-    if (gamePad.connected) {
-        constexpr float kPadRotateSpeed = 0.035f;
-        constexpr float kPadPanSpeed = 0.08f;
-        constexpr float kPadZoomSpeed = 0.12f;
-
-        const float orbitDirection = invertOrbit ? 1.0f : -1.0f;
-        transform_.rotate.y += gamePad.rightStickX * kPadRotateSpeed * orbitDirection;
-        transform_.rotate.x -= gamePad.rightStickY * kPadRotateSpeed * orbitDirection;
-
-        Matrix4x4 padRotation =
-            Math::Multiply(Math::MakeRotateXMatrix(transform_.rotate.x), Math::MakeRotateYMatrix(transform_.rotate.y));
-        target_.x +=
-            (padRotation.m[0][0] * gamePad.leftStickX + padRotation.m[2][0] * gamePad.leftStickY) * kPadPanSpeed;
-        target_.z +=
-            (padRotation.m[0][2] * gamePad.leftStickX + padRotation.m[2][2] * gamePad.leftStickY) * kPadPanSpeed;
-
-        if ((gamePad.buttons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0) {
-            distance_ -= kPadZoomSpeed;
-        }
-        if ((gamePad.buttons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0) {
-            distance_ += kPadZoomSpeed;
-        }
-    }
-
-    if (distance_ < 1.0f) {
-        distance_ = 1.0f;
-    }
+    const auto &mouse = input->GetMouseState();
+    const auto &pad = input->GetGamePadState();
+    CameraControlInput frame;
+    frame.enabled = GetActiveWindow() == hwnd && !isGuiCaptured;
+    frame.middle = mouse.buttons[2];
+    frame.shift = input->PushKey(DIK_LSHIFT);
+    frame.invert = invertOrbit;
+    frame.mouseX = static_cast<float>(mouse.x);
+    frame.mouseY = static_cast<float>(mouse.y);
+    frame.wheel = static_cast<float>(mouse.wheel);
+    frame.pad = pad.connected;
+    frame.rightX = pad.rightStickX;
+    frame.rightY = pad.rightStickY;
+    frame.leftX = pad.leftStickX;
+    frame.leftY = pad.leftStickY;
+    frame.zoomIn = (pad.buttons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
+    frame.zoomOut = (pad.buttons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
+    CameraControlPose pose{transform_.rotate,target_,distance_};
+    controlFlow_.Update(pose,frame);
+    if (!frame.enabled) { return; }
+    transform_.rotate = pose.rotation;
+    target_ = pose.target;
+    distance_ = pose.distance;
 
     // 最終的な座標計算
     Matrix4x4 matRot =

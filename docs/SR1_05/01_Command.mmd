@@ -1,0 +1,34 @@
+classDiagram
+class BlockPlacementController {
+ -unique_ptr~PlaceBlocksCommand~ lastCommand_
+ -StageMap* stageMap_
+ -BlockInventory* inventory_
+ +TryPlace(index, rotationY) bool
+ +TryUndo() bool
+ +HasUndo() bool
+}
+class PlaceBlocksCommand {
+ -StageMap* stageMap_
+ -BlockInventory* inventory_
+ -Placement_Plan plan_
+ -vector~SavedCell~ cells_
+ -bool applied_
+ +Execute() bool
+ +Undo(player) bool
+ +CanUndo() bool
+}
+class StageMap {
+ +GetCell(index) const_MapCell_ptr
+ +SetCell(index, cell) bool
+}
+class BlockInventory {
+ -int wallCount_
+ -int[5] customCounts_
+ +ConsumeBlock(type, count, customId) bool
+ +AddBlock(type, count, customId) void
+}
+BlockPlacementController "1" *-- "0..1" PlaceBlocksCommand : owns
+BlockPlacementController --> StageMap : references
+BlockPlacementController --> BlockInventory : references
+PlaceBlocksCommand --> StageMap : modifies and restores
+PlaceBlocksCommand --> BlockInventory : consumes and refunds

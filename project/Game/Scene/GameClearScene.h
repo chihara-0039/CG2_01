@@ -21,6 +21,7 @@ class GameClearScene final : public BaseScene {
     void Update(GameRuntime &game, const SceneUpdateContext &context) override;
     void Draw(GameRuntime &game) override;
     void Finalize(GameRuntime &game) override;
+    static void HandleNavigation(GameRuntime &game, bool stampFinished);
 
   private:
     enum Part {

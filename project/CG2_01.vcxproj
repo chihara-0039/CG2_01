@@ -145,6 +145,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Game\Scene\PostEffectShowcaseScene.cpp" />
+    <ClCompile Include="Game\Scene\EffectShowcaseScene.cpp" />
+    <ClCompile Include="Game\Scene\EffectPreviewScene.cpp" />
+    <ClCompile Include="Game\Scene\SkinningEditorScene.cpp" />
+    <ClCompile Include="Game\Scene\GamePlayBlockPlaceScene.cpp" />
+    <ClCompile Include="Game\Scene\GamePlayScene.cpp" />
+    <ClCompile Include="Game\Scene\StageEditorScene.cpp" />
+    <ClCompile Include="Game\Scene\DebugViewScene.cpp" />
+    <ClCompile Include="Game\Scene\StageSelectScene.cpp" />
+    <ClCompile Include="Engine\Utility\CameraControlFlow.cpp" />
+    <ClCompile Include="Game\Player\PlayerActionFlow.cpp" />
     <ClCompile Include="Game\Environment\WeatherPresetManager.cpp" />
     <ClCompile Include="Game\Scene\StageSelection.cpp" />
     <ClCompile Include="Game\Scene\RecoveryTransition.cpp" />
@@ -319,6 +330,17 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Game\Scene\PostEffectShowcaseScene.h" />
+    <ClInclude Include="Game\Scene\EffectShowcaseScene.h" />
+    <ClInclude Include="Game\Scene\EffectPreviewScene.h" />
+    <ClInclude Include="Game\Scene\SkinningEditorScene.h" />
+    <ClInclude Include="Game\Scene\GamePlayBlockPlaceScene.h" />
+    <ClInclude Include="Game\Scene\GamePlayScene.h" />
+    <ClInclude Include="Game\Scene\StageEditorScene.h" />
+    <ClInclude Include="Game\Scene\DebugViewScene.h" />
+    <ClInclude Include="Game\Scene\StageSelectScene.h" />
+    <ClInclude Include="Engine\Utility\CameraControlFlow.h" />
+    <ClInclude Include="Game\Player\PlayerActionFlow.h" />
     <ClInclude Include="Game\Environment\WeatherPresetManager.h" />
     <ClInclude Include="Game\Environment\WeatherRuntimeController.h" />
     <ClInclude Include="Game\Block\BlockPlacementController.h" />

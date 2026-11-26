@@ -322,9 +322,7 @@ void GameRuntime::UpdateGoalCelebration() {
     if (dioramaCapture_) {
         return; // Keep the wide shot and final pose until recording ends.
     }
-    if (goalCelebrationTimer_ >= StarGet::kDuration) {
-        RequestSceneChange(SceneType::GameClear);
-    }
+
 }
 
 int GameRuntime::GetResultPageIndex() const {
@@ -368,16 +366,11 @@ void GameRuntime::UpdateGameClear(bool celebrationReady) {
     if (clearGuideXboxSprite_) {
         clearGuideXboxSprite_->Update();
     }
-    if (input->TriggerKey(DIK_SPACE) || input->TriggerKey(DIK_RETURN) ||
-        input->TriggerControllerButton(XINPUT_GAMEPAD_A)) {
-        ReturnToStageSelect();
-    } else if (input->TriggerKey(DIK_ESCAPE) || input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
-        RequestSceneChange(SceneType::Title);
-    }
+
 }
 
 // 配置中のカーソル・高さ・回転・確定・取り消しとカメラを更新する。
-void GameRuntime::UpdateGamePlayBlockPlace() {
+bool GameRuntime::UpdateGamePlayBlockPlace() {
     blockPlacementController_.SetRotationIsland(rotationTrial_);
     EnsurePostProcessInitialized();
     postEffectShowcaseController_.UpdateGameplay(*input, postProcess_);
@@ -434,42 +427,23 @@ void GameRuntime::UpdateGamePlayBlockPlace() {
         if (blockPlacementController_.TryPlace(cursor, placeRotationY_)) {
             bool hasRest =
                 (selectedType == BlockType::Ground) || blockInventory_.HasBlock(selectedType, selectedCustomId);
-            if (!hasRest) {
-                RequestSceneChange(SceneType::GamePlay);
-                placeRotationY_ = 0.0f;
-                if (stageRenderer_) {
-                    stageRenderer_->ClearPlacementPreview();
-                }
-            }
-        }
-    }
-
-    if (input->TriggerKey(DIK_ESCAPE) || input->TriggerKey(DIK_B) || input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
-        RequestSceneChange(SceneType::GamePlay);
-        placeRotationY_ = 0.0f;
-        if (stageRenderer_) {
-            stageRenderer_->ClearPlacementPreview();
+            if (!hasRest) { return true; }
         }
     }
 
     // 配置中のカメラは通常プレイと同じ追従カメラで更新する。
     // エディタ専用カメラを重ねて更新すると視点が跳ぶため、ここでは呼び出さない。
+    return false;
 }
 
 // 選択入力を処理し、読み込みに成功したステージの開始状態を準備する。
-void GameRuntime::UpdateStageSelect() {
+bool GameRuntime::UpdateStageSelect() {
     if (menuExitKeyboardSprite_) {
         menuExitKeyboardSprite_->Update();
     }
     if (menuExitXboxSprite_) {
         menuExitXboxSprite_->Update();
     }
-    if (input->TriggerKey(DIK_ESCAPE) || input->TriggerControllerButton(XINPUT_GAMEPAD_B)) {
-        // 選択画面の戻る操作はタイトルへ。ゲーム終了はタイトル側だけで行う。
-        RequestSceneChange(SceneType::Title);
-        return;
-    }
-
     stageSelect_->Update();
     // 入力直後も選択先に追従し、実時間の緩い脈動で操作可能な場所を示す。
     if (stageSelectAccentSprite_) {
@@ -484,7 +458,7 @@ void GameRuntime::UpdateStageSelect() {
         std::string path = "Resources/Stages/" + stageSelect_->GetSelectedFileName();
         if (!std::filesystem::exists(path) || !stageMap_.LoadFromFile(path)) {
             stageSelect_->ReportLoadFailure();
-            return;
+            return false;
         }
         {
             // グリッドステージ開始時はBlenderステージの衝突・Spawnを無効化する。
@@ -544,8 +518,9 @@ void GameRuntime::UpdateStageSelect() {
             }
             startIntroPending_ = true;
         }
-        RequestSceneChange(SceneType::GamePlay);
+        return true;
     }
+    return false;
 }
 
 // ステージからゴールと鍵の総数を調べ、クリア条件と案内先を更新する。
@@ -628,7 +603,7 @@ void GameRuntime::UpdateSceneTransition() {
 }
 
 // 選択画面の状態を準備し、プレイ中の演出を終えて戻る。
-void GameRuntime::ReturnToStageSelect() {
+void GameRuntime::PrepareReturnToStageSelect() {
     const int selected = stageSelect_ ? stageSelect_->GetSelectedIndex() : 0;
     blockInventory_.Initialize(0);
     if (blockInventoryUI_) {
@@ -653,6 +628,12 @@ void GameRuntime::ReturnToStageSelect() {
     if (player_) {
         player_->Respawn();
     }
+
+}
+
+// メニューなどシーン外からの明示的な復帰コマンドを受け付ける。
+void GameRuntime::ReturnToStageSelect() {
+    PrepareReturnToStageSelect();
     RequestSceneChange(SceneType::StageSelect);
 }
 
@@ -686,4 +667,10 @@ void GameRuntime::BeginGameOver(bool fall, float fallVelocity) {
         particleManager->EmitHitEffect(player_->GetPosition(), hit);
     }
     gameOver_->Begin(camera.get(), player_->GetPosition(), player_->GetRotation(), fall, fallVelocity);
+}
+
+// 配置シーンを離れる際に、一時的な回転とプレビューを片付ける。
+void GameRuntime::FinishBlockPlacement() {
+    placeRotationY_ = 0;
+    if (stageRenderer_) { stageRenderer_->ClearPlacementPreview(); }
 }
